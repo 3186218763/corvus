@@ -1,6 +1,9 @@
 package cli
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestMotionEnvHelpers(t *testing.T) {
 	t.Setenv("REASONIX_REDUCE_MOTION", "1")
@@ -45,6 +48,7 @@ func TestToolFramesFreezeUnderReducedMotion(t *testing.T) {
 	m := newTestChatTUI()
 	m.transcript = append(m.transcript, "")
 	m.toolStreamIdx = 0
+	m.toolStreamStart = time.Now() // pin elapsed so freeze assertions only track the frame
 	t.Setenv("REASONIX_REDUCE_MOTION", "1")
 	m.tickToolRunning()
 	frozen := m.transcript[0]
