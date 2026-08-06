@@ -4262,3 +4262,41 @@ func TestShiftTabLeavesDontAskForAskMode(t *testing.T) {
 		t.Fatalf("Shift+Tab from dontAsk = %q, want ask", got)
 	}
 }
+
+var panelRenderCounts = map[string]int{}
+
+func TestBottomPanelsRenderOncePerEvent(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	ch := make(chan event.Event, 1)
+	m := newChatTUI(ctrl, "", ch, 80)
+	m.panelRenderHook = func(name string) { panelRenderCounts[name]++ }
+	next := func(msg tea.Msg) chatTUI {
+		n, _ := m.Update(msg)
+		return n.(chatTUI)
+	}
+	m = next(tea.WindowSizeMsg{Width: 80, Height: 8})
+	for i := 0; i < 3; i++ {
+		m = next(agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"}))
+	}
+	// 1 resize + 3 notices = exactly 4 renders per panel, no more.
+	for name, n := range panelRenderCounts {
+		if n != 4 {
+			t.Fatalf("panel %q rendered %d times across 4 events, want exactly 4", name, n)
+		}
+	}
+	if fresh := m.renderBottomPanels(); m.panels.rows != fresh.rows {
+		t.Fatalf("cached rows %d != fresh render %d", m.panels.rows, fresh.rows)
+	}
+	if got := m.renderCheatsheet(); got != "" && !strings.Contains(m.View().Content, got) {
+		t.Fatal("View should render the cached cheatsheet")
+	}
+}
+
+func TestBottomPanelsFallbackWhenInvalid(t *testing.T) {
+	m := newTestChatTUI()
+	m.panelsValid = false
+	rows := m.bottomRows()
+	if rows < 0 {
+		t.Fatalf("fallback bottomRows should render on demand, got %d", rows)
+	}
+}

@@ -357,6 +357,15 @@ type chatTUI struct {
 	// height; starts at 2 (unwrapped) until first render.
 	statusLineCount int
 
+	// panels caches the rendered bottom region (todo / approval / chooser /
+	// rewind / completion / manager panels) from the last Update so bottomRows()
+	// and View() share one render pass per event. panelsValid is false until the
+	// first Update, forcing a render-on-demand fallback. panelRenderHook is a
+	// test seam; nil in production.
+	panels          bottomPanels
+	panelsValid     bool
+	panelRenderHook func(name string)
+
 	// modelSwitchPending is true while any async controller rebuild is in flight.
 	modelSwitchPending bool
 	// pendingModelSwitch holds the tea.Cmd that triggers the async build. The
@@ -824,6 +833,9 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	next, cmd := m.update(msg)
 	cm := next.(chatTUI)
+	// Render the bottom region once per event; bottomRows()/View() read it.
+	cm.panels = cm.renderBottomPanels()
+	cm.panelsValid = true
 
 	contentW := transcriptContentWidth(cm.width, cm.nativeScrollback)
 	cm.viewport.SetWidth(contentW)
@@ -1934,34 +1946,15 @@ func (m *chatTUI) commitSpacer() {
 // scrollback mode they join the bottom rail because there is no main viewport.
 func (m chatTUI) bottomRows() int {
 	rows := 0
-	for _, s := range []string{
-		m.renderTodoPanel(),
-		m.renderApprovalBanner(),
-		m.renderChooser(),
-		m.renderRewind(),
-		m.renderMCPImport(),
-		m.renderResumePicker(),
-		m.renderQuickPicker(),
-		m.renderCopyPicker(),
-		m.renderCheatsheet(),
-		m.renderCompletion(),
-	} {
-		if s != "" {
-			rows += strings.Count(s, "\n") + 1
-		}
+	if m.panelsValid {
+		rows = m.panels.rows
+	} else {
+		rows = m.renderBottomPanels().rows
 	}
 	// Remove the hardcoded working-line increment — it is counted inside
 	// statusLineCount via computeStatusLineCount, which also accounts for
 	// wrapping. The fallback to 2 (unwrapped) covers the initial frame and
 	// tests that don't call Update first.
-	if m.nativeScrollback {
-		if main := m.renderMainManager(); main != "" {
-			rows += strings.Count(main, "\n") + 1
-		}
-	}
-	if footer := m.renderMainManagerFooter(); footer != "" {
-		rows += strings.Count(footer, "\n") + 1
-	}
 	if !m.hideComposer() {
 		rows += m.input.Height() + 2
 	}
@@ -2904,53 +2897,55 @@ func (m chatTUI) View() tea.View {
 	// Bottom region pinned under the transcript viewport: optional panels, the
 	// composer when visible, then the two status rows. Its height feeds
 	// transcriptHeight so the viewport above fills exactly the rest of the screen.
+	panels := m.panels
+	if !m.panelsValid {
+		panels = m.renderBottomPanels()
+	}
 	var parts []string
 	rowsAboveBox := 0 // terminal rows occupied by panels/working line before the composer
-	if todo := m.renderTodoPanel(); todo != "" {
-		parts = append(parts, todo)
-		rowsAboveBox += strings.Count(todo, "\n") + 1
+	if panels.todo != "" {
+		parts = append(parts, panels.todo)
+		rowsAboveBox += strings.Count(panels.todo, "\n") + 1
 	}
-	if banner := m.renderApprovalBanner(); banner != "" {
-		parts = append(parts, banner)
-		rowsAboveBox += strings.Count(banner, "\n") + 1
+	if panels.banner != "" {
+		parts = append(parts, panels.banner)
+		rowsAboveBox += strings.Count(panels.banner, "\n") + 1
 	}
-	if card := m.renderChooser(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.chooser != "" {
+		parts = append(parts, panels.chooser)
+		rowsAboveBox += strings.Count(panels.chooser, "\n") + 1
 	}
-	if card := m.renderRewind(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.rewind != "" {
+		parts = append(parts, panels.rewind)
+		rowsAboveBox += strings.Count(panels.rewind, "\n") + 1
 	}
-	if card := m.renderMCPImport(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.mcpImport != "" {
+		parts = append(parts, panels.mcpImport)
+		rowsAboveBox += strings.Count(panels.mcpImport, "\n") + 1
 	}
-	if card := m.renderResumePicker(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.resumePick != "" {
+		parts = append(parts, panels.resumePick)
+		rowsAboveBox += strings.Count(panels.resumePick, "\n") + 1
 	}
-	if card := m.renderQuickPicker(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.quickPick != "" {
+		parts = append(parts, panels.quickPick)
+		rowsAboveBox += strings.Count(panels.quickPick, "\n") + 1
 	}
-	if card := m.renderCopyPicker(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.copyPick != "" {
+		parts = append(parts, panels.copyPick)
+		rowsAboveBox += strings.Count(panels.copyPick, "\n") + 1
 	}
-	if card := m.renderCheatsheet(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.cheatsheet != "" {
+		parts = append(parts, panels.cheatsheet)
+		rowsAboveBox += strings.Count(panels.cheatsheet, "\n") + 1
 	}
-	if menu := m.renderCompletion(); menu != "" {
-		parts = append(parts, menu)
-		rowsAboveBox += strings.Count(menu, "\n") + 1
+	if panels.completion != "" {
+		parts = append(parts, panels.completion)
+		rowsAboveBox += strings.Count(panels.completion, "\n") + 1
 	}
-	if m.nativeScrollback {
-		if card := m.renderMainManager(); card != "" {
-			parts = append(parts, card)
-			rowsAboveBox += strings.Count(card, "\n") + 1
-		}
+	if m.nativeScrollback && panels.manager != "" {
+		parts = append(parts, panels.manager)
+		rowsAboveBox += strings.Count(panels.manager, "\n") + 1
 	}
 	// Layout: the working spinner (when running), then the composer when visible,
 	// then the persistent status block. Wide terminals keep two information rows
@@ -2962,7 +2957,7 @@ func (m chatTUI) View() tea.View {
 		parts = append(parts, workingStyle.Width(boxW).MaxWidth(boxW).Render(wrapStatusLine(working, boxW)))
 		rowsAboveBox++
 	}
-	if footer := m.renderMainManagerFooter(); footer != "" {
+	if footer := panels.managerFooter; footer != "" {
 		parts = append(parts, footer)
 		rowsAboveBox += strings.Count(footer, "\n") + 1
 	}
