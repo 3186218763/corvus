@@ -40,3 +40,33 @@ func TestWorkingCmdsGatesSpinnerTick(t *testing.T) {
 		t.Fatal("spinner tick must be scheduled when motion is on")
 	}
 }
+
+func TestToolFramesFreezeUnderReducedMotion(t *testing.T) {
+	m := newTestChatTUI()
+	m.transcript = append(m.transcript, "")
+	m.toolStreamIdx = 0
+	t.Setenv("REASONIX_REDUCE_MOTION", "1")
+	m.tickToolRunning()
+	frozen := m.transcript[0]
+	m.tickToolRunning()
+	if m.transcript[0] != frozen {
+		t.Fatal("tool working line must not advance frames under reduced motion")
+	}
+	t.Setenv("REASONIX_REDUCE_MOTION", "0")
+	m.tickToolRunning()
+	if m.transcript[0] == frozen {
+		t.Fatal("tool working line should advance frames when motion is on")
+	}
+}
+
+func TestWorkingBatchSuppressesSpinner(t *testing.T) {
+	m := newTestChatTUI()
+	t.Setenv("REASONIX_REDUCE_MOTION", "1")
+	if got := m.workingBatch(); got == nil {
+		t.Fatal("workingBatch must still return the elapsed ticker")
+	}
+	t.Setenv("REASONIX_REDUCE_MOTION", "0")
+	if got := m.workingBatch(); got == nil {
+		t.Fatal("workingBatch must return a batch with motion on")
+	}
+}

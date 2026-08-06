@@ -1531,7 +1531,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.turnDiscarded = false
 				m.confirmBubbleSent() // shell events arrive instantly
 				m.ctrl.RunShell(cmd)
-				return m, tea.Batch(m.spinner.Tick, elapsedTick())
+				return m, m.workingBatch()
 			}
 
 			// Slash commands run locally without going through the model. A
@@ -2455,7 +2455,9 @@ func (m *chatTUI) tickToolRunning() {
 	if m.toolStreamIdx < 0 || m.toolLineCount != 0 || m.toolPartial != "" {
 		return
 	}
-	m.toolStreamFrame++
+	if motionEnabled() {
+		m.toolStreamFrame++
+	}
 	frame := toolWorkingFrames[m.toolStreamFrame%len(toolWorkingFrames)]
 	secs := int(time.Since(m.toolStreamStart).Seconds())
 	m.setLiveBlock(m.toolStreamIdx, connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, frame, formatElapsedFixed(secs)))}))
@@ -3763,7 +3765,7 @@ func (m *chatTUI) startControllerTurn(displayed, restore string, start func()) t
 	// The controller owns the run goroutine, its context, and cancellation; it
 	// streams events to eventCh and emits TurnDone when the turn settles.
 	start()
-	return tea.Batch(m.spinner.Tick, elapsedTick())
+	return m.workingBatch()
 }
 
 // confirmBubbleSent marks the already-echoed user bubble as really sent once a
