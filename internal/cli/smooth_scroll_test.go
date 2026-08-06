@@ -44,8 +44,8 @@ func TestSmoothScrollStartsAndSnaps(t *testing.T) {
 		t.Fatal("mid-flight tick should re-arm")
 	}
 	off := next2.viewport.YOffset()
-	if off <= 0 || off >= 50 {
-		t.Fatalf("mid-flight offset %d should be strictly between 0 and 50", off)
+	if off != 43 {
+		t.Fatalf("mid-flight offset = %d, want 43 (ease-out cubic at t=0.5)", off)
 	}
 
 	// Final snap.

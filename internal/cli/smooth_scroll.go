@@ -34,6 +34,7 @@ func smoothScrollTick() tea.Cmd {
 // is active; interrupts an in-flight animation from its current offset.
 func (m chatTUI) startSmoothScroll(target int) (chatTUI, tea.Cmd) {
 	if !motionEnabled() || m.scrollRepaint {
+		m.smooth = nil
 		m.viewport.SetYOffset(target)
 		return m, nil
 	}
