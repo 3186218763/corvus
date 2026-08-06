@@ -75,24 +75,29 @@ var toolArgKey = map[string]string{
 	"task":          "description",
 }
 
+// toolCategoryColor returns the semantic color for a tool's category: reads
+// cyan, writes green, shell yellow, process control magenta, everything else
+// copper. Shared by the ● dot and the card verb.
+func toolCategoryColor(name string) cliColor {
+	switch toolCategory[name] {
+	case "read":
+		return activeCLITheme.toolRead
+	case "write":
+		return activeCLITheme.success
+	case "exec":
+		return activeCLITheme.warn
+	case "proc":
+		return activeCLITheme.toolProc
+	default:
+		return activeCLITheme.accent
+	}
+}
+
 // toolDot returns the "●" status glyph coloured by the tool's category so the eye
 // can tell reads (cyan) from writes (green), shell (yellow), process control
 // (magenta), and everything else (copper) at a glance.
 func toolDot(name string) string {
-	var c cliColor
-	switch toolCategory[name] {
-	case "read":
-		c = activeCLITheme.toolRead
-	case "write":
-		c = activeCLITheme.success
-	case "exec":
-		c = activeCLITheme.warn
-	case "proc":
-		c = activeCLITheme.toolProc
-	default:
-		c = activeCLITheme.accent
-	}
-	return themeFg(c, "●")
+	return themeFg(toolCategoryColor(name), "●")
 }
 
 var toolCategory = map[string]string{
@@ -169,14 +174,15 @@ func toolCard(name, args string, width int) string {
 	return "  " + toolDot(name) + " " + toolHead(name, toolArg(name, args), width)
 }
 
-// toolHead builds "Verb(arg)" with the verb bold and the arg clamped to fit the
-// remaining width; shared by toolCard and the diff block header.
+// toolHead builds "Verb(arg)" with the verb bold and category-coloured and the
+// arg in the toolArg tone, clamped to fit the remaining width; shared by
+// toolCard and the diff block header.
 func toolHead(name, arg string, width int) string {
 	label := toolDisplayName(name)
-	head := bold(label)
+	head := themeFg(toolCategoryColor(name), bold(label))
 	if arg != "" {
 		avail := width - 4 - len([]rune(label)) - 2
-		head += dim("(") + clampPlain(arg, avail) + dim(")")
+		head += dim("(") + themeFg(activeCLITheme.toolArg, clampPlain(arg, avail)) + dim(")")
 	}
 	return head
 }

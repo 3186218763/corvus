@@ -60,6 +60,25 @@ func TestDiffBlockNilWithoutDiff(t *testing.T) {
 	}
 }
 
+func TestDiffHeaderUsesCategoryAndArgColors(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	d := event.FileDiff{Diff: "--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n-old\n+new\n", Added: 1, Removed: 1}
+	lines := diffBlock("write_file", `{"path":"x.go"}`, d, 80, 40)
+	if len(lines) == 0 {
+		t.Fatal("diffBlock returned no lines")
+	}
+	header := lines[0]
+	if !strings.Contains(header, fgSGR(activeCLITheme.success)) {
+		t.Fatalf("write diff header verb should carry success SGR, got %q", header)
+	}
+	if !strings.Contains(header, fgSGR(activeCLITheme.toolArg)) {
+		t.Fatalf("diff header path should carry toolArg SGR, got %q", header)
+	}
+}
+
 func TestDiffPath(t *testing.T) {
 	if got := diffPath(`{"path":"a/b.go","old_string":"x"}`); got != "a/b.go" {
 		t.Fatalf("got %q", got)
