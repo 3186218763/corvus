@@ -4263,23 +4263,37 @@ func TestShiftTabLeavesDontAskForAskMode(t *testing.T) {
 	}
 }
 
-var panelRenderCounts = map[string]int{}
-
 func TestBottomPanelsRenderOncePerEvent(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	ch := make(chan event.Event, 1)
 	m := newChatTUI(ctrl, "", ch, 80)
-	m.panelRenderHook = func(name string) { panelRenderCounts[name]++ }
+	counts := map[string]int{}
+	m.panelRenderHook = func(name string) { counts[name]++ }
 	next := func(msg tea.Msg) chatTUI {
 		n, _ := m.Update(msg)
 		return n.(chatTUI)
 	}
+	notice := agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"})
 	m = next(tea.WindowSizeMsg{Width: 80, Height: 8})
-	for i := 0; i < 3; i++ {
-		m = next(agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"}))
+	m.cheatsheetOpen = true
+	m = next(notice)
+	if m.panels.cheatsheet == "" {
+		t.Fatal("open cheatsheet should be cached by the panel render pass")
 	}
+	if !strings.Contains(m.View().Content, i18n.M.CheatsheetSectionNavigation) {
+		t.Fatal("View should render the cached cheatsheet without re-rendering")
+	}
+	m.cheatsheetOpen = false
+	m = next(notice)
+	if m.panels.cheatsheet != "" {
+		t.Fatal("closed cheatsheet should be dropped from the cache")
+	}
+	m = next(notice)
+	// View() and bottomRows() must consume the cache without re-rendering.
+	_ = m.View()
+	_ = m.bottomRows()
 	// 1 resize + 3 notices = exactly 4 renders per panel, no more.
-	for name, n := range panelRenderCounts {
+	for name, n := range counts {
 		if n != 4 {
 			t.Fatalf("panel %q rendered %d times across 4 events, want exactly 4", name, n)
 		}
@@ -4287,16 +4301,23 @@ func TestBottomPanelsRenderOncePerEvent(t *testing.T) {
 	if fresh := m.renderBottomPanels(); m.panels.rows != fresh.rows {
 		t.Fatalf("cached rows %d != fresh render %d", m.panels.rows, fresh.rows)
 	}
-	if got := m.renderCheatsheet(); got != "" && !strings.Contains(m.View().Content, got) {
-		t.Fatal("View should render the cached cheatsheet")
-	}
 }
 
 func TestBottomPanelsFallbackWhenInvalid(t *testing.T) {
-	m := newTestChatTUI()
+	ctrl := control.New(control.Options{})
+	ch := make(chan event.Event, 1)
+	m := newChatTUI(ctrl, "", ch, 80)
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 8})
+	m = m0.(chatTUI)
+	m.cheatsheetOpen = true
+	m.panels = m.renderBottomPanels()
+	m.panelsValid = true
+	if m.panels.cheatsheet == "" {
+		t.Fatal("fixture should have a non-empty cached panel")
+	}
+	cached := m.View().Content
 	m.panelsValid = false
-	rows := m.bottomRows()
-	if rows < 0 {
-		t.Fatalf("fallback bottomRows should render on demand, got %d", rows)
+	if got := m.View().Content; got != cached {
+		t.Fatal("invalidated cache must fall back to byte-identical rendering")
 	}
 }
