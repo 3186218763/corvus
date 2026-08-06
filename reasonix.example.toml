@@ -1,0 +1,21 @@
+﻿# Reasonix TUI configuration template.
+# Copy to reasonix.toml for local use. API keys go in .env.
+
+default_model = "deepseek"
+# language = "zh"
+
+[ui]
+theme = "auto"
+
+[agent]
+temperature = 0.0
+
+[[providers]]
+name = "deepseek"
+kind = "openai"
+base_url = "https://api.deepseek.com"
+models = ["deepseek-v4-flash", "deepseek-v4-pro"]
+default = "deepseek-v4-flash"
+api_key_env = "DEEPSEEK_API_KEY"
+context_window = 1000000
+effort = "high"

@@ -1,0 +1,44 @@
+# Build artifacts
+/bin/
+/dist/
+/stage/
+/reasonix
+/reasonix.exe
+
+# Go test/build scratch
+*.test
+*.out
+*.coverprofile
+coverage.out
+cpu.prof
+mem.prof
+
+# Environment / local config (reasonix.example.toml is the shared template)
+.env
+.env.local
+*.local
+/reasonix.toml
+
+# Project-local Reasonix state (not committed)
+/.reasonix/
+
+# Stray Reasonix state written under a package dir by a test whose RealPath
+# resolves to CWD. Never commit these.
+internal/**/.reasonix/
+
+# CodeGraph per-project index (rebuilt locally; never committed)
+.codegraph/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local scratch
+temp/
+
+# git worktrees (local isolation)
+.worktrees/
+# superpowers SDD scratch
+.superpowers/
