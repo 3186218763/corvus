@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 // Tool-result maintenance is the free half of context management: stale tool

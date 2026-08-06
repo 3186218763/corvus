@@ -62,7 +62,7 @@ func TestSmoothScrollStartsAndSnaps(t *testing.T) {
 }
 
 func TestSmoothScrollInstantWhenMotionOff(t *testing.T) {
-	t.Setenv("REASONIX_REDUCE_MOTION", "1")
+	t.Setenv("CORVUS_REDUCE_MOTION", "1")
 	m := scrollFixture()
 	next, cmd := m.startSmoothScroll(50)
 	if cmd != nil {

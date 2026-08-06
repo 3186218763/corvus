@@ -3,7 +3,7 @@ package boot
 import (
 	"testing"
 
-	"reasonix/internal/testenv"
+	"corvus/internal/testenv"
 )
 
 func TestMain(m *testing.M) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
+	"corvus/internal/event"
+	"corvus/internal/provider"
 )
 
 type fakeStreamProvider struct {

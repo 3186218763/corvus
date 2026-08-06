@@ -63,7 +63,7 @@
 
 ## 7. env 开关读取位置——【不属实】（位置）
 
-- 【事实】现有 TUI env 开关读在 **chat_tui.go / theme.go**，不是 cli.go：`REASONIX_DISABLE_MOUSE`（chat_tui.go:612，`mouseCaptureOffByDefault` 610-613）、`REASONIX_THEME`/`REASONIX_THEME_STYLE`（theme.go:130/138）；Termux 检测也在 chat_tui.go:659-662。cli.go 只有 API-key env（1224/1245）。
+- 【事实】现有 TUI env 开关读在 **chat_tui.go / theme.go**，不是 cli.go：`CORVUS_DISABLE_MOUSE`（chat_tui.go:612，`mouseCaptureOffByDefault` 610-613）、`CORVUS_THEME`/`CORVUS_THEME_STYLE`（theme.go:130/138）；Termux 检测也在 chat_tui.go:659-662。cli.go 只有 API-key env（1224/1245）。
 - 【事实】构造期读取模式：`newChatTUI`（chat_tui.go:552-595）里 `detectTermuxTerminal()`（561）与 `mouseCaptureOffByDefault()` 都是构造时求值——`scrollRepaint`/`reduceMotion` 加同款字段+构造读取即可。
 - 【事实】「no config section exists」属实：config 与 internal/cli 无 motion/animation/reduce 配置键。
 - 【建议】spec 的「cli.go, same place」改为「chat_tui.go newChatTUI / mouseCaptureOffByDefault 同款位置」。
@@ -78,7 +78,7 @@
 
 ## 9. banner / md 表格代码 / diff 颜色 ——【部分属实】
 
-- 【事实】`renderTUIBanner(label, missing, width)` 是包级函数（chat_tui.go:4696-4706）：两行（`◆ reasonix · label` + tip）+ 可选 missing 警告行；以 `transcriptSourceBanner` 提交为 transcript block（chat_tui.go:4062、transcript.go:97/113），resize 时 `reflowTranscript` 会按新宽度重渲染（transcript.go:129-139）——宽窄屏（≥60/<60）改造可行，宽度参数现成；需处理窄屏下 missing 警告行的取舍。
+- 【事实】`renderTUIBanner(label, missing, width)` 是包级函数（chat_tui.go:4696-4706）：两行（`◆ corvus · label` + tip）+ 可选 missing 警告行；以 `transcriptSourceBanner` 提交为 transcript block（chat_tui.go:4062、transcript.go:97/113），resize 时 `reflowTranscript` 会按新宽度重渲染（transcript.go:129-139）——宽窄屏（≥60/<60）改造可行，宽度参数现成；需处理窄屏下 missing 警告行的取舍。
 - 【不属实·前提】md.go **没有任何语法高亮**：全文件无 chroma；fenced code 也只是 accent 单色（md.go:322-331 renderFenced）。表格 cell 走 `collectCells→collectInline→appendInline`，`CodeSpan` 一律 `accent()`（md.go:362-364），与正文相同。所以「table code cells may carry full syntax colors」不成立；实际是「表格内 code span 带 accent 前景色」。「如果语法高亮就中性化」的前提不存在，但「表格内 code span 改中性色」本身可实现（在 appendInline 增加 inTable 上下文或 collectCells 后处理）。
 - 【事实】diffview.go:29-32 确有 4 个硬编码 256 色常量（48;5;22 / 48;5;52 / 1;38;5;46 / 1;38;5;203）——但全仓库**无任何引用，是死代码**；实际渲染早已用主题槽位：`bgSGR(activeCLITheme.diffAddBG)`/`fgSGR(activeCLITheme.success)` 等（diffview.go:116-119）。theme.go:34-44/67-98 确有 diffAddBG/diffDelBG/success/err 槽位。「migrate」实为「删除 4 个死常量」；另注意若真迁移，fg 46→success(108)、203→err(167) 色值会变（语义映射而非等价替换）。
 - 【事实】internal/cli 非测试、非 theme/style 代码中其余 SGR 字面量只有 select.go 的 `\033[K` 擦行序列（10 处）与 OSC 标记（见第 10 条），删掉死常量后颜色纪律测试可绿。
@@ -87,7 +87,7 @@
 
 - 【事实】若按 spec 的裸模式（`38;5`/`48;5`/`38;2`/`3x`/`4x`/`9x`/`10x`）扫描字符串字面量，存在真实误伤：
   1. `select.go:57/121/123/135/137/143/148/150/156/159` 的 `"\r\033[K..."` 擦行序列：八进制 `\033` 含子串 `"33"`，命中 `3x` 类模式（SGR 33=黄）——误伤 10 处。
-  2. `transcript.go:231-232` 的 OSC 1337 copy-math 标记 `"\x1b]1337;reasonix-copy-math=..."`：`"1337"` 含 `"33"`，命中 `3x`——误伤。
+  2. `transcript.go:231-232` 的 OSC 1337 copy-math 标记 `"\x1b]1337;corvus-copy-math=..."`：`"1337"` 含 `"33"`，命中 `3x`——误伤。
   3. `theme_osc_unix.go:44` 的 `"\x1b]11;?\x07"`（OSC 11 查询）不含目标模式，安全；`\x1b[?2026` 类 DEC 序列目前 internal/cli 无字面量，`2026` 也不命中列出的模式，安全（但若将来按 `3x` 裸模式加 `\x1b[?25l` 等也不会命中——`25` 不匹配）。
   4. `theme.go:324-336` 的 SGR 构造器在排除名单内（theme.go/style.go/`*_test.go`），OK。
 - 【建议】用 `go/ast` 提取字符串字面量，模式锚定 CSI+SGR 终结符：`\x1b\[(?:[0-9;]*m)` 且参数含颜色段（`38;5;`/`48;5;`/`38;2;` 或 `(?:3[0-9]|4[0-9]|9[0-9]|10[0-9])` 后接 `;` 或 `m`）；或更简单：排除 `\033[K` 与 OSC（`\x1b]`）后按现有列表扫。删除 diffview 死常量后应绿。
@@ -103,6 +103,6 @@
 5. **§5.8 diff「迁移」实为删除 4 个死常量**（diffview.go:29-32 无引用），实际渲染已用主题槽位；若按 fg→success/err 真迁移颜色会变。
 6. **§5.7 前提错误**——md.go 无语法高亮，表格 code span 只是 accent 单色（md.go:362-364）；「中性化表格 code span」仍可做。
 7. **§4.1 的 CSI 2J 表述**是 v1 近似；v2 ClearScreen = 缓冲 Erase 整帧重绘（cursed_renderer.go:633-639）。
-8. **§5/§7 env 位置**——TUI env 开关读在 chat_tui.go:612（REASONIX_DISABLE_MOUSE）与 theme.go:130，不是 cli.go；「no config section」属实。
+8. **§5/§7 env 位置**——TUI env 开关读在 chat_tui.go:612（CORVUS_DISABLE_MOUSE）与 theme.go:130，不是 cli.go；「no config section」属实。
 9. **§6 TestNoHardcodedColorCodes 模式会误伤** `\033[K`（select.go 10 处）与 OSC 1337 标记（transcript.go:231）——需 CSI 锚定 + go/ast 解析。
 10. 其余（bubbletea 渲染器/DEC 2026/WithFPS/ClearScreen 语义、viewport 无平滑滚动及 PgUp/PageDown/ScrollUp(3)/GotoBottom 语义、lipgloss 无 Gradient/无缓存/Blend1D、bench 数字 28/58ms、i18n 三语言 %d、renderTUIBanner 位置）——属实，仅按上文细节微调表述。

@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/pluginpkg"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/pluginpkg"
 )
 
 // SourceStatus describes one hooks settings file for diagnostics.
@@ -67,7 +67,7 @@ func Inspect(opts LoadOptions) Inspection {
 	}
 
 	// Plugin hooks (enabled packages only — same as Load).
-	appendPluginInspect(&out, reasonixHome(opts.HomeDir), opts.ProjectRoot)
+	appendPluginInspect(&out, corvusHome(opts.HomeDir), opts.ProjectRoot)
 
 	g := GlobalSettingsPath(opts.HomeDir)
 	st := inspectSettingsFile(g, ScopeGlobal)
@@ -176,11 +176,11 @@ func appendInspectEntries(out *Inspection, s *Settings, scope Scope, source stri
 	}
 }
 
-func appendPluginInspect(out *Inspection, reasonixHomeDir, projectRoot string) {
-	if strings.TrimSpace(reasonixHomeDir) == "" {
+func appendPluginInspect(out *Inspection, corvusHomeDir, projectRoot string) {
+	if strings.TrimSpace(corvusHomeDir) == "" {
 		return
 	}
-	installed, _ := pluginpkg.LoadInstalled(reasonixHomeDir)
+	installed, _ := pluginpkg.LoadInstalled(corvusHomeDir)
 	for _, item := range installed {
 		pkg := item.Package
 		src := filepath.Join(pkg.Root, pluginpkg.ManifestPath(pkg.ManifestKind))

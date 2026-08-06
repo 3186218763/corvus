@@ -1,6 +1,6 @@
 package permission
 
-import "reasonix/internal/shellparse"
+import "corvus/internal/shellparse"
 
 // DecomposeBashCommand splits a compound bash command line into its
 // simple-command segments so each segment can be matched against the rule

@@ -1,5 +1,5 @@
 // Package builtincontent holds shipped skill markdown that is embedded into the
-// Reasonix binary. Bodies stay out of the system prompt until the skill is
+// Corvus binary. Bodies stay out of the system prompt until the skill is
 // invoked; only the name+description index line is cache-stable.
 package builtincontent
 
@@ -10,10 +10,10 @@ import (
 	"path"
 	"strings"
 
-	"reasonix/internal/frontmatter"
+	"corvus/internal/frontmatter"
 )
 
-//go:embed reasonix-guide/SKILL.md
+//go:embed corvus-guide/SKILL.md
 var files embed.FS
 
 // SkillMarkdown is one embedded skill file after frontmatter split.
@@ -28,9 +28,9 @@ type SkillMarkdown struct {
 	Frontmatter map[string]string
 }
 
-// LoadReasonixGuide returns the shipped reasonix-guide skill markdown.
-func LoadReasonixGuide() (SkillMarkdown, error) {
-	return loadSkill("reasonix-guide/SKILL.md")
+// LoadCorvusGuide returns the shipped corvus-guide skill markdown.
+func LoadCorvusGuide() (SkillMarkdown, error) {
+	return loadSkill("corvus-guide/SKILL.md")
 }
 
 // All loads every embedded SKILL.md under this package (currently one).
@@ -72,7 +72,7 @@ func ParseSkillMarkdown(sourcePath, content string) (SkillMarkdown, error) {
 	fm, body := frontmatter.Split(content)
 	name := strings.TrimSpace(fm["name"])
 	if name == "" {
-		// Fall back to directory name: reasonix-guide/SKILL.md → reasonix-guide
+		// Fall back to directory name: corvus-guide/SKILL.md → corvus-guide
 		dir := path.Dir(sourcePath)
 		if dir != "" && dir != "." {
 			name = path.Base(dir)

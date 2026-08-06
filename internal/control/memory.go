@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"reasonix/internal/memory"
+	"corvus/internal/memory"
 )
 
 // memoryManager owns the session's loaded memory snapshot, the queue of pending
@@ -143,7 +143,7 @@ func (m *memoryManager) applyWrite(mem *memory.Set, note string) {
 }
 
 // quickAdd appends a one-line note to the doc-memory file for scope (project
-// REASONIX.md by default) — the write side of "#<note>". Returns the file written.
+// CORVUS.md by default) — the write side of "#<note>". Returns the file written.
 func (m *memoryManager) quickAdd(scope memory.Scope, note string) (string, error) {
 	m.writeMu.Lock()
 	defer m.writeMu.Unlock()

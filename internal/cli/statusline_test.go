@@ -13,14 +13,14 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/agent/testutil"
-	"reasonix/internal/config"
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	"reasonix/internal/i18n"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/agent"
+	"corvus/internal/agent/testutil"
+	"corvus/internal/config"
+	"corvus/internal/control"
+	"corvus/internal/event"
+	"corvus/internal/i18n"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 // TestRunStatuslineCmd checks the custom status-line runner: it returns the
@@ -408,7 +408,7 @@ func TestStatuslineShowsEffortWithoutGitOnPersistentFooter(t *testing.T) {
 	if !strings.Contains(plain, "MODEL deepseek-v4-flash   EFFORT auto") {
 		t.Fatalf("session row should keep effort beside the model:\n%s", plain)
 	}
-	if strings.Contains(plain, "Reasonix@") || strings.Contains(plain, "+3 -1") {
+	if strings.Contains(plain, "Corvus@") || strings.Contains(plain, "+3 -1") {
 		t.Fatalf("lean footer must omit git porcelain:\n%s", plain)
 	}
 }
@@ -511,7 +511,7 @@ func renderStatuslineViewWithGitAndEffort(t *testing.T) string {
 	m.label = "deepseek-v4-flash"
 	m.effortLevel = "auto"
 	m.gitStatus = gitStatus{
-		Repo:      "Reasonix",
+		Repo:      "Corvus",
 		Branch:    "codex/demo",
 		Added:     3,
 		Removed:   1,

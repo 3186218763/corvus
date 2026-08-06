@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/capability"
-	"reasonix/internal/plugin"
-	"reasonix/internal/tool"
+	"corvus/internal/capability"
+	"corvus/internal/plugin"
+	"corvus/internal/tool"
 )
 
 type subagentRegistryTool struct {

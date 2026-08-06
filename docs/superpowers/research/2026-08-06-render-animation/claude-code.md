@@ -1,4 +1,4 @@
-# Claude Code TUI 渲染与操作设计调研（供 Reasonix 渲染/动画/美术专项）
+# Claude Code TUI 渲染与操作设计调研（供 Corvus 渲染/动画/美术专项）
 
 - 日期：2026-08-06；调研对象：anthropics/claude-code（闭源，v2.1.89+）
 - 标注：**【事实】** = 官方 docs/官方仓库 issue/PR 或本地源码可证；**【推断】** = 基于公开资料的合理判断

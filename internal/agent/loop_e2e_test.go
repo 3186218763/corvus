@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/agent/testutil"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/agent/testutil"
+	"corvus/internal/event"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 type toolCallReasoningRequiredProvider struct {

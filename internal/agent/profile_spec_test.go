@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"reasonix/internal/tool"
+	"corvus/internal/tool"
 )
 
 func TestIntersectToolLists(t *testing.T) {

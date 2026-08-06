@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/event"
+	"corvus/internal/event"
 )
 
 type recordingAsker struct {

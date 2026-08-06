@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 func TestRedactMasksCommonSecretShapes(t *testing.T) {
@@ -276,31 +276,31 @@ func TestFilterEnvDropsSensitiveKeys(t *testing.T) {
 }
 
 func TestProcessEnvUnfilteredByDefault(t *testing.T) {
-	t.Setenv("REASONIX_TEST_SECRET_TOKEN", "ghp_abcdefghijklmnopqrstuvwxyz")
+	t.Setenv("CORVUS_TEST_SECRET_TOKEN", "ghp_abcdefghijklmnopqrstuvwxyz")
 	joined := strings.Join(ProcessEnv(), "\n")
-	if !strings.Contains(joined, "REASONIX_TEST_SECRET_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz") {
+	if !strings.Contains(joined, "CORVUS_TEST_SECRET_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz") {
 		t.Fatalf("ProcessEnv filtered by default; filter_subprocess_env must be opt-in:\n%s", joined)
 	}
 
 	SetFilterSubprocessEnv(true)
 	t.Cleanup(func() { SetFilterSubprocessEnv(false) })
 	joined = strings.Join(ProcessEnv(), "\n")
-	if strings.Contains(joined, "REASONIX_TEST_SECRET_TOKEN") {
+	if strings.Contains(joined, "CORVUS_TEST_SECRET_TOKEN") {
 		t.Fatalf("ProcessEnv leaked sensitive key with filtering enabled:\n%s", joined)
 	}
 }
 
 func TestProcessEnvAlwaysFiltersRegisteredCredentialKeys(t *testing.T) {
-	const key = "REASONIX_TEST_CUSTOM_PROVIDER_CREDENTIAL"
+	const key = "CORVUS_TEST_CUSTOM_PROVIDER_CREDENTIAL"
 	t.Setenv(key, "opaque-provider-value")
-	t.Setenv("REASONIX_TEST_BENIGN_ENV", "visible")
+	t.Setenv("CORVUS_TEST_BENIGN_ENV", "visible")
 	RegisterCredentialEnvKeys([]string{key})
 
 	joined := strings.Join(ProcessEnv(), "\n")
 	if strings.Contains(joined, key+"=") || strings.Contains(joined, "opaque-provider-value") {
 		t.Fatalf("registered provider credential survived in subprocess env:\n%s", joined)
 	}
-	if !strings.Contains(joined, "REASONIX_TEST_BENIGN_ENV=visible") {
+	if !strings.Contains(joined, "CORVUS_TEST_BENIGN_ENV=visible") {
 		t.Fatalf("ordinary env was removed with opt-in filtering off:\n%s", joined)
 	}
 }

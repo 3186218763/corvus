@@ -11,8 +11,8 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"reasonix/internal/fileutil"
-	fileencoding "reasonix/internal/fileutil/encoding"
+	"corvus/internal/fileutil"
+	fileencoding "corvus/internal/fileutil/encoding"
 )
 
 const (
@@ -20,8 +20,8 @@ const (
 	CredentialsStoreKeyring = "keyring"
 	CredentialsStoreFile    = "file"
 
-	credentialsKeyringService = "reasonix"
-	credentialClearedPrefix   = "# reasonix-cleared "
+	credentialsKeyringService = "corvus"
+	credentialClearedPrefix   = "# corvus-cleared "
 )
 
 const (
@@ -56,7 +56,7 @@ var credentialSourceTracker = struct {
 	byKey map[string]trackedCredentialSource
 }{byKey: map[string]trackedCredentialSource{}}
 
-// userCredentialEditMu serializes Reasonix-owned credential-store writes.
+// userCredentialEditMu serializes Corvus-owned credential-store writes.
 // LockUserCredentialEdits also takes a path-derived advisory file lock so a
 // Desktop window, CLI process, or background catalog save can share one
 // compare-and-apply boundary with credential rotation.
@@ -81,7 +81,7 @@ func NewCredentialResolverForRoot(root string) *CredentialResolver {
 }
 
 // ResolveGlobalFirst resolves a provider credential for this workspace root.
-// Priority: project .env, then Reasonix's persistent credentials store.
+// Priority: project .env, then Corvus's persistent credentials store.
 // Repeated calls for the same key reuse the first result so UI views with
 // multiple provider entries sharing api_key_env stay consistent.
 //
@@ -129,7 +129,7 @@ func normalizeCredentialsStore(mode string) string {
 }
 
 func credentialsStoreMode() string {
-	if mode := strings.TrimSpace(os.Getenv("REASONIX_CREDENTIALS_STORE")); mode != "" {
+	if mode := strings.TrimSpace(os.Getenv("CORVUS_CREDENTIALS_STORE")); mode != "" {
 		return normalizeCredentialsStore(mode)
 	}
 	var partial struct {
@@ -145,9 +145,9 @@ func credentialEnvNamesForRoot(root string) []string {
 	root = resolveRoot(root)
 	cfg := Default()
 
-	projectTOML := "reasonix.toml"
+	projectTOML := "corvus.toml"
 	if root != "." {
-		projectTOML = filepath.Join(root, "reasonix.toml")
+		projectTOML = filepath.Join(root, "corvus.toml")
 	}
 	if uc := userConfigLoadPath(); uc != "" {
 		_ = mergeFile(cfg, uc)
@@ -184,7 +184,7 @@ func credentialEnvNamesFromConfig(cfg *Config) []string {
 }
 
 // CredentialEnvNames returns every environment-variable name whose value can
-// be loaded from Reasonix's global credential store. This includes configured
+// be loaded from Corvus's global credential store. This includes configured
 // provider/bot keys and stored keys that are no longer referenced by the
 // current config: loadCredentialStoreForRoot loads the whole credential file,
 // so stale entries must remain outside child-process environments too.
@@ -251,11 +251,11 @@ func loadCredentialStoreForRoot(root string) {
 		return
 	}
 	if p := UserCredentialsPath(); p != "" {
-		loadDotEnvFileAs(p, CredentialSource{Kind: CredentialSourceCredentials, Path: p, Label: "Reasonix credentials (.env)"})
+		loadDotEnvFileAs(p, CredentialSource{Kind: CredentialSourceCredentials, Path: p, Label: "Corvus credentials (.env)"})
 	}
 }
 
-// StoreCredentialLines stores KEY=value assignments in Reasonix's global .env
+// StoreCredentialLines stores KEY=value assignments in Corvus's global .env
 // and pins them into the current process environment.
 func StoreCredentialLines(lines []string) (string, error) {
 	assignments := parseCredentialLines(lines)
@@ -285,7 +285,7 @@ func SetCredential(key, value string) (string, error) {
 	return StoreCredentialLines([]string{key + "=" + value})
 }
 
-// IsValidCredentialKey reports whether key can be stored in Reasonix's dotenv
+// IsValidCredentialKey reports whether key can be stored in Corvus's dotenv
 // credential file and exposed as an environment variable.
 func IsValidCredentialKey(key string) bool {
 	return isCredentialKey(strings.TrimSpace(key))
@@ -310,7 +310,7 @@ func RemoveCredential(key string) error {
 }
 
 // LockUserCredentialEdits serializes credential-store compare/write
-// transactions in this process and across Reasonix processes. When both the
+// transactions in this process and across Corvus processes. When both the
 // user config and credential store are needed, acquire LockUserConfigEdits
 // first, then this lock.
 func LockUserCredentialEdits() (func(), error) {
@@ -335,7 +335,7 @@ func LockUserCredentialEdits() (func(), error) {
 }
 
 // CredentialStoreRevision returns a content-derived revision for the current
-// Reasonix credential store. Callers performing compare-and-apply must hold
+// Corvus credential store. Callers performing compare-and-apply must hold
 // LockUserCredentialEdits from this read through their commit.
 func CredentialStoreRevision() string {
 	path := UserCredentialsPath()
@@ -413,7 +413,7 @@ func parseCredentialLines(lines []string) map[string]string {
 func pinCredentialAssignments(assignments map[string]string) {
 	for key, value := range assignments {
 		_ = os.Setenv(key, value)
-		recordCredentialSource(key, value, CredentialSource{Kind: CredentialSourceCredentials, Path: UserCredentialsPath(), Label: "Reasonix credentials (.env)"})
+		recordCredentialSource(key, value, CredentialSource{Kind: CredentialSourceCredentials, Path: UserCredentialsPath(), Label: "Corvus credentials (.env)"})
 	}
 }
 
@@ -466,11 +466,11 @@ func credentialSourceLabel(source CredentialSource) string {
 	case CredentialSourceProjectEnv:
 		return "project .env"
 	case CredentialSourceCredentials:
-		return "Reasonix credentials"
+		return "Corvus credentials"
 	case CredentialSourceHomeEnv:
 		return "home .env"
 	case CredentialSourceLegacy:
-		return "legacy Reasonix credentials"
+		return "legacy Corvus credentials"
 	case CredentialSourceEnvironment:
 		return "environment variable"
 	default:
@@ -538,7 +538,7 @@ func resolveCredentialForRootGlobalFirst(root, key string) CredentialResolution 
 }
 
 // projectCredentialValue reads a non-empty key from the workspace project .env.
-// It never treats Reasonix's own credentials path as a project file.
+// It never treats Corvus's own credentials path as a project file.
 func projectCredentialValue(root, key string) (string, CredentialSource, bool) {
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -565,7 +565,7 @@ func projectCredentialValue(root, key string) (string, CredentialSource, bool) {
 func storedCredentialValue(key string) (string, CredentialSource, bool) {
 	if p := UserCredentialsPath(); p != "" {
 		if value, ok := envFileValue(p, key); ok && strings.TrimSpace(value) != "" {
-			return value, CredentialSource{Kind: CredentialSourceCredentials, Path: p, Label: "Reasonix credentials (.env)"}, true
+			return value, CredentialSource{Kind: CredentialSourceCredentials, Path: p, Label: "Corvus credentials (.env)"}, true
 		}
 	}
 	return "", CredentialSource{}, false

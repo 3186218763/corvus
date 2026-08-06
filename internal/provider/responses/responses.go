@@ -20,8 +20,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"reasonix/internal/netclient"
-	"reasonix/internal/provider"
+	"corvus/internal/netclient"
+	"corvus/internal/provider"
 )
 
 const defaultStreamIdleTimeout = 120 * time.Second
@@ -64,7 +64,7 @@ type Config struct {
 	Proxy     netclient.ProxySpec
 	KeyEnv    string
 	KeySource string
-	// MaxOutputTokens is the total provider output budget. Zero enables Reasonix's
+	// MaxOutputTokens is the total provider output budget. Zero enables Corvus's
 	// 32K reasoning safety default on official DeepSeek and otherwise omits the
 	// field; thinking-disabled DeepSeek requests and negative values omit it.
 	MaxOutputTokens int

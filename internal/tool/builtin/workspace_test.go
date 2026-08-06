@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/tool"
+	"corvus/internal/tool"
 )
 
 func TestResolveIn(t *testing.T) {
@@ -169,7 +169,7 @@ func TestWorkspaceToolSchemasStableAcrossRoots(t *testing.T) {
 	}
 
 	resolver := NewPathResolver()
-	resolver.RegisterReadRoot("__reasonix_external_folder/schema/root", t.TempDir())
+	resolver.RegisterReadRoot("__corvus_external_folder/schema/root", t.TempDir())
 	withResolver := workspaceSchemasJSONWithResolver(t, firstRoot, resolver)
 	if first != withResolver {
 		t.Fatalf("workspace tool schemas should not depend on external read roots:\nfirst=%s\nwith=%s", first, withResolver)
@@ -201,7 +201,7 @@ func TestWorkspaceReadToolsResolveExternalReadRoots(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	token := "__reasonix_external_folder/abc123/External"
+	token := "__corvus_external_folder/abc123/External"
 	resolver := NewPathResolver()
 	resolver.RegisterReadRoot(token, external)
 	tools := byName(Workspace{Dir: workspace, ReadPaths: resolver}.Tools("read_file", "ls", "grep", "glob"))

@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"reasonix/internal/i18n"
+	"corvus/internal/i18n"
 )
 
 // copyPicker is an in-chat overlay for "/copy" that lets the user pick an

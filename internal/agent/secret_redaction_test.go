@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 type secretOutputTool struct{}

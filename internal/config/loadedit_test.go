@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	fileencoding "reasonix/internal/fileutil/encoding"
+	fileencoding "corvus/internal/fileutil/encoding"
 )
 
 func TestLoadForEdit(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "reasonix.toml")
+	path := filepath.Join(dir, "corvus.toml")
 	custom := `default_model = "custom"
 [[providers]]
 name = "custom"
@@ -40,7 +40,7 @@ api_key_env = "X_KEY"
 }
 
 func TestMergeTOMLUIProviderAccessPreservesExplicitEmpty(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "reasonix.toml")
+	path := filepath.Join(t.TempDir(), "corvus.toml")
 	if err := os.WriteFile(path, []byte("[ui]\nprovider_access = []\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ api_key_env = "LOCAL_KEY"
 
 func TestLoadForEditNormalizesLegacyMCPTiersWithoutWriting(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "reasonix.toml")
+	path := filepath.Join(dir, "corvus.toml")
 	body := `
 [[plugins]]
 name = "playwright"
@@ -115,7 +115,7 @@ model = "m"
 }
 
 func TestLoadForEditReadOnlyStrictDoesNotMigrateDisk(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "reasonix.toml")
+	path := filepath.Join(t.TempDir(), "corvus.toml")
 	body := []byte(`
 [[plugins]]
 name = "playwright"
@@ -145,7 +145,7 @@ func TestLoadForEditDoesNotBindEditedConfigRootCredentials(t *testing.T) {
 	project := t.TempDir()
 	launch := t.TempDir()
 	home := t.TempDir()
-	path := filepath.Join(project, "reasonix.toml")
+	path := filepath.Join(project, "corvus.toml")
 	body := `default_model = "custom/m"
 [[providers]]
 name = "custom"

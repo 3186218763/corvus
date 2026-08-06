@@ -4,15 +4,15 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/skill/builtincontent"
+	"corvus/internal/skill/builtincontent"
 )
 
-func TestLoadReasonixGuide(t *testing.T) {
-	sk, err := builtincontent.LoadReasonixGuide()
+func TestLoadCorvusGuide(t *testing.T) {
+	sk, err := builtincontent.LoadCorvusGuide()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sk.Name != "reasonix-guide" {
+	if sk.Name != "corvus-guide" {
 		t.Fatalf("name = %q", sk.Name)
 	}
 	if sk.Description == "" {
@@ -21,7 +21,7 @@ func TestLoadReasonixGuide(t *testing.T) {
 	if sk.RunAs != "inline" {
 		t.Fatalf("runAs = %q, want inline", sk.RunAs)
 	}
-	if !strings.Contains(sk.Body, "reasonix doctor capabilities") {
+	if !strings.Contains(sk.Body, "corvus doctor capabilities") {
 		t.Fatal("body should recommend doctor capabilities")
 	}
 	if strings.Contains(strings.ToLower(sk.Frontmatter["auto-use"]), "require") {

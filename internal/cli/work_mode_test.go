@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/boot"
-	"reasonix/internal/command"
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	"reasonix/internal/i18n"
-	"reasonix/internal/provider"
-	"reasonix/internal/skill"
+	"corvus/internal/agent"
+	"corvus/internal/boot"
+	"corvus/internal/command"
+	"corvus/internal/control"
+	"corvus/internal/event"
+	"corvus/internal/i18n"
+	"corvus/internal/provider"
+	"corvus/internal/skill"
 )
 
 func TestRuntimeProfileDisplayLocalizesLabels(t *testing.T) {

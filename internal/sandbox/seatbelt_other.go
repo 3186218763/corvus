@@ -138,7 +138,7 @@ func bwrapArgsForArgs(spec Spec, args []string) []string {
 }
 
 // bwrapForbidReadArgs returns mounts suitable for both configured directory
-// roots and Reasonix-owned credential files. bubblewrap cannot mount tmpfs on a
+// roots and Corvus-owned credential files. bubblewrap cannot mount tmpfs on a
 // file, so an existing file is replaced by a read-only /dev/null bind instead.
 // Missing paths are ignored: there are no bytes to protect and passing a
 // missing mount destination would make an otherwise valid sandbox fail closed.

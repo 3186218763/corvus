@@ -1,18 +1,18 @@
-# DeepSeek-Reasonix 深度探索（以源码为准）
+# DeepSeek-Corvus 深度探索（以源码为准）
 
 > 本文基于当前仓库 **源码通读** 整理（分支 `main-v2`），不依赖 README 叙事。  
-> 对照包：`cmd/reasonix`、`internal/cli`、`internal/boot`、`internal/control`、`internal/agent`、`internal/evidence`、`internal/checkpoint`、`internal/permission`、`internal/recovery`、`internal/event` 等。  
+> 对照包：`cmd/corvus`、`internal/cli`、`internal/boot`、`internal/control`、`internal/agent`、`internal/evidence`、`internal/checkpoint`、`internal/permission`、`internal/recovery`、`internal/event` 等。  
 > 条目速查可另见 `DESIGN.zh-CN.md`；**行为以本仓实现与测试为准**。
 
 ---
 
 ## 0. 项目是什么
 
-**Reasonix** 是一个用 Go 实现的本地 AI 编程代理 runtime：
+**Corvus** 是一个用 Go 实现的本地 AI 编程代理 runtime：
 
 | 事实 | 源码依据 |
 |------|----------|
-| 唯一可执行入口 | `cmd/reasonix/main.go` → `cli.Run` |
+| 唯一可执行入口 | `cmd/corvus/main.go` → `cli.Run` |
 | 唯一交互面 | Bubble Tea TUI；非 TTY 直接退出（`cli.Run` 检查 `cliIsInteractive`） |
 | 装配单点 | `boot.Build`：配置 → `control.Controller` |
 | 执行核 | `agent.Agent` 或双模型 `agent.Coordinator`（均实现 `Runner`） |
@@ -34,7 +34,7 @@
 **按调用链读代码：**
 
 ```
-cmd/reasonix/main.go
+cmd/corvus/main.go
   blank-import: provider/{openai,anthropic,responses}, tool/builtin
   → cli.Run
       → boot.Build(Options) → *control.Controller
@@ -437,7 +437,7 @@ Depth：`light` | `full`；可 `MaxResearchRounds` 注入 `withRunStepLimit`。
 - `[no_changes]` → 不执行  
 - `[planner_requires_approval]` 或 **中英文 approval 短语**（含“用户已批准”也重新门控，因 planner 不知 host 状态）  
 - `<planner-ask>…</planner-ask>` → 结构化 Ask  
-- handoff 格式带 `Reasonix executor handoff` marker  
+- handoff 格式带 `Corvus executor handoff` marker  
 
 降级策略：**plan_and_execute** 下 planner 失败可 executor-only；**plan_only / plan_for_approval** fail-closed。
 
@@ -517,7 +517,7 @@ Depth：`light` | `full`；可 `MaxResearchRounds` 注入 `withRunStepLimit`。
 
 ## 11. 缓存命中机制（深度）
 
-Reasonix 的 cache-first **不是**客户端本地缓存 LLM 回复，而是：  
+Corvus 的 cache-first **不是**客户端本地缓存 LLM 回复，而是：  
 **把发往 Provider 的请求做成「字节稳定的长前缀 + 每轮变长的尾部」**，吃服务端 **prompt cache / automatic prefix cache**（DeepSeek 的 `prompt_cache_hit_tokens`、OpenAI 的 `prompt_tokens_details.cached_tokens`、Anthropic 的 `cache_read_input_tokens` 等）。
 
 核心文件：
@@ -540,7 +540,7 @@ Reasonix 的 cache-first **不是**客户端本地缓存 LLM 回复，而是：
 同一会话连续请求里，若 **messages（及 tools 等）从头部起有一段与历史请求字节一致**，一致的那一段可计为 cache hit；新增尾部计为 miss。  
 粒度通常按 token block（live 测试注释提到 DeepSeek 约 64-token 块），前缀太短可能 hit=0。
 
-Reasonix **不自己实现 KV cache**，只做两件事：
+Corvus **不自己实现 KV cache**，只做两件事：
 
 1. **尽量让「上一请求的完整内容」成为「下一请求的前缀」**（append-only 历史）  
 2. **把服务端回报的 hit/miss 归一、累计、诊断、定价**
@@ -796,7 +796,7 @@ Evidence ledger、todoState、deliveryCheckpoint **不进 prompt**（host 状态
 | `openai.TestRealDeepSeekCacheProbe`（`-tags live`） | 真实 API：重复前缀是否 hit、tool-call reasoning 回放是否仍可 cache |
 | tool schema/order 稳定性测试 | 防无意改 Description/Schema/注册序 |
 
-Release 可选：`REASONIX_RELEASE_CACHE_GUARD=1` 门槛化 hit 率回归。
+Release 可选：`CORVUS_RELEASE_CACHE_GUARD=1` 门槛化 hit 率回归。
 
 ---
 
@@ -877,12 +877,12 @@ Shell：`bash` `bash_output` `kill_shell` `wait`
 |------|----------|
 | MCP | cache schema → lazy 进程；`EnsureConnected`；Economy 按需；`use_capability` 稳定代理 |
 | Capability | Catalog + 确定性路由 + 可选 SemanticRouter（3s 超时、不覆盖 require/prefer） |
-| Skills | project > custom > global > builtin；索引进前缀、正文按需；兼容 `.reasonix/.agents/.claude` |
+| Skills | project > custom > global > builtin；索引进前缀、正文按需；兼容 `.corvus/.agents/.claude` |
 | Memory | Standing instructions + auto-memory；mid-session 只走 turn tail |
 | Plugin packages | native / Codex / Claude manifest |
 | Hooks | PreToolUse 可阻断；UserPromptSubmit/Stop 在 controller 边界 |
 
-内置 skill `reasonix-guide`：用 `doctor capabilities` 做自诊断剧本。
+内置 skill `corvus-guide`：用 `doctor capabilities` 做自诊断剧本。
 
 ---
 
@@ -939,7 +939,7 @@ TUI 输入
 
 ## 18. 建议阅读顺序（按源码）
 
-1. `cmd/reasonix/main.go`  
+1. `cmd/corvus/main.go`  
 2. `internal/cli/cli.go` → `setupProfileWithOverrides`  
 3. `internal/boot/boot.go` `Build` + `token_profile.go`  
 4. `internal/control/controller.go` 结构体字段 + `turn_orchestrator.go`  
@@ -958,7 +958,7 @@ TUI 输入
 
 ## 19. 结语
 
-Reasonix 的核心不是「让模型会调工具」，而是：
+Corvus 的核心不是「让模型会调工具」，而是：
 
 1. **工具结果如何变成 host 可审计证据**  
 2. **证据不足时如何拒绝“口头完成”**  

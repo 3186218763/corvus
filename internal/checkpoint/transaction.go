@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	fileenc "reasonix/internal/fileutil/encoding"
+	fileenc "corvus/internal/fileutil/encoding"
 )
 
 // InjectFail is a test seam. When set, CommitRewind fails at the named phase
@@ -643,7 +643,7 @@ func (s *Store) prepareTransaction(plan RewindPlan, applier ConversationApplier)
 func transactionSiblingPaths(absPath, transactionID string, index int) (publish, backup string) {
 	dir := filepath.Dir(absPath)
 	base := filepath.Base(absPath)
-	prefix := fmt.Sprintf(".%s.reasonix-%s-%d", base, transactionID, index)
+	prefix := fmt.Sprintf(".%s.corvus-%s-%d", base, transactionID, index)
 	return filepath.Join(dir, prefix+".tmp"), filepath.Join(dir, prefix+".bak")
 }
 
@@ -1036,7 +1036,7 @@ func (s *Store) compensatePublished(targets []TransactionTarget, stages []FileSt
 					if suffix == "" {
 						suffix = "unknown"
 					}
-					recov := t.AbsPath + ".reasonix-recovery-" + suffix
+					recov := t.AbsPath + ".corvus-recovery-" + suffix
 					_ = secureWriteNew(s.root, recov, data, os.FileMode(t.ForwardMode))
 					err = fmt.Errorf("external modification after publish; recovery copy at %s", recov)
 				} else {
@@ -1166,7 +1166,7 @@ func (s *Store) persistTransaction(tx *TransactionManifest) error {
 
 func (s *Store) txDir() string {
 	if s.dir == "" {
-		return filepath.Join(os.TempDir(), "reasonix-ckpt-tx")
+		return filepath.Join(os.TempDir(), "corvus-ckpt-tx")
 	}
 	return filepath.Join(s.dir, "transactions")
 }

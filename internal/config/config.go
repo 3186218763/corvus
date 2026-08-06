@@ -1,5 +1,5 @@
-// Package config loads Reasonix's runtime configuration from TOML. Resolution order:
-// flag > project ./reasonix.toml > user config.toml (in the OS user-config dir) > built-in defaults.
+// Package config loads Corvus's runtime configuration from TOML. Resolution order:
+// flag > project ./corvus.toml > user config.toml (in the OS user-config dir) > built-in defaults.
 // Secrets come from the environment via api_key_env and are never stored in
 // config files.
 package config
@@ -17,9 +17,9 @@ import (
 	"runtime"
 	"strings"
 
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/netclient"
-	"reasonix/internal/provider"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/netclient"
+	"corvus/internal/provider"
 )
 
 var validSkillName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
@@ -39,11 +39,11 @@ func SkillNameKey(name string) string {
 	return name
 }
 
-// Config is Reasonix's runtime configuration.
+// Config is Corvus's runtime configuration.
 type Config struct {
 	ConfigVersion    int               `toml:"config_version"`
 	DefaultModel     string            `toml:"default_model"`
-	Language         string            `toml:"language"` // ui/model language tag (e.g. "zh"); empty = auto-detect from $LANG / $REASONIX_LANG
+	Language         string            `toml:"language"` // ui/model language tag (e.g. "zh"); empty = auto-detect from $LANG / $CORVUS_LANG
 	CredentialsStore string            `toml:"credentials_store"`
 	UI               UIConfig          `toml:"ui"`
 	Agent            AgentConfig       `toml:"agent"`
@@ -148,7 +148,7 @@ func (c *Config) IgnoredLegacyAgentStepLimits() bool {
 	return c != nil && c.ignoredLegacyStepLimits
 }
 
-// IgnoredProjectDefaultModel returns the project reasonix.toml default_model
+// IgnoredProjectDefaultModel returns the project corvus.toml default_model
 // that LoadForRoot ignored because no configured provider serves it (see
 // restoreUnresolvableProjectDefaultModel), or "" when none was ignored.
 func (c *Config) IgnoredProjectDefaultModel() string {
@@ -159,7 +159,7 @@ func (c *Config) IgnoredProjectDefaultModel() string {
 }
 
 // SecretsConfig controls the credential protection layers. It is a user-global
-// setting: project reasonix.toml values are ignored (see LoadForRoot), so a
+// setting: project corvus.toml values are ignored (see LoadForRoot), so a
 // cloned repository cannot silently opt the user into workflow-breaking
 // protections.
 type SecretsConfig struct {
@@ -445,7 +445,7 @@ func (c *Config) NetworkProxyMode() string {
 
 // SkillsConfig configures skill discovery. Paths adds extra "custom"-scope skill
 // roots — each a directory of SKILL.md / <name>.md playbooks — scanned between
-// the project roots (.reasonix/.agents/.agent/.claude under the workspace) and
+// the project roots (.corvus/.agents/.agent/.claude under the workspace) and
 // the global roots. ExcludedPaths hides matching discovery roots without deleting
 // folders. ~, relative paths, and ${VAR} expansion are supported. DisabledSkills
 // hides named skills from the agent prompt, slash invocation, and skill tools
@@ -696,7 +696,7 @@ type AgentConfig struct {
 	MaxParallelWriters int `toml:"max_parallel_writers"`
 	// OutputStyle selects a persona/tone block folded into the system prompt at
 	// startup (a built-in like "explanatory"/"learning"/"concise", or a custom
-	// .reasonix/output-styles/<name>.md). Empty = the unmodified prompt.
+	// .corvus/output-styles/<name>.md). Empty = the unmodified prompt.
 	OutputStyle string `toml:"output_style"`
 	// PromptCacheKey selects sticky prompt-cache key policy for OpenAI-compatible
 	// and non-DeepSeek Responses requests: auto|on|off|custom. Empty means auto.
@@ -1153,7 +1153,7 @@ func (s MCPConfigSource) ProjectScoped() bool {
 // static Headers. String fields support ${VAR} / ${VAR:-default} expansion so
 // secrets (bearer tokens, keys) come from the environment, not the file. The
 // fields mirror Claude Code's mcpServers spec, so entries can come from either
-// reasonix.toml's [[plugins]] or a project-root .mcp.json (see loadMCPJSON).
+// corvus.toml's [[plugins]] or a project-root .mcp.json (see loadMCPJSON).
 type PluginEntry struct {
 	Name    string            `toml:"name"`
 	Type    string            `toml:"type"` // "stdio" (default) | "http" | "sse"
@@ -1249,7 +1249,7 @@ func (c *Config) EnabledPlugins(workspace string, activation *MCPActivationStore
 }
 
 // DefaultSystemPrompt is used when config provides none.
-const DefaultSystemPrompt = `You are Reasonix, a coding agent.
+const DefaultSystemPrompt = `You are Corvus, a coding agent.
 Use the available tools when they help you complete the user's request.
 Keep changes focused and responses concise.`
 
@@ -1287,8 +1287,8 @@ func Default() *Config {
 			MaxSubagentConcurrency: 6,
 			MaxParallelWriters:     3,
 		},
-		// Mode "ask" with no rules keeps `reasonix run` autonomous (no TTY → ask
-		// resolves to allow) while `reasonix` prompts before writers. Users add
+		// Mode "ask" with no rules keeps `corvus run` autonomous (no TTY → ask
+		// resolves to allow) while `corvus` prompts before writers. Users add
 		// deny/allow rules to harden or quiet specific tools.
 		Permissions: PermissionsConfig{Mode: "ask"},
 		// Sandbox uses platform defaults: macOS/Linux jail bash by default;
@@ -1477,7 +1477,7 @@ func (c *Config) resolveNewSessionChatModel(providerAllowed func(string) bool, p
 
 // APIKey resolves the entry's API key from its api_key_env.
 // Prefer the value resolved at load time; otherwise fall back to project .env
-// (cwd) then Reasonix's persistent credentials store.
+// (cwd) then Corvus's persistent credentials store.
 func (e *ProviderEntry) APIKey() string {
 	if e == nil {
 		return ""
@@ -1494,7 +1494,7 @@ func (e *ProviderEntry) APIKey() string {
 // ResolveAPIKeyFromProcessEnvForProbe pins a setup-time, user-entered key onto
 // this entry for an immediate connectivity probe. Normal runtime resolution does
 // not call this; loaded provider entries resolve from project .env first, then
-// Reasonix's persistent credentials store.
+// Corvus's persistent credentials store.
 func (e *ProviderEntry) ResolveAPIKeyFromProcessEnvForProbe() {
 	if e == nil {
 		return
@@ -1576,7 +1576,7 @@ func (c *Config) ResolveSystemPrompt() (string, error) {
 // ResolveSystemPromptForRoot is like ResolveSystemPrompt but resolves a relative
 // system_prompt_file against root. Desktop tabs pass their workspace root here so
 // prompt files are project-scoped even when the process cwd is elsewhere. A path
-// inherited from user config may fall back to Reasonix home, while a path chosen
+// inherited from user config may fall back to Corvus home, while a path chosen
 // by project config is confined to the workspace and never probes user files.
 func (c *Config) ResolveSystemPromptForRoot(root string) (string, error) {
 	path := c.Agent.SystemPromptFile
@@ -1605,7 +1605,7 @@ func (c *Config) ResolveSystemPromptForRoot(root string) (string, error) {
 	}
 
 	candidates := []string{filepath.Join(resolveRoot(root), path)}
-	if home := ReasonixHomeDir(); home != "" {
+	if home := CorvusHomeDir(); home != "" {
 		homeCandidate := filepath.Join(home, path)
 		if filepath.Clean(homeCandidate) != filepath.Clean(candidates[0]) {
 			candidates = append(candidates, homeCandidate)

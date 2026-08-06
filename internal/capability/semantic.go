@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
+	"corvus/internal/event"
+	"corvus/internal/provider"
 )
 
 const (

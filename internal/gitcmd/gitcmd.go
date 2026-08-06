@@ -1,8 +1,8 @@
-// Package gitcmd builds the git invocations Reasonix runs on its own behalf:
+// Package gitcmd builds the git invocations Corvus runs on its own behalf:
 // the status readout, workspace change probes, worktree management, and plugin
 // source checkouts.
 //
-// Every one of those may point at a repository Reasonix did not create, and a
+// Every one of those may point at a repository Corvus did not create, and a
 // repository's own .git/config is data authored by whoever produced the
 // repository — not configuration the user chose. Several config keys name a
 // command that git then executes during ordinary read-only work: an index
@@ -28,8 +28,8 @@ import (
 	"runtime"
 	"slices"
 
-	"reasonix/internal/proc"
-	"reasonix/internal/secrets"
+	"corvus/internal/proc"
+	"corvus/internal/secrets"
 )
 
 // baseConfig is the -c override set every invocation carries.

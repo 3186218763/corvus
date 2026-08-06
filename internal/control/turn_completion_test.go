@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"reasonix/internal/event"
+	"corvus/internal/event"
 )
 
 type completionCountingSink struct {

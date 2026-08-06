@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"reasonix/internal/diff"
+	"corvus/internal/diff"
 )
 
 // writerRegistry is shared across parent/child observers so background writer
@@ -225,7 +225,7 @@ func (o *MutationObserver) BeforeMutationFromChange(ch diff.Change, tool string)
 }
 
 // AfterMutation re-reads the path after a tool attempt (success or failure) and
-// records the after fingerprint under Reasonix ownership.
+// records the after fingerprint under Corvus ownership.
 func (o *MutationObserver) AfterMutation(path, tool string) {
 	if o == nil || o.store == nil || path == "" {
 		return

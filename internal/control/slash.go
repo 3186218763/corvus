@@ -6,11 +6,11 @@ import (
 	"strconv"
 	"strings"
 
-	"reasonix/internal/config"
-	"reasonix/internal/i18n"
-	"reasonix/internal/migration"
-	"reasonix/internal/pluginpkg"
-	"reasonix/internal/skill"
+	"corvus/internal/config"
+	"corvus/internal/i18n"
+	"corvus/internal/migration"
+	"corvus/internal/pluginpkg"
+	"corvus/internal/skill"
 )
 
 // SlashItem is one slash-completion suggestion. Insert is the token text placed
@@ -463,7 +463,7 @@ func (c *Controller) managementNotice(trimmed string) bool {
 		}
 		switch sub {
 		case "", "list", "ls":
-			text, err := pluginpkg.InstalledListText(config.ReasonixHomeDir())
+			text, err := pluginpkg.InstalledListText(config.CorvusHomeDir())
 			if err != nil {
 				c.notice("plugins: " + err.Error())
 			} else {
@@ -474,7 +474,7 @@ func (c *Controller) managementNotice(trimmed string) bool {
 				c.notice("usage: /plugins show <name>")
 				return true
 			}
-			text, err := pluginpkg.InstalledShowText(config.ReasonixHomeDir(), fields[2])
+			text, err := pluginpkg.InstalledShowText(config.CorvusHomeDir(), fields[2])
 			if err != nil {
 				c.notice("plugins: " + err.Error())
 			} else {

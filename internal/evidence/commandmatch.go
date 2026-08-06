@@ -3,7 +3,7 @@ package evidence
 import (
 	"strings"
 
-	"reasonix/internal/shellparse"
+	"corvus/internal/shellparse"
 )
 
 // CommandMatches reports whether a cited verification command is proven by a

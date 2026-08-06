@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/store"
+	"corvus/internal/agent"
+	"corvus/internal/store"
 )
 
 func TestSessionLeaseKeeperRebindMovesLease(t *testing.T) {
@@ -149,7 +149,7 @@ func TestSessionInUseMessageNamesHolder(t *testing.T) {
 		},
 	}
 	msg := SessionInUseMessage(err)
-	if !strings.Contains(msg, "another Reasonix process") {
+	if !strings.Contains(msg, "another Corvus process") {
 		t.Fatalf("message %q missing holder wording", msg)
 	}
 	if !strings.Contains(msg, "pid 12345") || !strings.Contains(msg, "on devbox") {
@@ -173,7 +173,7 @@ func TestSessionInUseMessageFallsBackWithoutInfo(t *testing.T) {
 		"zero pid":   &agent.SessionLeaseError{Info: &agent.SessionLeaseInfo{PID: 0}},
 	} {
 		msg := SessionInUseMessage(err)
-		if msg != "this session is in use by another Reasonix window or process" {
+		if msg != "this session is in use by another Corvus window or process" {
 			t.Fatalf("%s: message = %q, want generic fallback", name, msg)
 		}
 		if strings.Contains(msg, "pid "+strconv.Itoa(os.Getpid())) {

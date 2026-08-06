@@ -17,18 +17,18 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/agent/testutil"
-	"reasonix/internal/checkpoint"
-	"reasonix/internal/config"
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	"reasonix/internal/i18n"
-	"reasonix/internal/provider"
-	"reasonix/internal/secrets"
-	"reasonix/internal/skill"
-	"reasonix/internal/testenv"
-	"reasonix/internal/tool"
+	"corvus/internal/agent"
+	"corvus/internal/agent/testutil"
+	"corvus/internal/checkpoint"
+	"corvus/internal/config"
+	"corvus/internal/control"
+	"corvus/internal/event"
+	"corvus/internal/i18n"
+	"corvus/internal/provider"
+	"corvus/internal/secrets"
+	"corvus/internal/skill"
+	"corvus/internal/testenv"
+	"corvus/internal/tool"
 )
 
 type blockingTurnRunner struct{ started chan struct{} }
@@ -41,9 +41,9 @@ type stubbornTurnRunner struct {
 const tinyPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
 const (
-	middleClickPasteHelperFlag = "GO_WANT_REASONIX_MIDDLE_CLICK_PASTE_HELPER"
-	middleClickPasteHelperMode = "REASONIX_MIDDLE_CLICK_PASTE_HELPER_MODE"
-	middleClickPasteTestValue  = "REASONIX_MIDDLE_CLICK_TEST_VALUE"
+	middleClickPasteHelperFlag = "GO_WANT_CORVUS_MIDDLE_CLICK_PASTE_HELPER"
+	middleClickPasteHelperMode = "CORVUS_MIDDLE_CLICK_PASTE_HELPER_MODE"
+	middleClickPasteTestValue  = "CORVUS_MIDDLE_CLICK_TEST_VALUE"
 )
 
 func TestMiddleClickPasteCommandHelper(t *testing.T) {
@@ -75,7 +75,7 @@ func TestMain(m *testing.M) {
 
 	// Pin the UI language for the whole cli test binary. Production code
 	// (cli.Run) calls i18n.DetectLanguage("") which resolves the host locale from
-	// the environment (REASONIX_LANG/LC_ALL/LC_MESSAGES/LANG) and installs it as
+	// the environment (CORVUS_LANG/LC_ALL/LC_MESSAGES/LANG) and installs it as
 	// the global i18n.M. On a non-English dev machine that flips M to e.g.
 	// Chinese, and tests that exercise the CLI entry point (acp_test.go,
 	// cli_test.go) don't restore it — so later tests asserting English UI strings
@@ -83,7 +83,7 @@ func TestMain(m *testing.M) {
 	// deterministic English environment keeps the suite independent of the host
 	// locale (matching CI). Tests that need another language still set it
 	// explicitly via i18n.DetectLanguage(lang) with their own cleanup.
-	os.Unsetenv("REASONIX_LANG")
+	os.Unsetenv("CORVUS_LANG")
 	os.Unsetenv("LC_ALL")
 	os.Unsetenv("LC_MESSAGES")
 	os.Setenv("LANG", "en_US.UTF-8")
@@ -142,7 +142,7 @@ func writeTUIImageCapabilityConfig(t *testing.T, root string) {
 		Models:       []string{"text-only", "vision-pro"},
 		VisionModels: []string{"vision-pro"},
 	}}
-	if err := cfg.SaveTo(filepath.Join(root, "reasonix.toml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(root, "corvus.toml")); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
 }
@@ -900,14 +900,14 @@ func TestMainManagerFollowsTranscriptWithoutTopPadding(t *testing.T) {
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
 	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
 	m = m0.(chatTUI)
-	m.wrappedLines = []string{"reasonix", "› /mcp"}
+	m.wrappedLines = []string{"corvus", "› /mcp"}
 
 	out := ansi.Strip(m.renderTranscriptWithMainManager("Manage MCP servers\n1 servers"))
 	lines := strings.Split(out, "\n")
 	if len(lines) < 4 {
 		t.Fatalf("rendered manager area too short:\n%s", out)
 	}
-	if !strings.Contains(lines[0], "reasonix") || !strings.Contains(lines[1], "/mcp") {
+	if !strings.Contains(lines[0], "corvus") || !strings.Contains(lines[1], "/mcp") {
 		t.Fatalf("transcript lines should stay above manager:\n%s", out)
 	}
 	if strings.TrimSpace(lines[2]) != "" {
@@ -1251,7 +1251,7 @@ func TestStatusCommandShowsRuntimeDetails(t *testing.T) {
 	m.effortLevel = "max"
 	m.runtimeProfile = "delivery"
 	m.balance = "$10.00"
-	m.gitStatus = gitStatus{Repo: "Reasonix", Branch: "feature/status-host"}
+	m.gitStatus = gitStatus{Repo: "Corvus", Branch: "feature/status-host"}
 	m.mouseCaptureOff = true
 	m.runSlashCommand("/status")
 	out := ansi.Strip(strings.Join(m.transcript, "\n"))
@@ -1476,22 +1476,22 @@ func TestUnsendDiscardsBufferedEvents(t *testing.T) {
 
 func TestRecoveryPauseTurnDoneIsInformational(t *testing.T) {
 	t.Cleanup(func() { i18n.DetectLanguage("en") })
-	const backendFallback = "Automatic retries paused. Reasonix stopped repeated attempts and kept completed work. Send \"continue\" to start a fresh attempt, or add instructions to change direction."
+	const backendFallback = "Automatic retries paused. Corvus stopped repeated attempts and kept completed work. Send \"continue\" to start a fresh attempt, or add instructions to change direction."
 	tests := []struct {
 		lang string
 		want string
 	}{
 		{
 			lang: "en",
-			want: "Automatic retries paused. Reasonix stopped repeated attempts and kept completed work. Send “Continue” to start a fresh attempt, or add instructions to change direction.",
+			want: "Automatic retries paused. Corvus stopped repeated attempts and kept completed work. Send “Continue” to start a fresh attempt, or add instructions to change direction.",
 		},
 		{
 			lang: "zh",
-			want: "已暂停自动重试。Reasonix 已停止重复尝试，并保留已完成的工作。发送“继续”即可开始新一轮，也可以补充要求来调整方向。",
+			want: "已暂停自动重试。Corvus 已停止重复尝试，并保留已完成的工作。发送“继续”即可开始新一轮，也可以补充要求来调整方向。",
 		},
 		{
 			lang: "zh-TW",
-			want: "已暫停自動重試。Reasonix 已停止重複嘗試，並保留已完成的工作。傳送「繼續」即可開始新一輪，也可以補充要求來調整方向。",
+			want: "已暫停自動重試。Corvus 已停止重複嘗試，並保留已完成的工作。傳送「繼續」即可開始新一輪，也可以補充要求來調整方向。",
 		},
 	}
 	for _, tt := range tests {
@@ -2269,7 +2269,7 @@ func isolateUserConfig(t *testing.T) {
 	t.Helper()
 	root := t.TempDir()
 	t.Setenv("HOME", root)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
 	t.Setenv("AppData", filepath.Join(root, "AppData")) // os.UserConfigDir reads AppData on Windows
 	t.Chdir(root)
@@ -2371,7 +2371,7 @@ func TestReasoningLanguageCommandPersistsAndUpdatesController(t *testing.T) {
 
 func TestReasoningLanguageCommandWritesUserConfigNotProjectConfig(t *testing.T) {
 	isolateUserConfig(t)
-	projectPath := filepath.Join(mustGetwd(t), "reasonix.toml")
+	projectPath := filepath.Join(mustGetwd(t), "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte("[agent]\nreasoning_language = \"en\"\n"), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
@@ -2533,7 +2533,7 @@ func TestLanguageCommandAutoClearsPinnedLanguage(t *testing.T) {
 
 func TestLanguageCommandAutoClearsLowerPriorityUserOverride(t *testing.T) {
 	isolateUserConfig(t)
-	t.Setenv("REASONIX_LANG", "")
+	t.Setenv("CORVUS_LANG", "")
 	t.Setenv("LC_ALL", "")
 	t.Setenv("LC_MESSAGES", "")
 	t.Setenv("LANG", "")
@@ -2549,7 +2549,7 @@ func TestLanguageCommandAutoClearsLowerPriorityUserOverride(t *testing.T) {
 		t.Fatalf("save user config: %v", err)
 	}
 	projectCfg := config.Default()
-	if err := projectCfg.SaveTo("reasonix.toml"); err != nil {
+	if err := projectCfg.SaveTo("corvus.toml"); err != nil {
 		t.Fatalf("save project config: %v", err)
 	}
 
@@ -3017,7 +3017,7 @@ func TestRegularForceGotoBottomScrollJumpNoClearScreenByDefault(t *testing.T) {
 func TestScrollRepaintEnvRestoresClearScreen(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	ch := make(chan event.Event, 1)
-	t.Setenv("REASONIX_TUI_SCROLL_REPAINT", "1")
+	t.Setenv("CORVUS_TUI_SCROLL_REPAINT", "1")
 	adv := func(m chatTUI, msg tea.Msg) (chatTUI, tea.Cmd) {
 		n, cmd := m.Update(msg)
 		return n.(chatTUI), cmd
@@ -3037,7 +3037,7 @@ func TestScrollRepaintEnvRestoresClearScreen(t *testing.T) {
 	cur, cmd := adv(cur, tea.WindowSizeMsg{Width: 80, Height: 8})
 
 	if !cur.scrollRepaint {
-		t.Fatal("REASONIX_TUI_SCROLL_REPAINT=1 should enable legacy repaint")
+		t.Fatal("CORVUS_TUI_SCROLL_REPAINT=1 should enable legacy repaint")
 	}
 	if cmd == nil {
 		t.Fatal("legacy repaint mode must still request ClearScreen on scroll jumps")
@@ -3538,7 +3538,7 @@ func TestDynamicMCPFreshApprovalHidesRememberedChoices(t *testing.T) {
 }
 
 func TestDynamicBashApprovalChoicesUseExactLiteralRules(t *testing.T) {
-	const command = "git status $(touch /tmp/reasonix-dynamic-approval)"
+	const command = "git status $(touch /tmp/corvus-dynamic-approval)"
 	approval := &event.Approval{Tool: "bash", Subject: command}
 	choices := approvalChoices(approval)
 	if len(choices) != 4 {
@@ -3622,7 +3622,7 @@ func TestSlashMigrateShowsProgress(t *testing.T) {
 
 func TestSlashMigrateFromImportsExplicitSessions(t *testing.T) {
 	home := isolateCLIConfigHome(t)
-	legacySessions := filepath.Join(home, "Old Reasonix", "sessions")
+	legacySessions := filepath.Join(home, "Old Corvus", "sessions")
 	if err := os.MkdirAll(legacySessions, 0o755); err != nil {
 		t.Fatal(err)
 	}

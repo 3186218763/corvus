@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 // TestStreamRetriesThenSucceeds drives the real retry path end-to-end: the
@@ -582,7 +582,7 @@ func TestStreamSendsCustomHeaders(t *testing.T) {
 			http.Error(w, "authorization was not preserved", http.StatusUnauthorized)
 			return
 		}
-		if r.Header.Get("HTTP-Referer") != "https://app.example" || r.Header.Get("X-Title") != "Reasonix" {
+		if r.Header.Get("HTTP-Referer") != "https://app.example" || r.Header.Get("X-Title") != "Corvus" {
 			http.Error(w, "custom headers missing", http.StatusForbidden)
 			return
 		}
@@ -604,7 +604,7 @@ func TestStreamSendsCustomHeaders(t *testing.T) {
 			"Authorization": "Bearer wrong",
 			"Accept":        "application/json",
 			"HTTP-Referer":  "https://app.example",
-			"X-Title":       "Reasonix",
+			"X-Title":       "Corvus",
 		}},
 	})
 	if err != nil {
@@ -2309,7 +2309,7 @@ func TestBuildRequestIncludesPromptCacheKey(t *testing.T) {
 	c := &client{model: "gpt-test", baseURL: "https://api.openai.com", deepseek: false}
 	req := c.buildRequest(provider.Request{
 		Messages:       []provider.Message{{Role: provider.RoleUser, Content: "hi"}},
-		PromptCacheKey: "reasonix:session:abc",
+		PromptCacheKey: "corvus:session:abc",
 	})
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -2319,7 +2319,7 @@ func TestBuildRequestIncludesPromptCacheKey(t *testing.T) {
 	if err := json.Unmarshal(body, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m["prompt_cache_key"] != "reasonix:session:abc" {
+	if m["prompt_cache_key"] != "corvus:session:abc" {
 		t.Fatalf("body=%s", body)
 	}
 }
@@ -2336,7 +2336,7 @@ func TestBuildRequestDeepSeekHardOmitsPromptCacheKey(t *testing.T) {
 	c := &client{model: "deepseek-v4", deepseek: true, baseURL: "https://api.deepseek.com"}
 	body, _ := json.Marshal(c.buildRequest(provider.Request{
 		Messages:       []provider.Message{{Role: provider.RoleUser, Content: "hi"}},
-		PromptCacheKey: "reasonix:session:abc",
+		PromptCacheKey: "corvus:session:abc",
 	}))
 	if strings.Contains(string(body), "prompt_cache_key") {
 		t.Fatalf("DeepSeek must omit: %s", body)

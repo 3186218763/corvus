@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/agent/testutil"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/agent/testutil"
+	"corvus/internal/event"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 
-	_ "reasonix/internal/tool/builtin"
+	_ "corvus/internal/tool/builtin"
 )
 
 type stubBash struct{}

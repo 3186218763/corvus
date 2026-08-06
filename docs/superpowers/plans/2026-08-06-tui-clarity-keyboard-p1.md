@@ -278,10 +278,10 @@ func TestStatusFooterDefaultOmitsBalanceGitCache(t *testing.T) {
 	m := newTestChatTUI()
 	// attach ctrl stub with context if needed
 	m.balance = "¥12.34"
-	m.gitStatus = gitStatus{Repo: "Reasonix", Branch: "main", Added: 1}
+	m.gitStatus = gitStatus{Repo: "Corvus", Branch: "main", Added: 1}
 	// force cache metrics if test helpers exist; otherwise set fields used by cacheStatus()
 	plain := ansi.Strip(m.renderStatusBlock(m.primaryStatusLine(/*no mode*/ false, false), 100))
-	for _, banned := range []string{"BAL", "¥12.34", "Reasonix", "main"} {
+	for _, banned := range []string{"BAL", "¥12.34", "Corvus", "main"} {
 		// After lean chrome, these must not appear on default footer.
 		// Cache label: i18n.M.ChatStatusCacheLabel
 	}
@@ -291,7 +291,7 @@ func TestStatusFooterDefaultOmitsBalanceGitCache(t *testing.T) {
 func TestStatusCommandStillShowsMovedFields(t *testing.T) {
 	m := newTestChatTUI()
 	m.balance = "$10.00"
-	m.gitStatus = gitStatus{Repo: "Reasonix", Branch: "feature"}
+	m.gitStatus = gitStatus{Repo: "Corvus", Branch: "feature"}
 	// set cache if possible
 	m.runSlashCommand("/status")
 	out := ansi.Strip(strings.Join(m.transcript, "\n"))
@@ -644,7 +644,7 @@ Expected: PASS. Fix any failures before claiming done.
 
 ```bash
 make build
-# or: CGO_ENABLED=0 go build -o bin/reasonix ./cmd/reasonix
+# or: CGO_ENABLED=0 go build -o bin/corvus ./cmd/corvus
 ```
 
 - [ ] **Step 4: Commit any residual fixes**

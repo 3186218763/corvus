@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 // TestRealDeepSeekAnthropicToolLoop exercises the official Messages endpoint's

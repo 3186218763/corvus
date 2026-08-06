@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"strings"
 
-	"reasonix/internal/provider/openai"
+	"corvus/internal/provider/openai"
 )
 
 var mimoVisionModels = map[string]bool{

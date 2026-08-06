@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"reasonix/internal/proc"
-	"reasonix/internal/sandbox"
-	"reasonix/internal/secrets"
-	"reasonix/internal/tool"
+	"corvus/internal/proc"
+	"corvus/internal/sandbox"
+	"corvus/internal/secrets"
+	"corvus/internal/tool"
 )
 
 const (
@@ -175,7 +175,7 @@ func prepareMCPPrivateStateForOS(s Spec, processSandbox sandbox.Spec, env []stri
 		}
 	}
 	// Windows stdio processes are currently unsandboxed and must keep the host's
-	// short temporary directory. Nesting TEMP below Reasonix's workspace-scoped
+	// short temporary directory. Nesting TEMP below Corvus's workspace-scoped
 	// state path can exceed the 108-byte Unix-domain-socket limit used by MCP
 	// servers such as MATLAB before their initialize response is written.
 	for key, value := range privateEnv {
@@ -298,7 +298,7 @@ func stdioWorkingDir(s Spec) string {
 // enrichStdioShellPATH probes the user's interactive login shell for its PATH
 // and prepends those directories to the current environment. The result is the
 // subprocess environment with a PATH that matches what the user sees in their
-// terminal, even when Reasonix was launched from the Finder / Dock / open(1).
+// terminal, even when Corvus was launched from the Finder / Dock / open(1).
 func enrichStdioShellPATH(ctx context.Context, env []string) []string {
 	currentPath, _ := envValue(env, "PATH")
 	if shellPath := strings.TrimSpace(stdioShellPATH(ctx)); shellPath != "" {
@@ -423,7 +423,7 @@ func defaultStdioShellPATH(ctx context.Context) string {
 	if shell == "" {
 		return ""
 	}
-	const marker = "__REASONIX_PATH__="
+	const marker = "__CORVUS_PATH__="
 	script := "printf '\\n" + marker + "%s\\n' \"$PATH\""
 	for _, args := range [][]string{
 		{"-l", "-i", "-c", script},

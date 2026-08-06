@@ -12,10 +12,10 @@ import (
 	"time"
 	"unicode"
 
-	"reasonix/internal/evidence"
-	"reasonix/internal/fileutil"
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/store"
+	"corvus/internal/evidence"
+	"corvus/internal/fileutil"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/store"
 )
 
 const (

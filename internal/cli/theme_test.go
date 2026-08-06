@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/colorprofile"
 
-	"reasonix/internal/control"
+	"corvus/internal/control"
 
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
@@ -15,8 +15,8 @@ import (
 )
 
 func TestConfigureCLIThemeSwitchesModeAndDefaultStyle(t *testing.T) {
-	t.Setenv("REASONIX_THEME", "")
-	t.Setenv("REASONIX_THEME_STYLE", "")
+	t.Setenv("CORVUS_THEME", "")
+	t.Setenv("CORVUS_THEME_STYLE", "")
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
 
@@ -38,8 +38,8 @@ func TestConfigureCLIThemeSwitchesModeAndDefaultStyle(t *testing.T) {
 }
 
 func TestConfigureCLIThemeStyleOverride(t *testing.T) {
-	t.Setenv("REASONIX_THEME", "")
-	t.Setenv("REASONIX_THEME_STYLE", "")
+	t.Setenv("CORVUS_THEME", "")
+	t.Setenv("CORVUS_THEME_STYLE", "")
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
 
@@ -58,14 +58,14 @@ func TestConfigureCLIThemeStyleOverride(t *testing.T) {
 }
 
 func TestConfigureCLIThemeHonorsEnvOverride(t *testing.T) {
-	t.Setenv("REASONIX_THEME", "ember")
-	t.Setenv("REASONIX_THEME_STYLE", "")
+	t.Setenv("CORVUS_THEME", "ember")
+	t.Setenv("CORVUS_THEME_STYLE", "")
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
 
 	configureCLIThemeWithStyle("light", "glacier")
 	if activeCLITheme.name != "dark" || activeCLITheme.style != "ember" {
-		t.Fatalf("REASONIX_THEME override resolved %s/%s, want dark/ember", activeCLITheme.name, activeCLITheme.style)
+		t.Fatalf("CORVUS_THEME override resolved %s/%s, want dark/ember", activeCLITheme.name, activeCLITheme.style)
 	}
 }
 
@@ -105,8 +105,8 @@ func TestThemeArgCompletion(t *testing.T) {
 }
 
 func TestRunThemeSubcommandSwitchesAccentAndTextarea(t *testing.T) {
-	t.Setenv("REASONIX_THEME", "")
-	t.Setenv("REASONIX_THEME_STYLE", "")
+	t.Setenv("CORVUS_THEME", "")
+	t.Setenv("CORVUS_THEME_STYLE", "")
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
 	configureCLIThemeWithStyle("dark", "graphite")
@@ -184,8 +184,8 @@ func TestAutoThemeFallsBackToColorFGBG(t *testing.T) {
 }
 
 func TestApplyTextareaThemeClearsCursorLineBackground(t *testing.T) {
-	t.Setenv("REASONIX_THEME", "")
-	t.Setenv("REASONIX_THEME_STYLE", "")
+	t.Setenv("CORVUS_THEME", "")
+	t.Setenv("CORVUS_THEME_STYLE", "")
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
 
@@ -220,8 +220,8 @@ func TestApplyTextareaThemeClearsCursorLineBackground(t *testing.T) {
 }
 
 func TestApplyTextareaThemeHonorsCursorShape(t *testing.T) {
-	t.Setenv("REASONIX_THEME", "")
-	t.Setenv("REASONIX_THEME_STYLE", "")
+	t.Setenv("CORVUS_THEME", "")
+	t.Setenv("CORVUS_THEME_STYLE", "")
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	prevShape := cliCursorShape
 	defer func() { cliCursorShape = prevShape }()
@@ -251,8 +251,8 @@ func TestApplyTextareaThemeHonorsCursorShape(t *testing.T) {
 }
 
 func TestComposerBorderAndCursorTrackThemeAccent(t *testing.T) {
-	t.Setenv("REASONIX_THEME", "")
-	t.Setenv("REASONIX_THEME_STYLE", "")
+	t.Setenv("CORVUS_THEME", "")
+	t.Setenv("CORVUS_THEME_STYLE", "")
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
 
@@ -291,8 +291,8 @@ func TestComposerBorderAndCursorTrackThemeAccent(t *testing.T) {
 // racing bubbletea's input reader. The switch must resolve via the COLORFGBG
 // fallback instead, never invoking the probe.
 func TestRuntimeAutoThemeDoesNotProbeStdin(t *testing.T) {
-	t.Setenv("REASONIX_THEME", "")
-	t.Setenv("REASONIX_THEME_STYLE", "")
+	t.Setenv("CORVUS_THEME", "")
+	t.Setenv("CORVUS_THEME_STYLE", "")
 	t.Setenv("COLORFGBG", "15;0")
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
@@ -325,8 +325,8 @@ func TestRuntimeAutoThemeDoesNotProbeStdin(t *testing.T) {
 // muted (body-adjacent values) must stay distinct from quiet border chrome, and
 // borders stay low-chroma so tool cards / footer rules do not shout.
 func TestThemeHierarchyBodyBrighterThanChromeBorder(t *testing.T) {
-	t.Setenv("REASONIX_THEME", "")
-	t.Setenv("REASONIX_THEME_STYLE", "")
+	t.Setenv("CORVUS_THEME", "")
+	t.Setenv("CORVUS_THEME_STYLE", "")
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
 

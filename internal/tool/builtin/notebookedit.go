@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"reasonix/internal/diff"
-	"reasonix/internal/tool"
+	"corvus/internal/diff"
+	"corvus/internal/tool"
 )
 
 func init() { tool.RegisterBuiltin(notebookEdit{}) }
@@ -20,7 +20,7 @@ func init() { tool.RegisterBuiltin(notebookEdit{}) }
 // unrelated cells, outputs, and top-level metadata are preserved.
 //
 // roots, when non-empty, confines the target to the workspace (see confine);
-// guard rejects Reasonix session-data targets (see SessionDataGuard); the
+// guard rejects Corvus session-data targets (see SessionDataGuard); the
 // zero value registered at init is unconfined and is overridden per run by
 // ConfineWriters. workDir, when non-empty, is the directory a relative path
 // resolves against (see resolveIn).

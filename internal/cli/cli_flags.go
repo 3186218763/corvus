@@ -7,10 +7,10 @@ import (
 	"strings"
 	"unicode"
 
-	"reasonix/internal/agent"
+	"corvus/internal/agent"
 )
 
-const resumePickerSentinel = "__reasonix_resume_picker__"
+const resumePickerSentinel = "__corvus_resume_picker__"
 
 func splitAllowedToolRules(values []string) ([]string, error) {
 	var rules []string

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/tool"
+	"corvus/internal/tool"
 )
 
 // rememberTool lets the model persist a durable fact to the auto-memory store.
@@ -43,7 +43,7 @@ func (rememberTool) Description() string {
 		"Do NOT save what the repo already records (code structure, git history) or facts that only matter to the current conversation; " +
 		"if asked to remember one of those, save instead the non-obvious point behind it. " +
 		"Choose scope \"project\" for the current workspace (the safe default) or \"global\" only when the fact should affect every project. " +
-		"Standing rules that must always be followed belong in project or global REASONIX.md/AGENTS.md instructions, not background memory. " +
+		"Standing rules that must always be followed belong in project or global CORVUS.md/AGENTS.md instructions, not background memory. " +
 		"Before saving, check the loaded memory index for an entry that already covers this — reuse that name to update it rather than create a near-duplicate, and use `forget` to drop one that is now wrong. " +
 		"The saved index loads into context at the start of each session."
 }

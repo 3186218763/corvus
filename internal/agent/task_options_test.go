@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 func TestNewTaskToolWithOptionsMatchesPositional(t *testing.T) {

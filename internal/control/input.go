@@ -7,10 +7,10 @@ import (
 	"strings"
 	"unicode"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/memory"
-	"reasonix/internal/planmode"
-	"reasonix/internal/skill"
+	"corvus/internal/agent"
+	"corvus/internal/memory"
+	"corvus/internal/planmode"
+	"corvus/internal/skill"
 )
 
 // InvocationRequest is an explicit user-selected Skill or Subagent entity.
@@ -377,8 +377,8 @@ const goalTaskContractInstructions = `Goal mode: pursue this goal autonomously. 
 Do not stop after describing a plan; execute the next useful step. End every goal-mode assistant reply with exactly one status marker on its own line: [goal:continue], [goal:complete], or [goal:blocked:<short reason>].`
 
 const autoResearchGoalInstructions = `AutoResearch protocol: this goal looks like long-horizon research, debugging, optimization, or implementation work. Treat AutoResearch as a durable strategy for this Goal, not as a background daemon or a global skill.
-- Say briefly in the first visible reply that the goal is being handled with AutoResearch and that host-owned state lives under .reasonix/autoresearch/<task-id>/, using the actual task_id from <autoresearch-runtime>.
-- Keep dynamic state out of REASONIX.md, AGENTS.md, project memory, system prompts, and tool schemas. Use project-local .reasonix/autoresearch/ state only.
+- Say briefly in the first visible reply that the goal is being handled with AutoResearch and that host-owned state lives under .corvus/autoresearch/<task-id>/, using the actual task_id from <autoresearch-runtime>.
+- Keep dynamic state out of CORVUS.md, AGENTS.md, project memory, system prompts, and tool schemas. Use project-local .corvus/autoresearch/ state only.
 - Use the task_id and open_success_criteria in <autoresearch-runtime> as authoritative. The host creates task ids and owns state/task_spec.json, state/progress.json, state/findings.jsonl, state/directions_tried.json, state/iteration_log.jsonl, and logs/heartbeat.jsonl.
 - Do not hand-edit the host-owned AutoResearch state files. When you have direct evidence for an open criterion, include an <autoresearch-evidence> block in your assistant reply so the host can persist it:
 <autoresearch-evidence>
@@ -387,7 +387,7 @@ const autoResearchGoalInstructions = `AutoResearch protocol: this goal looks lik
 - Before each iteration, use the runtime summary as authoritative, choose a direction that differs materially from directions already tried, execute the smallest evidence-producing chunk, verify it, and report accepted evidence with <autoresearch-evidence> blocks.
 - Increment stale_count when an iteration lacks accepted evidence or repeats a prior direction. At stale_count >= 2, make a structural pivot such as changing evidence source, entrypoint, implementation boundary, test oracle, benchmark, decomposition, environment, platform, or refutation angle. At stale_count >= 4, stop autonomous digging and ask for the smallest external input needed.
 - Workers or subagents may gather evidence, but the orchestrator owns canonical state writes. Workers must not publish, push, delete, contact external systems, or write canonical state unless explicitly designated.
-- Complete only after auditing every open success criterion in <autoresearch-runtime> against direct evidence. Public publishing, destructive changes, credential use, payments, external notifications, privacy-sensitive output, and cache-sensitive changes still require the normal Reasonix gates.`
+- Complete only after auditing every open success criterion in <autoresearch-runtime> against direct evidence. Public publishing, destructive changes, credential use, payments, external notifications, privacy-sensitive output, and cache-sensitive changes still require the normal Corvus gates.`
 
 func shouldUseAutoResearch(goal string, mode GoalResearchMode) bool {
 	switch mode {
@@ -405,7 +405,7 @@ func isAutoResearchGoal(goal string) bool {
 		return false
 	}
 	lower := strings.ToLower(trimmed)
-	if strings.Contains(lower, ".reasonix/autoresearch/") {
+	if strings.Contains(lower, ".corvus/autoresearch/") {
 		return true
 	}
 	for _, kw := range autoResearchStrongKeywords {

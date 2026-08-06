@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/capability"
-	"reasonix/internal/event"
-	"reasonix/internal/evidence"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/capability"
+	"corvus/internal/event"
+	"corvus/internal/evidence"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 // fakeReadFileTool is a minimal read-only tool whose successful calls produce

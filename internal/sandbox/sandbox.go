@@ -77,7 +77,7 @@ func UnavailableRemediation() string {
 	case "darwin":
 		return "Ensure `sandbox-exec` is available on PATH or set [sandbox] bash = \"off\" in config.toml / Settings -> Sandbox to restore pre-1.16 unconfined shell execution."
 	case "windows":
-		return "Windows does not currently provide a Reasonix OS-level Bash sandbox; the effective setting is fixed to \"off\" and shell commands run unconfined."
+		return "Windows does not currently provide a Corvus OS-level Bash sandbox; the effective setting is fixed to \"off\" and shell commands run unconfined."
 	default:
 		return "Set [sandbox] bash = \"off\" in config.toml / Settings -> Sandbox to run shell commands unconfined on this platform."
 	}
@@ -94,6 +94,6 @@ func BackendUnavailableReason() string {
 	case "windows":
 		return "the AppContainer helper or required Windows sandbox APIs are unavailable"
 	default:
-		return "this platform has no supported Reasonix sandbox backend"
+		return "this platform has no supported Corvus sandbox backend"
 	}
 }

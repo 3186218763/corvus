@@ -26,9 +26,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"reasonix/internal/event"
-	"reasonix/internal/evidence"
-	"reasonix/internal/nilutil"
+	"corvus/internal/event"
+	"corvus/internal/evidence"
+	"corvus/internal/nilutil"
 )
 
 var renamePath = os.Rename
@@ -230,7 +230,7 @@ func NewManager(sink event.Sink, opts ...Option) *Manager {
 		sink = event.Discard
 	}
 	root, cancel := context.WithCancel(context.Background())
-	tempRoot, _ := os.MkdirTemp("", "reasonix-jobs-*")
+	tempRoot, _ := os.MkdirTemp("", "corvus-jobs-*")
 	m := &Manager{
 		sink:          sink,
 		root:          root,
@@ -1527,7 +1527,7 @@ func (m *Manager) loadSessionArtifacts(parentSession, sessionPath, dir string) {
 			maxSeq = seq
 		}
 		// A persisted Running record may belong to another manager in this
-		// process or to another Reasonix process entirely. Only the runtime that
+		// process or to another Corvus process entirely. Only the runtime that
 		// owns the session lease may repair an abandoned record as Interrupted.
 		// Observers without proof of ownership defer the artifact and leave the
 		// session reloadable for a later owned bind.

@@ -10,10 +10,10 @@ import (
 	"sync"
 	"testing"
 
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/provider/openai"
-	"reasonix/internal/tool"
+	"corvus/internal/event"
+	"corvus/internal/provider"
+	"corvus/internal/provider/openai"
+	"corvus/internal/tool"
 )
 
 type recordSink struct {

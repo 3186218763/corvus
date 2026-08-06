@@ -10,18 +10,18 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 // TestListSessionsScalingManual reproduces the sidebar "project list loads
 // slowly" report by timing ListSessions against a synthetically large session
-// directory. It is gated behind REASONIX_BENCH=1 so it never runs (or writes
+// directory. It is gated behind CORVUS_BENCH=1 so it never runs (or writes
 // hundreds of MB) during a normal `go test`.
 //
-//	REASONIX_BENCH=1 go test ./internal/agent -run TestListSessionsScalingManual -v
+//	CORVUS_BENCH=1 go test ./internal/agent -run TestListSessionsScalingManual -v
 func TestListSessionsScalingManual(t *testing.T) {
-	if os.Getenv("REASONIX_BENCH") != "1" {
-		t.Skip("set REASONIX_BENCH=1 to run the scaling benchmark")
+	if os.Getenv("CORVUS_BENCH") != "1" {
+		t.Skip("set CORVUS_BENCH=1 to run the scaling benchmark")
 	}
 
 	type shape struct {
@@ -124,10 +124,10 @@ func writeSyntheticSessions(t *testing.T, dir string, n, turns int) int64 {
 // is to confirm the disk cache is now redundant — sidecar-only listing of the
 // whole tree is already in the low-millisecond range on cold start.
 //
-//	REASONIX_BENCH=1 go test ./internal/agent -run TestColdStartProjectTreeManual -v
+//	CORVUS_BENCH=1 go test ./internal/agent -run TestColdStartProjectTreeManual -v
 func TestColdStartProjectTreeManual(t *testing.T) {
-	if os.Getenv("REASONIX_BENCH") != "1" {
-		t.Skip("set REASONIX_BENCH=1 to run the cold-start benchmark")
+	if os.Getenv("CORVUS_BENCH") != "1" {
+		t.Skip("set CORVUS_BENCH=1 to run the cold-start benchmark")
 	}
 
 	const (

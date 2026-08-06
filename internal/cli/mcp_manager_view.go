@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/config"
-	"reasonix/internal/mcpdiag"
+	"corvus/internal/config"
+	"corvus/internal/mcpdiag"
 )
 
 func (m chatTUI) renderMCPManager() string {
@@ -137,7 +137,7 @@ func (p *mcpManager) renderDetail(width int) string {
 	} else if v.Source == config.MCPSourceProjectMCPJSON {
 		writeMCPDetailField(&b, "Config location", "current project .mcp.json")
 	} else if v.Source == config.MCPSourceProjectConfig {
-		writeMCPDetailField(&b, "Config location", "current project reasonix.toml")
+		writeMCPDetailField(&b, "Config location", "current project corvus.toml")
 	} else {
 		loc := fallbackText(p.snapshot.configPath, "not saved")
 		if loc != "not saved" {
@@ -218,7 +218,7 @@ func (p *mcpManager) renderConfirmRemove(width int) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Remove MCP server %q?\n", v.Name)
-	b.WriteString(viewMeta("This removes it from Reasonix config. It cannot be undone from this panel.") + "\n\n")
+	b.WriteString(viewMeta("This removes it from Corvus config. It cannot be undone from this panel.") + "\n\n")
 	b.WriteString(rowLine(p.confirm == 0, 1, "", "Confirm remove", false) + "\n")
 	b.WriteString(rowLine(p.confirm == 1, 2, "", "Cancel", false) + "\n")
 	return strings.TrimRight(b.String(), "\n")

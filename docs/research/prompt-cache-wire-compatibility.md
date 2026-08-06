@@ -19,7 +19,7 @@
 - 给纯 OpenAI 发 Anthropic `cache_control` 块 → 通常无效  
 - DeepSeek 自动前缀：**两边字段都可不发**（发了 Anthropic 侧还可能污染 wire）
 
-Reasonix 已有：
+Corvus 已有：
 
 - Anthropic 适配器：`cache_control` 断点（**非 DeepSeek**）— `internal/provider/anthropic/anthropic.go`  
 - OpenAI 适配器：**尚未**发 sticky key；有 `ExtraBody` 合并通道  
@@ -68,7 +68,7 @@ alibaba:          { cacheControl: { type: "ephemeral" } }
 
 1. OpenCode 走 **Vercel AI SDK**，camelCase `promptCacheKey` 是 SDK 参数名，SDK 再映射到 HTTP。  
 2. **HTTP REST 官方**（OpenAI 文档、Codex、Agents SDK）用的是 **`prompt_cache_key` snake_case**。  
-3. Reasonix **直连 HTTP**，应对齐 **Codex / Agents SDK 的 snake_case**，而不是 AI SDK 的 camelCase（除非某网关文档明确只要 camel）。  
+3. Corvus **直连 HTTP**，应对齐 **Codex / Agents SDK 的 snake_case**，而不是 AI SDK 的 camelCase（除非某网关文档明确只要 camel）。  
 4. `setCacheKey: true` 可强制给「未列入白名单」的 provider 也塞 key——对应「兼容网关」场景。
 
 ---
@@ -106,9 +106,9 @@ Key 形状：
 - `agents-sdk:{kind}:{sha256[:32]}`（conversation/session/group）  
 - 或 `agents-sdk:run:{run_id}`（仅本 run 多轮 tool loop）  
 
-### 3.3 对 Reasonix 的启示
+### 3.3 对 Corvus 的启示
 
-| SDK 做法 | Reasonix 映射 |
+| SDK 做法 | Corvus 映射 |
 |----------|---------------|
 | 仅官方 OpenAI 默认开 | 官方 openai.com / 已知兼容列表默认 on；未知默认可配置 |
 | 字段名 `prompt_cache_key` | OpenAI/Responses HTTP 体用 snake_case |
@@ -134,7 +134,7 @@ fn prompt_cache_key(...) -> String {
 - 值：**session_id**（可 override）  
 - 无 AI SDK camelCase 分叉  
 
-Reasonix `internal/provider/responses` 应对齐此形状。
+Corvus `internal/provider/responses` 应对齐此形状。
 
 ---
 
@@ -151,7 +151,7 @@ Anthropic transform（`litellm/llms/anthropic/chat/transformation.py`）：
 
 ---
 
-## 6. Reasonix 现状对照
+## 6. Corvus 现状对照
 
 | 能力 | 现状 | 与开源差距 |
 |------|------|------------|
@@ -164,7 +164,7 @@ Anthropic transform（`litellm/llms/anthropic/chat/transformation.py`）：
 
 ---
 
-## 7. 推荐兼容矩阵（给 Reasonix 设计用）
+## 7. 推荐兼容矩阵（给 Corvus 设计用）
 
 ### 7.1 决策输入
 
@@ -181,11 +181,11 @@ Anthropic transform（`litellm/llms/anthropic/chat/transformation.py`）：
 | kind=openai 且 DeepSeek-shaped（`IsDeepSeek` / 现有 host 检测） | 不发 | 不发 |
 | kind=openai 且 OpenAI/Azure 官方或已知兼容 | 发 **`prompt_cache_key`** = session 稳定 id | 不发 |
 | kind=openai 且未知 base_url | `auto`→发 key（网关粘性优先）+ **Phase 1 fail-open**；`off` 可关 | 不发 |
-| kind=responses 且 DeepSeek-shaped | **不发**（Reasonix 上 DeepSeek 走 Responses；不可照抄 Codex「一律发」） | 不发 |
+| kind=responses 且 DeepSeek-shaped | **不发**（Corvus 上 DeepSeek 走 Responses；不可照抄 Codex「一律发」） | 不发 |
 | kind=responses 且非 DeepSeek | 发 **`prompt_cache_key`**（对齐 Codex） | 不发 |
 | 用户 `prompt_cache_key=off` | 永不发 | Anthropic 断点仍可保留（独立开关可选） |
 
-### 7.3 字段名规范（Reasonix 直连 HTTP）
+### 7.3 字段名规范（Corvus 直连 HTTP）
 
 ```
 OpenAI / Responses / 多数 OpenAI 兼容 REST:
@@ -202,7 +202,7 @@ Anthropic Messages:
   cachePoint              // 除非明确 Bedrock 原生请求形状
 ```
 
-若未来接入 **Bedrock 原生** 或 **OpenRouter 特殊路径**，再按 OpenCode 表扩展 `providerOptions` 映射；当前 Reasonix 只有 openai/anthropic/responses 三套 HTTP 客户端，**先做这三套**。
+若未来接入 **Bedrock 原生** 或 **OpenRouter 特殊路径**，再按 OpenCode 表扩展 `providerOptions` 映射；当前 Corvus 只有 openai/anthropic/responses 三套 HTTP 客户端，**先做这三套**。
 
 ### 7.4 400 / 拒识策略（兼容网关）
 
@@ -211,7 +211,7 @@ Anthropic Messages:
 - Agents SDK：**默认不对非官方 client 注入**（最保守）  
 - OpenCode：**白名单 + setCacheKey 强制**（网关友好）  
 
-Reasonix 建议折中（**以实现 design 为准**）：
+Corvus 建议折中（**以实现 design 为准**）：
 
 1. `auto`：官方 OpenAI/Azure/非 DeepSeek Responses → on；DeepSeek-shaped（任意 kind）→ off；其它 openai-compatible → **on**（网关命中是主诉求）  
 2. **Phase 1 必做 fail-open**：provider fingerprint（kind+host）若 400 明确拒识 `prompt_cache_key` → 进程内关闭该 fingerprint 并 Notice  
@@ -228,10 +228,10 @@ Reasonix 建议折中（**以实现 design 为准**）：
 | Agents SDK | 带命名空间 hash：`agents-sdk:session:…` |
 | OpenCode | `sessionID` 原样 |
 
-Reasonix 建议：
+Corvus 建议：
 
-- 默认：`reasonix:session:<BranchID>`（`BranchID` = session 文件 path stem，resume 不变）  
-- Subagent：`reasonix:session:<parentBranchID>:sub:<subID>`（避免共用一个 OpenAI 路由桶）  
+- 默认：`corvus:session:<BranchID>`（`BranchID` = session 文件 path stem，resume 不变）  
+- Subagent：`corvus:session:<parentBranchID>:sub:<subID>`（避免共用一个 OpenAI 路由桶）  
 - 或后期配置 `prompt_cache_key_format = raw | namespaced`
 
 ---
@@ -259,8 +259,8 @@ Reasonix 建议：
 | Agents SDK | `models/openai_responses.py` | `extra_args` 合并、`prompt_cache_retention` |
 | Codex | `codex-rs/core/src/client.rs` | `prompt_cache_key = session_id` |
 | LiteLLM | `litellm/llms/anthropic/chat/transformation.py` | cache_control 透传与 usage |
-| Reasonix | `internal/provider/anthropic/anthropic.go` | 已有断点 |
-| Reasonix | `internal/provider/openai/openai.go` | `MarshalJSON` + ExtraBody；缺 sticky key |
+| Corvus | `internal/provider/anthropic/anthropic.go` | 已有断点 |
+| Corvus | `internal/provider/openai/openai.go` | `MarshalJSON` + ExtraBody；缺 sticky key |
 
 ---
 

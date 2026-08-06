@@ -10,9 +10,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"reasonix/internal/config"
-	"reasonix/internal/control"
-	"reasonix/internal/plugin"
+	"corvus/internal/config"
+	"corvus/internal/control"
+	"corvus/internal/plugin"
 )
 
 func TestParseMCPAddStdio(t *testing.T) {
@@ -283,7 +283,7 @@ func TestBuildMCPSnapshotUsesControllerWorkspaceAndPerServerConfigPaths(t *testi
 	if err := userCfg.SaveTo(userPath); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(workspace, "reasonix.toml")
+	projectPath := filepath.Join(workspace, "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte(`
 [[plugins]]
 name = "project-only"
@@ -350,7 +350,7 @@ func TestRenderMCPManagerAuthFailureActions(t *testing.T) {
 		stage: mcpStageDetail,
 		name:  "figma",
 		snapshot: mcpSnapshot{
-			configPath: "reasonix.toml",
+			configPath: "corvus.toml",
 			servers: []mcpServerView{{
 				Name: "figma", Transport: "http", Status: "failed", Configured: true,
 				Tier: "background", URL: "https://mcp.figma.com", Error: "connect: 401 unauthorized",
@@ -382,7 +382,7 @@ func TestRenderMCPManagerProjectServerIsReadyWithoutInstallAction(t *testing.T) 
 		stage: mcpStageDetail,
 		name:  "project-docs",
 		snapshot: mcpSnapshot{
-			configPath: "reasonix.toml",
+			configPath: "corvus.toml",
 			servers: []mcpServerView{{
 				Name: "project-docs", Transport: "http", Status: "connected", Configured: true,
 				Source: config.MCPSourceProjectConfig, URL: "https://example.test/mcp",
@@ -393,7 +393,7 @@ func TestRenderMCPManagerProjectServerIsReadyWithoutInstallAction(t *testing.T) 
 	got := p.renderDetail(120)
 	for _, want := range []string{
 		"connected",
-		"current project reasonix.toml",
+		"current project corvus.toml",
 		"View tools",
 		"Disable for this session",
 	} {
@@ -438,7 +438,7 @@ func TestRenderMCPManagerRemoteDeferredAuthHint(t *testing.T) {
 		stage: mcpStageDetail,
 		name:  "dida",
 		snapshot: mcpSnapshot{
-			configPath: "reasonix.toml",
+			configPath: "corvus.toml",
 			servers: []mcpServerView{{
 				Name: "dida", Transport: "http", Status: "deferred", Configured: true,
 				Tier: "background", URL: "https://mcp.dida365.com",
@@ -469,7 +469,7 @@ func TestRenderMCPManagerDetailCompactsConfigPath(t *testing.T) {
 		stage: mcpStageDetail,
 		name:  "github",
 		snapshot: mcpSnapshot{
-			configPath: "/Users/example/Library/Application Support/reasonix/config.toml",
+			configPath: "/Users/example/Library/Application Support/corvus/config.toml",
 			servers: []mcpServerView{{
 				Name: "github", Transport: "stdio", Status: "deferred", Configured: true,
 				Tier: "background", Command: "npx", Args: []string{"-y", "@modelcontextprotocol/server-github"},
@@ -482,7 +482,7 @@ func TestRenderMCPManagerDetailCompactsConfigPath(t *testing.T) {
 			t.Fatalf("detail line exceeds width 80 (%d): %q\n%s", visibleWidth(line), line, got)
 		}
 	}
-	if strings.Contains(got, "Application Support/reasonix/config.toml") {
+	if strings.Contains(got, "Application Support/corvus/config.toml") {
 		t.Fatalf("long config path should be compacted:\n%s", got)
 	}
 }
@@ -491,7 +491,7 @@ func TestMCPEditConfigLaunchUsesVisualBeforeEditor(t *testing.T) {
 	t.Setenv("VISUAL", "vim")
 	t.Setenv("EDITOR", "nano")
 
-	path := "/tmp/reasonix config.toml"
+	path := "/tmp/corvus config.toml"
 	launch, err := mcpEditConfigLaunchCommand(path, func(string) (string, error) {
 		t.Fatal("lookPath should not be called when VISUAL is set")
 		return "", errors.New("unexpected lookup")
@@ -520,7 +520,7 @@ func TestMCPEditConfigLaunchEditorWithArgs(t *testing.T) {
 	t.Setenv("VISUAL", "code --wait")
 	t.Setenv("EDITOR", "")
 
-	path := "/tmp/reasonix.toml"
+	path := "/tmp/corvus.toml"
 	launch, err := mcpEditConfigLaunchCommand(path, func(string) (string, error) {
 		t.Fatal("lookPath should not be called when VISUAL is set")
 		return "", errors.New("unexpected lookup")
@@ -543,7 +543,7 @@ func TestMCPEditConfigLaunchEditorWithArgs(t *testing.T) {
 }
 
 func TestMCPEditConfigLaunchEditorParsesShellStyleQuotes(t *testing.T) {
-	path := "/tmp/reasonix.toml"
+	path := "/tmp/corvus.toml"
 	cases := []struct {
 		name       string
 		editor     string
@@ -606,7 +606,7 @@ func TestMCPEditConfigLaunchEditorRejectsUnterminatedQuote(t *testing.T) {
 	t.Setenv("VISUAL", `code --wait "unterminated`)
 	t.Setenv("EDITOR", "")
 
-	_, err := mcpEditConfigLaunchCommand("/tmp/reasonix.toml", func(string) (string, error) {
+	_, err := mcpEditConfigLaunchCommand("/tmp/corvus.toml", func(string) (string, error) {
 		t.Fatal("lookPath should not be called when VISUAL is set")
 		return "", errors.New("unexpected lookup")
 	})
@@ -622,7 +622,7 @@ func TestMCPEditConfigLaunchEditorRejectsShellMetachars(t *testing.T) {
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "vim; rm -rf /tmp/should-not-exist")
 
-	path := "/tmp/reasonix.toml"
+	path := "/tmp/corvus.toml"
 	_, err := mcpEditConfigLaunchCommand(path, func(string) (string, error) {
 		t.Fatal("lookPath should not be called when EDITOR is set")
 		return "", errors.New("unexpected lookup")
@@ -638,11 +638,11 @@ func TestMCPEditConfigLaunchEditorRejectsShellMetachars(t *testing.T) {
 // EDITOR="$HOME/bin/myeditor" verbatim (rather than relying on the shell
 // to expand at export time).
 func TestMCPEditConfigLaunchEditorExpandsEnvVar(t *testing.T) {
-	t.Setenv("REASONIX_TEST_EDITOR_BIN", "/opt/custom/bin/myed")
-	t.Setenv("VISUAL", "$REASONIX_TEST_EDITOR_BIN --flag")
+	t.Setenv("CORVUS_TEST_EDITOR_BIN", "/opt/custom/bin/myed")
+	t.Setenv("VISUAL", "$CORVUS_TEST_EDITOR_BIN --flag")
 	t.Setenv("EDITOR", "")
 
-	path := "/tmp/reasonix.toml"
+	path := "/tmp/corvus.toml"
 	launch, err := mcpEditConfigLaunchCommand(path, func(string) (string, error) {
 		t.Fatal("lookPath should not be called when VISUAL is set")
 		return "", errors.New("unexpected lookup")
@@ -680,7 +680,7 @@ func TestMCPEditConfigLaunchEditorExpandsTilde(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("VISUAL", c.editor+" --wait")
 			t.Setenv("EDITOR", "")
-			launch, err := mcpEditConfigLaunchCommand("/tmp/reasonix.toml", func(string) (string, error) {
+			launch, err := mcpEditConfigLaunchCommand("/tmp/corvus.toml", func(string) (string, error) {
 				t.Fatal("lookPath should not be called when VISUAL is set")
 				return "", errors.New("unexpected lookup")
 			})
@@ -704,7 +704,7 @@ func TestMCPEditConfigLaunchEditorTildeNotInPayload(t *testing.T) {
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "vim; rm -rf ~/should-not-exist")
 
-	_, err := mcpEditConfigLaunchCommand("/tmp/reasonix.toml", func(string) (string, error) {
+	_, err := mcpEditConfigLaunchCommand("/tmp/corvus.toml", func(string) (string, error) {
 		t.Fatal("lookPath should not be called when EDITOR is set")
 		return "", errors.New("unexpected lookup")
 	})
@@ -717,7 +717,7 @@ func TestMCPEditConfigLaunchFallsBackToTerminalEditor(t *testing.T) {
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "")
 
-	launch, err := mcpEditConfigLaunchCommand("/tmp/reasonix.toml", func(name string) (string, error) {
+	launch, err := mcpEditConfigLaunchCommand("/tmp/corvus.toml", func(name string) (string, error) {
 		if name == "vim" {
 			return "/usr/bin/vim", nil
 		}
@@ -732,7 +732,7 @@ func TestMCPEditConfigLaunchFallsBackToTerminalEditor(t *testing.T) {
 	if launch.editor != "vim" {
 		t.Fatalf("editor = %q, want vim", launch.editor)
 	}
-	if len(launch.cmd.Args) != 2 || launch.cmd.Args[0] != "/usr/bin/vim" || launch.cmd.Args[1] != "/tmp/reasonix.toml" {
+	if len(launch.cmd.Args) != 2 || launch.cmd.Args[0] != "/usr/bin/vim" || launch.cmd.Args[1] != "/tmp/corvus.toml" {
 		t.Fatalf("terminal editor args=%v", launch.cmd.Args)
 	}
 }
@@ -741,7 +741,7 @@ func TestMCPEditConfigLaunchUsesSystemDefaultLast(t *testing.T) {
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "")
 
-	path := "/tmp/reasonix.toml"
+	path := "/tmp/corvus.toml"
 	launch, err := mcpEditConfigLaunchCommand(path, func(string) (string, error) {
 		return "", errors.New("not found")
 	})
@@ -764,7 +764,7 @@ func TestApplyMCPModeDropsLegacyTier(t *testing.T) {
 	isolateUserConfig(t)
 	cfg := config.Default()
 	cfg.Plugins = []config.PluginEntry{{Name: "github", Command: "npx", Args: []string{"server"}, Tier: "lazy"}}
-	if err := cfg.SaveTo("reasonix.toml"); err != nil {
+	if err := cfg.SaveTo("corvus.toml"); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
 
@@ -772,7 +772,7 @@ func TestApplyMCPModeDropsLegacyTier(t *testing.T) {
 	m.mcp = &mcpManager{
 		stage: mcpStageMode,
 		name:  "github",
-		snapshot: mcpSnapshot{configPath: "reasonix.toml", servers: []mcpServerView{{
+		snapshot: mcpSnapshot{configPath: "corvus.toml", servers: []mcpServerView{{
 			Name: "github", Transport: "stdio", Status: "deferred", Configured: true, Tier: "background",
 		}}},
 	}
@@ -785,7 +785,7 @@ func TestApplyMCPModeDropsLegacyTier(t *testing.T) {
 	if len(loaded.Plugins) != 1 || loaded.Plugins[0].Tier != "" {
 		t.Fatalf("tier should be migrated away, plugins=%+v", loaded.Plugins)
 	}
-	raw, err := os.ReadFile("reasonix.toml")
+	raw, err := os.ReadFile("corvus.toml")
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}
@@ -798,8 +798,8 @@ func TestApplyMCPModeRecordsPluginConnectFailure(t *testing.T) {
 	isolateUserConfig(t)
 	t.Setenv("PATH", "")
 	cfg := config.Default()
-	cfg.Plugins = []config.PluginEntry{{Name: "broken", Command: "definitely-missing-reasonix-mcp", Tier: "background"}}
-	if err := cfg.SaveTo("reasonix.toml"); err != nil {
+	cfg.Plugins = []config.PluginEntry{{Name: "broken", Command: "definitely-missing-corvus-mcp", Tier: "background"}}
+	if err := cfg.SaveTo("corvus.toml"); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
 
@@ -810,7 +810,7 @@ func TestApplyMCPModeRecordsPluginConnectFailure(t *testing.T) {
 	m.mcp = &mcpManager{
 		stage: mcpStageMode,
 		name:  "broken",
-		snapshot: mcpSnapshot{configPath: "reasonix.toml", servers: []mcpServerView{{
+		snapshot: mcpSnapshot{configPath: "corvus.toml", servers: []mcpServerView{{
 			Name: "broken", Transport: "stdio", Status: "deferred", Configured: true, Tier: "background",
 		}}},
 	}

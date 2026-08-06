@@ -8,7 +8,7 @@ var ChineseTraditional = Messages{
 	WelcomeTitleFmt: "歡迎使用 %s",
 	NoConfigYet:     "還沒有設定 — 現在來設定一下吧。",
 	StartingChatFmt: "正在啟動 %s…",
-	SetKeyHint:      "設定好 API key 後執行 `reasonix`。",
+	SetKeyHint:      "設定好 API key 後執行 `corvus`。",
 	ConfigLabel:     "設定",
 	ModelsLabel:     "模型",
 	ConfigNotFound:  "未找到 — 使用內建預設值",
@@ -16,7 +16,7 @@ var ChineseTraditional = Messages{
 	NoKey:           "未設定 key",
 	Ready:           "已就緒",
 	GetStarted:      "開始使用",
-	StepScaffold:    "生成 reasonix.toml",
+	StepScaffold:    "生成 corvus.toml",
 	StepSetKey:      "設定 API key",
 
 	StepChatDesc:   "互動式會話",
@@ -24,8 +24,8 @@ var ChineseTraditional = Messages{
 	ChatTip:             "對話上下文將跨輪保留。輸入 'exit' 或按 Ctrl-D 退出。",
 	TurnCancelled:       "已取消 — 回到提示符",
 	InterruptedRecovery: "本輪已中斷。部分輸出會永久保留供查看；只有完整工具呼叫及結果和有界恢復摘要會進入模型下一輪。繼續或回復前請先檢查目前工作區。",
-	RecoveryPaused:      "已暫停自動重試。Reasonix 已停止重複嘗試，並保留已完成的工作。傳送「繼續」即可開始新一輪，也可以補充要求來調整方向。",
-	NoSessionToResume:   "沒有可恢復的會話 — 用 `reasonix` 開一個新的",
+	RecoveryPaused:      "已暫停自動重試。Corvus 已停止重複嘗試，並保留已完成的工作。傳送「繼續」即可開始新一輪，也可以補充要求來調整方向。",
+	NoSessionToResume:   "沒有可恢復的會話 — 用 `corvus` 開一個新的",
 	ResumeRequiresTTY:   "--resume 需要互動式終端；用 --continue 直接恢復最近一次",
 	PickSessionLabel:    "恢復哪個會話？",
 
@@ -126,17 +126,17 @@ var ChineseTraditional = Messages{
 	MemoryApprovalBodyLabel:                "正文",
 	MemoryApprovalArchiveFmt:               "封存記憶 %q",
 	PlanModeBashTrustSubjectFmt:            "在計劃模式中信任 %q 為唯讀命令前綴\n命令：%s",
-	PlanModeBashTrustReason:                "這條 bash 命令不在 Reasonix 內建唯讀集合中。只有在確認這個精確前綴用於計劃和研究時是唯讀的，才應核准。自動/YOLO 核准不能回答這個信任提示。",
+	PlanModeBashTrustReason:                "這條 bash 命令不在 Corvus 內建唯讀集合中。只有在確認這個精確前綴用於計劃和研究時是唯讀的，才應核准。自動/YOLO 核准不能回答這個信任提示。",
 	PlanModeBashTrustDeclined:              "使用者拒絕將這條 bash 命令信任為計劃模式唯讀命令；不要重試它，請繼續使用其他已信任的唯讀工具，或詢問使用者希望如何繼續。",
 	SandboxEscapeSubjectFallback:           "僅本次不進沙箱執行 shell 命令",
 	SandboxEscapeSubjectPrefix:             "僅本次不進沙箱執行：",
 	SandboxEscapeWrapReason:                "Windows 不提供這條命令所需的 OS 級 Bash 沙箱。是否僅本次不受限執行？這只會對此命令繞過 OS 隔離。",
 	SandboxEscapeRuntimeReason:             "OS 沙箱無法啟動這條命令。是否僅本次不受限執行？這只會對此命令繞過 OS 隔離。",
 	SandboxEscapeDeclined:                  "使用者拒絕在沒有 OS 沙箱的情況下執行這條命令；不要不進沙箱重試，請詢問使用者希望如何繼續。",
-	ApprovalToolLabelConfigWrite:           "Reasonix 設定寫入核准",
-	ConfigWriteSubjectPrefix:               "寫入 Reasonix 設定：",
-	ConfigWriteReason:                      "這次寫入的目標是工作區之外的 Reasonix 託管設定檔。它可以改變後續工作階段的模型供應商、沙箱規則、權限和 MCP 伺服器，因此需要你的明確核准。",
-	ConfigWriteDeclined:                    "使用者拒絕了這次 Reasonix 設定寫入；不要重試，請詢問使用者希望如何繼續。",
+	ApprovalToolLabelConfigWrite:           "Corvus 設定寫入核准",
+	ConfigWriteSubjectPrefix:               "寫入 Corvus 設定：",
+	ConfigWriteReason:                      "這次寫入的目標是工作區之外的 Corvus 託管設定檔。它可以改變後續工作階段的模型供應商、沙箱規則、權限和 MCP 伺服器，因此需要你的明確核准。",
+	ConfigWriteDeclined:                    "使用者拒絕了這次 Corvus 設定寫入；不要重試，請詢問使用者希望如何繼續。",
 	ConfigWriteApprovalChoices:             "1. 允許一次\n2. 本工作階段允許\n3. 拒絕\n選擇 [1/2/3]（相容 y/a/n）",
 	PermissionSavedFmt:                     "授權已儲存到 %s：%s",
 	PermissionAlreadyAllowedFmt:            "授權已由 %s 中的規則覆蓋：%s",
@@ -148,7 +148,7 @@ var ChineseTraditional = Messages{
 
 	OutputStyleNone:           "沒有可用的輸出風格",
 	OutputStyleHeader:         "輸出風格：",
-	OutputStyleHint:           "在 reasonix.toml 設定 agent.output_style 即可啟用（下次會話生效）",
+	OutputStyleHint:           "在 corvus.toml 設定 agent.output_style 即可啟用（下次會話生效）",
 	ThemeHeader:               "主題：",
 	ThemeHint:                 "使用 /theme <auto|light|dark|style> 切換",
 	ThemeChangedFmt:           "已切換主題為 %s / %s",
@@ -222,7 +222,7 @@ var ChineseTraditional = Messages{
 	SkillPickerStatusNotDir:      "非目錄",
 	SkillPickerStatusUnreadable:  "無權限",
 	SlashPromptEmpty:             "該 MCP prompt 沒有返回可傳送的內容",
-	SlashMCPNone:                 "沒有設定 MCP 伺服器 — 在 reasonix.toml 加一個 [[plugins]] 條目",
+	SlashMCPNone:                 "沒有設定 MCP 伺服器 — 在 corvus.toml 加一個 [[plugins]] 條目",
 	CtrlCQuitHint:                "再按一次 Ctrl+C 退出",
 	CompHintSlash:                "↑/↓ 移動 · Tab/Enter 選中 · Esc 關閉",
 	CompHintFile:                 "↑/↓ 移動 · Tab/Enter 進入資料夾或選中檔案 · Esc 關閉",
@@ -298,7 +298,7 @@ var ChineseTraditional = Messages{
 	ArgEffortXHigh:      "超高推理",
 	ArgEffortMax:        "最高推理",
 	ArgThemeCurrent:     "當前",
-	ArgLanguageAuto:     "從 REASONIX_LANG / 系統 locale 自動偵測",
+	ArgLanguageAuto:     "從 CORVUS_LANG / 系統 locale 自動偵測",
 	ArgLanguageEn:       "English",
 	ArgLanguageZh:       "中文",
 
@@ -309,11 +309,11 @@ var ChineseTraditional = Messages{
 	ListSkillsHeaderFmt: "skills（%d 個）",
 	ListSkillsNone:      "暫無 skill — 呼叫內建的（如 /init），或用 install_skill 建立一個",
 	ListHooksHeaderFmt:  "hooks（生效 %d 個）",
-	ListHooksNone:       "無生效 hooks — 在 .reasonix/settings.json（專案）或 <Reasonix home>/settings.json（全域）設定",
+	ListHooksNone:       "無生效 hooks — 在 .corvus/settings.json（專案）或 <Corvus home>/settings.json（全域）設定",
 	ListMcpHeader:       "MCP 伺服器",
-	ListMcpNone:         "未連線 MCP 伺服器 — 在 reasonix.toml（[[plugins]]）或專案 .mcp.json 中新增",
+	ListMcpNone:         "未連線 MCP 伺服器 — 在 corvus.toml（[[plugins]]）或專案 .mcp.json 中新增",
 
-	MemoryNone:                "還沒有載入任何記憶 — 輸入 “/remember 內容” 可快速記錄，也可以在專案根目錄建立 REASONIX.md",
+	MemoryNone:                "還沒有載入任何記憶 — 輸入 “/remember 內容” 可快速記錄，也可以在專案根目錄建立 CORVUS.md",
 	MemoryLoaded:              "當前已載入的記憶：",
 	MemorySavedHeader:         "  已記錄的條目（用 “/forget <name>” 刪除）：",
 	MemoryStoredUnderFmt:      "  存放於 %s",
@@ -363,7 +363,7 @@ var ChineseTraditional = Messages{
 
 	SelectProvidersLabel:     "選擇要啟用的 provider",
 	EnterAPIKeysHeader:       "輸入 API key（Enter 跳過、稍後再設）：",
-	MissingKeyIntro:          "reasonix.toml 已設定好 — 只差一個 API key 就可以開始。",
+	MissingKeyIntro:          "corvus.toml 已設定好 — 只差一個 API key 就可以開始。",
 	WroteFileFmt:             "已寫入 %s",
 	SetupComplete:            "設定完成。",
 	SetupCancelled:           "設定已取消。",
@@ -414,7 +414,7 @@ var ChineseTraditional = Messages{
 	NoModelsAvailableFmt:       "%s: 沒有可用模型，跳過",
 	CustomFetchEmpty:           "/models 返回為空，回退到手動輸入",
 	AnthropicFetchEmpty:        "/models 返回為空 — Anthropic 相容服務通常不提供此端點，回退到手動輸入",
-	SkipStaleCustomEntryFmt:    "跳過 reasonix.toml 裡的舊 %q 條目（指向 %s）— 請手動從 [[providers]] 裡刪除",
+	SkipStaleCustomEntryFmt:    "跳過 corvus.toml 裡的舊 %q 條目（指向 %s）— 請手動從 [[providers]] 裡刪除",
 	APIKeyAlreadySetFmt:        "復用已設定的 %s",
 	APIKeyResetPromptFmt:       "重新輸入 %s？",
 	InvalidAPIKeyEnvFmt:        "%q 不是有效的 API Key 變數名稱。只能使用字母、數字和底線（例如 MY_PROVIDER_API_KEY）；請勿在此填寫模型名稱。",
@@ -455,7 +455,7 @@ var ChineseTraditional = Messages{
 	WriteEnvErr:               "寫入 .env 失敗：",
 
 	ProviderErrBadRequest:          "請求格式錯誤 (HTTP 400)：請求體被拒絕，通常是程式缺陷。若持續出現請回報。",
-	ProviderErrAuth:                "認證失敗 (HTTP 401)：未讀到 API key。請在專案 .env 或 Reasonix 憑證儲存中設定服務商金鑰。",
+	ProviderErrAuth:                "認證失敗 (HTTP 401)：未讀到 API key。請在專案 .env 或 Corvus 憑證儲存中設定服務商金鑰。",
 	ProviderErrInsufficientBalance: "餘額不足 (HTTP 402)：帳戶餘額不足，請前往儲值後重試。",
 	ProviderErrUnprocessable:       "參數錯誤 (HTTP 422)：某個請求參數被拒絕，通常是程式缺陷。若持續出現請回報。",
 	ProviderErrInputSensitive:      "輸入被 MiniMax 內容審查拒絕（錯誤碼 1026）。審查對象可能包含對話歷史和工具結果；請調整相關內容，或建立新對話只保留必要上下文。原樣重試通常無效。",
@@ -469,10 +469,10 @@ var ChineseTraditional = Messages{
 
 
 
-	UsageBody: `reasonix — 終端 coding agent
+	UsageBody: `corvus — 終端 coding agent
 
 用法：
-  reasonix [選項]
+  corvus [選項]
 
 啟動互動式終端介面。在 TUI 中輸入 /help 可查看會話內命令。
 
@@ -492,14 +492,14 @@ var ChineseTraditional = Messages{
   --version, -v
 
 範例：
-  reasonix
-  reasonix --continue
-  reasonix --resume provider-config
+  corvus
+  corvus --continue
+  corvus --resume provider-config
 
 設定：
-  優先順序：flag > ./reasonix.toml > <Reasonix home>/config.toml > 內建預設值
-  金鑰透過 api_key_env 注入（如 DEEPSEEK_API_KEY）：優先專案 .env，其次 Reasonix 憑證儲存。
-  首次啟動 TUI 可引導設定；也可參考 reasonix.example.toml。
+  優先順序：flag > ./corvus.toml > <Corvus home>/config.toml > 內建預設值
+  金鑰透過 api_key_env 注入（如 DEEPSEEK_API_KEY）：優先專案 .env，其次 Corvus 憑證儲存。
+  首次啟動 TUI 可引導設定；也可參考 corvus.example.toml。
 `,
 	RenameUsage:                "用法：/rename <新名稱>  或  /rename <序號> <新名稱>",
 	RenameNoSession:            "當前沒有活躍會話可重新命名",

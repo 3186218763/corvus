@@ -1,8 +1,8 @@
 package control
 
 import (
-	"reasonix/internal/agent"
-	"reasonix/internal/provider"
+	"corvus/internal/agent"
+	"corvus/internal/provider"
 )
 
 // EnsureSessionPath pins a fresh auto-save file for this controller when none is

@@ -7,7 +7,7 @@ var English = Messages{
 	WelcomeTitleFmt: "Welcome to %s",
 	NoConfigYet:     "No configuration found yet — let's set it up.",
 	StartingChatFmt: "Starting %s…",
-	SetKeyHint:      "Set your API key, then run `reasonix`.",
+	SetKeyHint:      "Set your API key, then run `corvus`.",
 	ConfigLabel:     "config",
 	ModelsLabel:     "models",
 	ConfigNotFound:  "not found — using built-in defaults",
@@ -15,7 +15,7 @@ var English = Messages{
 	NoKey:           "no key",
 	Ready:           "ready",
 	GetStarted:      "Get started",
-	StepScaffold:    "scaffold reasonix.toml",
+	StepScaffold:    "scaffold corvus.toml",
 	StepSetKey:      "set API key",
 
 	StepChatDesc: "interactive session",
@@ -23,8 +23,8 @@ var English = Messages{
 	ChatTip:             "Context is kept across turns. Type 'exit' or Ctrl-D to quit.",
 	TurnCancelled:       "cancelled — back to prompt",
 	InterruptedRecovery: "This turn was interrupted. Partial output is kept for reference; only completed tool pairs and a bounded recovery summary enter the next model turn. Inspect the workspace before continuing or reverting changes.",
-	RecoveryPaused:      "Automatic retries paused. Reasonix stopped repeated attempts and kept completed work. Send “Continue” to start a fresh attempt, or add instructions to change direction.",
-	NoSessionToResume:   "no saved session to resume — start a new one with `reasonix`",
+	RecoveryPaused:      "Automatic retries paused. Corvus stopped repeated attempts and kept completed work. Send “Continue” to start a fresh attempt, or add instructions to change direction.",
+	NoSessionToResume:   "no saved session to resume — start a new one with `corvus`",
 	ResumeRequiresTTY:   "--resume needs an interactive terminal; pass --continue for the most recent session",
 	PickSessionLabel:    "Resume which session?",
 
@@ -129,17 +129,17 @@ var English = Messages{
 	MemoryApprovalBodyLabel:                "body",
 	MemoryApprovalArchiveFmt:               "Archive memory %q",
 	PlanModeBashTrustSubjectFmt:            "Trust %q as a read-only command prefix while planning\nCommand: %s",
-	PlanModeBashTrustReason:                "This bash command is not in Reasonix's built-in read-only set. Confirm only if this exact prefix is read-only for planning and research. Auto/YOLO approval cannot answer this trust prompt.",
+	PlanModeBashTrustReason:                "This bash command is not in Corvus's built-in read-only set. Confirm only if this exact prefix is read-only for planning and research. Auto/YOLO approval cannot answer this trust prompt.",
 	PlanModeBashTrustDeclined:              "the user declined to trust this bash command as read-only for plan mode - do not retry it; continue with other trusted read-only tools or ask how to proceed.",
 	SandboxEscapeSubjectFallback:           "run shell command unconfined once",
 	SandboxEscapeSubjectPrefix:             "run unconfined once: ",
 	SandboxEscapeWrapReason:                "Windows does not provide an OS-level Bash sandbox for this command. Run it unconfined one time? This bypasses OS isolation for this command only.",
 	SandboxEscapeRuntimeReason:             "The OS sandbox could not start this command. Run it unconfined one time? This bypasses OS isolation for this command only.",
 	SandboxEscapeDeclined:                  "the user declined to run this command without the OS sandbox - do not retry it unconfined; ask how they would like to proceed.",
-	ApprovalToolLabelConfigWrite:           "Reasonix config write",
-	ConfigWriteSubjectPrefix:               "write Reasonix config: ",
-	ConfigWriteReason:                      "This write targets a Reasonix-managed configuration file outside the workspace. It can change providers, sandbox rules, permissions, and MCP servers for future sessions, so it needs your explicit approval.",
-	ConfigWriteDeclined:                    "the user declined this Reasonix config write - do not retry it; ask how they would like to proceed.",
+	ApprovalToolLabelConfigWrite:           "Corvus config write",
+	ConfigWriteSubjectPrefix:               "write Corvus config: ",
+	ConfigWriteReason:                      "This write targets a Corvus-managed configuration file outside the workspace. It can change providers, sandbox rules, permissions, and MCP servers for future sessions, so it needs your explicit approval.",
+	ConfigWriteDeclined:                    "the user declined this Corvus config write - do not retry it; ask how they would like to proceed.",
 	ConfigWriteApprovalChoices:             "1. Allow once\n2. Allow for this session\n3. Deny\nChoose [1/2/3] (y/a/n also work)",
 	PermissionSavedFmt:                     "permission saved to %s: %s",
 	PermissionAlreadyAllowedFmt:            "permission already covered in %s: %s",
@@ -153,7 +153,7 @@ var English = Messages{
 
 	OutputStyleNone:           "no output styles available",
 	OutputStyleHeader:         "output styles:",
-	OutputStyleHint:           "set agent.output_style in reasonix.toml to apply one (takes effect next session)",
+	OutputStyleHint:           "set agent.output_style in corvus.toml to apply one (takes effect next session)",
 	ThemeHeader:               "themes:",
 	ThemeHint:                 "switch with /theme <auto|light|dark|style>",
 	ThemeChangedFmt:           "theme switched to %s / %s",
@@ -231,7 +231,7 @@ var English = Messages{
 	SkillPickerStatusNotDir:      "not-directory",
 	SkillPickerStatusUnreadable:  "unreadable",
 	SlashPromptEmpty:             "the MCP prompt returned no content to send",
-	SlashMCPNone:                 "no MCP servers configured — add a [[plugins]] entry in reasonix.toml",
+	SlashMCPNone:                 "no MCP servers configured — add a [[plugins]] entry in corvus.toml",
 	CtrlCQuitHint:                "press Ctrl+C again to quit",
 	CompHintSlash:                "↑/↓ move · Tab/Enter select · Esc close",
 	CompHintFile:                 "↑/↓ move · Tab/Enter open folder or pick file · Esc close",
@@ -311,7 +311,7 @@ var English = Messages{
 	ArgEffortXHigh:      "extra deep reasoning",
 	ArgEffortMax:        "maximum reasoning",
 	ArgThemeCurrent:     "current",
-	ArgLanguageAuto:     "auto-detect from REASONIX_LANG / locale",
+	ArgLanguageAuto:     "auto-detect from CORVUS_LANG / locale",
 	ArgLanguageEn:       "English",
 	ArgLanguageZh:       "中文",
 
@@ -324,11 +324,11 @@ var English = Messages{
 	ListSkillsHeaderFmt: "skills (%d)",
 	ListSkillsNone:      "skills: none defined — invoke a built-in like /init, or author one with install_skill",
 	ListHooksHeaderFmt:  "hooks (%d active)",
-	ListHooksNone:       "hooks: none active — configure in .reasonix/settings.json (project) or <Reasonix home>/settings.json (global)",
+	ListHooksNone:       "hooks: none active — configure in .corvus/settings.json (project) or <Corvus home>/settings.json (global)",
 	ListMcpHeader:       "mcp servers",
-	ListMcpNone:         "mcp: no servers connected — add one in reasonix.toml ([[plugins]]) or a project .mcp.json",
+	ListMcpNone:         "mcp: no servers connected — add one in corvus.toml ([[plugins]]) or a project .mcp.json",
 
-	MemoryNone:                "memory: none — add with “/remember <note>” or create REASONIX.md in the project root",
+	MemoryNone:                "memory: none — add with “/remember <note>” or create CORVUS.md in the project root",
 	MemoryLoaded:              "memory loaded:",
 	MemorySavedHeader:         "  saved memories (archive with “/forget <name>”):",
 	MemoryStoredUnderFmt:      "  stored under %s",
@@ -382,7 +382,7 @@ var English = Messages{
 
 	SelectProvidersLabel:     "Select providers to enable",
 	EnterAPIKeysHeader:       "Enter API keys (Enter to skip and set later):",
-	MissingKeyIntro:          "reasonix.toml is ready — just an API key away.",
+	MissingKeyIntro:          "corvus.toml is ready — just an API key away.",
 	WroteFileFmt:             "Wrote %s",
 	SetupComplete:            "Setup complete.",
 	SetupCancelled:           "setup cancelled.",
@@ -433,7 +433,7 @@ var English = Messages{
 	NoModelsAvailableFmt:       "%s: no models available, skipping",
 	CustomFetchEmpty:           "/models returned an empty list — falling back to manual entry",
 	AnthropicFetchEmpty:        "/models returned an empty list — Anthropic-compatible providers usually don't expose one, falling back to manual entry",
-	SkipStaleCustomEntryFmt:    "skipping stale %q entry from reasonix.toml (pointing at %s) — please remove it from [[providers]]",
+	SkipStaleCustomEntryFmt:    "skipping stale %q entry from corvus.toml (pointing at %s) — please remove it from [[providers]]",
 	APIKeyAlreadySetFmt:        "reusing existing value for %s",
 	APIKeyResetPromptFmt:       "Re-enter %s?",
 	InvalidAPIKeyEnvFmt:        "%q is not a valid API Key variable name. Use letters, numbers, and underscores (for example, MY_PROVIDER_API_KEY); do not enter a model name.",
@@ -473,7 +473,7 @@ var English = Messages{
 	WriteEnvErr:               "write .env:",
 
 	ProviderErrBadRequest:          "Malformed request (HTTP 400): the request body was rejected. This is likely a bug — please report it if it persists.",
-	ProviderErrAuth:                "Authentication failed (HTTP 401): your API key is missing or unset. Set the provider API key in the project .env or Reasonix's credentials store.",
+	ProviderErrAuth:                "Authentication failed (HTTP 401): your API key is missing or unset. Set the provider API key in the project .env or Corvus's credentials store.",
 	ProviderErrAuthRejected:        "Authentication failed (HTTP 401): the server rejected your API key. It may be wrong or expired, or the provider hit a transient auth/quota issue — retried with backoff and still failed. Check the project .env or credentials store and try again shortly.",
 	ProviderErrInsufficientBalance: "Insufficient balance (HTTP 402): your account is out of credit. Top up your account, then retry.",
 	ProviderErrUnprocessable:       "Invalid parameters (HTTP 422): a request parameter was rejected. This is likely a bug — please report it if it persists.",
@@ -497,10 +497,10 @@ var English = Messages{
 	ProviderPickLabel:    "Select a model from %s",
 	ProviderNoModelsFmt:  "provider %s has no configured models",
 
-	UsageBody: `reasonix — terminal coding agent
+	UsageBody: `corvus — terminal coding agent
 
 Usage:
-  reasonix [options]
+  corvus [options]
 
 Starts the interactive terminal UI. Type /help in the TUI to list commands.
 

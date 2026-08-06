@@ -72,7 +72,7 @@ var localRegistry = struct {
 }{locks: map[string]*localLock{}}
 
 // New returns a Delivery-session lease owner for workspaceRoot. lockDir must be
-// shared by Reasonix processes for cross-process protection; it is kept outside
+// shared by Corvus processes for cross-process protection; it is kept outside
 // the workspace so acquiring a lease never dirties user files.
 func New(workspaceRoot, lockDir string, onWait WaitNotice) (*Owner, error) {
 	canonical, err := CanonicalWorkspace(workspaceRoot)

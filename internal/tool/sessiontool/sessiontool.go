@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/provider"
-	"reasonix/internal/textutil"
+	"corvus/internal/agent"
+	"corvus/internal/provider"
+	"corvus/internal/textutil"
 )
 
 // ---- list_sessions tool -----------------------------------------------------

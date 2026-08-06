@@ -1,4 +1,4 @@
-# Reasonix TUI Render Animation & Art Polish — P1.5 Design
+# Corvus TUI Render Animation & Art Polish — P1.5 Design
 
 **Date:** 2026-08-06  
 **Status:** Design approved (brainstorming §1–§3) + subagent review applied (2026-08-06, P0/P1 all fixed)  
@@ -65,14 +65,14 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 
 **Change:** stop returning `tea.ClearScreen()` when the viewport offset moves. Keep the legacy behavior behind an env switch.
 
-- New field `scrollRepaint bool` on `chatTUI`; read once in `newChatTUI()` from env `REASONIX_TUI_SCROLL_REPAINT=1`, following the existing TUI env pattern (`mouseCaptureOffByDefault()` at chat_tui.go:612).
+- New field `scrollRepaint bool` on `chatTUI`; read once in `newChatTUI()` from env `CORVUS_TUI_SCROLL_REPAINT=1`, following the existing TUI env pattern (`mouseCaptureOffByDefault()` at chat_tui.go:612).
 - Update wrapper: the ClearScreen branch becomes
   `if cm.viewport.YOffset() != prevYOff && !cm.nativeScrollback && !cm.sessionSwitch && cm.scrollRepaint`.
 - Native scrollback path is unchanged (no clear there today).
 
 **Why safe:** bubbletea v2.0.7 `cursedRenderer` diffs at cell level and writes only dirty lines. `ClearScreen` (buffer erase + full redraw) discards that diffing, and doing it on every scroll step (including smooth-scroll ticks, §5.2) is the flicker source. The env switch is the documented escape hatch for terminals that strand stale rows.
 
-**Tests:** rewrite the existing ClearScreen test families (`chat_tui_test.go` ≈2917/2921) in the same task: default no ClearScreen, `REASONIX_TUI_SCROLL_REPAINT=1` restores, sessionSwitch suppression semantics preserved.
+**Tests:** rewrite the existing ClearScreen test families (`chat_tui_test.go` ≈2917/2921) in the same task: default no ClearScreen, `CORVUS_TUI_SCROLL_REPAINT=1` restores, sessionSwitch suppression semantics preserved.
 
 ### 4.2 Incremental wrap cache
 
@@ -109,13 +109,13 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 
 ### 5.1 Reduced-motion gate
 
-- New `motion.go`: `motionEnabled() bool` is **true when animation is enabled** — it reads env `REASONIX_REDUCE_MOTION` on every call and returns false when that env is set to `1` (pattern follows `mouseCaptureOffByDefault()`; no config section exists, env only, YAGNI).
+- New `motion.go`: `motionEnabled() bool` is **true when animation is enabled** — it reads env `CORVUS_REDUCE_MOTION` on every call and returns false when that env is set to `1` (pattern follows `mouseCaptureOffByDefault()`; no config section exists, env only, YAGNI).
 - Consumers (must consult the gate):
   - Spinner scheduling: motion off → the working line shows a static glyph (first frame) and does **not** schedule `spinner.Tick` (elapsed ticker still runs — it is information).
   - **Tool working line**: `tickToolRunning` (driven by `elapsedTickMsg`) must not advance `toolStreamFrame` when motion is off — the braille frames freeze on the first glyph. (It animates today because the elapsed ticker keeps running.)
   - Smooth scroll (§5.2): motion off → instant jump (today's behavior).
   - Shimmer (§5.3, if it ships): off.
-- Test: enumerate every animation entry point (spinner scheduling, tool frame advancement, smooth-scroll start) and assert it consults the gate; with `REASONIX_REDUCE_MOTION=1` no `spinner.Tick`/scroll-tick is scheduled and tool frames stay frozen.
+- Test: enumerate every animation entry point (spinner scheduling, tool frame advancement, smooth-scroll start) and assert it consults the gate; with `CORVUS_REDUCE_MOTION=1` no `spinner.Tick`/scroll-tick is scheduled and tool frames stay frozen.
 - Test seam: gate helpers return `nil` cmd when disabled; tick messages are synthetic and injectable; no wall-clock sleeps in tests.
 
 ### 5.2 Smooth scroll interpolation (pinned spec)
@@ -123,7 +123,7 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 - New `smooth_scroll.go`: single state machine `{active, from, to, start, dur}` driven by a 16ms `tea.Tick`.
 - Inputs: PgUp/PgDn (page = viewport height − 1 lines) and wheel up/down (3 lines) start an interpolation from the current `YOffset` to the target, clamped to `[0, maxOffset]`.
 - Timing: **dur = 150ms fixed**, ease-out cubic `t' = 1 − (1−t)³`; each tick recomputes and **reclamps** the offset to current bounds, and the final tick **snaps** exactly to the target.
-- **Instant exceptions** (no animation): `GotoTop`/`GotoBottom` (incl. tail-follow), edge auto-scroll while mouse-held, any scroll input while `!motionEnabled()`, and **whenever `REASONIX_TUI_SCROLL_REPAINT=1`** (legacy full repaint per tick would flicker).
+- **Instant exceptions** (no animation): `GotoTop`/`GotoBottom` (incl. tail-follow), edge auto-scroll while mouse-held, any scroll input while `!motionEnabled()`, and **whenever `CORVUS_TUI_SCROLL_REPAINT=1`** (legacy full repaint per tick would flicker).
 - **Interrupt**: a new scroll input during an animation cancels it and starts from the current offset. Content growth during an animation reclamps the target to the new bounds.
 - AtBottom semantics: during animation the viewport is not at bottom; tail-follow is unaffected (only triggers when at bottom).
 - No behavior change to Esc, draft, or keyboard completeness.
@@ -143,7 +143,7 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 
 ### 5.5 First-screen branding (width-gated)
 
-- `renderTUIBanner`: wide (≥60 cols) keeps today's two lines (`◆ reasonix · label` + tip); narrow (<60 cols) renders a single trimmed wordmark line (no tip, hard-truncated to width). Accent + bold wordmark reuse existing theme slots; static, no animation.
+- `renderTUIBanner`: wide (≥60 cols) keeps today's two lines (`◆ corvus · label` + tip); narrow (<60 cols) renders a single trimmed wordmark line (no tip, hard-truncated to width). Accent + bold wordmark reuse existing theme slots; static, no animation.
 
 ### 5.6 Density audit (sealed scope)
 
@@ -169,9 +169,9 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 
 - **Benchmarks** (kept + added): `BenchmarkWrapTranscript` (reflow path, unchanged); `BenchmarkAppendBlock` (append 1 block ≈ 1 token increment at a 10k-line base); optionally `BenchmarkBottomPanels`. Benchmarks are reports, not assertions.
 - **Property test**: incremental wrappedLines == full wrapTranscript equivalence (append/set/remove/truncate interleavings + the four direct-mutation patterns).
-- **Scroll repaint**: default no ClearScreen on scroll; env `REASONIX_TUI_SCROLL_REPAINT=1` restores; sessionSwitch semantics preserved; native scrollback unchanged. Rewrites the two existing ClearScreen test families in the same task.
+- **Scroll repaint**: default no ClearScreen on scroll; env `CORVUS_TUI_SCROLL_REPAINT=1` restores; sessionSwitch semantics preserved; native scrollback unchanged. Rewrites the two existing ClearScreen test families in the same task.
 - **Panel cache**: `panelRenderHook` counter proves each panel renders once per event; `bottomRows()` == cached rows; resize refresh; first-frame fallback.
-- **Motion gate**: all four animation entries (spinner scheduling, tool frame advancement, smooth-scroll start, shimmer-if-shipped) consult `motionEnabled()`; `REASONIX_REDUCE_MOTION=1` schedules no spinner/scroll ticks and freezes tool frames.
+- **Motion gate**: all four animation entries (spinner scheduling, tool frame advancement, smooth-scroll start, shimmer-if-shipped) consult `motionEnabled()`; `CORVUS_REDUCE_MOTION=1` schedules no spinner/scroll ticks and freezes tool frames.
 - **Smooth scroll**: start/end states, ease-out progression, final snap, interrupt mid-flight, instant exceptions (GotoBottom, edge auto-scroll, legacy env combo), motion-off instant jump, content-growth reclamp, AtBottom during animation.
 - **Fixed-width elapsed**: widths stable for 0–999s at all six call sites.
 - **Branding**: wide ≥60 and narrow <60 variants; tip present/absent; narrow truncates to width.
@@ -202,7 +202,7 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 - **Process:** TDD per task (failing test → implement → pass → commit); one task = one §4.x/§5.x item; order fluidity → motion → art; shimmer spike is an optional task with go/no-go. Commit prefixes follow P1 (`feat(cli):` / `test(cli):` / `style(cli):`), one commit per task. Feature branch/worktree.
 - **Plan opening sections:** transcript-mutation inventory table (required by §4.2) + test-seam list (synthetic ticks, nil-cmd gating, `panelRenderHook`, injectable clock).
 - **Spec-coverage table:** the plan ends with a §4/§5 item → task mapping (P1 plan convention).
-- **Env docs:** `REASONIX_TUI_SCROLL_REPAINT` / `REASONIX_REDUCE_MOTION` documented in README (env section).
+- **Env docs:** `CORVUS_TUI_SCROLL_REPAINT` / `CORVUS_REDUCE_MOTION` documented in README (env section).
 - **Research artifacts:** `docs/superpowers/research/2026-08-06-render-animation/` + `internal/cli/bench_test.go` already committed with the first spec version.
 
 ---
@@ -212,9 +212,9 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 | Scenario | Pass |
 |----------|------|
 | Streaming at 10k lines | Append cost ~58ms → <2ms per token (benchmark); no visible jank in user terminal |
-| Scroll | Default no ClearScreen, smooth interpolation on PgUp/PgDn/wheel, GotoBottom/auto-scroll instant. Env matrix: default = smooth; `REASONIX_REDUCE_MOTION=1` = instant; `REASONIX_TUI_SCROLL_REPAINT=1` = instant (legacy full repaint) |
+| Scroll | Default no ClearScreen, smooth interpolation on PgUp/PgDn/wheel, GotoBottom/auto-scroll instant. Env matrix: default = smooth; `CORVUS_REDUCE_MOTION=1` = instant; `CORVUS_TUI_SCROLL_REPAINT=1` = instant (legacy full repaint) |
 | Bottom region | Panels render once per event; height/View lockstep tests green |
-| Reduce motion | `REASONIX_REDUCE_MOTION=1` → static spinner, frozen tool frames, instant scroll, no shimmer; elapsed still ticks |
+| Reduce motion | `CORVUS_REDUCE_MOTION=1` → static spinner, frozen tool frames, instant scroll, no shimmer; elapsed still ticks |
 | Art | Wide/narrow branding; neutral table code cells; dead diff constants deleted; `TestNoHardcodedColorCodes` green |
 | Regression | Full `internal/cli` suite green; keyboard/Esc/draft invariants unchanged (existing + manual checklist) |
 | Manual | Verified on user's terminal + at least one of Warp / iTerm2 / Windows Terminal / konsole (env fallback documented) |
@@ -225,7 +225,7 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 
 | Risk | Mitigation |
 |------|------------|
-| Removing ClearScreen strands rows on some terminals | env `REASONIX_TUI_SCROLL_REPAINT=1`; README docs; manual terminal list (§8) |
+| Removing ClearScreen strands rows on some terminals | env `CORVUS_TUI_SCROLL_REPAINT=1`; README docs; manual terminal list (§8) |
 | wrappedLines cache bugs (offset drift, missed mutation sites) | property equivalence test; plan opens with mutation inventory; cache-aware setter for the 4 direct writes |
 | Smooth scroll breaks tail-follow / AtBottom / legacy combo | instant exceptions + env combo tests |
 | Panel cache staleness | refresh inside `m.update()` (single mutation point), before all consumers; empty-cache fallback |
@@ -240,10 +240,10 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 | # | Topic | Choice |
 |---|-------|--------|
 | 1 | Round direction | C — dual track: fluidity foundation + curated motion/art |
-| 2 | Scroll repaint | Default off; env `REASONIX_TUI_SCROLL_REPAINT=1` legacy; read in `newChatTUI()` |
+| 2 | Scroll repaint | Default off; env `CORVUS_TUI_SCROLL_REPAINT=1` legacy; read in `newChatTUI()` |
 | 3 | Wrap strategy | Per-block incremental cache + `blockLineCounts`; O(1) last-block rewrap, O(nBlocks) prefix sums for rare middle/truncate; mutation inventory required |
 | 4 | Panel rendering | Once per `m.update()`; `View()` is per-event (tea.go:888), not per-frame |
-| 5 | Motion gate | `motionEnabled()` = animation enabled; env `REASONIX_REDUCE_MOTION=1` disables it (read per call); all 4 animation entries incl. tool frames |
+| 5 | Motion gate | `motionEnabled()` = animation enabled; env `CORVUS_REDUCE_MOTION=1` disables it (read per call); all 4 animation entries incl. tool frames |
 | 6 | Smooth scroll | 150ms fixed, ease-out cubic, 16ms tick, final snap, per-tick reclamp; instant exceptions incl. legacy env |
 | 7 | Shimmer | Spike-gated; bounded optional task with go/no-go |
 | 8 | Thinking tail | Keep 12-line live tail; only elapsed width fixed |

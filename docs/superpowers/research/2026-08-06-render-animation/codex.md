@@ -1,6 +1,6 @@
 # Codex CLI 渲染与视觉设计调研
 
-> 面向 Reasonix（Go + Bubble Tea v2）的专项调研。调研对象：openai/codex（Rust + Ratatui + crossterm），基于 main 分支源码、`styles.md`、`clippy.toml`、PR 与官方文档。「事实：」为源码/文档可验证内容；「推断：」为基于事实的分析。
+> 面向 Corvus（Go + Bubble Tea v2）的专项调研。调研对象：openai/codex（Rust + Ratatui + crossterm），基于 main 分支源码、`styles.md`、`clippy.toml`、PR 与官方文档。「事实：」为源码/文档可验证内容；「推断：」为基于事实的分析。
 
 ## 1. 渲染机制
 
@@ -97,9 +97,9 @@
 ## 6. 可借鉴点（具体技术名）
 
 1. **FrameRequester + FrameRateLimiter**（事实）：actor 式帧请求合并 + 120FPS 上限。→ Bubble Tea v2 用 `tea.Tick` 做统一帧驱动，把多个渲染请求合并到最早 deadline。
-2. **StreamingRender 稳定前缀**（事实）：已完成 markdown 块只渲染一次，仅重渲染尾部；遇 reference link 定义等再全量回退。→ Reasonix 渲染器可缓存已完成块、只重渲染尾部。
+2. **StreamingRender 稳定前缀**（事实）：已完成 markdown 块只渲染一次，仅重渲染尾部；遇 reference link 定义等再全量回退。→ Corvus 渲染器可缓存已完成块、只重渲染尾部。
 3. **Scrollback 外置（insert_history_lines）**（事实）：完成的历史行直接写终端 scrollback。→ Bubble Tea 同样可用 ANSI 序列实现，比 viewport 虚拟滚动更适合长会话。
-4. **语义 ANSI 色 + clippy 硬禁**（事实）：cyan/green/red/magenta 语义化；禁 `Rgb` / `Indexed` / black/white；亮背景用 RGB(0,95,135) 例外并带测试。→ Reasonix 已有 `charmbracelet/colorprofile`，可做能力探测 + 类似 lint 规则。
+4. **语义 ANSI 色 + clippy 硬禁**（事实）：cyan/green/red/magenta 语义化；禁 `Rgb` / `Indexed` / black/white；亮背景用 RGB(0,95,135) 例外并带测试。→ Corvus 已有 `charmbracelet/colorprofile`，可做能力探测 + 类似 lint 规则。
 5. **AdaptiveChunkingPolicy（Smooth/CatchUp + 磁滞）**（事实）：每 tick 1 行 vs 排空队列，进出阈值不同 + hold 防抖。→ 对应 Bubble Tea 的流式行排队器。
 6. **VT100Backend + insta 快照**（事实→推断）：终端仿真 + 快照回归。→ Go 侧用 vt100 类模拟 screen + golden 文件。
 7. **motion.rs 集中门控 + 测试正则**（事实）：所有动画必须走 reduced-motion 门控。→ 可移植为「动画工具模块 + lint/测试强制」。

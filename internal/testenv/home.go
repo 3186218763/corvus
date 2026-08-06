@@ -17,15 +17,15 @@ type savedEnvironment struct {
 	set   bool
 }
 
-// IsolateUserState redirects default user-scoped Reasonix paths to a disposable
+// IsolateUserState redirects default user-scoped Corvus paths to a disposable
 // home and clears inherited explicit path overrides. Tests may still override
 // any of these variables for a focused scenario after this process-level guard
 // is installed.
 func IsolateUserState() (func(), error) {
 	originalHome, _ := os.UserHomeDir()
-	home, err := os.MkdirTemp(originalHome, ".reasonix-test-home-*")
+	home, err := os.MkdirTemp(originalHome, ".corvus-test-home-*")
 	if err != nil && originalHome != "" {
-		home, err = os.MkdirTemp("", "reasonix-test-home-*")
+		home, err = os.MkdirTemp("", "corvus-test-home-*")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("create isolated test home: %w", err)
@@ -41,9 +41,9 @@ func IsolateUserState() (func(), error) {
 		"LocalAppData":    filepath.Join(home, "AppData", "Local"),
 	}
 	unset := []string{
-		"REASONIX_HOME",
-		"REASONIX_STATE_HOME",
-		"REASONIX_CACHE_HOME",
+		"CORVUS_HOME",
+		"CORVUS_STATE_HOME",
+		"CORVUS_CACHE_HOME",
 	}
 
 	saved := make(map[string]savedEnvironment, len(set)+len(unset))

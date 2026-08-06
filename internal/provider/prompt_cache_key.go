@@ -34,7 +34,7 @@ func FormatSessionPromptCacheKey(sessionID, subID string) string {
 	if sessionID == "" {
 		return ""
 	}
-	key := "reasonix:session:" + sessionID
+	key := "corvus:session:" + sessionID
 	if sub := strings.TrimSpace(subID); sub != "" {
 		key += ":sub:" + sub
 	}

@@ -3,8 +3,8 @@ package installsource
 import (
 	"encoding/json"
 
-	"reasonix/internal/config"
-	"reasonix/internal/pluginpkg"
+	"corvus/internal/config"
+	"corvus/internal/pluginpkg"
 )
 
 // request mirrors the public schema. Fields stay exported because Execute

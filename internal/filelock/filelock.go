@@ -29,7 +29,7 @@ var localRegistry = struct {
 
 // Acquire obtains an exclusive lock on path until the returned release
 // function is called. It serializes both goroutines in this process and other
-// Reasonix processes, and never waits past ctx's deadline.
+// Corvus processes, and never waits past ctx's deadline.
 func Acquire(ctx context.Context, path string) (func(), error) {
 	if ctx == nil {
 		ctx = context.Background()

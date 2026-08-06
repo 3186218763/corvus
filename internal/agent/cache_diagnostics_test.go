@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/event"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 type cacheDiagProvider struct {

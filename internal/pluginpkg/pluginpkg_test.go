@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	fileencoding "reasonix/internal/fileutil/encoding"
+	fileencoding "corvus/internal/fileutil/encoding"
 )
 
 func TestParseCodexSuperpowersManifest(t *testing.T) {
@@ -586,7 +586,7 @@ func TestParseClaudeHooksDoesNotWarnOnMatchersThatCanFire(t *testing.T) {
 			hooksJSON: `{"hooks":{"PreToolUse":[{"matcher":"WebSearch.*","hooks":[{"type":"command","command":"bin/guard"}]}]}}`,
 		},
 		{
-			// A previously-unmapped Reasonix tool the fix now supports.
+			// A previously-unmapped Corvus tool the fix now supports.
 			name:      "run-skill-now-mapped",
 			hooksJSON: `{"hooks":{"PreToolUse":[{"matcher":"Skill","hooks":[{"type":"command","command":"bin/guard"}]}]}}`,
 		},
@@ -739,7 +739,7 @@ func TestParseClaudePluginMapsCommandsDir(t *testing.T) {
 }
 
 // TestNativeManifestCommandsField pins the explicit "commands" declaration in
-// reasonix-plugin.json, including path validation.
+// corvus-plugin.json, including path validation.
 func TestNativeManifestCommandsField(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, filepath.Join(root, NativeManifest), `{"name": "native-pack", "commands": ["cmds"]}`)

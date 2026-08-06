@@ -10,10 +10,10 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/config"
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/frontmatter"
-	"reasonix/internal/skill"
+	"corvus/internal/config"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/frontmatter"
+	"corvus/internal/skill"
 )
 
 const (
@@ -99,12 +99,12 @@ func (t *installSourceTool) skillRootAction(req request, path string, names []st
 
 func (t *installSourceTool) skillInstallRoot(scope string) (string, error) {
 	if scope == "global" {
-		if t.reasonixHome == "" {
-			return "", newErr(ErrSourceUnreadable, "global skill install requires a Reasonix home directory")
+		if t.corvusHome == "" {
+			return "", newErr(ErrSourceUnreadable, "global skill install requires a Corvus home directory")
 		}
-		return filepath.Join(t.reasonixHome, skill.SkillsDirname), nil
+		return filepath.Join(t.corvusHome, skill.SkillsDirname), nil
 	}
-	return filepath.Join(t.root, ".reasonix", skill.SkillsDirname), nil
+	return filepath.Join(t.root, ".corvus", skill.SkillsDirname), nil
 }
 
 // skillCanonicalPath computes the canonical install destination:
@@ -126,14 +126,14 @@ func (t *installSourceTool) skillCanonicalPath(name, scope string) (string, erro
 func (t *installSourceTool) verifySkill(scope, name string, act *action) error {
 	custom := []string(nil)
 	if scope == "project" {
-		cfg := config.LoadForEdit(filepath.Join(t.root, "reasonix.toml"))
+		cfg := config.LoadForEdit(filepath.Join(t.root, "corvus.toml"))
 		custom = cfg.SkillCustomPaths()
 	} else {
 		cfg := config.LoadForEdit(t.configPath(scope))
 		custom = cfg.SkillCustomPaths()
 	}
 	var stderr bytes.Buffer
-	store := skill.New(skill.Options{HomeDir: t.home, ReasonixHomeDir: t.reasonixHome, ProjectRoot: t.root, CustomPaths: custom, DisableBuiltins: true, Stderr: &stderr})
+	store := skill.New(skill.Options{HomeDir: t.home, CorvusHomeDir: t.corvusHome, ProjectRoot: t.root, CustomPaths: custom, DisableBuiltins: true, Stderr: &stderr})
 	sk, ok := store.Read(name)
 	if !ok {
 		return newErr(ErrSourceUnreadable, "skill %q is installed but not discoverable", name)

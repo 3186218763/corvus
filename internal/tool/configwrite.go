@@ -3,13 +3,13 @@ package tool
 import "context"
 
 // ConfigWriteRequest describes a file-tool write that targets a
-// Reasonix-managed configuration file outside the workspace write roots.
+// Corvus-managed configuration file outside the workspace write roots.
 type ConfigWriteRequest struct {
 	// Path is the resolved absolute target the tool wants to write.
 	Path string
 }
 
-// ConfigWriteApprover asks the user whether one write to a Reasonix-managed
+// ConfigWriteApprover asks the user whether one write to a Corvus-managed
 // config file may proceed. It is a fresh human decision: YOLO/auto approval
 // must not answer it, and a nil approver (headless runs, sub-agent loops with
 // no interactive parent) fails closed.

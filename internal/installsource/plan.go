@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode"
 
-	"reasonix/internal/skill"
+	"corvus/internal/skill"
 )
 
 var githubAPIBaseURL = "https://api.github.com"

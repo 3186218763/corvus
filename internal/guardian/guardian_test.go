@@ -10,10 +10,10 @@ import (
 	"sync"
 	"testing"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/agent"
+	"corvus/internal/event"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 type scriptedProvider struct {

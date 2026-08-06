@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/event"
-	"reasonix/internal/permission"
-	"reasonix/internal/provider"
-	"reasonix/internal/recovery"
-	"reasonix/internal/tool"
+	"corvus/internal/agent"
+	"corvus/internal/event"
+	"corvus/internal/permission"
+	"corvus/internal/provider"
+	"corvus/internal/recovery"
+	"corvus/internal/tool"
 )
 
 // End-to-end: scripted provider fails verification, runs read-only diagnosis,

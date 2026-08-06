@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 func boolPtr(value bool) *bool { return &value }
@@ -452,9 +452,9 @@ func TestBuildRequestBodyPromptCacheKeyNonDeepSeek(t *testing.T) {
 	c := New(Config{Name: "oai", BaseURL: "https://api.openai.com", Model: "gpt-test"}).(*client)
 	body, _, _ := c.buildRequestBody(provider.Request{
 		Messages:       []provider.Message{{Role: provider.RoleUser, Content: "hi"}},
-		PromptCacheKey: "reasonix:session:abc",
+		PromptCacheKey: "corvus:session:abc",
 	})
-	if body["prompt_cache_key"] != "reasonix:session:abc" {
+	if body["prompt_cache_key"] != "corvus:session:abc" {
 		t.Fatalf("body=%#v", body)
 	}
 }
@@ -463,7 +463,7 @@ func TestBuildRequestBodyPromptCacheKeyDeepSeekOmits(t *testing.T) {
 	c := New(Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"}).(*client)
 	body, _, _ := c.buildRequestBody(provider.Request{
 		Messages:       []provider.Message{{Role: provider.RoleUser, Content: "hi"}},
-		PromptCacheKey: "reasonix:session:abc",
+		PromptCacheKey: "corvus:session:abc",
 	})
 	if _, ok := body["prompt_cache_key"]; ok {
 		t.Fatalf("DeepSeek Responses must omit key: %#v", body)

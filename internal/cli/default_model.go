@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/config"
+	"corvus/internal/config"
 )
 
 // resolveModelForCLI picks the chat model a CLI subcommand should boot on. A
@@ -39,7 +39,7 @@ func resolveModelForCLI(explicitRef string, cfg *config.Config) (ref string, fal
 }
 
 // resolveServeModel keeps serve's implicit model scoped to the user config.
-// A project reasonix.toml may configure the served workspace, but it must not
+// A project corvus.toml may configure the served workspace, but it must not
 // replace the account-level model used for new serve sessions.
 func resolveServeModel(modelName string) string {
 	if strings.TrimSpace(modelName) != "" {

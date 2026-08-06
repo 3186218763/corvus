@@ -6,7 +6,7 @@ import (
 
 	"mvdan.cc/sh/v3/syntax"
 
-	"reasonix/internal/shellparse"
+	"corvus/internal/shellparse"
 )
 
 // NormalizeBashSafeRedirectsForMatch returns a copy of subject with redirect

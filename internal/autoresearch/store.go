@@ -19,11 +19,11 @@ import (
 	"time"
 	"unicode"
 
-	fileencoding "reasonix/internal/fileutil/encoding"
+	fileencoding "corvus/internal/fileutil/encoding"
 )
 
 var safeTaskID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
-var explicitTaskPath = regexp.MustCompile(`\.reasonix/autoresearch/([A-Za-z0-9][A-Za-z0-9._-]*)/?`)
+var explicitTaskPath = regexp.MustCompile(`\.corvus/autoresearch/([A-Za-z0-9][A-Za-z0-9._-]*)/?`)
 var safeCreateToken = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 // createTokenFile is written immediately after an atomic task-directory
@@ -43,7 +43,7 @@ func NewStore(workspaceRoot string) *Store {
 	}
 	return &Store{
 		workspaceRoot: workspaceRoot,
-		root:          filepath.Join(workspaceRoot, ".reasonix", "autoresearch"),
+		root:          filepath.Join(workspaceRoot, ".corvus", "autoresearch"),
 		taskLocks:     map[string]*sync.Mutex{},
 	}
 }

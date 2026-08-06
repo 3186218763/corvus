@@ -29,9 +29,9 @@ type tuiDiagnostics struct {
 	close    sync.Once
 }
 
-func startTUIDiagnostics(reasonixHome string) *tuiDiagnostics {
+func startTUIDiagnostics(corvusHome string) *tuiDiagnostics {
 	d := &tuiDiagnostics{previous: slog.Default(), writer: io.Discard}
-	if logDir := tuiDiagnosticLogDir(reasonixHome); logDir != "" {
+	if logDir := tuiDiagnosticLogDir(corvusHome); logDir != "" {
 		if err := os.MkdirAll(logDir, 0o700); err == nil {
 			pruneTUIDiagnosticLogs(logDir, time.Now())
 			if file, err := os.CreateTemp(logDir, "cli-tui-*.log"); err == nil {
@@ -69,11 +69,11 @@ func (d *tuiDiagnostics) Close() {
 	})
 }
 
-func tuiDiagnosticLogDir(reasonixHome string) string {
-	if strings.TrimSpace(reasonixHome) == "" {
+func tuiDiagnosticLogDir(corvusHome string) string {
+	if strings.TrimSpace(corvusHome) == "" {
 		return ""
 	}
-	return filepath.Join(reasonixHome, "logs")
+	return filepath.Join(corvusHome, "logs")
 }
 
 func pruneTUIDiagnosticLogs(logDir string, now time.Time) {
@@ -123,7 +123,7 @@ func (w *boundedDiagnosticWriter) Write(p []byte) (int, error) {
 	}
 	if n < total && !w.truncated {
 		w.truncated = true
-		_, _ = io.WriteString(w.dst, "\nreasonix: CLI TUI diagnostic log limit reached; further diagnostics omitted\n")
+		_, _ = io.WriteString(w.dst, "\ncorvus: CLI TUI diagnostic log limit reached; further diagnostics omitted\n")
 		w.remaining = 0
 	}
 	return total, nil

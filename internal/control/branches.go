@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"reasonix/internal/agent"
+	"corvus/internal/agent"
 )
 
 // ParseBranchTarget parses the arguments after "/branch". A leading positive

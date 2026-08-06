@@ -16,13 +16,13 @@ func isolateUserConfigHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	for _, key := range []string{"REASONIX_HOME", "REASONIX_STATE_HOME", "REASONIX_CACHE_HOME"} {
+	for _, key := range []string{"CORVUS_HOME", "CORVUS_STATE_HOME", "CORVUS_CACHE_HOME"} {
 		t.Setenv(key, "")
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("unset %s: %v", key, err)
 		}
 	}
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData", "Roaming"))
@@ -34,17 +34,17 @@ func isolateUserConfigHome(t *testing.T) string {
 // would otherwise race on the shared global.
 func setRuntimeGOOS(t *testing.T, goos string) {
 	t.Helper()
-	t.Setenv("REASONIX_TEST_GOOS", goos)
+	t.Setenv("CORVUS_TEST_GOOS", goos)
 	old := runtimeGOOS
 	runtimeGOOS = goos
 	t.Cleanup(func() { runtimeGOOS = old })
 }
 
-func expectedDefaultReasonixHome(home string) string {
+func expectedDefaultCorvusHome(home string) string {
 	if runtime.GOOS == "windows" {
-		return filepath.Join(home, "AppData", "Roaming", "reasonix")
+		return filepath.Join(home, "AppData", "Roaming", "corvus")
 	}
-	return filepath.Join(home, ".reasonix")
+	return filepath.Join(home, ".corvus")
 }
 
 func TestUserConfigDisplayPathCollapsesHome(t *testing.T) {
@@ -53,33 +53,33 @@ func TestUserConfigDisplayPathCollapsesHome(t *testing.T) {
 	if !strings.HasPrefix(got, "~/") {
 		t.Fatalf("display path = %q, want ~/ prefix", got)
 	}
-	if !strings.HasSuffix(got, "reasonix/config.toml") {
-		t.Fatalf("display path = %q, want reasonix/config.toml suffix", got)
+	if !strings.HasSuffix(got, "corvus/config.toml") {
+		t.Fatalf("display path = %q, want corvus/config.toml suffix", got)
 	}
 	if strings.Contains(got, home) {
 		t.Fatalf("display path %q must not embed the absolute home", got)
 	}
 }
 
-func TestUserConfigPathUsesReasonixHome(t *testing.T) {
+func TestUserConfigPathUsesCorvusHome(t *testing.T) {
 	home := isolateUserConfigHome(t)
-	want := filepath.Join(expectedDefaultReasonixHome(home), "config.toml")
+	want := filepath.Join(expectedDefaultCorvusHome(home), "config.toml")
 	if got := UserConfigPath(); filepath.Clean(got) != filepath.Clean(want) {
 		t.Fatalf("UserConfigPath() = %q, want %q", got, want)
 	}
 }
 
-func TestReasonixManagedConfigPathsAreConfigFilesOnly(t *testing.T) {
+func TestCorvusManagedConfigPathsAreConfigFilesOnly(t *testing.T) {
 	home := isolateUserConfigHome(t)
 	setRuntimeGOOS(t, "windows")
 	oldConfigDir := osUserConfigDir
 	osUserConfigDir = func() string { return filepath.Join(home, "AppData", "Roaming") }
 	t.Cleanup(func() { osUserConfigDir = oldConfigDir })
 
-	paths := ReasonixManagedConfigPaths()
+	paths := CorvusManagedConfigPaths()
 	for _, want := range []string{
-		filepath.Join(home, "AppData", "Roaming", "reasonix", "config.toml"),
-		filepath.Join(home, ".reasonix", "config.json"),
+		filepath.Join(home, "AppData", "Roaming", "corvus", "config.toml"),
+		filepath.Join(home, ".corvus", "config.json"),
 	} {
 		found := false
 		for _, got := range paths {
@@ -93,7 +93,7 @@ func TestReasonixManagedConfigPathsAreConfigFilesOnly(t *testing.T) {
 		}
 	}
 	// The escape hatch is file-level by contract: no directories, and none of
-	// the sensitive Reasonix-home siblings (credentials, hooks, skills,
+	// the sensitive Corvus-home siblings (credentials, hooks, skills,
 	// sessions) may ride along.
 	for _, got := range paths {
 		if base := filepath.Base(got); base != "config.toml" && base != "config.json" {
@@ -101,11 +101,11 @@ func TestReasonixManagedConfigPathsAreConfigFilesOnly(t *testing.T) {
 		}
 		for _, forbidden := range []string{
 			home,
-			ReasonixHomeDir(),
+			CorvusHomeDir(),
 			UserCredentialsPath(),
-			filepath.Join(ReasonixHomeDir(), "settings.json"),
-			filepath.Join(ReasonixHomeDir(), "skills"),
-			filepath.Join(ReasonixHomeDir(), "sessions"),
+			filepath.Join(CorvusHomeDir(), "settings.json"),
+			filepath.Join(CorvusHomeDir(), "skills"),
+			filepath.Join(CorvusHomeDir(), "sessions"),
 		} {
 			if samePath(got, forbidden) {
 				t.Fatalf("managed config paths must not include %q: %v", forbidden, paths)
@@ -114,10 +114,10 @@ func TestReasonixManagedConfigPathsAreConfigFilesOnly(t *testing.T) {
 	}
 }
 
-func TestUserConfigPathHonorsReasonixHome(t *testing.T) {
+func TestUserConfigPathHonorsCorvusHome(t *testing.T) {
 	home := isolateUserConfigHome(t)
 	custom := filepath.Join(home, "custom-home")
-	t.Setenv("REASONIX_HOME", custom)
+	t.Setenv("CORVUS_HOME", custom)
 
 	want := filepath.Join(custom, "config.toml")
 	if got := UserConfigPath(); filepath.Clean(got) != filepath.Clean(want) {
@@ -141,9 +141,9 @@ func TestLoadForRootUsesWindowsHomeFallbackWhenConfigDirUnavailable(t *testing.T
 		osUserHomeDir = oldHomeDir
 	})
 
-	t.Setenv("REASONIX_HOME", "")
+	t.Setenv("CORVUS_HOME", "")
 
-	configPath := filepath.Join(home, "AppData", "Roaming", "reasonix", "config.toml")
+	configPath := filepath.Join(home, "AppData", "Roaming", "corvus", "config.toml")
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 			Server:   "127.0.0.1",
 			Port:     7890,
 			Username: "user",
-			Password: "${REASONIX_PROXY_PASSWORD}",
+			Password: "${CORVUS_PROXY_PASSWORD}",
 		},
 	}
 	orig.Environment.Enabled = boolPtr(false)
@@ -249,7 +249,7 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 		},
 	}
 	orig.Plugins = []PluginEntry{
-		{Name: "example", Command: "reasonix-plugin-example"},
+		{Name: "example", Command: "corvus-plugin-example"},
 		{Name: "stripe", Type: "http", URL: "https://mcp.stripe.com", Headers: map[string]string{"Authorization": "Bearer x"}, AutoStart: boolPtr(false), Tier: "background"},
 	}
 	mm, _ := orig.Provider("mimo-pro")
@@ -913,7 +913,7 @@ func TestRenderTOMLRoundTripsProviderHeadersAndModelOverrides(t *testing.T) {
 		APIKeyEnv: "GATEWAY_API_KEY",
 		Headers: map[string]string{
 			"HTTP-Referer": "https://app.example",
-			"X-Title":      "Reasonix",
+			"X-Title":      "Corvus",
 		},
 		ExtraBody: map[string]any{
 			"enable_thinking": true,
@@ -937,7 +937,7 @@ func TestRenderTOMLRoundTripsProviderHeadersAndModelOverrides(t *testing.T) {
 	}}
 
 	rendered := RenderTOML(orig)
-	if !strings.Contains(rendered, `headers     = { HTTP-Referer = "https://app.example", X-Title = "Reasonix" }`) {
+	if !strings.Contains(rendered, `headers     = { HTTP-Referer = "https://app.example", X-Title = "Corvus" }`) {
 		t.Fatalf("rendered TOML missing headers:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, `extra_body`) || !strings.Contains(rendered, `"enable_thinking" = true`) {
@@ -958,7 +958,7 @@ func TestRenderTOMLRoundTripsProviderHeadersAndModelOverrides(t *testing.T) {
 	if !ok {
 		t.Fatal("gateway provider missing after round trip")
 	}
-	if p.Headers["HTTP-Referer"] != "https://app.example" || p.Headers["X-Title"] != "Reasonix" {
+	if p.Headers["HTTP-Referer"] != "https://app.example" || p.Headers["X-Title"] != "Corvus" {
 		t.Fatalf("headers after round trip = %+v", p.Headers)
 	}
 	if p.ExtraBody["enable_thinking"] != true || p.ExtraBody["top_p"] != 0.8 {
@@ -1119,15 +1119,15 @@ func TestLoadForEditIgnoresAndDropsDeprecatedAgentStepLimitsOnSave(t *testing.T)
 }
 
 func TestIsolatedHomeDirEmptyByDefault(t *testing.T) {
-	t.Setenv("REASONIX_HOME", "")
+	t.Setenv("CORVUS_HOME", "")
 	if got := IsolatedHomeDir(); got != "" {
 		t.Fatalf("IsolatedHomeDir() = %q, want empty", got)
 	}
 }
 
 func TestIsolatedHomeDirReturnsCleanPath(t *testing.T) {
-	raw := filepath.Join(t.TempDir(), "isolated-reasonix")
-	t.Setenv("REASONIX_HOME", raw)
+	raw := filepath.Join(t.TempDir(), "isolated-corvus")
+	t.Setenv("CORVUS_HOME", raw)
 	got := IsolatedHomeDir()
 	if filepath.Clean(got) != filepath.Clean(raw) {
 		t.Fatalf("IsolatedHomeDir() = %q, want %q", got, raw)
@@ -1136,7 +1136,7 @@ func TestIsolatedHomeDirReturnsCleanPath(t *testing.T) {
 
 func TestLegacyOSSupportDirEmptyWhenIsolated(t *testing.T) {
 	isolateUserConfigHome(t)
-	t.Setenv("REASONIX_HOME", filepath.Join(t.TempDir(), "isolated-home"))
+	t.Setenv("CORVUS_HOME", filepath.Join(t.TempDir(), "isolated-home"))
 	if got := legacyOSSupportDir(); got != "" {
 		t.Fatalf("legacyOSSupportDir() = %q, want empty when isolated", got)
 	}
@@ -1144,18 +1144,18 @@ func TestLegacyOSSupportDirEmptyWhenIsolated(t *testing.T) {
 
 func TestLegacyXDGConfigPathsEmptyWhenIsolated(t *testing.T) {
 	isolateUserConfigHome(t)
-	t.Setenv("REASONIX_HOME", filepath.Join(t.TempDir(), "isolated-home"))
+	t.Setenv("CORVUS_HOME", filepath.Join(t.TempDir(), "isolated-home"))
 	if got := legacyXDGConfigPaths(); got != nil {
 		t.Fatalf("legacyXDGConfigPaths() = %v, want nil when isolated", got)
 	}
 }
 
-func TestCacheDirHonorsReasonixHome(t *testing.T) {
+func TestCacheDirHonorsCorvusHome(t *testing.T) {
 	home := t.TempDir()
 	isolated := filepath.Join(home, "isolated-home")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("REASONIX_HOME", isolated)
+	t.Setenv("CORVUS_HOME", isolated)
 
 	got := CacheDir()
 	want := filepath.Join(isolated, "cache")
@@ -1164,28 +1164,28 @@ func TestCacheDirHonorsReasonixHome(t *testing.T) {
 	}
 }
 
-func TestCacheDirHonorsReasonixCacheHomeOverReasonixHome(t *testing.T) {
+func TestCacheDirHonorsCorvusCacheHomeOverCorvusHome(t *testing.T) {
 	home := t.TempDir()
 	cacheHome := filepath.Join(home, "custom-cache")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("REASONIX_HOME", filepath.Join(home, "isolated-home"))
-	t.Setenv("REASONIX_CACHE_HOME", cacheHome)
+	t.Setenv("CORVUS_HOME", filepath.Join(home, "isolated-home"))
+	t.Setenv("CORVUS_CACHE_HOME", cacheHome)
 
 	got := CacheDir()
 	want := cacheHome
 	if filepath.Clean(got) != filepath.Clean(want) {
-		t.Fatalf("CacheDir() = %q, want %q (REASONIX_CACHE_HOME must win)", got, want)
+		t.Fatalf("CacheDir() = %q, want %q (CORVUS_CACHE_HOME must win)", got, want)
 	}
 }
 
 func TestUserConfigLoadPathNoLegacyFallbackWhenIsolated(t *testing.T) {
 	home := isolateUserConfigHome(t)
 	isolated := filepath.Join(home, "isolated-home")
-	t.Setenv("REASONIX_HOME", isolated)
+	t.Setenv("CORVUS_HOME", isolated)
 
 	// Create a legacy config at the OS production path — it must not be loaded.
-	productionHome := expectedDefaultReasonixHome(home)
+	productionHome := expectedDefaultCorvusHome(home)
 	if err := os.MkdirAll(productionHome, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1203,7 +1203,7 @@ func TestUserConfigLoadPathNoLegacyFallbackWhenIsolated(t *testing.T) {
 
 func TestCredentialSourceCandidatesSkipHomeEnvWhenIsolated(t *testing.T) {
 	isolateUserConfigHome(t)
-	t.Setenv("REASONIX_HOME", filepath.Join(t.TempDir(), "isolated-home"))
+	t.Setenv("CORVUS_HOME", filepath.Join(t.TempDir(), "isolated-home"))
 
 	// Write a key into the production home .env — it must not appear as a source.
 	if home, err := os.UserHomeDir(); err == nil {
@@ -1223,10 +1223,10 @@ func TestCredentialSourceCandidatesSkipHomeEnvWhenIsolated(t *testing.T) {
 func TestMigrateLegacyIfNeededSkipsWhenIsolated(t *testing.T) {
 	home := isolateUserConfigHome(t)
 	isolated := filepath.Join(home, "isolated-home")
-	t.Setenv("REASONIX_HOME", isolated)
+	t.Setenv("CORVUS_HOME", isolated)
 
 	// Create a legacy config.json in production home — migration must skip it.
-	legacyDir := filepath.Join(home, ".reasonix")
+	legacyDir := filepath.Join(home, ".corvus")
 	if err := os.MkdirAll(legacyDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1244,11 +1244,11 @@ func TestMigrateLegacyIfNeededSkipsWhenIsolated(t *testing.T) {
 }
 
 // TestProjectConfigCannotOverrideSecrets pins [secrets] as a user-global
-// security control: a cloned repository's reasonix.toml must not be able to
+// security control: a cloned repository's corvus.toml must not be able to
 // opt the user into subprocess env stripping or sensitive-path hiding.
 func TestProjectConfigCannotOverrideSecrets(t *testing.T) {
 	isolateUserConfigHome(t)
-	t.Setenv("REASONIX_HOME", "")
+	t.Setenv("CORVUS_HOME", "")
 	globalDir := filepath.Dir(UserConfigPath())
 	if err := os.MkdirAll(globalDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -1260,7 +1260,7 @@ func TestProjectConfigCannotOverrideSecrets(t *testing.T) {
 
 	project := t.TempDir()
 	projectTOML := "[secrets]\nfilter_subprocess_env = true\nprotect_sensitive_files = true\n"
-	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(projectTOML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte(projectTOML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1269,10 +1269,10 @@ func TestProjectConfigCannotOverrideSecrets(t *testing.T) {
 		t.Fatalf("LoadForRoot() error = %v", err)
 	}
 	if cfg.Secrets.FilterSubprocessEnv {
-		t.Error("project reasonix.toml enabled filter_subprocess_env; [secrets] must stay user-global")
+		t.Error("project corvus.toml enabled filter_subprocess_env; [secrets] must stay user-global")
 	}
 	if cfg.Secrets.ProtectSensitiveFiles {
-		t.Error("project reasonix.toml enabled protect_sensitive_files; [secrets] must stay user-global")
+		t.Error("project corvus.toml enabled protect_sensitive_files; [secrets] must stay user-global")
 	}
 }
 

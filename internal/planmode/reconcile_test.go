@@ -3,10 +3,10 @@ package planmode_test
 import (
 	"testing"
 
-	"reasonix/internal/planmode"
-	"reasonix/internal/tool"
+	"corvus/internal/planmode"
+	"corvus/internal/tool"
 
-	_ "reasonix/internal/tool/builtin"
+	_ "corvus/internal/tool/builtin"
 )
 
 func TestBuiltinPhaseClassifiersMatchPolicy(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"reasonix/internal/diff"
-	fileenc "reasonix/internal/fileutil/encoding"
+	"corvus/internal/diff"
+	fileenc "corvus/internal/fileutil/encoding"
 )
 
 // preview.go gives the file-writing built-ins the optional tool.Previewer

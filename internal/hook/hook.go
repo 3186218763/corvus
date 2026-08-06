@@ -2,8 +2,8 @@
 // PreToolUse / PostToolUse fire around each tool call, PermissionRequest fires
 // before a tool approval prompt is shown, UserPromptSubmit before a turn, Stop
 // after it. Hooks come from settings.json — a project
-// (.reasonix/settings.json, only when the project is trusted) and a global
-// (<Reasonix home>/settings.json) file. A hook's exit
+// (.corvus/settings.json, only when the project is trusted) and a global
+// (<Corvus home>/settings.json) file. A hook's exit
 // code is its verdict: 0 = pass, 2 = block (only on the gating events), other =
 // warn. The payload is delivered as JSON on stdin; output is captured (capped)
 // and surfaced to the user. This package only loads, matches, and runs hooks;
@@ -28,12 +28,12 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"reasonix/internal/config"
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/pluginpkg"
-	"reasonix/internal/proc"
-	"reasonix/internal/sandbox"
-	"reasonix/internal/secrets"
+	"corvus/internal/config"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/pluginpkg"
+	"corvus/internal/proc"
+	"corvus/internal/sandbox"
+	"corvus/internal/secrets"
 )
 
 // Event is a point in the agent loop a hook can fire at.
@@ -74,12 +74,12 @@ var Events = []Event{
 
 // IsBlocking reports whether a non-zero/exit-2 (or timed-out) hook on this event
 // can block the loop. Only the gating events qualify. (PreCompact does not block;
-// it only contributes guidance via stdout.) This governs native Reasonix hooks;
+// it only contributes guidance via stdout.) This governs native Corvus hooks;
 // see claudePermissionBlocking for the Claude-imported PermissionRequest case.
 func IsBlocking(e Event) bool { return e == PreToolUse || e == UserPromptSubmit }
 
 // claudePermissionBlocking reports whether exit code 2 (or a timeout) on h
-// aborts the action even though PermissionRequest is not one of Reasonix's own
+// aborts the action even though PermissionRequest is not one of Corvus's own
 // blocking events (docs/DESKTOP_HOOKS.md: "只有 PreToolUse 和 UserPromptSubmit
 // 是阻塞型事件"). Claude's own PermissionRequest contract denies the permission
 // on exit 2 the same way PreToolUse does (https://code.claude.com/docs/en/hooks),
@@ -111,7 +111,7 @@ const (
 )
 
 // ExecutionMode is the contract between a hook manifest and its process
-// launcher. The zero value is the legacy Reasonix settings behavior, where a
+// launcher. The zero value is the legacy Corvus settings behavior, where a
 // command string is interpreted by the platform shell after compatibility
 // repairs. Plugin manifests can opt into an unambiguous exec or shell form.
 type ExecutionMode string
@@ -134,7 +134,7 @@ type HookConfig struct {
 	// Argv is the literal argument vector for exec-form plugin hooks.
 	Argv []string `json:"-"`
 	// ExecutionMode and Shell are internal plugin-package metadata. Native
-	// Reasonix settings retain their legacy shell-command behavior.
+	// Corvus settings retain their legacy shell-command behavior.
 	ExecutionMode ExecutionMode `json:"-"`
 	Shell         string        `json:"-"`
 	// ContextFile is an internal plugin-package helper: when set, the hook reads
@@ -149,7 +149,7 @@ type HookConfig struct {
 	// Env adds environment variables for this hook invocation.
 	Env map[string]string `json:"env,omitempty"`
 	// Async and PayloadFormat are internal compatibility metadata populated for
-	// imported Claude hooks. Native Reasonix settings keep their old behavior.
+	// imported Claude hooks. Native Corvus settings keep their old behavior.
 	Async         bool   `json:"-"`
 	PayloadFormat string `json:"-"`
 }
@@ -176,17 +176,17 @@ func (h ResolvedHook) timeout() time.Duration {
 
 // SettingsDirname / SettingsFilename locate a scope's settings.json.
 const (
-	SettingsDirname  = ".reasonix"
+	SettingsDirname  = ".corvus"
 	SettingsFilename = "settings.json"
 )
 
-// GlobalSettingsPath is <Reasonix home>/settings.json (homeDir overrides ~ for
+// GlobalSettingsPath is <Corvus home>/settings.json (homeDir overrides ~ for
 // tests and legacy callers).
 func GlobalSettingsPath(homeDir string) string {
-	return filepath.Join(reasonixHome(homeDir), SettingsFilename)
+	return filepath.Join(corvusHome(homeDir), SettingsFilename)
 }
 
-// ProjectSettingsPath is <root>/.reasonix/settings.json.
+// ProjectSettingsPath is <root>/.corvus/settings.json.
 func ProjectSettingsPath(projectRoot string) string {
 	return filepath.Join(projectRoot, SettingsDirname, SettingsFilename)
 }
@@ -231,7 +231,7 @@ func Load(opts LoadOptions) []ResolvedHook {
 			appendResolved(&out, s, ScopeProject, p)
 		}
 	}
-	appendPluginHooks(&out, reasonixHome(opts.HomeDir), opts.ProjectRoot)
+	appendPluginHooks(&out, corvusHome(opts.HomeDir), opts.ProjectRoot)
 	g := GlobalSettingsPath(opts.HomeDir)
 	if s := readSettings(g); s != nil {
 		appendResolved(&out, s, ScopeGlobal, g)
@@ -297,11 +297,11 @@ func appendResolved(out *[]ResolvedHook, s *Settings, scope Scope, source string
 	}
 }
 
-func appendPluginHooks(out *[]ResolvedHook, reasonixHomeDir, projectRoot string) {
-	if strings.TrimSpace(reasonixHomeDir) == "" {
+func appendPluginHooks(out *[]ResolvedHook, corvusHomeDir, projectRoot string) {
+	if strings.TrimSpace(corvusHomeDir) == "" {
 		return
 	}
-	installed, _ := pluginpkg.LoadInstalled(reasonixHomeDir)
+	installed, _ := pluginpkg.LoadInstalled(corvusHomeDir)
 	for _, item := range installed {
 		pkg := item.Package
 		events := make([]string, 0, len(pkg.Manifest.Hooks))
@@ -340,14 +340,14 @@ func appendPluginHooks(out *[]ResolvedHook, reasonixHomeDir, projectRoot string)
 				for key, value := range env {
 					env[key] = expandPluginRoot(value, pkg.Root)
 				}
-				env["REASONIX_PLUGIN_ROOT"] = pkg.Root
-				env["REASONIX_PLUGIN_NAME"] = item.Installed.Name
-				env["REASONIX_HOME"] = reasonixHomeDir
-				env["REASONIX_WORKSPACE_ROOT"] = projectRoot
+				env["CORVUS_PLUGIN_ROOT"] = pkg.Root
+				env["CORVUS_PLUGIN_NAME"] = item.Installed.Name
+				env["CORVUS_HOME"] = corvusHomeDir
+				env["CORVUS_WORKSPACE_ROOT"] = projectRoot
 				env["CLAUDE_PROJECT_DIR"] = projectRoot
 				env["CLAUDE_PLUGIN_ROOT"] = pkg.Root
 				if item.Installed.Version != "" {
-					env["REASONIX_PLUGIN_VERSION"] = item.Installed.Version
+					env["CORVUS_PLUGIN_VERSION"] = item.Installed.Version
 				}
 				*out = append(*out, ResolvedHook{
 					HookConfig: HookConfig{
@@ -449,9 +449,9 @@ var pluginRootTokens = [...]struct {
 	{value: "${CLAUDE_PLUGIN_ROOT}"},
 	{value: "$CLAUDE_PLUGIN_ROOT", needsBoundary: true},
 	{value: "%CLAUDE_PLUGIN_ROOT%"},
-	{value: "${REASONIX_PLUGIN_ROOT}"},
-	{value: "$REASONIX_PLUGIN_ROOT", needsBoundary: true},
-	{value: "%REASONIX_PLUGIN_ROOT%"},
+	{value: "${CORVUS_PLUGIN_ROOT}"},
+	{value: "$CORVUS_PLUGIN_ROOT", needsBoundary: true},
+	{value: "%CORVUS_PLUGIN_ROOT%"},
 }
 
 func pluginRootTokenLen(value string) int {
@@ -516,7 +516,7 @@ func MatchesTool(h ResolvedHook, toolName string) bool {
 	return false
 }
 
-// claudeAgentSpawningTools are every Reasonix tool that spawns a subagent and
+// claudeAgentSpawningTools are every Corvus tool that spawns a subagent and
 // so corresponds to Claude's single "Agent" tool: the general task delegator
 // (task/read_only_task/parallel_tasks) and the dedicated named wrappers
 // around a runAs=subagent skill (BuiltinSubagentTools in
@@ -530,8 +530,8 @@ var claudeAgentSpawningTools = []string{
 }
 
 // claudeAgentDefaultDescriptions fill Claude Agent's required description
-// field when the corresponding Reasonix tool does not expose one or the model
-// omitted Reasonix's optional description. These are stable operation labels;
+// field when the corresponding Corvus tool does not expose one or the model
+// omitted Corvus's optional description. These are stable operation labels;
 // the complete task remains in prompt for hook policy decisions.
 var claudeAgentDefaultDescriptions = map[string]string{
 	"task":            "Run delegated subagent task",
@@ -543,7 +543,7 @@ var claudeAgentDefaultDescriptions = map[string]string{
 	"security_review": "Review security risks",
 }
 
-// claudeToolNames maps Reasonix's own tool names to the *current* Claude Code
+// claudeToolNames maps Corvus's own tool names to the *current* Claude Code
 // built-in tool name (https://code.claude.com/docs/en/tools-reference) — what
 // an imported hook's emitted tool_name payload field shows, and a script's own
 // tool_name check is written against. MCP tool names already share the
@@ -576,7 +576,7 @@ func buildClaudeToolNames() map[string]string {
 }
 
 // claudeToolMatchAliases lists every tool name — current and legacy — an
-// imported hook's matcher may have been authored against for a Reasonix
+// imported hook's matcher may have been authored against for a Corvus
 // tool, so a matcher written against an older Claude Code tool name keeps
 // firing after Claude renames the tool (Task became Agent; BashOutput/KillShell
 // became TaskOutput/TaskStop). claudeFacingToolName (the emitted tool_name
@@ -596,7 +596,7 @@ func buildClaudeToolMatchAliases() map[string][]string {
 }
 
 // claudeMatchNames returns every name an imported hook's matcher should be
-// tried against for a Reasonix tool call.
+// tried against for a Corvus tool call.
 func claudeMatchNames(name string) []string {
 	if aliases, ok := claudeToolMatchAliases[name]; ok {
 		return aliases
@@ -605,8 +605,8 @@ func claudeMatchNames(name string) []string {
 }
 
 // claudeFacingToolName returns the current Claude tool name a Claude-imported
-// hook's tool_name payload field should see for a Reasonix tool call.
-// Reasonix-only tools (wait, code_index, move_file, ...) have no Claude
+// hook's tool_name payload field should see for a Corvus tool call.
+// Corvus-only tools (wait, code_index, move_file, ...) have no Claude
 // equivalent and pass through unchanged — an imported hook can't have been
 // authored against a name Claude never had.
 func claudeFacingToolName(name string) string {
@@ -616,18 +616,18 @@ func claudeFacingToolName(name string) string {
 	return name
 }
 
-// claudeToolInputKeyRenames maps, per Reasonix tool name, JSON keys in its
+// claudeToolInputKeyRenames maps, per Corvus tool name, JSON keys in its
 // tool-call arguments that must be renamed to Claude's own tool_input field
-// name — Reasonix's file tools use "path", Claude's use "file_path" — so a
+// name — Corvus's file tools use "path", Claude's use "file_path" — so a
 // hook script reading e.g. ".tool_input.file_path" sees the value instead of
-// failing open on an empty field. Only tools whose Reasonix schema differs
+// failing open on an empty field. Only tools whose Corvus schema differs
 // from Claude's by a plain key rename are listed: Bash's "command",
 // Glob/Grep's "pattern"/"path", web_fetch's "url", ask's "questions",
 // todo_write's "todos", and task/read_only_task's "prompt"/"description"
 // already use Claude's field names. Agent description can still be absent and
 // is filled separately below. NotebookEdit's cell_number (a
 // 0-based index) has no Claude field — Claude targets cells only by the
-// opaque cell_id, which Reasonix also accepts — so it passes through as an
+// opaque cell_id, which Corvus also accepts — so it passes through as an
 // extra key. parallel_tasks is a structural mismatch handled separately in
 // claudeFacingToolInput.
 var claudeToolInputKeyRenames = map[string]map[string]string{
@@ -650,7 +650,7 @@ var claudeToolInputKeyRenames = map[string]map[string]string{
 
 // claudeAbsolutePathInputKeys are the translated tool_input keys whose Claude
 // schema demands an absolute path ("must be absolute, not relative" on
-// Read/Write/Edit/NotebookEdit). Reasonix's file tools accept relative paths
+// Read/Write/Edit/NotebookEdit). Corvus's file tools accept relative paths
 // and resolve them against the workspace root (resolveIn in
 // internal/tool/builtin/workspace.go); the payload resolves against
 // payload.Cwd — the same root — so a prefix-matching guard inspects the path
@@ -712,7 +712,7 @@ func claudeFacingToolInput(toolName string, args json.RawMessage, cwd string) js
 				obj["task_id"] = body
 			}
 		}
-		// An unbounded Reasonix wait omits TaskOutput's optional timeout
+		// An unbounded Corvus wait omits TaskOutput's optional timeout
 		// entirely: in Claude's schema timeout is the maximum wait in ms, so
 		// claiming 0 would read as "don't wait" — the opposite of the call.
 		var timeoutSeconds int64
@@ -781,8 +781,8 @@ func claudeFacingToolInput(toolName string, args json.RawMessage, cwd string) js
 	return out
 }
 
-// fillClaudeAskDefaults supplies fields Claude requires but Reasonix treats as
-// optional. Empty option descriptions are honest (Reasonix has no explanation
+// fillClaudeAskDefaults supplies fields Claude requires but Corvus treats as
+// optional. Empty option descriptions are honest (Corvus has no explanation
 // to add), and omitted multiSelect has the same false default in both systems.
 func fillClaudeAskDefaults(obj map[string]json.RawMessage) bool {
 	var questions []map[string]json.RawMessage
@@ -827,7 +827,7 @@ func fillClaudeAskDefaults(obj map[string]json.RawMessage) bool {
 }
 
 // fillClaudeTodoDefaults supplies Claude's required activeForm label from the
-// Reasonix task content when the caller omitted it.
+// Corvus task content when the caller omitted it.
 func fillClaudeTodoDefaults(obj map[string]json.RawMessage) bool {
 	var todos []map[string]json.RawMessage
 	if err := json.Unmarshal(obj["todos"], &todos); err != nil {
@@ -1032,7 +1032,7 @@ func decideOutcome(h ResolvedHook, r SpawnResult) Decision {
 }
 
 // claudeJSONDeny reports whether a Claude-format hook's exit-0 stdout still
-// carries a JSON deny decision (see HookOutput.Deny). Reasonix must honor it
+// carries a JSON deny decision (see HookOutput.Deny). Corvus must honor it
 // for the events it claims Claude hook compatibility for, or a plugin's
 // "block this dangerous command" hook silently no-ops whenever the script
 // signals deny via JSON instead of exit code 2. UserPromptSubmit uses a
@@ -1221,11 +1221,11 @@ func marshalPayload(payload Payload, format string) string {
 	return string(body) + "\n"
 }
 
-// claudeToolResponse adapts a Reasonix tool result to the tool_response a
+// claudeToolResponse adapts a Corvus tool result to the tool_response a
 // Claude-authored PostToolUse hook reads. Claude's Bash response is an object
 // — {stdout, stderr, interrupted}, the fields the official security-guidance
 // plugin's commit/push checks read (a non-object response is treated as empty
-// and the check silently passes) — while Reasonix's bash returns one combined
+// and the check silently passes) — while Corvus's bash returns one combined
 // output string, so it is wrapped with the failure error as stderr. Other
 // tools' results pass through as before: raw JSON when the result is a JSON
 // document, else the plain string.
@@ -1352,7 +1352,7 @@ func defaultSpawner(ctx context.Context, in SpawnInput, options RuntimeOptions) 
 // spawnCommand picks the execution vehicle from the manifest contract.
 // Explicit exec-form hooks pass their argv directly to the executable;
 // explicit shell-form hooks pass the raw command to the selected interpreter.
-// Legacy settings retain Reasonix's historical shell behavior and repairs.
+// Legacy settings retain Corvus's historical shell behavior and repairs.
 func spawnCommand(ctx context.Context, command string, mode ExecutionMode, shell string, args []string, options RuntimeOptions) (*exec.Cmd, error) {
 	switch mode {
 	case ExecutionExec:
@@ -1522,7 +1522,7 @@ func powerShellCommand(ctx context.Context, path, command string) *exec.Cmd {
 	// -EncodedCommand transports the exact script as UTF-16LE and avoids a
 	// second layer of quote/backslash interpretation. Force captured output to
 	// UTF-8 before encoding so Windows PowerShell does not emit the host console
-	// code page into Reasonix's stdout/stderr text contract.
+	// code page into Corvus's stdout/stderr text contract.
 	command = sandbox.PowerShellUTF8Script(command)
 	codeUnits := utf16.Encode([]rune(command))
 	raw := make([]byte, len(codeUnits)*2)
@@ -1567,11 +1567,11 @@ func (c *cappedBuffer) Write(p []byte) (int, error) {
 func (c *cappedBuffer) Bytes() []byte  { return c.buf.Bytes() }
 func (c *cappedBuffer) String() string { return c.buf.String() }
 
-func reasonixHome(override string) string {
+func corvusHome(override string) string {
 	if override != "" {
 		return filepath.Join(override, SettingsDirname)
 	}
-	if dir := config.ReasonixHomeDir(); dir != "" {
+	if dir := config.CorvusHomeDir(); dir != "" {
 		return dir
 	}
 	if h, err := os.UserHomeDir(); err == nil {
@@ -1581,14 +1581,14 @@ func reasonixHome(override string) string {
 }
 
 func legacyGlobalSettingsPath(homeDir string) string {
-	dir := legacyReasonixHome(homeDir)
+	dir := legacyCorvusHome(homeDir)
 	if dir == "" {
 		return ""
 	}
 	return filepath.Join(dir, SettingsFilename)
 }
 
-func legacyReasonixHome(override string) string {
+func legacyCorvusHome(override string) string {
 	if override != "" {
 		return ""
 	}
@@ -1600,7 +1600,7 @@ func legacyReasonixHome(override string) string {
 		return ""
 	}
 	legacy := filepath.Join(home, SettingsDirname)
-	if sameCleanPath(legacy, reasonixHome("")) {
+	if sameCleanPath(legacy, corvusHome("")) {
 		return ""
 	}
 	return legacy

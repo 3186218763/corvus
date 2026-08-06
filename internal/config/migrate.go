@@ -11,12 +11,12 @@ import (
 	"sort"
 	"strings"
 
-	fileencoding "reasonix/internal/fileutil/encoding"
+	fileencoding "corvus/internal/fileutil/encoding"
 )
 
-// legacyConfig is the subset of the v0.x (~/.reasonix/config.json) schema this
+// legacyConfig is the subset of the v0.x (~/.corvus/config.json) schema this
 // import carries forward. Fields absent here are dropped on purpose: desktop tab
-// state is frontend-owned, and skills already live in the shared ~/.reasonix/skills
+// state is frontend-owned, and skills already live in the shared ~/.corvus/skills
 // root that v1+ also scans, so they need no migration.
 type legacyConfig struct {
 	APIKey      string                       `json:"apiKey"`
@@ -64,7 +64,7 @@ func (r *MigrationResult) Notice() string {
 		fmt.Fprintf(&b, " (%d MCP server(s))", r.Plugins)
 	}
 	if r.KeyToEnv {
-		b.WriteString("; API key saved to reasonix's credentials store")
+		b.WriteString("; API key saved to corvus's credentials store")
 	}
 	b.WriteString(". The old files were left untouched.")
 	for _, w := range r.Warnings {
@@ -75,7 +75,7 @@ func (r *MigrationResult) Notice() string {
 
 // MigrateLegacyIfNeeded performs a one-time, non-destructive import of older
 // installs into the current user config when the latter does not exist yet. It
-// checks v1-era TOML first, then v0.5/v0.x ~/.reasonix/config.json, and never
+// checks v1-era TOML first, then v0.5/v0.x ~/.corvus/config.json, and never
 // modifies or deletes the legacy files. Returns nil when there is nothing to
 // migrate, or when the current user config already exists.
 func MigrateLegacyIfNeeded() (*MigrationResult, error) {
@@ -109,7 +109,7 @@ func MigrateLegacyIfNeededForRoot(root string) (*MigrationResult, error) {
 		}
 		return res, err
 	}
-	src := filepath.Join(home, ".reasonix", "config.json")
+	src := filepath.Join(home, ".corvus", "config.json")
 	data, err := fileencoding.ReadFileUTF8(src)
 	if err != nil {
 		return nil, nil
@@ -248,7 +248,7 @@ func migrateMCPToUserConfig(projectRoots []string) (*MCPGlobalMigrationResult, e
 		addEntries(loadPluginEntriesFromTOML(path))
 	}
 	for _, root := range normalizedMCPMigrationRoots(projectRoots) {
-		addEntries(loadPluginEntriesFromTOML(filepath.Join(root, "reasonix.toml")))
+		addEntries(loadPluginEntriesFromTOML(filepath.Join(root, "corvus.toml")))
 		if entries, err := loadMCPJSON(filepath.Join(root, mcpJSONFile)); err == nil {
 			addEntries(entries)
 		}
@@ -450,11 +450,11 @@ func legacyTOMLPaths(dest, home string) []string {
 	}
 	for _, legacy := range legacyXDGConfigPaths() {
 		add(legacy)
-		add(filepath.Join(filepath.Dir(legacy), "reasonix.toml"))
+		add(filepath.Join(filepath.Dir(legacy), "corvus.toml"))
 	}
-	add(filepath.Join(filepath.Dir(dest), "reasonix.toml"))
+	add(filepath.Join(filepath.Dir(dest), "corvus.toml"))
 	if home != "" {
-		add(filepath.Join(home, ".reasonix", "reasonix.toml"))
+		add(filepath.Join(home, ".corvus", "corvus.toml"))
 	}
 	return paths
 }
@@ -560,9 +560,9 @@ func mergeEnv(base, overlay map[string]string) map[string]string {
 	return out
 }
 
-// writeCredentialsEnv merges lines into Reasonix's global .env
+// writeCredentialsEnv merges lines into Corvus's global .env
 // and pins them into the current process env so the just-built session resolves
-// the key without a restart. Falls back to ~/.env only when Reasonix home can't
+// the key without a restart. Falls back to ~/.env only when Corvus home can't
 // be resolved — never a project .env, so a migration keeps secrets out of the
 // user's project tree.
 func writeCredentialsEnv(home string, lines []string) error {

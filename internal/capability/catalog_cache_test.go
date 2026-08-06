@@ -4,15 +4,15 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/config"
-	"reasonix/internal/plugin"
-	"reasonix/internal/tool"
+	"corvus/internal/config"
+	"corvus/internal/plugin"
+	"corvus/internal/tool"
 )
 
 func boolPtr(b bool) *bool { return &b }
 
 func TestLoadCachedToolsForSpecsHonorsSchemaCacheKey(t *testing.T) {
-	t.Setenv("REASONIX_CACHE_HOME", t.TempDir())
+	t.Setenv("CORVUS_CACHE_HOME", t.TempDir())
 	fresh := plugin.Spec{Name: "gh", Type: "stdio", Command: "gh-mcp"}
 	if err := plugin.SaveCachedSchema("gh", plugin.CachedSchema{
 		CacheKey: plugin.SchemaCacheKey(fresh),

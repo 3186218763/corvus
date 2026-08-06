@@ -2,8 +2,8 @@
 /bin/
 /dist/
 /stage/
-/reasonix
-/reasonix.exe
+/corvus
+/corvus.exe
 
 # Go test/build scratch
 *.test
@@ -13,18 +13,18 @@ coverage.out
 cpu.prof
 mem.prof
 
-# Environment / local config (reasonix.example.toml is the shared template)
+# Environment / local config (corvus.example.toml is the shared template)
 .env
 .env.local
 *.local
-/reasonix.toml
+/corvus.toml
 
-# Project-local Reasonix state (not committed)
-/.reasonix/
+# Project-local Corvus state (not committed)
+/.corvus/
 
-# Stray Reasonix state written under a package dir by a test whose RealPath
+# Stray Corvus state written under a package dir by a test whose RealPath
 # resolves to CWD. Never commit these.
-internal/**/.reasonix/
+internal/**/.corvus/
 
 # CodeGraph per-project index (rebuilt locally; never committed)
 .codegraph/

@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/config"
-	"reasonix/internal/plugin"
-	"reasonix/internal/skill"
-	"reasonix/internal/tool"
+	"corvus/internal/config"
+	"corvus/internal/plugin"
+	"corvus/internal/skill"
+	"corvus/internal/tool"
 )
 
 // Profile filters which skills are eligible in a given runtime profile.

@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/capability"
-	"reasonix/internal/evidence"
-	"reasonix/internal/skill"
-	"reasonix/internal/tool"
+	"corvus/internal/capability"
+	"corvus/internal/evidence"
+	"corvus/internal/skill"
+	"corvus/internal/tool"
 )
 
 // SeedCapabilityRoute installs the turn's route decision into the capability ledger.

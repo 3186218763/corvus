@@ -11,7 +11,7 @@ import (
 var providerToolIndexPattern = regexp.MustCompile(`(?i)\btool\s+(\d+)\s+function\b`)
 
 // AnnotateToolSchemaError resolves provider messages such as "Tool 197 function
-// has invalid 'parameters' schema" back to the stable Reasonix tool identity.
+// has invalid 'parameters' schema" back to the stable Corvus tool identity.
 // MCP tool names carry their source server in mcp__<server>__<tool> form, so the
 // resulting diagnostic tells users which integration supplied the bad schema.
 func AnnotateToolSchemaError(err error, tools []ToolSchema) error {
@@ -29,9 +29,9 @@ func AnnotateToolSchemaError(err error, tools []ToolSchema) error {
 	}
 
 	tool := tools[index]
-	context := fmt.Sprintf("Provider tool %d maps to Reasonix tool %q.", index, tool.Name)
+	context := fmt.Sprintf("Provider tool %d maps to Corvus tool %q.", index, tool.Name)
 	if server, rawName, ok := splitMCPToolName(tool.Name); ok {
-		context = fmt.Sprintf("Provider tool %d maps to Reasonix tool %q (MCP server %q, tool %q).", index, tool.Name, server, rawName)
+		context = fmt.Sprintf("Provider tool %d maps to Corvus tool %q (MCP server %q, tool %q).", index, tool.Name, server, rawName)
 	}
 	annotated := *apiErr
 	annotated.ToolContext = context

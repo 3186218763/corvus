@@ -751,7 +751,7 @@ func TestSkillEnabledMutator(t *testing.T) {
 func TestPluginMutators(t *testing.T) {
 	c := Default()
 
-	if err := c.UpsertPlugin(PluginEntry{Name: "ex", Command: "reasonix-plugin-example"}); err != nil {
+	if err := c.UpsertPlugin(PluginEntry{Name: "ex", Command: "corvus-plugin-example"}); err != nil {
 		t.Fatalf("add stdio: %v", err)
 	}
 	if err := c.UpsertPlugin(PluginEntry{Name: "stripe", Type: "http", URL: "https://mcp.stripe.com"}); err != nil {
@@ -909,7 +909,7 @@ func TestSaveToRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	path := filepath.Join(t.TempDir(), "nested", "reasonix.toml")
+	path := filepath.Join(t.TempDir(), "nested", "corvus.toml")
 	if err := c.SaveTo(path); err != nil {
 		t.Fatalf("SaveTo: %v", err)
 	}
@@ -986,7 +986,7 @@ func TestSaveToScopesUserAndProjectFiles(t *testing.T) {
 		t.Fatalf("user config mode = %o, want 600", info.Mode().Perm())
 	}
 
-	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
 	if err := c.SaveTo(projectPath); err != nil {
 		t.Fatalf("SaveTo project config: %v", err)
 	}
@@ -1032,7 +1032,7 @@ api_key_env = "USER_DEEPSEEK_KEY"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "reasonix.toml"), []byte(`
+	if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte(`
 [[providers]]
 name = "deepseek-flash"
 kind = "openai"
@@ -1081,7 +1081,7 @@ api_key_env = "GLOBAL_SHARED_KEY"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "reasonix.toml"), []byte(`
+	if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte(`
 [[providers]]
 name = "shared"
 kind = "openai"
@@ -1130,7 +1130,7 @@ temperature = 0.4
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "reasonix.toml"), []byte(`
+	if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte(`
 default_model = "deepseek-pro"
 
 [agent]
@@ -1165,7 +1165,7 @@ temperature = 0.8
 	if cfg.DefaultModel != "deepseek-pro" {
 		t.Fatalf("default_model = %q, want project config to keep overriding unrelated fields", cfg.DefaultModel)
 	}
-	for _, path := range []string{userPath, filepath.Join(root, "reasonix.toml")} {
+	for _, path := range []string{userPath, filepath.Join(root, "corvus.toml")} {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
@@ -1196,7 +1196,7 @@ filter_subprocess_env = true
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(root, "reasonix.toml")
+	projectPath := filepath.Join(root, "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte(`[secrets]
 redact_tool_output = false
 protect_sensitive_files = true
@@ -1257,7 +1257,7 @@ temperature = 0.4
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(root, "reasonix.toml")
+	projectPath := filepath.Join(root, "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte(`[agent]
 memory_compiler = { enabled = false }
 reasoning_language = "zh"
@@ -1375,7 +1375,7 @@ func TestMigrateLegacyMemoryCompilerKeepsMultilineSystemPrompt(t *testing.T) {
 	}
 	original := `[agent]
 system_prompt = """
-You are Reasonix. Historical config example:
+You are Corvus. Historical config example:
 memory_compiler = { enabled = true, verbosity = "compact" }
 Keep answers short.
 """
@@ -1481,7 +1481,7 @@ func TestStripTOMLKeyLinesPreservesMultilineStrings(t *testing.T) {
 func TestLoadForRootReadOnlyIgnoresDeprecatedAgentStepLimitsWithoutRewriting(t *testing.T) {
 	isolateUserConfigHome(t)
 	root := t.TempDir()
-	path := filepath.Join(root, "reasonix.toml")
+	path := filepath.Join(root, "corvus.toml")
 	original := []byte(`
 [agent]
 max_steps = 3
@@ -1527,7 +1527,7 @@ api_key_env = "GLOBAL_SHARED_KEY"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(root, "reasonix.toml")
+	projectPath := filepath.Join(root, "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte(`
 [[providers]]
 name = "shared"
@@ -1578,7 +1578,7 @@ api_key_env = "GLOBAL_KEY"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(root, "reasonix.toml")
+	projectPath := filepath.Join(root, "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte(`
 config_version = 2
 default_model = "project-local/project-model"
@@ -1620,7 +1620,7 @@ api_key_env = "PROJECT_KEY"
 }
 
 func TestSaveToExistingProjectPersistsTopLevelDelta(t *testing.T) {
-	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte("[permissions]\nallow = [\"Bash(go test:*)\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1655,7 +1655,7 @@ func TestSaveToExistingProjectPersistsTopLevelDelta(t *testing.T) {
 }
 
 func TestSaveToExistingProjectPersistsProviderAccessWithoutReplacingUISection(t *testing.T) {
-	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte("[permissions]\nallow = [\"Bash(go test:*)\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1688,7 +1688,7 @@ func TestSaveToExistingProjectPersistsProviderAccessWithoutReplacingUISection(t 
 }
 
 func TestWritePermissionsAllowUpdatesOnlyAllow(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "reasonix.toml")
+	path := filepath.Join(t.TempDir(), "corvus.toml")
 	original := `[permissions]
 # Keep the policy rationale.
 mode = "deny"
@@ -1775,7 +1775,7 @@ Ends with one quote.''''
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "reasonix.toml")
+			path := filepath.Join(t.TempDir(), "corvus.toml")
 			if err := os.WriteFile(path, []byte(tt.body), 0o644); err != nil {
 				t.Fatal(err)
 			}
@@ -1810,7 +1810,7 @@ Ends with one quote.''''
 }
 
 func TestWritePermissionsAllowReplacesArrayContainingMultilineString(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "reasonix.toml")
+	path := filepath.Join(t.TempDir(), "corvus.toml")
 	original := `[permissions]
 allow = [
   """Bash(example]
@@ -1895,7 +1895,7 @@ func TestProviderEntriesConfigEqualIgnoresRuntimeState(t *testing.T) {
 }
 
 func TestSaveToExistingProjectRemovesPluginDelta(t *testing.T) {
-	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
 	cfg := Default()
 	if err := cfg.UpsertPlugin(PluginEntry{Name: "ed", Type: "http", URL: "https://mcp.example.com/mcp", Headers: map[string]string{"Authorization": "Bearer token"}}); err != nil {
 		t.Fatal(err)
@@ -1926,7 +1926,7 @@ func TestSaveToExistingProjectRemovesPluginDelta(t *testing.T) {
 }
 
 func TestSaveToNewProjectKeepsPluginSourcesSeparate(t *testing.T) {
-	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
 	cfg := Default()
 	cfg.Plugins = []PluginEntry{
 		{Name: "unknown", Command: "unknown-mcp"},
@@ -1957,7 +1957,7 @@ func TestSaveToNewProjectKeepsPluginSourcesSeparate(t *testing.T) {
 }
 
 func TestSaveToExistingProjectKeepsPluginSourcesSeparate(t *testing.T) {
-	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte("# keep\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1981,7 +1981,7 @@ func TestSaveToExistingProjectKeepsPluginSourcesSeparate(t *testing.T) {
 }
 
 func TestSaveToExistingProjectRemovesPluginDeltaWithOnlyForeignSources(t *testing.T) {
-	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte("[[plugins]]\nname = \"old\"\ncommand = \"old-mcp\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -2006,7 +2006,7 @@ func TestSaveToExistingProjectRemovesPluginDeltaWithOnlyForeignSources(t *testin
 
 func TestSaveToExistingProjectRemovesIneffectiveWindowsBashEnforce(t *testing.T) {
 	setRuntimeGOOS(t, "windows")
-	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte("[sandbox]\nbash = \"enforce\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -2030,7 +2030,7 @@ func TestSaveToExistingProjectRemovesIneffectiveWindowsBashEnforce(t *testing.T)
 
 func TestSaveToExistingProjectRemovesIneffectiveWindowsBashEnforceWhenTargetIsOff(t *testing.T) {
 	setRuntimeGOOS(t, "windows")
-	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte("[sandbox]\nbash = \"enforce\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -2054,7 +2054,7 @@ func TestSaveToExistingProjectRemovesIneffectiveWindowsBashEnforceWhenTargetIsOf
 
 func TestSaveToExistingProjectRemovesOnlyIneffectiveWindowsBashEnforce(t *testing.T) {
 	setRuntimeGOOS(t, "windows")
-	projectPath := filepath.Join(t.TempDir(), "reasonix.toml")
+	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte("[sandbox]\nbash = \"enforce\"\nnetwork = true\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -2093,7 +2093,7 @@ func TestSaveForRootDoesNotWriteUserAgentSettingsIntoProjectConfig(t *testing.T)
 	if err := os.WriteFile(userPath, []byte("[agent]\ntemperature = 0.42\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(root, "reasonix.toml")
+	projectPath := filepath.Join(root, "corvus.toml")
 	if err := os.WriteFile(projectPath, []byte("[permissions]\nallow = [\"Bash(go test:*)\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -2364,7 +2364,7 @@ func TestEffortCapabilityEmptySupportedEffortsNotConfigurable(t *testing.T) {
 func TestWriteFilePreservesSymlinkToWritableTarget(t *testing.T) {
 	home := t.TempDir()
 	targetDir := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	target := filepath.Join(targetDir, "target.toml")
 	link := UserConfigPath()
 	if err := os.WriteFile(target, []byte("default_model = \"old\"\n"), 0o600); err != nil {
@@ -2398,7 +2398,7 @@ func TestWriteFilePreservesSymlinkToWritableTarget(t *testing.T) {
 func TestSaveToPreservesMultiLevelSymlinkChain(t *testing.T) {
 	home := t.TempDir()
 	targetDir := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	target := filepath.Join(targetDir, "target.toml")
 	first := filepath.Join(targetDir, "first.toml")
 	second := UserConfigPath()
@@ -2474,7 +2474,7 @@ func makeDirReadOnly(dir string) (func(), error) {
 func TestSaveToUnwritableUserSymlinkTargetPreservesLink(t *testing.T) {
 	home := t.TempDir()
 	targetDir := filepath.Join(t.TempDir(), "readonly")
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	target := filepath.Join(targetDir, "target.toml")
 	link := UserConfigPath()
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
@@ -2516,7 +2516,7 @@ func TestSaveToUnwritableUserSymlinkTargetPreservesLink(t *testing.T) {
 
 func TestSaveToBrokenUserSymlinkFailsAndPreservesLink(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	link := UserConfigPath()
 	missingTarget := filepath.Join(t.TempDir(), "missing", "target.toml")
 	if err := os.Symlink(missingTarget, link); err != nil {
@@ -2541,7 +2541,7 @@ func TestSaveToProjectSymlinkOutsideRootFailsWithoutReadingOrReplacing(t *testin
 	project := t.TempDir()
 	outside := t.TempDir()
 	target := filepath.Join(outside, "target.toml")
-	link := filepath.Join(project, "reasonix.toml")
+	link := filepath.Join(project, "corvus.toml")
 	const sentinel = "private_token = \"must-not-be-copied\"\n"
 	if err := os.WriteFile(target, []byte(sentinel), 0o600); err != nil {
 		t.Fatal(err)
@@ -2577,15 +2577,15 @@ func TestSaveToProjectSymlinkOutsideRootFailsWithoutReadingOrReplacing(t *testin
 func TestProjectConfigSymlinkWithinRootLoadsAndSavesTarget(t *testing.T) {
 	project := t.TempDir()
 	targetDir := filepath.Join(project, "config")
-	target := filepath.Join(targetDir, "reasonix.toml")
-	link := filepath.Join(project, "reasonix.toml")
+	target := filepath.Join(targetDir, "corvus.toml")
+	link := filepath.Join(project, "corvus.toml")
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(target, []byte("default_model = \"deepseek-pro\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(filepath.Join("config", "reasonix.toml"), link); err != nil {
+	if err := os.Symlink(filepath.Join("config", "corvus.toml"), link); err != nil {
 		t.Skipf("symlinks are unavailable: %v", err)
 	}
 
@@ -2618,8 +2618,8 @@ func TestProjectConfigSymlinkWithinRootLoadsAndSavesTarget(t *testing.T) {
 
 func TestBrokenProjectConfigSymlinkFailsLoadAndSave(t *testing.T) {
 	project := t.TempDir()
-	link := filepath.Join(project, "reasonix.toml")
-	if err := os.Symlink(filepath.Join("missing", "reasonix.toml"), link); err != nil {
+	link := filepath.Join(project, "corvus.toml")
+	if err := os.Symlink(filepath.Join("missing", "corvus.toml"), link); err != nil {
 		t.Skipf("symlinks are unavailable: %v", err)
 	}
 

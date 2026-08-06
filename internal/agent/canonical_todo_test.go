@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/event"
-	"reasonix/internal/evidence"
-	"reasonix/internal/provider"
+	"corvus/internal/event"
+	"corvus/internal/evidence"
+	"corvus/internal/provider"
 )
 
 func TestFinalReadinessFallsBackToCanonicalTodos(t *testing.T) {

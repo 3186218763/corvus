@@ -9,7 +9,7 @@ import (
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-const toolSchemaResource = "urn:reasonix:tool-schema"
+const toolSchemaResource = "urn:corvus:tool-schema"
 
 // ValidateToolSchema compiles a provider-visible tool parameter schema without
 // resolving external resources. MCP schemas default to draft-07 when they do

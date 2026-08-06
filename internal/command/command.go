@@ -1,7 +1,7 @@
 // Package command loads custom slash commands from Markdown files. A command is
 // a prompt template: invoking /name substitutes the arguments into the body and
 // sends the result as a chat turn. Loading is pure and dependency-free — a small
-// "key: value" frontmatter parser keeps Reasonix's single-(TOML)-dependency promise
+// "key: value" frontmatter parser keeps Corvus's single-(TOML)-dependency promise
 // rather than pulling in a YAML library.
 package command
 
@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/frontmatter"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/frontmatter"
 )
 
 // Command is a custom slash command loaded from a .md file.

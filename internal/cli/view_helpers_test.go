@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/command"
-	"reasonix/internal/memory"
-	"reasonix/internal/outputstyle"
-	"reasonix/internal/plugin"
-	"reasonix/internal/skill"
+	"corvus/internal/command"
+	"corvus/internal/memory"
+	"corvus/internal/outputstyle"
+	"corvus/internal/plugin"
+	"corvus/internal/skill"
 )
 
 func TestRenderSkillListUsesSharedVisualLanguage(t *testing.T) {
@@ -59,12 +59,12 @@ func TestRenderMemoryGroupsDocsAndStore(t *testing.T) {
 		t.Fatalf("save memory: %v", err)
 	}
 	got := renderMemory(width, &memory.Set{
-		Docs:  []memory.Source{{Path: "/Users/me/project/REASONIX.md", Scope: memory.ScopeProject}},
+		Docs:  []memory.Source{{Path: "/Users/me/project/CORVUS.md", Scope: memory.ScopeProject}},
 		Store: store,
 		Index: store.Index(),
 	})
 	for _, want := range []string{
-		"memory", "instructions", "precedence=1", "scope=project", "REASONIX.md",
+		"memory", "instructions", "precedence=1", "scope=project", "CORVUS.md",
 		"saved memories", "saved-fact", "Saved Fact", "revision=1", "freshness=fresh",
 		"doc edits apply next session",
 	} {
@@ -124,7 +124,7 @@ func TestRenderHelpGroupsCommands(t *testing.T) {
 func TestRenderSkillPathsStaysWithinWidth(t *testing.T) {
 	width := 72
 	got := renderSkillPaths(width, []skill.Root{{
-		Dir:      "/Users/me/projects/really/deep/path/to/.reasonix/skills",
+		Dir:      "/Users/me/projects/really/deep/path/to/.corvus/skills",
 		Scope:    skill.ScopeProject,
 		Priority: 0,
 		Status:   skill.StatusMissing,

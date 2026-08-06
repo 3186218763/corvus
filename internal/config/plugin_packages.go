@@ -7,23 +7,23 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/command"
-	"reasonix/internal/pluginpkg"
+	"corvus/internal/command"
+	"corvus/internal/pluginpkg"
 )
 
 // mergeInstalledPluginPackages overlays enabled plugin package capabilities onto
 // the in-memory config. It never writes config.toml: plugin package state lives
-// in <Reasonix home>/plugin-packages.json so uninstall/disable can remove the
+// in <Corvus home>/plugin-packages.json so uninstall/disable can remove the
 // entire bundle without editing user-authored config.
 func mergeInstalledPluginPackages(cfg *Config, root string) []string {
 	if cfg == nil {
 		return nil
 	}
-	reasonixHome := ReasonixHomeDir()
-	if strings.TrimSpace(reasonixHome) == "" {
+	corvusHome := CorvusHomeDir()
+	if strings.TrimSpace(corvusHome) == "" {
 		return nil
 	}
-	installed, warnings := pluginpkg.LoadInstalled(reasonixHome)
+	installed, warnings := pluginpkg.LoadInstalled(corvusHome)
 	sort.SliceStable(installed, func(i, j int) bool {
 		return installed[i].Installed.Name < installed[j].Installed.Name
 	})
@@ -126,11 +126,11 @@ func (c *Config) PluginPackageAgentOwners() map[string][]string {
 // commands win exact canonical-name clashes; LoadInstalled filters to enabled
 // packages.
 func pluginPackageCommandRoots() []command.Root {
-	reasonixHome := ReasonixHomeDir()
-	if strings.TrimSpace(reasonixHome) == "" {
+	corvusHome := CorvusHomeDir()
+	if strings.TrimSpace(corvusHome) == "" {
 		return nil
 	}
-	installed, _ := pluginpkg.LoadInstalled(reasonixHome)
+	installed, _ := pluginpkg.LoadInstalled(corvusHome)
 	var out []command.Root
 	for _, item := range installed {
 		for _, root := range item.Package.CommandRoots() {
@@ -164,13 +164,13 @@ func pluginPackageEnv(installed pluginpkg.InstalledPlugin, root, workspaceRoot s
 	if out == nil {
 		out = map[string]string{}
 	}
-	out["REASONIX_PLUGIN_ROOT"] = root
-	out["REASONIX_PLUGIN_NAME"] = installed.Name
+	out["CORVUS_PLUGIN_ROOT"] = root
+	out["CORVUS_PLUGIN_NAME"] = installed.Name
 	out["CLAUDE_PLUGIN_ROOT"] = root
 	out["CLAUDE_PROJECT_DIR"] = workspaceRoot
-	out["REASONIX_WORKSPACE_ROOT"] = workspaceRoot
+	out["CORVUS_WORKSPACE_ROOT"] = workspaceRoot
 	if installed.Version != "" {
-		out["REASONIX_PLUGIN_VERSION"] = installed.Version
+		out["CORVUS_PLUGIN_VERSION"] = installed.Version
 	}
 	return out
 }
@@ -253,9 +253,9 @@ func pluginPackageEntriesEqual(a, b PluginEntry) bool {
 	a.Env = cloneStringMap(a.Env)
 	b.Env = cloneStringMap(b.Env)
 	for _, env := range []map[string]string{a.Env, b.Env} {
-		delete(env, "REASONIX_PLUGIN_ROOT")
-		delete(env, "REASONIX_PLUGIN_NAME")
-		delete(env, "REASONIX_PLUGIN_VERSION")
+		delete(env, "CORVUS_PLUGIN_ROOT")
+		delete(env, "CORVUS_PLUGIN_NAME")
+		delete(env, "CORVUS_PLUGIN_VERSION")
 		delete(env, "CLAUDE_PLUGIN_ROOT")
 	}
 	return reflect.DeepEqual(a, b)

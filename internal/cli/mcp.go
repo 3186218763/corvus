@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/boot"
-	"reasonix/internal/config"
-	"reasonix/internal/plugin"
+	"corvus/internal/boot"
+	"corvus/internal/config"
+	"corvus/internal/plugin"
 )
 
 // mcp.go holds parsing and connection helpers for the in-chat `/mcp` workflow.
@@ -31,8 +31,8 @@ func parseMCPAdd(args []string) (config.PluginEntry, error) {
 	}
 
 	// Simplified forms:
-	//   reasonix mcp add -- npx -y chrome-devtools-mcp@latest
-	//   reasonix mcp add https://example.com/mcp
+	//   corvus mcp add -- npx -y chrome-devtools-mcp@latest
+	//   corvus mcp add https://example.com/mcp
 	// keep the historical "name command..." form as well.
 	if args[0] == "--" {
 		if len(args) < 2 {
@@ -66,7 +66,7 @@ func parseMCPAdd(args []string) (config.PluginEntry, error) {
 	}
 	rest := args[1:]
 	if len(rest) > 0 && rest[0] == "--" {
-		// reasonix mcp add <name> -- <argv...>
+		// corvus mcp add <name> -- <argv...>
 		if len(rest) < 2 {
 			return e, fmt.Errorf("mcp add: -- requires a command argv")
 		}
@@ -315,7 +315,7 @@ func probeMCPReadiness(entry config.PluginEntry) (plugin.MCPInstallResult, error
 	specs := boot.PluginSpecsForRootWithOptions([]config.PluginEntry{entry}, workspace, boot.PluginSpecOptions{
 		DefaultCallTimeout: 30 * time.Second,
 		ConfigSource:       string(config.MCPSourceUserConfig),
-		StateHome:          config.ReasonixHomeDir(),
+		StateHome:          config.CorvusHomeDir(),
 		Network:            true,
 	})
 	if len(specs) != 1 {

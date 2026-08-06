@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/event"
-	"reasonix/internal/memory"
-	"reasonix/internal/permission"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/agent"
+	"corvus/internal/event"
+	"corvus/internal/memory"
+	"corvus/internal/permission"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 // runHeadlessWriteOnce drives one write_file tool call through a headless gate in

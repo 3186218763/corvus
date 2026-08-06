@@ -10,8 +10,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/sandbox"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/sandbox"
 )
 
 var windowsHookBash struct {

@@ -10,10 +10,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
+	"corvus/internal/agent"
+	"corvus/internal/control"
+	"corvus/internal/event"
+	"corvus/internal/provider"
 )
 
 // TestResumeDispatchOpensPicker proves bare "/resume" opens the interactive

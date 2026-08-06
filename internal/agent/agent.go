@@ -14,21 +14,21 @@ import (
 
 	"mvdan.cc/sh/v3/syntax"
 
-	"reasonix/internal/capability"
-	"reasonix/internal/checkpoint"
-	"reasonix/internal/diff"
-	"reasonix/internal/event"
-	"reasonix/internal/evidence"
-	"reasonix/internal/instruction"
-	"reasonix/internal/jobs"
-	"reasonix/internal/memory"
-	"reasonix/internal/nilutil"
-	"reasonix/internal/planmode"
-	"reasonix/internal/provider"
-	"reasonix/internal/sandbox"
-	"reasonix/internal/shellparse"
-	"reasonix/internal/tool"
-	"reasonix/internal/workspacelease"
+	"corvus/internal/capability"
+	"corvus/internal/checkpoint"
+	"corvus/internal/diff"
+	"corvus/internal/event"
+	"corvus/internal/evidence"
+	"corvus/internal/instruction"
+	"corvus/internal/jobs"
+	"corvus/internal/memory"
+	"corvus/internal/nilutil"
+	"corvus/internal/planmode"
+	"corvus/internal/provider"
+	"corvus/internal/sandbox"
+	"corvus/internal/shellparse"
+	"corvus/internal/tool"
+	"corvus/internal/workspacelease"
 )
 
 // maxToolOutputBytes caps a single tool result before it goes into the model's
@@ -373,7 +373,7 @@ type Agent struct {
 	sandboxEscapeApprover sandbox.EscapeApprover
 
 	// configWriteApprover, when non-nil, can ask the user whether a file tool
-	// may write a Reasonix-managed config file outside the workspace roots.
+	// may write a Corvus-managed config file outside the workspace roots.
 	configWriteApprover tool.ConfigWriteApprover
 
 	// hooks, when non-nil, fires PreToolUse / PostToolUse shell hooks around each
@@ -697,7 +697,7 @@ func (a *Agent) SetSandboxEscapeApprover(g sandbox.EscapeApprover) {
 }
 
 // SetConfigWriteApprover installs the optional per-write approval path used by
-// the file tools when a target is a Reasonix-managed config file outside the
+// the file tools when a target is a Corvus-managed config file outside the
 // workspace write roots.
 func (a *Agent) SetConfigWriteApprover(g tool.ConfigWriteApprover) {
 	if nilutil.IsNil(g) {
@@ -779,7 +779,7 @@ func (a *Agent) Session() *Session {
 }
 
 // SetSession replaces the agent's conversation wholesale. Used by
-// `reasonix --resume` to load a saved JSONL transcript before the first turn,
+// `corvus --resume` to load a saved JSONL transcript before the first turn,
 // so the model picks up exactly where it left off. Callers serialise it against a
 // running turn (it only fires while idle); sessMu guards the pointer swap itself.
 func (a *Agent) SetSession(s *Session) {
@@ -1070,7 +1070,7 @@ type Options struct {
 	// enforced OS sandbox fails. nil keeps fail-closed behavior.
 	SandboxEscapeApprover sandbox.EscapeApprover
 
-	// ConfigWriteApprover confirms file-tool writes to Reasonix-managed config
+	// ConfigWriteApprover confirms file-tool writes to Corvus-managed config
 	// files outside the workspace roots. nil keeps fail-closed behavior.
 	ConfigWriteApprover tool.ConfigWriteApprover
 
@@ -1946,7 +1946,7 @@ func deliveryTaskNeedsEvidence(input string) bool {
 		return false
 	}
 	// Mutations always need evidence. Read-only technical tasks still need it
-	// when the user names work Reasonix can observe (reviewing a PR, reading a
+	// when the user names work Corvus can observe (reviewing a PR, reading a
 	// file, running tests, or reproducing a failure). Only explicit advisory
 	// questions may finish with an explanation alone.
 	return deliveryTaskNeedsMutation(input) || !deliveryTaskIsAdvisory(input)
@@ -2022,7 +2022,7 @@ func deliveryTaskIsAdvisory(input string) bool {
 	}
 
 	// A standalone refusal, inability, or constraint around a mutation verb is
-	// advisory rather than work Reasonix can perform. Affirmative mixed intent is
+	// advisory rather than work Corvus can perform. Affirmative mixed intent is
 	// handled by deliveryTaskNeedsMutation before this function is consulted.
 	_, negatedMutation := deliveryTaskMutationIntent(normalized)
 	return negatedMutation

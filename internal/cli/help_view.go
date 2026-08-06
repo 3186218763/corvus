@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/command"
-	"reasonix/internal/plugin"
-	"reasonix/internal/skill"
+	"corvus/internal/command"
+	"corvus/internal/plugin"
+	"corvus/internal/skill"
 )
 
 const helpMaxDynamicItems = 8

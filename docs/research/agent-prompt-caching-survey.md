@@ -1,8 +1,8 @@
 # Coding Agent 缓存命中机制调研报告
 
-> 调研对象：Claude Code、OpenAI Codex CLI、OpenAI Agents SDK、OpenCode，并对照本仓库 **Reasonix**。  
-> 目的：回答「别人怎么做 prompt cache？Reasonix 是否过死板？可借鉴什么？」  
-> 方法：官方文档 / 工程博文 / 开源代码（Agents SDK、Codex `client.rs`）交叉阅读；Reasonix 对照本仓实现。  
+> 调研对象：Claude Code、OpenAI Codex CLI、OpenAI Agents SDK、OpenCode，并对照本仓库 **Corvus**。  
+> 目的：回答「别人怎么做 prompt cache？Corvus 是否过死板？可借鉴什么？」  
+> 方法：官方文档 / 工程博文 / 开源代码（Agents SDK、Codex `client.rs`）交叉阅读；Corvus 对照本仓实现。  
 > 日期：2026-08-06  
 
 ---
@@ -30,9 +30,9 @@
 | **Codex CLI** | 严格 append-only + **session 级 `prompt_cache_key`**；配置变更插 developer/user 消息 | Responses API、`/responses/compact`、encrypted compaction |
 | **OpenAI Agents SDK** | 框架层自动 **生成/粘住 `prompt_cache_key`**；可选 retention / explicit breakpoint / server compaction | `PromptCacheKeyResolver`、`context_management`、`ToolSearch`/`defer_loading` |
 | **OpenCode** | 多 provider 适配：OpenAI 系 `setCacheKey`，Anthropic 系自动打 `cache_control` | `transform.ts` applyCaching、插件稳定 key |
-| **Reasonix** | **boot 钉死 system 前缀** + 历史 append-only + 本地 `PrefixShape` 诊断；Anthropic 已有 `cache_control`；动态几乎只进 user tail | cache-first 纪律很强；**缺** sticky key / 配置 delta-append / Full 默认 deferred MCP；断点已有、勿重做 |
+| **Corvus** | **boot 钉死 system 前缀** + 历史 append-only + 本地 `PrefixShape` 诊断；Anthropic 已有 `cache_control`；动态几乎只进 user tail | cache-first 纪律很强；**缺** sticky key / 配置 delta-append / Full 默认 deferred MCP；断点已有、勿重做 |
 
-### 1.3 对「Reasonix 太死板」的判断
+### 1.3 对「Corvus 太死板」的判断
 
 **死板的是「热更新策略」与「Provider 适配面」，不是「append-only 本身」。**
 
@@ -90,7 +90,7 @@
 
 另外 **model / effort** 不在文本里，但仍是 cache key 的一部分；改 effort 会弹确认。
 
-### 3.3 灵活之处（相对 Reasonix）
+### 3.3 灵活之处（相对 Corvus）
 
 1. **Plan mode / Skills / Commands：只 append 消息**  
    不换 system、不换 tools → 前缀完整保留。  
@@ -111,9 +111,9 @@
 
 换 model、改 effort、fast mode、MCP 前缀加载时的连断、deny 整个内置工具、compact、升级 CLI 等。
 
-### 3.5 对 Reasonix 的启示
+### 3.5 对 Corvus 的启示
 
-| Claude 做法 | Reasonix 现状 | 可借鉴 |
+| Claude 做法 | Corvus 现状 | 可借鉴 |
 |-------------|---------------|--------|
 | 动态用 append / reminder | plan/delivery/memory 已在 user tail | 可产品化「system-reminder」统一通道 |
 | 配置延迟到 clear/compact | memory 已类似；部分 UI 热改会触 tools | 热改 tools 前警告；或 deferred |
@@ -159,7 +159,7 @@ fn prompt_cache_key(&self, responses_metadata: &CodexResponsesMetadata) -> Strin
 - 作用不仅是「标记会话」，更是 **路由粘性**：同一 key + 相同前缀更容易打到持有 KV 的后端  
 - compact 请求同样带该 key  
 
-Reasonix / DeepSeek 路径 **目前没有等价物**（DeepSeek 自动 cache 也不暴露 key；但经 OpenAI 兼容网关时 sticky key 往往决定命中率）。
+Corvus / DeepSeek 路径 **目前没有等价物**（DeepSeek 自动 cache 也不暴露 key；但经 OpenAI 兼容网关时 sticky key 往往决定命中率）。
 
 ### 4.4 配置变更：delta-append（关键差异）
 
@@ -172,7 +172,7 @@ Codex 明确避免中途改早期 messages，而是：
 | tools 集合 / 顺序 | 尽量固定；MCP `list_changed` 中途应用会 miss（已知风险） |
 | model | 会 miss（instructions 模型相关） |
 
-这与 Reasonix「权限/模式尽量不进 prompt 或只进 gate」不同：**Codex 把可变配置放进 transcript 尾部**，用一次 miss 的局部代价换 **可热改且不重写前缀**。
+这与 Corvus「权限/模式尽量不进 prompt 或只进 gate」不同：**Codex 把可变配置放进 transcript 尾部**，用一次 miss 的局部代价换 **可热改且不重写前缀**。
 
 ### 4.5 Compaction
 
@@ -182,13 +182,13 @@ Codex 明确避免中途改早期 messages，而是：
 - 保留模型对历史的 latent 理解（ZDR 下 encrypted 仍可服务端解密）  
 - 第一 post-compact turn miss，同 `prompt_cache_key` 下后续再 warm  
 
-Reasonix compact 是 **本地 summarize 重写 messages**（`<compaction-summary>`），无 encrypted latent、无服务端 compact 端点。
+Corvus compact 是 **本地 summarize 重写 messages**（`<compaction-summary>`），无 encrypted latent、无服务端 compact 端点。
 
-### 4.6 对 Reasonix 的启示
+### 4.6 对 Corvus 的启示
 
 1. **OpenAI/Responses 路径必须支持 `prompt_cache_key=sessionID`**  
 2. **热配置用 append delta，而不是改 system 或要求重启**  
-3. 工具顺序稳定性（Codex 曾修 MCP 枚举序 bug）— Reasonix 已有类似测试，应继续  
+3. 工具顺序稳定性（Codex 曾修 MCP 枚举序 bug）— Corvus 已有类似测试，应继续  
 4. 评估 Responses compact / encrypted content（若走 OpenAI 生态）  
 
 ---
@@ -259,9 +259,9 @@ SDK 导出 `ToolSearchTool`、`ToolSearchCallItem`；function tools 可 `defer_l
 - 不强制 instructions 不可变——**动态 instructions callable 会破坏前缀**（文档建议静态）  
 - 跨非 OpenAI provider：默认 **不** 注入 `prompt_cache_key`  
 
-### 5.6 对 Reasonix 的启示
+### 5.6 对 Corvus 的启示
 
-| SDK 能力 | 建议映射到 Reasonix |
+| SDK 能力 | 建议映射到 Corvus |
 |----------|---------------------|
 | `PromptCacheKeyResolver` | `sessionPath` / session id → OpenAI/Responses 请求 |
 | `prompt_cache_retention` | 长会话可选 24h |
@@ -294,9 +294,9 @@ SDK 导出 `ToolSearchTool`、`ToolSearchCallItem`；function tools 可 `defer_l
 - Plan / Build 双 agent、session SQLite、阈值 compact  
 - 已知 issue：动态 tools / 合并 system 仍会破前缀（与各家相同）
 
-### 6.4 对 Reasonix 的启示
+### 6.4 对 Corvus 的启示
 
-Reasonix 已服务 DeepSeek 等多后端：
+Corvus 已服务 DeepSeek 等多后端：
 
 1. **按 provider kind 分支 cache 策略**（现主要是 usage 归一，缺请求侧注入）  
 2. 经第三方网关时 **session sticky key + 文档说明**  
@@ -304,11 +304,11 @@ Reasonix 已服务 DeepSeek 等多后端：
 
 ---
 
-## 7. Reasonix 现状对照（简）
+## 7. Corvus 现状对照（简）
 
 详见 `PROJECT_DEEP_DIVE.zh-CN.md` §11。此处只列与调研相关的点：
 
-| 维度 | Reasonix | 业界更灵活做法 |
+| 维度 | Corvus | 业界更灵活做法 |
 |------|----------|----------------|
 | 历史 | append-only ✅ | 同 |
 | System | boot 钉死；中途改走 tail 或下 session | Claude 延迟生效；Codex delta append |
@@ -319,14 +319,14 @@ Reasonix 已服务 DeepSeek 等多后端：
 | 诊断 | `PrefixShape` + UI cached/new ✅ | + 用户确认 invalidation |
 | 配置热更 | 偏重启/重建 Controller | append permissions/env |
 
-**合理的「死板」**：DeepSeek 自动前缀 + 无 sticky key API 时，客户端只能靠字节稳定——Reasonix 在这条路上做得很彻底。  
+**合理的「死板」**：DeepSeek 自动前缀 + 无 sticky key API 时，客户端只能靠字节稳定——Corvus 在这条路上做得很彻底。  
 **不合理的「死板」**：把「字节稳定」推到「任何热能力扩展都必须炸 tools 前缀」或「永远不能 session 内改配置」——Claude/Codex 已证明有第三路径。
 
 ---
 
 ## 8. 对比总表
 
-| 能力 | Claude Code | Codex | Agents SDK | OpenCode | Reasonix |
+| 能力 | Claude Code | Codex | Agents SDK | OpenCode | Corvus |
 |------|-------------|-------|------------|----------|----------|
 | Append-only 历史 | ✅ | ✅ | ✅（Session） | ✅ | ✅ |
 | 静前动后布局 | ✅ 分层文档化 | ✅ | 应用负责 | 部分 | ✅ 很强 |
@@ -380,7 +380,7 @@ Reasonix 已服务 DeepSeek 等多后端：
 
 - 为了「灵活」而每 turn 重写 system（必 miss）  
 - 无 deferred 时中途狂加 MCP  
-- 用百分比单独判断 cache 健康（Reasonix `(cached/new)` 绝对值更好）  
+- 用百分比单独判断 cache 健康（Corvus `(cached/new)` 绝对值更好）  
 
 ---
 
@@ -388,7 +388,7 @@ Reasonix 已服务 DeepSeek 等多后端：
 
 对外/对内可改成：
 
-> Reasonix 的 cache 策略是 **「前缀纪律 + 尾部弹性」**。  
+> Corvus 的 cache 策略是 **「前缀纪律 + 尾部弹性」**。  
 > 当前实现把弹性主要放在 user-turn tail，Anthropic 断点已就位；下一步补齐 **sticky key、deferred 工具、配置 delta-append 与 invalidation UX**，在不牺牲 DeepSeek 长会话命中的前提下，对齐 Claude Code / Codex 的热更新体验。
 
 而不是：
@@ -417,7 +417,7 @@ Reasonix 已服务 DeepSeek 等多后端：
 | Agents SDK | `src/agents/run_internal/run_loop.py`（注入 key） |
 | Agents SDK | `src/agents/memory/openai_responses_compaction_session.py` |
 | Codex | `codex-rs/core/src/client.rs`（`prompt_cache_key`、`compact_conversation_history`） |
-| Reasonix | `internal/agent/cache_shape.go`、`compact.go`、`stream`、`provider/anthropic`（breakpoints）、`provider/*/normaliseUsage` |
+| Corvus | `internal/agent/cache_shape.go`、`compact.go`、`stream`、`provider/anthropic`（breakpoints）、`provider/*/normaliseUsage` |
 
 ### 本仓相关文档
 

@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/agent"
+	"corvus/internal/event"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 // capturePromptCacheProvider records the last Stream request for sticky-key checks.
@@ -43,7 +43,7 @@ func TestSetSessionPathRefreshesSessionCacheID(t *testing.T) {
 	if err := c.Run(context.Background(), "hi"); err != nil {
 		t.Fatal(err)
 	}
-	want := "reasonix:session:chat-newid"
+	want := "corvus:session:chat-newid"
 	if prov.request.PromptCacheKey != want {
 		t.Fatalf("PromptCacheKey = %q, want %q after SetSessionPath", prov.request.PromptCacheKey, want)
 	}
@@ -66,7 +66,7 @@ func TestResumeRefreshesSessionCacheID(t *testing.T) {
 	if err := c.Run(context.Background(), "hi"); err != nil {
 		t.Fatal(err)
 	}
-	want := "reasonix:session:resumed-branch"
+	want := "corvus:session:resumed-branch"
 	if prov.request.PromptCacheKey != want {
 		t.Fatalf("PromptCacheKey = %q, want %q after Resume", prov.request.PromptCacheKey, want)
 	}
@@ -102,7 +102,7 @@ func TestNewSessionRefreshesSessionCacheID(t *testing.T) {
 	if err := c.Run(context.Background(), "hi"); err != nil {
 		t.Fatal(err)
 	}
-	want := "reasonix:session:" + wantID
+	want := "corvus:session:" + wantID
 	if prov.request.PromptCacheKey != want {
 		t.Fatalf("PromptCacheKey = %q, want %q after NewSession", prov.request.PromptCacheKey, want)
 	}
@@ -122,7 +122,7 @@ func TestControllerNewSeedsSessionCacheIDFromOptions(t *testing.T) {
 	if err := ag.Run(context.Background(), "hi"); err != nil {
 		t.Fatal(err)
 	}
-	want := "reasonix:session:seeded"
+	want := "corvus:session:seeded"
 	if prov.request.PromptCacheKey != want {
 		t.Fatalf("PromptCacheKey = %q, want %q from Options.SessionPath seed", prov.request.PromptCacheKey, want)
 	}

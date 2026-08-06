@@ -3,7 +3,7 @@ package provider_test
 import (
 	"testing"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 func TestNormalizePromptCacheKeyMode(t *testing.T) {
@@ -18,10 +18,10 @@ func TestNormalizePromptCacheKeyMode(t *testing.T) {
 }
 
 func TestFormatSessionPromptCacheKey(t *testing.T) {
-	if got := provider.FormatSessionPromptCacheKey("abc123", ""); got != "reasonix:session:abc123" {
+	if got := provider.FormatSessionPromptCacheKey("abc123", ""); got != "corvus:session:abc123" {
 		t.Fatalf("got %q", got)
 	}
-	if got := provider.FormatSessionPromptCacheKey("abc123", "sa_deadbeef"); got != "reasonix:session:abc123:sub:sa_deadbeef" {
+	if got := provider.FormatSessionPromptCacheKey("abc123", "sa_deadbeef"); got != "corvus:session:abc123:sub:sa_deadbeef" {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -37,7 +37,7 @@ func TestResolvePromptCacheKeyDeepSeekOmits(t *testing.T) {
 
 func TestResolvePromptCacheKeyOpenAIAutoSends(t *testing.T) {
 	got := provider.ResolvePromptCacheKey("auto", "", "openai", "https://api.openai.com/v1", "sess1", "")
-	if got != "reasonix:session:sess1" {
+	if got != "corvus:session:sess1" {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -51,7 +51,7 @@ func TestResolvePromptCacheKeyResponsesDeepSeekOmits(t *testing.T) {
 
 func TestResolvePromptCacheKeyResponsesNonDeepSeekSends(t *testing.T) {
 	got := provider.ResolvePromptCacheKey("auto", "", "responses", "https://api.openai.com/v1", "sess1", "")
-	if got != "reasonix:session:sess1" {
+	if got != "corvus:session:sess1" {
 		t.Fatalf("got %q", got)
 	}
 }

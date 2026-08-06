@@ -1,4 +1,4 @@
-module reasonix
+module corvus
 
 go 1.25.0
 

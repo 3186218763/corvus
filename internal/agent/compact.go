@@ -12,8 +12,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
+	"corvus/internal/event"
+	"corvus/internal/provider"
 )
 
 // Compaction is a low-frequency cache-reset point: the prompt grows append-only

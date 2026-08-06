@@ -8,7 +8,7 @@ import (
 
 	"github.com/joho/godotenv"
 
-	fileencoding "reasonix/internal/fileutil/encoding"
+	fileencoding "corvus/internal/fileutil/encoding"
 )
 
 type dotEnvFile struct {
@@ -17,7 +17,7 @@ type dotEnvFile struct {
 	Duplicates []string
 }
 
-// loadDotEnv loads Reasonix's global .env for provider credentials. The
+// loadDotEnv loads Corvus's global .env for provider credentials. The
 // workspace .env values returned by loadDotEnvForRoot are ignored here because
 // loadDotEnv has no Config to carry a workspace-scoped expansion environment.
 func loadDotEnv() {
@@ -25,10 +25,10 @@ func loadDotEnv() {
 }
 
 // loadDotEnvForRoot returns workspace .env values for scoped plugin/MCP/proxy
-// expansion, then loads Reasonix's global .env for provider credentials.
+// expansion, then loads Corvus's global .env for provider credentials.
 // Workspace .env values are deliberately not written into the process
 // environment, so multiple desktop/ACP workspaces cannot leak tokens into each
-// other and project files cannot redirect Reasonix's own config/credential
+// other and project files cannot redirect Corvus's own config/credential
 // paths.
 func loadDotEnvForRoot(root string) map[string]string {
 	projectEnv := loadProjectDotEnvForExpansion(root)
@@ -60,7 +60,7 @@ func isProjectDotEnvControlKey(key string) bool {
 		return true
 	}
 	upper := strings.ToUpper(key)
-	if strings.HasPrefix(upper, "REASONIX_") {
+	if strings.HasPrefix(upper, "CORVUS_") {
 		return true
 	}
 	switch upper {

@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"strings"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 // matchesVendorHost reports whether baseURL points at one of the canonical

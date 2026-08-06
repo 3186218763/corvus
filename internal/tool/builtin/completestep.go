@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"reasonix/internal/evidence"
-	"reasonix/internal/instruction"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/evidence"
+	"corvus/internal/instruction"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 func init() { tool.RegisterBuiltin(completeStep{}) }

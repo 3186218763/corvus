@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"reasonix/internal/tool"
+	"corvus/internal/tool"
 )
 
 const (

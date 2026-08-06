@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/i18n"
-	"reasonix/internal/memory"
+	"corvus/internal/i18n"
+	"corvus/internal/memory"
 )
 
 const memoryCommandUsage = "usage: /memory [recall|revisions <id-or-name>|restore <id-or-name> <revision>|archived|recover <archive-path>|instructions]"

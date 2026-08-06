@@ -7,14 +7,14 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"reasonix/internal/config"
+	"corvus/internal/config"
 )
 
 // TestModelRefsFromConfig verifies the /model picker enumerates configured
-// provider/model refs (built-in defaults when no reasonix.toml is present), and
+// provider/model refs (built-in defaults when no corvus.toml is present), and
 // only those whose provider API key is set.
 func TestModelRefsFromConfig(t *testing.T) {
-	isolateUserConfig(t) // no reasonix.toml -> built-in default providers
+	isolateUserConfig(t) // no corvus.toml -> built-in default providers
 	// Only DeepSeek keyed → MiMo refs must be filtered out.
 	if _, err := config.SetCredential("DEEPSEEK_API_KEY", "test-key"); err != nil {
 		t.Fatalf("SetCredential: %v", err)

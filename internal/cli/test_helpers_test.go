@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"reasonix/internal/agent"
+	"corvus/internal/agent"
 )
 
 func mustGetwd(t *testing.T) string {
@@ -22,8 +22,8 @@ func isolateCLIConfigHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	_ = os.Unsetenv("REASONIX_HOME")
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	_ = os.Unsetenv("CORVUS_HOME")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/tool"
+	"corvus/internal/tool"
 )
 
 type discardWriteCloser struct{}

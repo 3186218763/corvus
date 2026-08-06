@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"reasonix/internal/fileutil"
+	"corvus/internal/fileutil"
 )
 
 // writeJSONAtomic marshals v and publishes it via AtomicWriteFileStrict.

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"sync"
 
-	"reasonix/internal/agent"
+	"corvus/internal/agent"
 )
 
 // SessionLeaseKeeper owns at most one session lease on behalf of a frontend
-// that binds session files for writing (the CLI chat/run commands, `reasonix
+// that binds session files for writing (the CLI chat/run commands, `corvus
 // serve`, one ACP session). Desktop tabs keep their own per-tab lease
 // management; this keeper is the equivalent for the single-session surfaces:
 // it follows the active session path across resumes, forks, and fresh-session
@@ -113,7 +113,7 @@ func (k *SessionLeaseKeeper) releaseLocked() {
 
 // SessionLeaseCloseHint is the universal way out of a lease refusal, appended
 // by surfaces that have no copy escape hatch (in-TUI switches, serve, ACP).
-const SessionLeaseCloseHint = "close the other Reasonix window or process first"
+const SessionLeaseCloseHint = "close the other Corvus window or process first"
 
 // SessionInUseMessage renders a lease-acquisition failure as the shared
 // operator-facing "who is holding this" line used by the CLI, serve, and ACP.
@@ -121,14 +121,14 @@ const SessionLeaseCloseHint = "close the other Reasonix window or process first"
 // generic line otherwise. The session file path is deliberately omitted — the
 // caller already knows which session it asked for.
 func SessionInUseMessage(err error) string {
-	const fallback = "this session is in use by another Reasonix window or process"
+	const fallback = "this session is in use by another Corvus window or process"
 	var leaseErr *agent.SessionLeaseError
 	if !errors.As(err, &leaseErr) || leaseErr == nil || leaseErr.Info == nil || leaseErr.Info.PID <= 0 {
 		return fallback
 	}
 	info := leaseErr.Info
 	var b strings.Builder
-	fmt.Fprintf(&b, "this session is in use by another Reasonix process (pid %d", info.PID)
+	fmt.Fprintf(&b, "this session is in use by another Corvus process (pid %d", info.PID)
 	if host := strings.TrimSpace(info.Hostname); host != "" {
 		b.WriteString(" on " + host)
 	}

@@ -9,7 +9,7 @@ import (
 
 func TestLoadForRootUsesLastKnownGoodWhenUserConfigBroken(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	// Broken live config.
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[broken\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestLoadForRootUsesLastKnownGoodWhenUserConfigBroken(t *testing.T) {
 
 func TestLoadForRootUsesDefaultsWhenNoLKG(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[broken\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestLoadForRootUsesDefaultsWhenNoLKG(t *testing.T) {
 
 func TestLoadForRootTypeErrorDoesNotPartiallyApplyUserConfig(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	body := "default_model = \"must-not-survive\"\n[ui]\nshow_reasoning = \"not-a-bool\"\n"
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
@@ -87,12 +87,12 @@ func TestLoadForRootTypeErrorDoesNotPartiallyApplyUserConfig(t *testing.T) {
 
 func TestLoadForRootIsolatesBrokenProjectConfig(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("default_model = \"user-model\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	project := t.TempDir()
-	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte("[broken\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte("[broken\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := LoadForRoot(project)
@@ -109,13 +109,13 @@ func TestLoadForRootIsolatesBrokenProjectConfig(t *testing.T) {
 
 func TestLoadForRootTypeErrorDoesNotPartiallyApplyProjectConfig(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("default_model = \"user-model\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	project := t.TempDir()
 	body := "default_model = \"project-model\"\n[ui]\nshow_reasoning = \"not-a-bool\"\n"
-	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(body), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := LoadForRoot(project)

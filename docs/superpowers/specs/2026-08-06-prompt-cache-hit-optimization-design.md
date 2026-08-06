@@ -12,7 +12,7 @@
 
 ## 1. Problem
 
-Reasonix already keeps **append-only history** and a **boot-stable system prefix** (good for DeepSeek automatic caching). Gaps vs Codex / Claude Code / Agents SDK / OpenCode:
+Corvus already keeps **append-only history** and a **boot-stable system prefix** (good for DeepSeek automatic caching). Gaps vs Codex / Claude Code / Agents SDK / OpenCode:
 
 | Gap | Effect |
 |-----|--------|
@@ -41,7 +41,7 @@ Anthropic **already** places `cache_control` breakpoints (disabled for DeepSeek)
 - Rewriting local compact algorithm  
 - Bedrock-native `cachePoint` / Copilot-specific fields (no client for them today)  
 - Cross-session or cross-user shared cache keys  
-- Vercel AI SDK `promptCacheKey` camelCase (Reasonix speaks HTTP REST)  
+- Vercel AI SDK `promptCacheKey` camelCase (Corvus speaks HTTP REST)  
 - `prompt_cache_retention` / GPT-5.x `prompt_cache_options` / explicit OpenAI breakpoints (record as deferred levers; not Phase 1–3)  
 - Unifying every tail tag into a single `<system-reminder>` channel (nice-to-have; Phase 2 may introduce `<runtime-update>` without forcing a global rename)
 
@@ -100,9 +100,9 @@ No new top-level package. Small helpers may live next to provider or agent (`cac
 
 | Case | Key |
 |------|-----|
-| Main session | `reasonix:session:<BranchID>` where `BranchID` = `filepath.Base(sessionPath)` without extension |
+| Main session | `corvus:session:<BranchID>` where `BranchID` = `filepath.Base(sessionPath)` without extension |
 | Resume same file | Same key (path stem unchanged; title rename must not change stem) |
-| Subagent / parallel task | **Separate** key: `reasonix:session:<parentBranchID>:sub:<subID>` so distinct prefixes do not share one OpenAI ~15 RPM routing bucket |
+| Subagent / parallel task | **Separate** key: `corvus:session:<parentBranchID>:sub:<subID>` so distinct prefixes do not share one OpenAI ~15 RPM routing bucket |
 | Custom config | Raw string from `prompt_cache_key_value` when mode is `custom` |
 
 ### ExtraBody precedence
@@ -158,7 +158,7 @@ Config `on` / `custom` still hard-omit DeepSeek, but do **not** re-enable a fing
 
 ### Key value
 
-- Default: `reasonix:session:<BranchID>` (see §4)  
+- Default: `corvus:session:<BranchID>` (see §4)  
 - Namespace avoids colliding with other clients on shared gateways  
 - Custom: raw string from config (no `custom:` prefix parsing)
 
@@ -339,7 +339,7 @@ Implementation plans may be one file with three milestones or three sequential p
 
 - Survey: `docs/research/agent-prompt-caching-survey.md`  
 - Wire compat: `docs/research/prompt-cache-wire-compatibility.md`  
-- Reasonix today: `internal/provider/anthropic/anthropic.go` (breakpoints), `internal/agent/cache_shape.go`, `internal/agent/compact.go`, `internal/agent/branch.go` (`BranchID`), `internal/provider/responses` (DeepSeek Responses)  
+- Corvus today: `internal/provider/anthropic/anthropic.go` (breakpoints), `internal/agent/cache_shape.go`, `internal/agent/compact.go`, `internal/agent/branch.go` (`BranchID`), `internal/provider/responses` (DeepSeek Responses)  
 - Upstream patterns: OpenCode `transform.ts`; Agents SDK `prompt_cache_key.py`; Codex `client.rs`  
 - OpenAI: Prompt Caching guide + Prompt Caching 201 (routing stickiness, ~15 RPM/key, retention)  
 
@@ -357,7 +357,7 @@ Implementation plans may be one file with three milestones or three sequential p
 | DeepSeek | Hard-omit key **and** breakpoints on **all** kinds (openai, responses, anthropic) |
 | Responses + DeepSeek | Omit key (Codex parity only for non-DeepSeek Responses) |
 | auto + unknown host | Send key + **Phase 1 fail-open** (not deferred) |
-| Session id | `BranchID(sessionPath)`; namespaced `reasonix:session:…` |
+| Session id | `BranchID(sessionPath)`; namespaced `corvus:session:…` |
 | Subagent keys | Separate `…:sub:<id>` under parent |
 | ExtraBody | Canonical `Request.PromptCacheKey` wins; field reserved |
 | Config custom | Separate `prompt_cache_key` + `prompt_cache_key_value` (no `custom:` prefix) |

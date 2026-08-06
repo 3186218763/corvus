@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/event"
-	"reasonix/internal/evidence"
+	"corvus/internal/agent"
+	"corvus/internal/event"
+	"corvus/internal/evidence"
 )
 
 func TestParsePlanTodos(t *testing.T) {

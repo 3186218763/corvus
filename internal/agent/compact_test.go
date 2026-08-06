@@ -5,12 +5,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"reasonix/internal/event"
+	"corvus/internal/event"
 	"strings"
 	"testing"
 
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 // fakeProvider returns a fixed reply and records the messages it was asked to

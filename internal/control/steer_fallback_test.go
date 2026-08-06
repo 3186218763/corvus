@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/skill"
-	"reasonix/internal/tool"
+	"corvus/internal/agent"
+	"corvus/internal/event"
+	"corvus/internal/provider"
+	"corvus/internal/skill"
+	"corvus/internal/tool"
 )
 
 func steerFallbackController(t *testing.T) (*Controller, *agent.Agent) {

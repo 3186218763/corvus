@@ -80,7 +80,7 @@ func ResolveReasoningLanguage(lang, source string) string {
 }
 
 // InferReasoningLanguageFromText conservatively detects Chinese user-authored
-// turns for auto reasoning-language mode. It strips Reasonix-injected context
+// turns for auto reasoning-language mode. It strips Corvus-injected context
 // wrappers first so large @file payloads or transient XML blocks do not drown
 // out the user's actual prompt. English and ambiguous turns intentionally return
 // auto, preserving the old no-extra-instruction behaviour.

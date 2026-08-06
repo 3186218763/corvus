@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/skill"
-	"reasonix/internal/tool"
+	"corvus/internal/skill"
+	"corvus/internal/tool"
 )
 
 type Kind string

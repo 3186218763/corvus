@@ -4,7 +4,7 @@ import (
 	"errors"
 	"os"
 
-	"reasonix/internal/store"
+	"corvus/internal/store"
 )
 
 // SessionRemovalGuard holds a session's save lock and lease lock for the

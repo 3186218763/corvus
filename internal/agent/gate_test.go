@@ -3,12 +3,12 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"reasonix/internal/event"
+	"corvus/internal/event"
 	"strings"
 	"testing"
 
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 // stubGate denies any call whose tool name is in deny; everything else allows.

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/event"
-	"reasonix/internal/evidence"
+	"corvus/internal/event"
+	"corvus/internal/evidence"
 )
 
 type recordingSink struct {

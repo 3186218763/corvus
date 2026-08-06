@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 // TransientUserBlockTags names every block the host prepends to a user turn as

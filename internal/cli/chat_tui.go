@@ -21,23 +21,23 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/command"
-	"reasonix/internal/config"
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	"reasonix/internal/hook"
-	"reasonix/internal/i18n"
-	"reasonix/internal/memory"
-	"reasonix/internal/migration"
-	"reasonix/internal/outputstyle"
-	"reasonix/internal/permission"
-	"reasonix/internal/plugin"
-	"reasonix/internal/provider"
-	"reasonix/internal/recovery"
-	"reasonix/internal/sandbox"
-	"reasonix/internal/skill"
-	"reasonix/internal/tool"
+	"corvus/internal/agent"
+	"corvus/internal/command"
+	"corvus/internal/config"
+	"corvus/internal/control"
+	"corvus/internal/event"
+	"corvus/internal/hook"
+	"corvus/internal/i18n"
+	"corvus/internal/memory"
+	"corvus/internal/migration"
+	"corvus/internal/outputstyle"
+	"corvus/internal/permission"
+	"corvus/internal/plugin"
+	"corvus/internal/provider"
+	"corvus/internal/recovery"
+	"corvus/internal/sandbox"
+	"corvus/internal/skill"
+	"corvus/internal/tool"
 )
 
 // chatTUI is a bubbletea Model that normally owns the terminal with an
@@ -59,9 +59,9 @@ type chatTUI struct {
 	// mouseCaptureOff releases mouse ownership back to the terminal (View() sets
 	// tea.MouseModeNone instead of MouseModeCellMotion) so its native
 	// click-drag selection and right-click context menu work again. Toggled by
-	// "/mouse" or REASONIX_DISABLE_MOUSE at startup; trades away in-app
+	// "/mouse" or CORVUS_DISABLE_MOUSE at startup; trades away in-app
 	// drag-select, the transcript scrollbar, and wheel-scroll while it's on,
-	// since the terminal no longer forwards those events to Reasonix.
+	// since the terminal no longer forwards those events to Corvus.
 	mouseCaptureOff bool
 
 	input       textarea.Model
@@ -115,7 +115,7 @@ type chatTUI struct {
 	// smooth is the in-flight scroll interpolation (nil when idle).
 	smooth *smoothScroll
 	// scrollRepaint restores the legacy full-screen repaint on every viewport
-	// scroll (REASONIX_TUI_SCROLL_REPAINT=1) for terminals that strand stale
+	// scroll (CORVUS_TUI_SCROLL_REPAINT=1) for terminals that strand stale
 	// rows under the cell-diff renderer.
 	scrollRepaint bool
 	// yoloRestoreToolApprovalMode remembers the Ask/Auto base mode that Ctrl+Y
@@ -308,7 +308,7 @@ type chatTUI struct {
 	// (/mcp) from it.
 	host *plugin.Host
 
-	// commands are custom slash commands loaded from .reasonix/commands; each renders
+	// commands are custom slash commands loaded from .corvus/commands; each renders
 	// its template with the typed args and sends the result as a turn.
 	commands []command.Command
 
@@ -630,7 +630,7 @@ func transcriptContentWidth(termW int, nativeScrollback bool) int {
 // menu and click-drag selection matter more than the scrollbar and
 // wheel-scroll) without having to type "/mouse" each session.
 func mouseCaptureOffByDefault() bool {
-	v := strings.TrimSpace(os.Getenv("REASONIX_DISABLE_MOUSE"))
+	v := strings.TrimSpace(os.Getenv("CORVUS_DISABLE_MOUSE"))
 	return v != "" && v != "0"
 }
 
@@ -887,7 +887,7 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Any viewport scroll (wheel, PgUp/PgDn, edge auto-scroll, or tail-follow to
 	// newest output) shifts the whole window. Some terminals (Warp) mishandle
 	// the renderer's scroll/insert-line optimization and strand stale rows, so
-	// legacy repaint mode (REASONIX_TUI_SCROLL_REPAINT=1) force-clears on every
+	// legacy repaint mode (CORVUS_TUI_SCROLL_REPAINT=1) force-clears on every
 	// offset move; the default is incremental repaint without ClearScreen.
 	if cm.viewport.YOffset() != prevYOff && !cm.nativeScrollback && !cm.sessionSwitch && cm.scrollRepaint {
 		return cm, tea.Batch(tea.ClearScreen, cmd)
@@ -944,7 +944,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseClickMsg:
-		// Match the complete terminal right-click convention while Reasonix owns
+		// Match the complete terminal right-click convention while Corvus owns
 		// the mouse: copy an active selection, otherwise paste clipboard text into
 		// the visible composer. Left-press begins a selection unless it lands on
 		// the transcript scrollbar or a shell-output hint line.
@@ -1065,7 +1065,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.composerSel = composerSelection{}
 				return m, nil
 			}
-			// The terminal cannot see Reasonix's application-owned highlight, and
+			// The terminal cannot see Corvus's application-owned highlight, and
 			// macOS commonly consumes Cmd+C before it reaches the TUI. Copy on drag
 			// release just like transcript selection so the visible selection always
 			// has a usable clipboard result.
@@ -3708,7 +3708,7 @@ func (m *chatTUI) toggleVerboseReasoning(notify bool) {
 		_ = m.cfg.SetShowReasoning(m.showReasoning)
 		path := config.SourcePath()
 		if path == "" {
-			path = "reasonix.toml"
+			path = "corvus.toml"
 		}
 		saveErr = config.EditConfigFile(path, func(cfg *config.Config) error {
 			return cfg.SetShowReasoning(m.showReasoning)
@@ -3728,7 +3728,7 @@ func (m *chatTUI) toggleVerboseReasoning(notify bool) {
 	}
 }
 
-// toggleMouseCapture flips whether Reasonix owns the mouse. It's session-only
+// toggleMouseCapture flips whether Corvus owns the mouse. It's session-only
 // (unlike /verbose, this accommodates the terminal/multiplexer at hand rather
 // than recording a lasting preference) — mirrors nativeScrollback, which is
 // likewise never persisted to config. Clears any in-app selection/scrollbar
@@ -4439,7 +4439,7 @@ func (m *chatTUI) runExportCommand(input string) {
 	}
 
 	var b strings.Builder
-	b.WriteString("# reasonix session\n\n")
+	b.WriteString("# corvus session\n\n")
 	lastRole := provider.Role("")
 	exportedMessages := 0
 	for _, msg := range msgs {
@@ -4734,10 +4734,10 @@ func interruptedTurnDisplayNotice() string {
 func renderTUIBanner(label, missing string, width int) string {
 	var b strings.Builder
 	if width >= 60 {
-		b.WriteString(accent("◆") + " " + bold("reasonix") + "  " + dim("· "+label) + "\n")
+		b.WriteString(accent("◆") + " " + bold("corvus") + "  " + dim("· "+label) + "\n")
 		b.WriteString(dim("  "+i18n.M.ChatTip) + "\n")
 	} else {
-		line := accent("◆") + " " + bold("reasonix") + " " + dim("· "+label)
+		line := accent("◆") + " " + bold("corvus") + " " + dim("· "+label)
 		b.WriteString(ansi.Truncate(line, width, "…"))
 	}
 	if missing != "" {
@@ -4769,7 +4769,7 @@ func renderUserBubble(line string, width int, planMode bool) string {
 	return "  " + accent(prefix+line)
 }
 
-var cliImageRefRe = regexp.MustCompile(`(?:^|\s)@\.reasonix/attachments/clipboard-\d{8}-\d{6}\.\d+(?:-(?:\d{6}|[a-f0-9]{8}))?\.(?:png|jpg|jpeg|gif|webp)`)
+var cliImageRefRe = regexp.MustCompile(`(?:^|\s)@\.corvus/attachments/clipboard-\d{8}-\d{6}\.\d+(?:-(?:\d{6}|[a-f0-9]{8}))?\.(?:png|jpg|jpeg|gif|webp)`)
 
 func displayLineForImageRefs(line string) string {
 	idx := 0

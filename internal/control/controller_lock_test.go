@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
+	"corvus/internal/agent"
+	"corvus/internal/event"
+	"corvus/internal/provider"
 )
 
 // TestCompactRefusedWhileRunning locks in the same guard Rewind/Branch have:

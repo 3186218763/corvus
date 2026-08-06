@@ -1,5 +1,5 @@
-﻿# Reasonix TUI configuration template.
-# Copy to reasonix.toml for local use. API keys go in .env.
+﻿# Corvus TUI configuration template.
+# Copy to corvus.toml for local use. API keys go in .env.
 
 default_model = "deepseek"
 # language = "zh"

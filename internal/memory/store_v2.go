@@ -572,7 +572,7 @@ func newMemoryID(name string, now time.Time) string {
 }
 
 func legacyMemoryID(name string, scope FactScope) string {
-	sum := sha256.Sum256([]byte("reasonix-memory-v2\x00" + string(NormalizeFactScope(string(scope))) + "\x00" + slug(name)))
+	sum := sha256.Sum256([]byte("corvus-memory-v2\x00" + string(NormalizeFactScope(string(scope))) + "\x00" + slug(name)))
 	return "legacy-" + hex.EncodeToString(sum[:12])
 }
 

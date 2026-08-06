@@ -6,9 +6,9 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"reasonix/internal/event"
-	"reasonix/internal/i18n"
-	"reasonix/internal/provider"
+	"corvus/internal/event"
+	"corvus/internal/i18n"
+	"corvus/internal/provider"
 )
 
 const (

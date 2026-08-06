@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/boot"
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
+	"corvus/internal/boot"
+	"corvus/internal/control"
+	"corvus/internal/event"
+	"corvus/internal/provider"
 )
 
 func TestCacheInvalidationNoticeCopy(t *testing.T) {

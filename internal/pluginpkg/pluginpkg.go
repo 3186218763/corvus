@@ -1,4 +1,4 @@
-// Package pluginpkg handles installed Reasonix plugin packages.
+// Package pluginpkg handles installed Corvus plugin packages.
 //
 // Plugin packages are higher-level bundles that can contribute skills, hooks,
 // and MCP servers. They are intentionally parsed into package-local structs so
@@ -16,14 +16,14 @@ import (
 	"strings"
 	"sync"
 
-	"reasonix/internal/command"
-	"reasonix/internal/fileutil"
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/frontmatter"
+	"corvus/internal/command"
+	"corvus/internal/fileutil"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/frontmatter"
 )
 
 const (
-	NativeManifest = "reasonix-plugin.json"
+	NativeManifest = "corvus-plugin.json"
 	CodexManifest  = ".codex-plugin/plugin.json"
 	ClaudeManifest = ".claude-plugin/plugin.json"
 	StateFilename  = "plugin-packages.json"
@@ -107,7 +107,7 @@ type MCPServerRef struct {
 	AutoStart   bool
 }
 
-// Manifest is the normalized manifest shape used by Reasonix.
+// Manifest is the normalized manifest shape used by Corvus.
 type Manifest struct {
 	Name        string
 	Version     string
@@ -116,7 +116,7 @@ type Manifest struct {
 	Repository  string
 	Skills      []string
 	// Agents are directories of Claude-style flat agent Markdown files. They are
-	// loaded as plugin-owned, manually invoked Reasonix subagent profiles.
+	// loaded as plugin-owned, manually invoked Corvus subagent profiles.
 	Agents []string
 	// Commands are directories of flat <name>.md slash-command prompt templates
 	// (rendered with $ARGUMENTS/$1..$N on /<name>). Declared explicitly in a
@@ -204,7 +204,7 @@ type MCPServer struct {
 	Imported    bool              `json:"imported,omitempty"`
 }
 
-// State is persisted at <Reasonix home>/plugin-packages.json.
+// State is persisted at <Corvus home>/plugin-packages.json.
 type State struct {
 	Version int               `json:"version"`
 	Plugins []InstalledPlugin `json:"plugins"`
@@ -229,21 +229,21 @@ type InstalledPackage struct {
 
 func IsValidName(name string) bool { return validName.MatchString(strings.TrimSpace(name)) }
 
-func StatePath(reasonixHome string) string {
-	return filepath.Join(reasonixHome, StateFilename)
+func StatePath(corvusHome string) string {
+	return filepath.Join(corvusHome, StateFilename)
 }
 
-func PluginsDir(reasonixHome string) string {
-	return filepath.Join(reasonixHome, "plugins")
+func PluginsDir(corvusHome string) string {
+	return filepath.Join(corvusHome, "plugins")
 }
 
-func InstallRoot(reasonixHome, name string) string {
-	return filepath.Join(PluginsDir(reasonixHome), name)
+func InstallRoot(corvusHome, name string) string {
+	return filepath.Join(PluginsDir(corvusHome), name)
 }
 
-func LoadState(reasonixHome string) (State, error) {
+func LoadState(corvusHome string) (State, error) {
 	var st State
-	b, err := fileencoding.ReadFileUTF8(StatePath(reasonixHome))
+	b, err := fileencoding.ReadFileUTF8(StatePath(corvusHome))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return State{Version: 1}, nil
@@ -260,7 +260,7 @@ func LoadState(reasonixHome string) (State, error) {
 	return st, nil
 }
 
-func SaveState(reasonixHome string, st State) error {
+func SaveState(corvusHome string, st State) error {
 	if st.Version == 0 {
 		st.Version = 1
 	}
@@ -270,40 +270,40 @@ func SaveState(reasonixHome string, st State) error {
 		return err
 	}
 	b = append(b, '\n')
-	return fileutil.AtomicWriteFile(StatePath(reasonixHome), b, 0o644)
+	return fileutil.AtomicWriteFile(StatePath(corvusHome), b, 0o644)
 }
 
 // stateMu serialises the read-modify-write of the state file within this
 // process. SaveState writes atomically (tmpfile + rename), so concurrent
 // callers never see a half-written file; this lock additionally prevents two
 // in-process load-modify-save cycles from clobbering each other's edit. It is
-// not a cross-process lock — concurrent Reasonix processes can still race.
+// not a cross-process lock — concurrent Corvus processes can still race.
 var stateMu sync.Mutex
 
-func Upsert(reasonixHome string, p InstalledPlugin) error {
+func Upsert(corvusHome string, p InstalledPlugin) error {
 	if !IsValidName(p.Name) {
 		return fmt.Errorf("invalid plugin name %q", p.Name)
 	}
 	stateMu.Lock()
 	defer stateMu.Unlock()
-	st, err := LoadState(reasonixHome)
+	st, err := LoadState(corvusHome)
 	if err != nil {
 		return err
 	}
 	for i := range st.Plugins {
 		if st.Plugins[i].Name == p.Name {
 			st.Plugins[i] = p
-			return SaveState(reasonixHome, st)
+			return SaveState(corvusHome, st)
 		}
 	}
 	st.Plugins = append(st.Plugins, p)
-	return SaveState(reasonixHome, st)
+	return SaveState(corvusHome, st)
 }
 
-func Remove(reasonixHome, name string) (InstalledPlugin, bool, error) {
+func Remove(corvusHome, name string) (InstalledPlugin, bool, error) {
 	stateMu.Lock()
 	defer stateMu.Unlock()
-	st, err := LoadState(reasonixHome)
+	st, err := LoadState(corvusHome)
 	if err != nil {
 		return InstalledPlugin{}, false, err
 	}
@@ -312,29 +312,29 @@ func Remove(reasonixHome, name string) (InstalledPlugin, bool, error) {
 			continue
 		}
 		st.Plugins = append(st.Plugins[:i], st.Plugins[i+1:]...)
-		return p, true, SaveState(reasonixHome, st)
+		return p, true, SaveState(corvusHome, st)
 	}
 	return InstalledPlugin{}, false, nil
 }
 
-func SetEnabled(reasonixHome, name string, enabled bool) error {
+func SetEnabled(corvusHome, name string, enabled bool) error {
 	stateMu.Lock()
 	defer stateMu.Unlock()
-	st, err := LoadState(reasonixHome)
+	st, err := LoadState(corvusHome)
 	if err != nil {
 		return err
 	}
 	for i := range st.Plugins {
 		if st.Plugins[i].Name == name {
 			st.Plugins[i].Enabled = enabled
-			return SaveState(reasonixHome, st)
+			return SaveState(corvusHome, st)
 		}
 	}
 	return fmt.Errorf("plugin %q is not installed", name)
 }
 
-func LoadInstalled(reasonixHome string) ([]InstalledPackage, []string) {
-	st, err := LoadState(reasonixHome)
+func LoadInstalled(corvusHome string) ([]InstalledPackage, []string) {
+	st, err := LoadState(corvusHome)
 	if err != nil {
 		return nil, []string{err.Error()}
 	}
@@ -344,7 +344,7 @@ func LoadInstalled(reasonixHome string) ([]InstalledPackage, []string) {
 		if !installed.Enabled {
 			continue
 		}
-		root := ResolveRoot(reasonixHome, installed.Root)
+		root := ResolveRoot(corvusHome, installed.Root)
 		pkg, pkgWarnings, err := ParseDir(root)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("%s: %v", installed.Name, err))
@@ -356,15 +356,15 @@ func LoadInstalled(reasonixHome string) ([]InstalledPackage, []string) {
 	return out, warnings
 }
 
-func ResolveRoot(reasonixHome, root string) string {
+func ResolveRoot(corvusHome, root string) string {
 	if filepath.IsAbs(root) {
 		return filepath.Clean(root)
 	}
-	return filepath.Join(reasonixHome, filepath.Clean(root))
+	return filepath.Join(corvusHome, filepath.Clean(root))
 }
 
-func RelativeRoot(reasonixHome, root string) string {
-	if rel, err := filepath.Rel(reasonixHome, root); err == nil && rel != "." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".." {
+func RelativeRoot(corvusHome, root string) string {
+	if rel, err := filepath.Rel(corvusHome, root); err == nil && rel != "." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".." {
 		return filepath.ToSlash(rel)
 	}
 	return filepath.Clean(root)
@@ -425,7 +425,7 @@ func parseNative(path, root string) (Package, []string, error) {
 	if err := validateManifest(root, &manifest); err != nil {
 		return Package{}, warnings, err
 	}
-	pkg := Package{Root: root, ManifestKind: "reasonix", Manifest: manifest}
+	pkg := Package{Root: root, ManifestKind: "corvus", Manifest: manifest}
 	pkg.Compatibility = compatibilityFor(pkg, issues)
 	return pkg, warnings, nil
 }
@@ -504,7 +504,7 @@ var claudeConventionSkillDirs = []string{"skills", ".claude/skills"}
 
 // claudeConventionCommandDirs are the directories a Claude plugin loads slash
 // commands from by convention. A command is a flat <name>.md prompt template
-// the user invokes as /<name> — exactly Reasonix's custom-command shape
+// the user invokes as /<name> — exactly Corvus's custom-command shape
 // (internal/command) — so these directories map onto Manifest.Commands and
 // join command discovery at the lowest priority. Unlike skill dirs they are
 // adopted even when the manifest declares skills explicitly, because
@@ -516,7 +516,7 @@ var claudeConventionAgentDirs = []string{"agents"}
 // applyClaudeConventionDirs fills manifest.Skills from the conventional skill
 // directories when the manifest declares none (the standard Claude plugin
 // shape), adopts conventional command directories into manifest.Commands, and
-// reports the conventional capabilities Reasonix cannot map.
+// reports the conventional capabilities Corvus cannot map.
 func applyClaudeConventionDirs(root string, manifest *Manifest) []string {
 	var warnings []string
 	if len(manifest.Skills) == 0 {
@@ -583,7 +583,7 @@ func dirContainsCommandMd(dir string) bool {
 
 func ManifestPath(kind string) string {
 	switch kind {
-	case "reasonix":
+	case "corvus":
 		return NativeManifest
 	case "codex":
 		return CodexManifest

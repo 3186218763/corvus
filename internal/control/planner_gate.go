@@ -7,8 +7,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/capability"
+	"corvus/internal/agent"
+	"corvus/internal/capability"
 )
 
 const (

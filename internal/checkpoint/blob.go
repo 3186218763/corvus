@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"reasonix/internal/fileutil"
+	"corvus/internal/fileutil"
 )
 
 // BlobStore is a content-addressed store for checkpoint file payloads.

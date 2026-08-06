@@ -16,7 +16,7 @@
 - Field name on the wire: **`prompt_cache_key`** (snake_case only). Never default-send `promptCacheKey`.
 - DeepSeek-shaped endpoints (**openai**, **responses**, **anthropic** kinds): **hard-omit** sticky key (and keep Anthropic breakpoints off for DeepSeek).
 - Detection reuses existing host helpers: `openai.IsDeepSeek`, `responses.DetectVendor == "deepseek"`, anthropic `deepseek` flag — not model-id guessing.
-- Session id: `agent.BranchID(sessionPath)` (filepath stem). Key format: `reasonix:session:<BranchID>` or `reasonix:session:<BranchID>:sub:<SubagentMeta.Ref>`.
+- Session id: `agent.BranchID(sessionPath)` (filepath stem). Key format: `corvus:session:<BranchID>` or `corvus:session:<BranchID>:sub:<SubagentMeta.Ref>`.
 - Config: `[agent].prompt_cache_key = auto|on|off|custom` + optional `[agent].prompt_cache_key_value` (no `custom:` prefix grammar).
 - Fail-open is **in Phase 1** (process-local fingerprint map). Prefer next turn omits key; do **not** invent double-request auto-retry that re-bills.
 - ExtraBody rules apply to **openai** only; responses has no ExtraBody channel — set field from `Request` only.
@@ -71,7 +71,7 @@ package provider_test
 import (
 	"testing"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 func TestNormalizePromptCacheKeyMode(t *testing.T) {
@@ -86,10 +86,10 @@ func TestNormalizePromptCacheKeyMode(t *testing.T) {
 }
 
 func TestFormatSessionPromptCacheKey(t *testing.T) {
-	if got := provider.FormatSessionPromptCacheKey("abc123", ""); got != "reasonix:session:abc123" {
+	if got := provider.FormatSessionPromptCacheKey("abc123", ""); got != "corvus:session:abc123" {
 		t.Fatalf("got %q", got)
 	}
-	if got := provider.FormatSessionPromptCacheKey("abc123", "sa_deadbeef"); got != "reasonix:session:abc123:sub:sa_deadbeef" {
+	if got := provider.FormatSessionPromptCacheKey("abc123", "sa_deadbeef"); got != "corvus:session:abc123:sub:sa_deadbeef" {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -105,7 +105,7 @@ func TestResolvePromptCacheKeyDeepSeekOmits(t *testing.T) {
 
 func TestResolvePromptCacheKeyOpenAIAutoSends(t *testing.T) {
 	got := provider.ResolvePromptCacheKey("auto", "", "openai", "https://api.openai.com/v1", "sess1", "")
-	if got != "reasonix:session:sess1" {
+	if got != "corvus:session:sess1" {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -119,7 +119,7 @@ func TestResolvePromptCacheKeyResponsesDeepSeekOmits(t *testing.T) {
 
 func TestResolvePromptCacheKeyResponsesNonDeepSeekSends(t *testing.T) {
 	got := provider.ResolvePromptCacheKey("auto", "", "responses", "https://api.openai.com/v1", "sess1", "")
-	if got != "reasonix:session:sess1" {
+	if got != "corvus:session:sess1" {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -186,7 +186,7 @@ func FormatSessionPromptCacheKey(sessionID, subID string) string {
 	if sessionID == "" {
 		return ""
 	}
-	key := "reasonix:session:" + sessionID
+	key := "corvus:session:" + sessionID
 	if sub := strings.TrimSpace(subID); sub != "" {
 		key += ":sub:" + sub
 	}
@@ -287,7 +287,7 @@ func TestBuildRequestIncludesPromptCacheKey(t *testing.T) {
 	c := &client{model: "gpt-test", baseURL: "https://api.openai.com", deepseek: false}
 	req := c.buildRequest(provider.Request{
 		Messages:       []provider.Message{{Role: provider.RoleUser, Content: "hi"}},
-		PromptCacheKey: "reasonix:session:abc",
+		PromptCacheKey: "corvus:session:abc",
 	})
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -297,7 +297,7 @@ func TestBuildRequestIncludesPromptCacheKey(t *testing.T) {
 	if err := json.Unmarshal(body, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m["prompt_cache_key"] != "reasonix:session:abc" {
+	if m["prompt_cache_key"] != "corvus:session:abc" {
 		t.Fatalf("body=%s", body)
 	}
 }
@@ -314,7 +314,7 @@ func TestBuildRequestDeepSeekHardOmitsPromptCacheKey(t *testing.T) {
 	c := &client{model: "deepseek-v4", deepseek: true, baseURL: "https://api.deepseek.com"}
 	body, _ := json.Marshal(c.buildRequest(provider.Request{
 		Messages:       []provider.Message{{Role: provider.RoleUser, Content: "hi"}},
-		PromptCacheKey: "reasonix:session:abc",
+		PromptCacheKey: "corvus:session:abc",
 	}))
 	if strings.Contains(string(body), "prompt_cache_key") {
 		t.Fatalf("DeepSeek must omit: %s", body)
@@ -420,9 +420,9 @@ func TestBuildRequestBodyPromptCacheKeyNonDeepSeek(t *testing.T) {
 	c := New(Config{Name: "oai", BaseURL: "https://api.openai.com", Model: "gpt-test"}).(*client)
 	body, _, _ := c.buildRequestBody(provider.Request{
 		Messages:       []provider.Message{{Role: provider.RoleUser, Content: "hi"}},
-		PromptCacheKey: "reasonix:session:abc",
+		PromptCacheKey: "corvus:session:abc",
 	})
-	if body["prompt_cache_key"] != "reasonix:session:abc" {
+	if body["prompt_cache_key"] != "corvus:session:abc" {
 		t.Fatalf("body=%#v", body)
 	}
 }
@@ -431,7 +431,7 @@ func TestBuildRequestBodyPromptCacheKeyDeepSeekOmits(t *testing.T) {
 	c := New(Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"}).(*client)
 	body, _, _ := c.buildRequestBody(provider.Request{
 		Messages:       []provider.Message{{Role: provider.RoleUser, Content: "hi"}},
-		PromptCacheKey: "reasonix:session:abc",
+		PromptCacheKey: "corvus:session:abc",
 	})
 	if _, ok := body["prompt_cache_key"]; ok {
 		t.Fatalf("DeepSeek Responses must omit key: %#v", body)
@@ -651,7 +651,7 @@ func TestStreamAttachesPromptCacheKey(t *testing.T) {
 	if err := a.Run(context.Background(), "hi"); err != nil {
 		t.Fatal(err)
 	}
-	if prov.request.PromptCacheKey != "reasonix:session:abc123" {
+	if prov.request.PromptCacheKey != "corvus:session:abc123" {
 		t.Fatalf("got %q", prov.request.PromptCacheKey)
 	}
 }
@@ -680,7 +680,7 @@ func TestStreamSubagentPromptCacheKey(t *testing.T) {
 		SubagentCacheID:    "sa_ref1",
 	}, event.Discard)
 	_ = a.Run(context.Background(), "hi")
-	if prov.request.PromptCacheKey != "reasonix:session:parent1:sub:sa_ref1" {
+	if prov.request.PromptCacheKey != "corvus:session:parent1:sub:sa_ref1" {
 		t.Fatalf("got %q", prov.request.PromptCacheKey)
 	}
 }

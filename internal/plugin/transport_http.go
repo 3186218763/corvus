@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"reasonix/internal/tool"
+	"corvus/internal/tool"
 )
 
 // maxHTTPBody caps how much of a JSON / SSE response body we read, so a

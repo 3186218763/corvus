@@ -6,8 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"reasonix/internal/config"
-	"reasonix/internal/i18n"
+	"corvus/internal/config"
+	"corvus/internal/i18n"
 )
 
 // runModelSubcommand handles "/model": with no argument it opens the configured

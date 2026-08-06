@@ -36,9 +36,9 @@ const (
 // clients that only read err still get a non-technical message.
 const (
 	// PauseMessageEN is the turn_done.err / CLI text for recovery_paused.
-	PauseMessageEN = "Automatic retries paused. Reasonix stopped repeated attempts and kept completed work. Send \"continue\" to start a fresh attempt, or add instructions to change direction."
+	PauseMessageEN = "Automatic retries paused. Corvus stopped repeated attempts and kept completed work. Send \"continue\" to start a fresh attempt, or add instructions to change direction."
 	// PauseMessageZH is the preferred desktop product copy (localized separately).
-	PauseMessageZH = "已暂停自动重试。Reasonix 已停止重复尝试，并保留已完成的工作。发送“继续”即可开始新一轮，也可以补充要求来调整方向。"
+	PauseMessageZH = "已暂停自动重试。Corvus 已停止重复尝试，并保留已完成的工作。发送“继续”即可开始新一轮，也可以补充要求来调整方向。"
 	// FinalizationNudge tells the model it has exactly one summarize-only round.
 	FinalizationNudge = "Auto recovery has reached its limit for this turn. Do not call any more tools. Summarize what was completed, what failed, and what the user should do next. The user can continue in the next message."
 )

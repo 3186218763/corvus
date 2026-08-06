@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/diff"
+	"corvus/internal/diff"
 )
 
 type recordingConversationApplier struct {
@@ -73,7 +73,7 @@ func TestRestoreCodeAllOrNothingOnMidPublishFailure(t *testing.T) {
 	if got := read(t, b); got != "b1" {
 		t.Fatalf("b = %q, want b1 (compensated)", got)
 	}
-	if leftovers, err := filepath.Glob(filepath.Join(root, ".*.reasonix-*")); err != nil || len(leftovers) != 0 {
+	if leftovers, err := filepath.Glob(filepath.Join(root, ".*.corvus-*")); err != nil || len(leftovers) != 0 {
 		t.Fatalf("transaction artifacts remain after compensation: %v err=%v", leftovers, err)
 	}
 }

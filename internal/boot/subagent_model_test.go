@@ -4,11 +4,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/config"
-	"reasonix/internal/provider"
-	"reasonix/internal/skill"
-	"reasonix/internal/tool"
+	"corvus/internal/agent"
+	"corvus/internal/config"
+	"corvus/internal/provider"
+	"corvus/internal/skill"
+	"corvus/internal/tool"
 )
 
 type staticResolver struct {

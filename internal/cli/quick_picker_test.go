@@ -6,12 +6,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"reasonix/internal/command"
-	"reasonix/internal/config"
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/skill"
+	"corvus/internal/command"
+	"corvus/internal/config"
+	"corvus/internal/control"
+	"corvus/internal/event"
+	"corvus/internal/provider"
+	"corvus/internal/skill"
 )
 
 func TestQuickPickerNavigationFilterAndConfirm(t *testing.T) {

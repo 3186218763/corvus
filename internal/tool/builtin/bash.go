@@ -17,13 +17,13 @@ import (
 
 	"mvdan.cc/sh/v3/syntax"
 
-	"reasonix/internal/i18n"
-	"reasonix/internal/jobs"
-	"reasonix/internal/proc"
-	"reasonix/internal/sandbox"
-	"reasonix/internal/secrets"
-	"reasonix/internal/shellparse"
-	"reasonix/internal/tool"
+	"corvus/internal/i18n"
+	"corvus/internal/jobs"
+	"corvus/internal/proc"
+	"corvus/internal/sandbox"
+	"corvus/internal/secrets"
+	"corvus/internal/shellparse"
+	"corvus/internal/tool"
 )
 
 const (
@@ -75,7 +75,7 @@ func cachedBashShellPATH(ctx context.Context) string {
 // empty uses the process cwd. timeout optionally caps foreground commands;
 // zero or negative means no tool-local cap, while parent context cancellation
 // still kills the process tree. guard appends a warning to the output of
-// commands that reference Reasonix's own session stores (see SessionDataGuard).
+// commands that reference Corvus's own session stores (see SessionDataGuard).
 type bash struct {
 	sb      sandbox.Spec
 	shell   sandbox.Shell
@@ -491,7 +491,7 @@ func defaultBashShellPATH(ctx context.Context) string {
 	if shell == "" {
 		return ""
 	}
-	const marker = "__REASONIX_BASH_PATH__="
+	const marker = "__CORVUS_BASH_PATH__="
 	script := "printf '\\n" + marker + "%s\\n' \"$PATH\""
 	for _, args := range [][]string{
 		{"-l", "-i", "-c", script},

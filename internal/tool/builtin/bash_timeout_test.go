@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/sandbox"
+	"corvus/internal/sandbox"
 )
 
 func TestBashForegroundTimeoutConfig(t *testing.T) {

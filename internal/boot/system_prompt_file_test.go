@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/event"
+	"corvus/internal/event"
 )
 
 func TestBuildMissingSystemPromptFileFallsBackToInlinePrompt(t *testing.T) {
 	isolateConfigHome(t)
 	root := robustTempDir(t)
-	t.Setenv("REASONIX_HOME", robustTempDir(t))
-	writeFile(t, root, "reasonix.toml", systemPromptFileTestConfig("prompts/missing.md"))
+	t.Setenv("CORVUS_HOME", robustTempDir(t))
+	writeFile(t, root, "corvus.toml", systemPromptFileTestConfig("prompts/missing.md"))
 
 	var notices []event.Event
 	ctrl, err := Build(context.Background(), Options{
@@ -43,8 +43,8 @@ func TestBuildMissingSystemPromptFileFallsBackToInlinePrompt(t *testing.T) {
 func TestBuildNonMissingSystemPromptReadFailureStaysFatal(t *testing.T) {
 	isolateConfigHome(t)
 	root := robustTempDir(t)
-	t.Setenv("REASONIX_HOME", robustTempDir(t))
-	writeFile(t, root, "reasonix.toml", systemPromptFileTestConfig("prompts"))
+	t.Setenv("CORVUS_HOME", robustTempDir(t))
+	writeFile(t, root, "corvus.toml", systemPromptFileTestConfig("prompts"))
 	if err := os.MkdirAll(filepath.Join(root, "prompts"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -72,6 +72,6 @@ name = "test-model"
 kind = "openai"
 base_url = "https://example.invalid"
 model = "x"
-api_key_env = "REASONIX_TEST_KEY_UNSET"
+api_key_env = "CORVUS_TEST_KEY_UNSET"
 `
 }

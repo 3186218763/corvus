@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	fileencoding "reasonix/internal/fileutil/encoding"
+	fileencoding "corvus/internal/fileutil/encoding"
 )
 
 func TestLoadDotEnvDoesNotImportProjectOrHomeEnv(t *testing.T) {
@@ -22,7 +22,7 @@ func TestLoadDotEnvDoesNotImportProjectOrHomeEnv(t *testing.T) {
 
 	t.Chdir(cwd)
 	t.Setenv("HOME", home)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows.
 
 	// Start clean so the file values are what land (Setenv auto-restores).
@@ -46,8 +46,8 @@ func TestLoadDotEnvDoesNotImportProjectOrHomeEnv(t *testing.T) {
 	}
 }
 
-// TestLoadDotEnvReadsGlobalCredentials proves `reasonix setup`'s target — the
-// reasonix-owned credentials file under Reasonix home — is loaded into the
+// TestLoadDotEnvReadsGlobalCredentials proves `corvus setup`'s target — the
+// corvus-owned credentials file under Corvus home — is loaded into the
 // process environment from any working directory. Project .env is still not
 // imported into process env (provider resolution prefers project separately).
 func TestLoadDotEnvReadsGlobalCredentials(t *testing.T) {
@@ -56,7 +56,7 @@ func TestLoadDotEnvReadsGlobalCredentials(t *testing.T) {
 
 	t.Chdir(cwd)
 	t.Setenv("HOME", cfgHome)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", cfgHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(cfgHome, ".config"))
 	t.Setenv("AppData", filepath.Join(cfgHome, "AppData"))
@@ -97,7 +97,7 @@ func TestLoadDotEnvReadsGlobalCredentials(t *testing.T) {
 
 func TestCredentialEnvNamesIncludesUnconfiguredStoredKeys(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", filepath.Join(home, "reasonix-home"))
+	t.Setenv("CORVUS_HOME", filepath.Join(home, "corvus-home"))
 
 	credentialPath := UserCredentialsPath()
 	if err := os.MkdirAll(filepath.Dir(credentialPath), 0o700); err != nil {
@@ -120,8 +120,8 @@ func TestLoadDotEnvDecodesGB18030Credentials(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("REASONIX_HOME", filepath.Join(home, "reasonix-home"))
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_HOME", filepath.Join(home, "corvus-home"))
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("PINNED_CN", "")
 	os.Unsetenv("PINNED_CN")
 
@@ -144,7 +144,7 @@ func TestLoadForRootExpandsPluginAuthFromProjectDotEnv(t *testing.T) {
 	cfgHome := t.TempDir()
 
 	t.Setenv("HOME", cfgHome)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", cfgHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(cfgHome, ".config"))
 	t.Setenv("AppData", filepath.Join(cfgHome, "AppData"))
@@ -187,7 +187,7 @@ func TestProjectDotEnvUsesDotenvSyntax(t *testing.T) {
 	cfgHome := t.TempDir()
 
 	t.Setenv("HOME", cfgHome)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", cfgHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(cfgHome, ".config"))
 	t.Setenv("AppData", filepath.Join(cfgHome, "AppData"))
@@ -249,7 +249,7 @@ func TestDotEnvFileWarningsReportDuplicateKeysWithoutValues(t *testing.T) {
 
 func TestDotEnvFileFilteredPreservesProjectScopeRules(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".env")
-	if err := os.WriteFile(path, []byte("PLUGIN_TOKEN=project\nREASONIX_HOME=blocked\nHOME=blocked\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("PLUGIN_TOKEN=project\nCORVUS_HOME=blocked\nHOME=blocked\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	file, ok := readDotEnvFile(path)
@@ -260,8 +260,8 @@ func TestDotEnvFileFilteredPreservesProjectScopeRules(t *testing.T) {
 	if got["PLUGIN_TOKEN"] != "project" {
 		t.Fatalf("PLUGIN_TOKEN = %q", got["PLUGIN_TOKEN"])
 	}
-	if _, ok := got["REASONIX_HOME"]; ok {
-		t.Fatalf("REASONIX_HOME should be filtered: %+v", got)
+	if _, ok := got["CORVUS_HOME"]; ok {
+		t.Fatalf("CORVUS_HOME should be filtered: %+v", got)
 	}
 	if _, ok := got["HOME"]; ok {
 		t.Fatalf("HOME should be filtered: %+v", got)
@@ -274,7 +274,7 @@ func TestLoadForRootScopesProjectDotEnvPerWorkspace(t *testing.T) {
 	projectB := t.TempDir()
 
 	t.Setenv("HOME", home)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
@@ -329,18 +329,18 @@ func TestLoadForRootFiltersProjectDotEnvControlVars(t *testing.T) {
 	redirect := filepath.Join(project, "state")
 
 	t.Setenv("HOME", home)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Setenv("REASONIX_STATE_HOME", "")
-	os.Unsetenv("REASONIX_STATE_HOME")
+	t.Setenv("CORVUS_STATE_HOME", "")
+	os.Unsetenv("CORVUS_STATE_HOME")
 
 	wantCred := UserCredentialsPath()
 	if wantCred == "" {
 		t.Skip("user credentials path unavailable")
 	}
-	if err := os.WriteFile(filepath.Join(project, ".env"), []byte("REASONIX_STATE_HOME="+redirect+"\nPLUGIN_TOKEN=project-token\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(project, ".env"), []byte("CORVUS_STATE_HOME="+redirect+"\nPLUGIN_TOKEN=project-token\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(project, ".mcp.json"), []byte(`{
@@ -350,7 +350,7 @@ func TestLoadForRootFiltersProjectDotEnvControlVars(t *testing.T) {
       "url": "https://mcp.example.test",
       "headers": {
         "Authorization": "Bearer ${PLUGIN_TOKEN}",
-        "State": "${REASONIX_STATE_HOME:-default-state}"
+        "State": "${CORVUS_STATE_HOME:-default-state}"
       }
     }
   }
@@ -372,7 +372,7 @@ func TestLoadForRootFiltersProjectDotEnvControlVars(t *testing.T) {
 	if got := UserCredentialsPath(); got != wantCred {
 		t.Fatalf("project .env redirected credentials path: %q want %q", got, wantCred)
 	}
-	if got := os.Getenv("REASONIX_STATE_HOME"); got != "" {
+	if got := os.Getenv("CORVUS_STATE_HOME"); got != "" {
 		t.Fatalf("project control var leaked into process env: %q", got)
 	}
 }
@@ -383,7 +383,7 @@ func TestLoadForRootResolvesProviderCredentialsOverInheritedEnv(t *testing.T) {
 	key := "KEY_PROVIDER_GLOBAL_PRIORITY"
 
 	t.Setenv("HOME", cfgHome)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", cfgHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(cfgHome, ".config"))
 	t.Setenv("AppData", filepath.Join(cfgHome, "AppData"))
@@ -399,7 +399,7 @@ func TestLoadForRootResolvesProviderCredentialsOverInheritedEnv(t *testing.T) {
 	if err := os.WriteFile(cred, []byte(key+"=from_credentials\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(`
+	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte(`
 default_model = "custom/m"
 [[providers]]
 name = "custom"
@@ -433,7 +433,7 @@ func TestLoadForRootPrefersProjectProviderEnvOverCredentialsAndInheritedEnv(t *t
 	key := "KEY_PROVIDER_PROJECT_PRIORITY"
 
 	t.Setenv("HOME", cfgHome)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", cfgHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(cfgHome, ".config"))
 	t.Setenv("AppData", filepath.Join(cfgHome, "AppData"))
@@ -452,7 +452,7 @@ func TestLoadForRootPrefersProjectProviderEnvOverCredentialsAndInheritedEnv(t *t
 	if err := os.WriteFile(filepath.Join(project, ".env"), []byte(key+"=from_project\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(`
+	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte(`
 default_model = "custom/m"
 [[providers]]
 name = "custom"
@@ -489,7 +489,7 @@ func TestResolveCredentialGlobalFirstPrefersProjectWithoutMutatingEnv(t *testing
 	home := t.TempDir()
 
 	t.Setenv("HOME", home)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
@@ -534,7 +534,7 @@ func TestResolveCredentialGlobalFirstFallsBackToCredentials(t *testing.T) {
 	home := t.TempDir()
 
 	t.Setenv("HOME", home)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
@@ -568,7 +568,7 @@ func TestCredentialResolverCachesGlobalFirstLookups(t *testing.T) {
 		if got != key {
 			t.Fatalf("stored credential lookup key = %q, want %q", got, key)
 		}
-		return "from_credentials", CredentialSource{Kind: CredentialSourceCredentials, Label: "Reasonix credentials"}, true
+		return "from_credentials", CredentialSource{Kind: CredentialSourceCredentials, Label: "Corvus credentials"}, true
 	})
 
 	resolver := NewCredentialResolverForRoot(project)
@@ -601,7 +601,7 @@ func TestResolveCredentialSourceShowsCredentialsShadowingProjectEnv(t *testing.T
 
 	t.Chdir(cwd)
 	t.Setenv("HOME", cfgHome)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", cfgHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(cfgHome, ".config"))
 	t.Setenv("AppData", filepath.Join(cfgHome, "AppData"))
@@ -627,7 +627,7 @@ func TestResolveCredentialSourceShowsCredentialsShadowingProjectEnv(t *testing.T
 
 	got := ResolveCredentialForRoot(cwd, key)
 	if !got.Set || got.Source.Kind != CredentialSourceCredentials {
-		t.Fatalf("source = %+v set=%v, want Reasonix credentials", got.Source, got.Set)
+		t.Fatalf("source = %+v set=%v, want Corvus credentials", got.Source, got.Set)
 	}
 	foundProjectShadow := false
 	for _, source := range got.Shadowed {
@@ -646,7 +646,7 @@ func TestResolveCredentialSourceShowsCredentialsShadowingEmptyProjectEnv(t *test
 
 	t.Chdir(cwd)
 	t.Setenv("HOME", cfgHome)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", cfgHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(cfgHome, ".config"))
 	t.Setenv("AppData", filepath.Join(cfgHome, "AppData"))
@@ -690,7 +690,7 @@ func TestResolveCredentialSourceShowsCredentialsBeforeHomeEnv(t *testing.T) {
 
 	t.Chdir(cwd)
 	t.Setenv("HOME", cfgHome)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", cfgHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(cfgHome, ".config"))
 	t.Setenv("AppData", filepath.Join(cfgHome, "AppData"))
@@ -716,7 +716,7 @@ func TestResolveCredentialSourceShowsCredentialsBeforeHomeEnv(t *testing.T) {
 
 	got := ResolveCredentialForRoot(cwd, key)
 	if !got.Set || got.Source.Kind != CredentialSourceCredentials {
-		t.Fatalf("source = %+v set=%v, want Reasonix credentials", got.Source, got.Set)
+		t.Fatalf("source = %+v set=%v, want Corvus credentials", got.Source, got.Set)
 	}
 	if got.Value != "from_credentials" {
 		t.Fatalf("value = %q, want credentials value", got.Value)
@@ -728,7 +728,7 @@ func TestStoreCredentialLinesFileMode(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("KEY_FILE_MODE", "")
 	os.Unsetenv("KEY_FILE_MODE")
 
@@ -751,21 +751,21 @@ func TestStoreCredentialLinesFileMode(t *testing.T) {
 	}
 }
 
-func TestUserCredentialsPathIgnoresReasonixStateHome(t *testing.T) {
+func TestUserCredentialsPathIgnoresCorvusStateHome(t *testing.T) {
 	home := t.TempDir()
 	state := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Setenv("REASONIX_HOME", filepath.Join(home, "reasonix-home"))
-	t.Setenv("REASONIX_STATE_HOME", state)
+	t.Setenv("CORVUS_HOME", filepath.Join(home, "corvus-home"))
+	t.Setenv("CORVUS_STATE_HOME", state)
 
-	want := filepath.Join(home, "reasonix-home", ".env")
+	want := filepath.Join(home, "corvus-home", ".env")
 	if got := UserCredentialsPath(); got != want {
 		t.Fatalf("UserCredentialsPath() = %q, want %q", got, want)
 	}
 	if strings.HasPrefix(UserCredentialsPath(), state) {
-		t.Fatalf("credentials path must not live under REASONIX_STATE_HOME: %q", UserCredentialsPath())
+		t.Fatalf("credentials path must not live under CORVUS_STATE_HOME: %q", UserCredentialsPath())
 	}
 }
 
@@ -774,7 +774,7 @@ func TestRemoveCredentialMarksClearedAndSetRemovesMarker(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 
 	if _, err := SetCredential("KEY_REMOVE_MARKER", "old"); err != nil {
 		t.Fatalf("SetCredential old: %v", err)
@@ -805,7 +805,7 @@ func TestCredentialStoreRevisionChangesForSameLengthReplacement(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 
 	if got := CredentialStoreRevision(); got != "missing" {
 		t.Fatalf("initial credential revision = %q, want missing", got)
@@ -828,7 +828,7 @@ func TestStoreCredentialLinesRejectsUnsafeFileLines(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 
 	_, err := StoreCredentialLines([]string{
 		"VALID_KEY=kept",
@@ -855,7 +855,7 @@ func TestStoreCredentialLinesParsesDotenvQuotes(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 
 	_, err := StoreCredentialLines([]string{`export QUOTED_KEY="value with spaces # kept"`})
 	if err != nil {
@@ -878,7 +878,7 @@ func TestSetCredentialRejectsInvalidInput(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 
 	if _, err := SetCredential("BAD-KEY", "value"); err == nil {
 		t.Fatal("SetCredential accepted invalid key")
@@ -894,8 +894,8 @@ func TestSetCredentialRejectsInvalidInput(t *testing.T) {
 func TestProjectConfigCannotOverrideCredentialStoreMode(t *testing.T) {
 	home := isolateUserConfigHome(t)
 	project := t.TempDir()
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "")
-	os.Unsetenv("REASONIX_CREDENTIALS_STORE")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "")
+	os.Unsetenv("CORVUS_CREDENTIALS_STORE")
 	requireTestPathWithin(t, home, UserConfigPath())
 	if err := os.MkdirAll(filepath.Dir(UserConfigPath()), 0o755); err != nil {
 		t.Fatal(err)
@@ -903,7 +903,7 @@ func TestProjectConfigCannotOverrideCredentialStoreMode(t *testing.T) {
 	if err := os.WriteFile(UserConfigPath(), []byte(`credentials_store = "file"`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(project, "reasonix.toml"), []byte(`credentials_store = "keyring"`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte(`credentials_store = "keyring"`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -916,12 +916,12 @@ func TestProjectConfigCannotOverrideCredentialStoreMode(t *testing.T) {
 	}
 }
 
-// TestLoadDotEnvGlobalCredentialsOverrideEnv confirms Reasonix-owned global
+// TestLoadDotEnvGlobalCredentialsOverrideEnv confirms Corvus-owned global
 // credentials beat inherited environment variables.
 func TestLoadDotEnvGlobalCredentialsOverrideEnv(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))

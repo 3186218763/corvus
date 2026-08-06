@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/mcplaunch"
-	"reasonix/internal/secrets"
-	"reasonix/internal/tool"
+	"corvus/internal/mcplaunch"
+	"corvus/internal/secrets"
+	"corvus/internal/tool"
 )
 
 // projectLaunchIdentityDigest resolves a secret-free identity before a project
@@ -68,8 +68,8 @@ func buildProjectLaunchIdentity(ctx context.Context, s Spec) (mcplaunch.ProjectL
 
 // MCPStateDir returns a stable, server-scoped host directory outside the
 // workspace for state that must survive across calls and sessions.
-func MCPStateDir(reasonixHome, workspace, server string) string {
-	if strings.TrimSpace(reasonixHome) == "" {
+func MCPStateDir(corvusHome, workspace, server string) string {
+	if strings.TrimSpace(corvusHome) == "" {
 		return ""
 	}
 	workspaceID := mcplaunch.WorkspaceFingerprint(workspace)
@@ -79,7 +79,7 @@ func MCPStateDir(reasonixHome, workspace, server string) string {
 	if workspaceID == "" {
 		workspaceID = "global"
 	}
-	return filepath.Join(reasonixHome, "mcp-state", workspaceID, slug(server))
+	return filepath.Join(corvusHome, "mcp-state", workspaceID, slug(server))
 }
 
 // identityURLRedacted replaces credential material inside identity and cache
@@ -253,10 +253,10 @@ func ReconcileCachedToolSafety(server, rawName string, cached CachedToolSafety, 
 		return live, nil
 	}
 	if cached.ReadOnly && !live.ReadOnly {
-		return live, fmt.Errorf("MCP server %q no longer marks tool %q as read-only; the current call was blocked before execution — retry so Reasonix can apply the current Plan/read-only safety boundary", server, rawName)
+		return live, fmt.Errorf("MCP server %q no longer marks tool %q as read-only; the current call was blocked before execution — retry so Corvus can apply the current Plan/read-only safety boundary", server, rawName)
 	}
 	if !cached.Destructive && live.Destructive {
-		return live, fmt.Errorf("MCP server %q now marks tool %q as destructive; retry so Reasonix can apply the current Plan/read-only safety boundary before execution", server, rawName)
+		return live, fmt.Errorf("MCP server %q now marks tool %q as destructive; retry so Corvus can apply the current Plan/read-only safety boundary before execution", server, rawName)
 	}
 	return live, nil
 }

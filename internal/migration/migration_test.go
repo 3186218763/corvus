@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/config"
-	"reasonix/internal/event"
+	"corvus/internal/config"
+	"corvus/internal/event"
 )
 
 const legacyMessageLog = `{"role":"user","content":"hello from v0.x"}
@@ -21,9 +21,9 @@ func migrationRescueHome(t *testing.T) string {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Setenv("REASONIX_HOME", "")
-	t.Setenv("REASONIX_STATE_HOME", filepath.Join(home, "new-state"))
-	t.Setenv("REASONIX_CREDENTIALS_STORE", "file")
+	t.Setenv("CORVUS_HOME", "")
+	t.Setenv("CORVUS_STATE_HOME", filepath.Join(home, "new-state"))
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
 	t.Chdir(t.TempDir())
 	return home
 }
@@ -31,14 +31,14 @@ func migrationRescueHome(t *testing.T) string {
 func isolateMigrationHome(t *testing.T) string {
 	t.Helper()
 	home := migrationRescueHome(t)
-	t.Setenv("REASONIX_HOME", filepath.Join(home, "new-reasonix"))
-	t.Setenv("REASONIX_STATE_HOME", "")
+	t.Setenv("CORVUS_HOME", filepath.Join(home, "new-corvus"))
+	t.Setenv("CORVUS_STATE_HOME", "")
 	return home
 }
 
 func TestRunLegacyRescueImportsSessionsAndEmitsProgress(t *testing.T) {
 	home := migrationRescueHome(t)
-	legacyDir := filepath.Join(home, ".reasonix", "sessions")
+	legacyDir := filepath.Join(home, ".corvus", "sessions")
 	if err := os.MkdirAll(legacyDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -79,11 +79,11 @@ func TestRunLegacyRescueImportsSessionsAndEmitsProgress(t *testing.T) {
 
 func TestRunLegacyRescueImportsMemory(t *testing.T) {
 	home := migrationRescueHome(t)
-	legacyRoot := filepath.Join(home, ".reasonix")
+	legacyRoot := filepath.Join(home, ".corvus")
 	if err := os.MkdirAll(filepath.Join(legacyRoot, "memory", "global"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(legacyRoot, "REASONIX.md"), []byte("legacy user memory\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(legacyRoot, "CORVUS.md"), []byte("legacy user memory\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(legacyRoot, "memory", "global", "user.md"), []byte("---\nname: user\n---\nlegacy fact\n"), 0o644); err != nil {
@@ -110,7 +110,7 @@ func TestRunLegacyRescueImportsMemory(t *testing.T) {
 		t.Fatalf("imported memory files = %d, want 3; imports=%+v", got, res.MemoryImports)
 	}
 	for _, path := range []string{
-		filepath.Join(config.MemoryUserDir(), "REASONIX.md"),
+		filepath.Join(config.MemoryUserDir(), "CORVUS.md"),
 		filepath.Join(config.MemoryUserDir(), "memory", "global", "user.md"),
 		filepath.Join(config.MemoryUserDir(), "projects", "proj-slug", "memory", "project.md"),
 	} {
@@ -156,14 +156,14 @@ func TestRunLegacyRescueNoopStillShowsProgress(t *testing.T) {
 
 func TestRunLegacyRescueSkipsImplicitSourcesWhenIsolated(t *testing.T) {
 	home := isolateMigrationHome(t)
-	legacyRoot := filepath.Join(home, ".reasonix")
+	legacyRoot := filepath.Join(home, ".corvus")
 	if err := os.MkdirAll(filepath.Join(legacyRoot, "sessions"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(legacyRoot, "sessions", "old-chat.jsonl"), []byte(legacyMessageLog), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(legacyRoot, "REASONIX.md"), []byte("legacy user memory\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(legacyRoot, "CORVUS.md"), []byte("legacy user memory\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -182,18 +182,18 @@ func TestRunLegacyRescueSkipsImplicitSourcesWhenIsolated(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(config.SessionDir(), "old-chat.jsonl")); !os.IsNotExist(err) {
 		t.Fatalf("isolated rescue imported legacy session, stat err=%v", err)
 	}
-	if _, err := os.Stat(filepath.Join(config.MemoryUserDir(), "REASONIX.md")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(config.MemoryUserDir(), "CORVUS.md")); !os.IsNotExist(err) {
 		t.Fatalf("isolated rescue imported legacy memory, stat err=%v", err)
 	}
 	joined := strings.Join(notices, "\n")
-	if !strings.Contains(joined, "REASONIX_HOME is set; implicit legacy migration is skipped") {
+	if !strings.Contains(joined, "CORVUS_HOME is set; implicit legacy migration is skipped") {
 		t.Fatalf("missing isolated skip notice in:\n%s", joined)
 	}
 }
 
 func TestRunLegacyRescueCommandImportsFromExplicitInstallDir(t *testing.T) {
 	home := isolateMigrationHome(t)
-	installRoot := filepath.Join(home, "Custom Reasonix")
+	installRoot := filepath.Join(home, "Custom Corvus")
 	legacySessions := filepath.Join(installRoot, "sessions")
 	if err := os.MkdirAll(legacySessions, 0o755); err != nil {
 		t.Fatal(err)
@@ -244,10 +244,10 @@ func TestMigrateLegacySessionSourcesSkipsCurrentProjectTree(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
-	t.Setenv("REASONIX_HOME", "")
-	t.Setenv("REASONIX_STATE_HOME", "")
-	if !samePath(config.MemoryUserDir(), filepath.Join(home, ".reasonix")) {
-		t.Skip("current Reasonix home is not ~/.reasonix on this platform")
+	t.Setenv("CORVUS_HOME", "")
+	t.Setenv("CORVUS_STATE_HOME", "")
+	if !samePath(config.MemoryUserDir(), filepath.Join(home, ".corvus")) {
+		t.Skip("current Corvus home is not ~/.corvus on this platform")
 	}
 
 	projectSessions := filepath.Join(config.MemoryUserDir(), "projects", "current-project", "sessions")

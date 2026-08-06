@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/tool"
+	"corvus/internal/tool"
 )
 
 type builtinTestTool struct {

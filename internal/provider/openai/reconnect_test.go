@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 // rstAfter writes a 200 SSE head plus the given prelude, then forces a TCP RST

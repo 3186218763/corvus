@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"os"
 
-	"reasonix/internal/fileutil"
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/store"
+	"corvus/internal/fileutil"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/store"
 )
 
 // PathFor returns the recovery state sidecar for a main session path.

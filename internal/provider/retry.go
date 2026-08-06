@@ -158,7 +158,7 @@ type APIError struct {
 	Status      int
 	Body        string
 	TraceID     string // provider trace identifier from the response headers, when present
-	ToolContext string // resolved Reasonix/MCP identity for provider-indexed tool schema errors
+	ToolContext string // resolved Corvus/MCP identity for provider-indexed tool schema errors
 }
 
 func (e *APIError) Error() string {

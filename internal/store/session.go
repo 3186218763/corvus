@@ -1,4 +1,4 @@
-// Package store is the single authority for reasonix's on-disk persistence
+// Package store is the single authority for corvus's on-disk persistence
 // layout. Nothing else should construct a persistence path by hand.
 //
 // This first slice owns the session-artifact sidecars — the files and
@@ -11,7 +11,7 @@
 //
 // store is a leaf: it imports only the standard library, so any package may
 // depend on it without risking an import cycle. Root/directory resolution (the
-// ~/.reasonix tree) and the desktop root unification land in later slices.
+// ~/.corvus tree) and the desktop root unification land in later slices.
 package store
 
 import "strings"

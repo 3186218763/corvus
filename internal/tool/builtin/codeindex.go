@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/tool"
+	"corvus/internal/tool"
 )
 
 func init() { tool.RegisterBuiltin(codeIndex{}) }

@@ -16,11 +16,11 @@ import (
 
 	"golang.org/x/text/transform"
 
-	fileenc "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/proc"
-	"reasonix/internal/sandbox"
-	"reasonix/internal/secrets"
-	"reasonix/internal/tool"
+	fileenc "corvus/internal/fileutil/encoding"
+	"corvus/internal/proc"
+	"corvus/internal/sandbox"
+	"corvus/internal/secrets"
+	"corvus/internal/tool"
 )
 
 const (

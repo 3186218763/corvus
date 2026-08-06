@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"reasonix/internal/shellparse"
-	"reasonix/internal/shellsafe"
+	"corvus/internal/shellparse"
+	"corvus/internal/shellsafe"
 )
 
 // BashCommandIsReadOnly reports whether a bash tool call is a known foreground

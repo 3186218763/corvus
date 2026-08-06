@@ -9,10 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"reasonix/internal/checkpoint"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/checkpoint"
+	"corvus/internal/event"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 // ParallelTasksTool dispatches multiple read-only sub-agent tasks concurrently

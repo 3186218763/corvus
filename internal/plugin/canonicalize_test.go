@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/tool"
+	"corvus/internal/tool"
 )
 
 func TestCanonicalizeSchemaStable(t *testing.T) {

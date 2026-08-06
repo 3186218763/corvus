@@ -25,7 +25,7 @@ func TestResolveKeepsMostSpecificSourceForExactDuplicate(t *testing.T) {
 func TestResolveDuplicateReplacementPreservesPrecedenceOrder(t *testing.T) {
 	root := t.TempDir()
 	user := t.TempDir()
-	mustWriteInstruction(t, filepath.Join(user, "REASONIX.md"), "duplicate")
+	mustWriteInstruction(t, filepath.Join(user, "CORVUS.md"), "duplicate")
 	mustWriteInstruction(t, filepath.Join(user, "AGENTS.md"), "unique global")
 	mustWriteInstruction(t, filepath.Join(root, "AGENTS.md"), "duplicate")
 	mustWriteInstruction(t, filepath.Join(root, "CLAUDE.md"), "unique project")
@@ -46,7 +46,7 @@ func TestResolveDuplicateReplacementPreservesPrecedenceOrder(t *testing.T) {
 
 func TestResolveKeepsDistinctConventionFilesInDeterministicOrder(t *testing.T) {
 	root := t.TempDir()
-	mustWriteInstruction(t, filepath.Join(root, "REASONIX.md"), "Reasonix rule")
+	mustWriteInstruction(t, filepath.Join(root, "CORVUS.md"), "Corvus rule")
 	mustWriteInstruction(t, filepath.Join(root, "AGENTS.md"), "Portable rule")
 	mustWriteInstruction(t, filepath.Join(root, "CLAUDE.md"), "Claude-compatible rule")
 
@@ -54,7 +54,7 @@ func TestResolveKeepsDistinctConventionFilesInDeterministicOrder(t *testing.T) {
 	if len(got.Documents) != 3 {
 		t.Fatalf("documents = %+v, want all three distinct sources", got.Documents)
 	}
-	for i, name := range []string{"REASONIX.md", "AGENTS.md", "CLAUDE.md"} {
+	for i, name := range []string{"CORVUS.md", "AGENTS.md", "CLAUDE.md"} {
 		if filepath.Base(got.Documents[i].Path) != name || got.Documents[i].Order != i {
 			t.Fatalf("document %d = %+v, want %s with stable order", i, got.Documents[i], name)
 		}
@@ -131,11 +131,11 @@ func TestResolveUserInstructionsImportTrustedConventionRoots(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows.
-	userDir := filepath.Join(home, ".reasonix")
+	userDir := filepath.Join(home, ".corvus")
 	agentsDir := filepath.Join(home, ".agents")
 	root := filepath.Join(home, "repo")
 	mustWriteInstruction(t, filepath.Join(agentsDir, "AGENTS.md"), "SHARED USER RULE")
-	mustWriteInstruction(t, filepath.Join(userDir, "REASONIX.md"), "@~/.agents/AGENTS.md")
+	mustWriteInstruction(t, filepath.Join(userDir, "CORVUS.md"), "@~/.agents/AGENTS.md")
 	mustWriteInstruction(t, filepath.Join(root, "AGENTS.md"), "PROJECT RULE")
 
 	got := Resolve(ResolveOptions{WorkspaceRoot: root, TargetDir: root, UserDir: userDir})
@@ -172,7 +172,7 @@ func TestResolveUserInstructionsRejectArbitraryHomeAndConventionSymlinkEscape(t 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir reads HOME on Unix and USERPROFILE on Windows.
-	userDir := filepath.Join(home, ".reasonix")
+	userDir := filepath.Join(home, ".corvus")
 	agentsDir := filepath.Join(home, ".agents")
 	mustWriteInstruction(t, filepath.Join(home, "secret.md"), "HOME SECRET")
 	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
@@ -181,7 +181,7 @@ func TestResolveUserInstructionsRejectArbitraryHomeAndConventionSymlinkEscape(t 
 	if err := os.Symlink(filepath.Join(home, "secret.md"), filepath.Join(agentsDir, "linked.md")); err != nil {
 		t.Skipf("symlink unsupported: %v", err)
 	}
-	mustWriteInstruction(t, filepath.Join(userDir, "REASONIX.md"), "@~/secret.md\n@~/.agents/linked.md")
+	mustWriteInstruction(t, filepath.Join(userDir, "CORVUS.md"), "@~/secret.md\n@~/.agents/linked.md")
 
 	got := Resolve(ResolveOptions{WorkspaceRoot: t.TempDir(), TargetDir: t.TempDir(), UserDir: userDir})
 	if strings.Contains(documentBodies(got.Documents), "HOME SECRET") {
@@ -237,7 +237,7 @@ func TestInstructionBlockIsStableAcrossWorkspaceRoots(t *testing.T) {
 	resolve := func(base string) string {
 		root := filepath.Join(base, "repo")
 		target := filepath.Join(root, "services", "api")
-		user := filepath.Join(base, "reasonix-home")
+		user := filepath.Join(base, "corvus-home")
 		mustWriteInstruction(t, filepath.Join(user, "AGENTS.md"), "Use concise replies.")
 		mustWriteInstruction(t, filepath.Join(root, "AGENTS.md"), "Run all tests.")
 		mustWriteInstruction(t, filepath.Join(target, "AGENTS.local.md"), "Run API tests first.")

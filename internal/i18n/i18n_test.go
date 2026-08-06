@@ -97,7 +97,7 @@ func countVerbs(s string) int {
 }
 
 // TestNormalize covers the locale-string shapes likely to land in $LANG /
-// $LC_ALL / $REASONIX_LANG. Unknown locales return "" so DetectLanguage falls
+// $LC_ALL / $CORVUS_LANG. Unknown locales return "" so DetectLanguage falls
 // through to the next candidate instead of mis-routing.
 func TestNormalize(t *testing.T) {
 	cases := map[string]string{
@@ -125,10 +125,10 @@ func TestNormalize(t *testing.T) {
 	}
 }
 
-// TestDetectLanguagePriority verifies override beats env and that REASONIX_LANG
+// TestDetectLanguagePriority verifies override beats env and that CORVUS_LANG
 // beats LANG. With a clean env we fall back to English.
 func TestDetectLanguagePriority(t *testing.T) {
-	t.Setenv("REASONIX_LANG", "")
+	t.Setenv("CORVUS_LANG", "")
 	t.Setenv("LC_ALL", "")
 	t.Setenv("LC_MESSAGES", "")
 	t.Setenv("LANG", "")
@@ -143,9 +143,9 @@ func TestDetectLanguagePriority(t *testing.T) {
 		t.Errorf("LANG=zh_CN.UTF-8: got %q, want zh", got)
 	}
 
-	t.Setenv("REASONIX_LANG", "en")
+	t.Setenv("CORVUS_LANG", "en")
 	if got := DetectLanguage(""); got != "en" {
-		t.Errorf("REASONIX_LANG=en overriding LANG=zh: got %q, want en", got)
+		t.Errorf("CORVUS_LANG=en overriding LANG=zh: got %q, want en", got)
 	}
 
 	if got := DetectLanguage("zh"); got != "zh" {

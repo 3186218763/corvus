@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	"reasonix/internal/i18n"
+	"corvus/internal/control"
+	"corvus/internal/event"
+	"corvus/internal/i18n"
 )
 
 func TestTUIDiagnosticsKeepProcessAndPluginLogsOffTerminal(t *testing.T) {

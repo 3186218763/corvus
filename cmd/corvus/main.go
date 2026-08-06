@@ -1,16 +1,16 @@
-// Command reasonix is a config- and plugin-driven coding agent CLI.
+// Command corvus is a config- and plugin-driven coding agent CLI.
 package main
 
 import (
 	"os"
 
-	"reasonix/internal/cli"
+	"corvus/internal/cli"
 
 	// Blank imports wire compile-time built-ins into their registries.
-	_ "reasonix/internal/provider/anthropic"
-	_ "reasonix/internal/provider/openai"
-	_ "reasonix/internal/provider/responses"
-	_ "reasonix/internal/tool/builtin"
+	_ "corvus/internal/provider/anthropic"
+	_ "corvus/internal/provider/openai"
+	_ "corvus/internal/provider/responses"
+	_ "corvus/internal/tool/builtin"
 )
 
 // version is injected at build time via -ldflags "-X main.version=...".

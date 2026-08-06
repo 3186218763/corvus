@@ -31,7 +31,7 @@ func FromContext(ctx context.Context) []VerifyCheck {
 	return append([]VerifyCheck(nil), checks...)
 }
 
-// ExtractHostChecks reads only the structured "Reasonix host checks" section.
+// ExtractHostChecks reads only the structured "Corvus host checks" section.
 // Ordinary project instructions remain guidance and do not become hard gates.
 func ExtractHostChecks(docs []Document) []VerifyCheck {
 	seen := map[string]bool{}
@@ -41,7 +41,7 @@ func ExtractHostChecks(docs []Document) []VerifyCheck {
 		for i, raw := range strings.Split(doc.Body, "\n") {
 			line := strings.TrimRight(raw, "\r")
 			if heading, ok := markdownHeading(line); ok {
-				inSection = strings.EqualFold(heading, "Reasonix host checks")
+				inSection = strings.EqualFold(heading, "Corvus host checks")
 				continue
 			}
 			if !inSection {

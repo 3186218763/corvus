@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/config"
-	"reasonix/internal/event"
+	"corvus/internal/agent"
+	"corvus/internal/config"
+	"corvus/internal/event"
 )
 
 // SessionImport records one legacy session source that contributed sessions.
@@ -82,7 +82,7 @@ func RunLegacyRescue(sink event.Sink) Result {
 	}
 	result := Result{}
 	if config.IsolatedHomeDir() != "" {
-		emit(event.LevelInfo, "migration rescue: REASONIX_HOME is set; implicit legacy migration is skipped")
+		emit(event.LevelInfo, "migration rescue: CORVUS_HOME is set; implicit legacy migration is skipped")
 		emit(event.LevelInfo, result.Summary())
 		return result
 	}
@@ -217,7 +217,7 @@ func migrateLegacyMemorySources(sink event.Sink, verbose bool) memoryMigrationRe
 		sources = append(sources, legacyMemorySource{root: root, label: label})
 	}
 	if home, herr := os.UserHomeDir(); herr == nil {
-		addRoot(filepath.Join(home, ".reasonix"), "~/.reasonix")
+		addRoot(filepath.Join(home, ".corvus"), "~/.corvus")
 	}
 	for _, legacyConfig := range config.LegacyUserConfigPaths() {
 		addRoot(filepath.Dir(legacyConfig), filepath.Dir(legacyConfig))
@@ -255,7 +255,7 @@ func copyLegacyMemoryRoot(srcRoot, destRoot string) (int, error) {
 		return 0, nil
 	}
 	total := 0
-	for _, name := range []string{"REASONIX.md", "AGENTS.md", "CLAUDE.md"} {
+	for _, name := range []string{"CORVUS.md", "AGENTS.md", "CLAUDE.md"} {
 		n, err := copyFileIfMissing(filepath.Join(srcRoot, name), filepath.Join(destRoot, name))
 		if err != nil {
 			return total, err
@@ -410,9 +410,9 @@ func migrateLegacySessionSources(sink event.Sink, verbose bool) sessionMigration
 		}
 	}
 	if home, herr := os.UserHomeDir(); herr == nil {
-		reasonixHome := filepath.Join(home, ".reasonix")
-		addFlatSource(filepath.Join(reasonixHome, "sessions"), "~/.reasonix/sessions", agent.MigrateLegacySessions)
-		addProjectSources(reasonixHome)
+		corvusHome := filepath.Join(home, ".corvus")
+		addFlatSource(filepath.Join(corvusHome, "sessions"), "~/.corvus/sessions", agent.MigrateLegacySessions)
+		addProjectSources(corvusHome)
 	}
 	for _, legacyConfig := range config.LegacyUserConfigPaths() {
 		legacyDir := filepath.Join(filepath.Dir(legacyConfig), "sessions")
@@ -515,8 +515,8 @@ func explicitLegacySessionSources(root string) ([]explicitSessionSource, error) 
 	}
 	candidates := []string{
 		filepath.Join(root, "sessions"),
-		filepath.Join(root, ".reasonix", "sessions"),
-		filepath.Join(root, "reasonix", "sessions"),
+		filepath.Join(root, ".corvus", "sessions"),
+		filepath.Join(root, "corvus", "sessions"),
 	}
 	var out []explicitSessionSource
 	seen := map[string]bool{}

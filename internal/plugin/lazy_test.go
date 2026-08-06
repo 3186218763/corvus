@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/mcplaunch"
-	"reasonix/internal/tool"
+	"corvus/internal/mcplaunch"
+	"corvus/internal/tool"
 )
 
 type destructiveLazyTarget struct {
@@ -783,7 +783,7 @@ func TestLazyConcurrentExecuteOnlyOneSpawn(t *testing.T) {
 func TestLazyHandshakeFailureSurfaced(t *testing.T) {
 	redirectCache(t)
 	// Bogus command: process exec will fail outright.
-	spec := Spec{Name: "missing", Command: "reasonix-nonexistent-binary-for-lazy-test"}
+	spec := Spec{Name: "missing", Command: "corvus-nonexistent-binary-for-lazy-test"}
 
 	// Hand-craft a cache so the cache-HIT branch runs (synchronous spawn,
 	// failure surfaces directly to the first caller rather than via a retry

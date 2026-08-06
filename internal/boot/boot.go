@@ -21,37 +21,37 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/capability"
-	"reasonix/internal/command"
-	"reasonix/internal/config"
-	"reasonix/internal/control"
-	"reasonix/internal/environment"
-	"reasonix/internal/event"
-	"reasonix/internal/guardian"
-	"reasonix/internal/history"
-	"reasonix/internal/hook"
-	"reasonix/internal/installsource"
-	"reasonix/internal/instruction"
-	"reasonix/internal/jobs"
-	"reasonix/internal/lsp"
-	"reasonix/internal/mcplaunch"
-	"reasonix/internal/memory"
-	"reasonix/internal/migration"
-	"reasonix/internal/netclient"
-	"reasonix/internal/outputstyle"
-	"reasonix/internal/permission"
-	"reasonix/internal/plugin"
-	"reasonix/internal/provider"
-	"reasonix/internal/recovery"
-	"reasonix/internal/sandbox"
-	"reasonix/internal/secrets"
-	"reasonix/internal/skill"
-	"reasonix/internal/stats"
-	"reasonix/internal/tool"
-	"reasonix/internal/tool/builtin"
-	"reasonix/internal/tool/sessiontool"
-	"reasonix/internal/workspacelease"
+	"corvus/internal/agent"
+	"corvus/internal/capability"
+	"corvus/internal/command"
+	"corvus/internal/config"
+	"corvus/internal/control"
+	"corvus/internal/environment"
+	"corvus/internal/event"
+	"corvus/internal/guardian"
+	"corvus/internal/history"
+	"corvus/internal/hook"
+	"corvus/internal/installsource"
+	"corvus/internal/instruction"
+	"corvus/internal/jobs"
+	"corvus/internal/lsp"
+	"corvus/internal/mcplaunch"
+	"corvus/internal/memory"
+	"corvus/internal/migration"
+	"corvus/internal/netclient"
+	"corvus/internal/outputstyle"
+	"corvus/internal/permission"
+	"corvus/internal/plugin"
+	"corvus/internal/provider"
+	"corvus/internal/recovery"
+	"corvus/internal/sandbox"
+	"corvus/internal/secrets"
+	"corvus/internal/skill"
+	"corvus/internal/stats"
+	"corvus/internal/tool"
+	"corvus/internal/tool/builtin"
+	"corvus/internal/tool/sessiontool"
+	"corvus/internal/workspacelease"
 )
 
 // ErrUnknownModel is returned by Build when the configured model can't be
@@ -118,7 +118,7 @@ type Options struct {
 	StatsSource string
 	// ExtraPlugins are session-scoped MCP servers supplied by a host transport
 	// (for example ACP session/new). They are connected eagerly for this
-	// controller but are not persisted to reasonix.toml.
+	// controller but are not persisted to corvus.toml.
 	ExtraPlugins []plugin.Spec
 	// TokenMode selects the session's runtime profile. Empty/full/balanced preserves
 	// the normal capability surface. "economy" keeps the core coding tools visible
@@ -170,7 +170,7 @@ type Options struct {
 	// mutating config or changing the provider-visible prompt/tool surface.
 	DisablePlanner bool
 	// SandboxNetworkOverride and WorkspaceOnly are process-local hard bounds for
-	// supervised ACP workers. Nil/false preserve normal Reasonix config.
+	// supervised ACP workers. Nil/false preserve normal Corvus config.
 	SandboxNetworkOverride *bool
 	SandboxBashOverride    string
 	WorkspaceOnly          bool
@@ -209,7 +209,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	// Arm the credential-protection layers from the user-global [secrets]
 	// section before any tool, hook, or plugin subprocess can spawn. Package
 	// globals are correct here because [secrets] is user-global (project
-	// reasonix.toml cannot override it), so concurrent workspaces agree.
+	// corvus.toml cannot override it), so concurrent workspaces agree.
 	secrets.SetFilterSubprocessEnv(cfg.Secrets.FilterSubprocessEnv)
 	secrets.SetProtectSensitiveFiles(cfg.Secrets.ProtectSensitiveFiles)
 	secrets.RegisterCredentialEnvKeys(cfg.CredentialEnvNames())
@@ -265,14 +265,14 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	}
 
 	if migErr != nil {
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Config migration did not complete.", Detail: "config migration from ~/.reasonix failed: " + migErr.Error()})
+		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Config migration did not complete.", Detail: "config migration from ~/.corvus failed: " + migErr.Error()})
 	} else if migrated != nil {
 		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: migrated.Notice()})
 	}
 	if stepLimitsMigrated || cfg.IgnoredLegacyAgentStepLimits() {
 		level := event.LevelInfo
 		text := "Deprecated agent step limits were removed."
-		detail := "[agent].max_steps and planner_max_steps are no longer used; Reasonix now manages interactive progress automatically. " +
+		detail := "[agent].max_steps and planner_max_steps are no longer used; Corvus now manages interactive progress automatically. " +
 			"Use the CLI --max-steps flag for a one-off run or [bot].max_steps for unattended bot sessions."
 		if stepLimitMigErr != nil {
 			level = event.LevelWarn
@@ -291,7 +291,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	if redactToolOutputMigrated || redactToolOutputMigErr != nil {
 		level := event.LevelInfo
 		text := "Deprecated redact_tool_output setting was removed."
-		detail := "[secrets].redact_tool_output no longer has any effect: ordinary model/tool content and local session/job artifacts now preserve their original text. Explicit diagnostics and reasonix doctor redact-sessions still redact credential values."
+		detail := "[secrets].redact_tool_output no longer has any effect: ordinary model/tool content and local session/job artifacts now preserve their original text. Explicit diagnostics and corvus doctor redact-sessions still redact credential values."
 		if redactToolOutputMigErr != nil {
 			level = event.LevelWarn
 			text = "Deprecated redact_tool_output setting was ignored."
@@ -302,7 +302,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	if memoryCompilerMigrated || memoryCompilerMigErr != nil {
 		level := event.LevelInfo
 		text := "Deprecated memory_compiler setting was removed."
-		detail := "The Memory v5 execution compiler has been removed from Reasonix: [agent].memory_compiler no longer has any effect, user turns are never replaced by compiled execution contracts, and no compiler state is written. Old transcripts containing compiled turns still display normally."
+		detail := "The Memory v5 execution compiler has been removed from Corvus: [agent].memory_compiler no longer has any effect, user turns are never replaced by compiled execution contracts, and no compiler state is written. Old transcripts containing compiled turns still display normally."
 		if memoryCompilerMigErr != nil {
 			level = event.LevelWarn
 			text = "Deprecated memory_compiler setting was ignored."
@@ -313,7 +313,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	migration.MigrateLegacyMemorySources(sink)
 	migration.MigrateLegacySessionSources(sink)
 	if ignored := cfg.IgnoredProjectDefaultModel(); ignored != "" {
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Ignored the project config's default_model.", Detail: fmt.Sprintf("./reasonix.toml sets default_model = %q but no configured provider serves it; using %q from your user config instead. Edit or remove that default_model line to silence this notice.", ignored, cfg.DefaultModel)})
+		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Ignored the project config's default_model.", Detail: fmt.Sprintf("./corvus.toml sets default_model = %q but no configured provider serves it; using %q from your user config instead. Edit or remove that default_model line to silence this notice.", ignored, cfg.DefaultModel)})
 	}
 
 	// A resolvable model whose API key env is unset would otherwise build fine
@@ -377,7 +377,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		}
 		// A stale missing prompt file must not block startup: warn and fall back
 		// to the inline (or built-in default) system prompt. Other read failures
-		// stay fatal so Reasonix never runs without explicitly configured policy.
+		// stay fatal so Corvus never runs without explicitly configured policy.
 		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: err.Error() + "; falling back to inline/default system prompt"})
 		sysPrompt = cfg.InlineSystemPrompt()
 	}
@@ -421,7 +421,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		}
 	}
 
-	// Persistent memory (REASONIX.md / AGENTS.md hierarchy + auto-memory index)
+	// Persistent memory (CORVUS.md / AGENTS.md hierarchy + auto-memory index)
 	// folds into the system prompt exactly here, once: it becomes part of the
 	// durable, cache-stable prefix every turn reuses, so memory costs nothing per
 	// turn. Mid-session changes never touch this prefix — they ride the
@@ -473,15 +473,15 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		bashMode = override
 	}
 	forbidReadRoots := RuntimeForbidReadRoots(cfg, root)
-	// managedConfig names the Reasonix-owned config FILES (config.toml,
+	// managedConfig names the Corvus-owned config FILES (config.toml,
 	// compatibility TOMLs, legacy v0.x config.json) the file-writers may repair
 	// outside the workspace after a fresh per-write human approval. The bash
 	// OS-sandbox write roots deliberately stay unwidened: config repair goes
 	// through the approval-gated file tools, not raw shell writes.
-	managedConfig := builtin.NewManagedConfigPaths(config.ReasonixManagedConfigPaths())
+	managedConfig := builtin.NewManagedConfigPaths(config.CorvusManagedConfigPaths())
 	bashSpec := sandbox.Spec{Mode: bashMode, WriteRoots: writeRoots, ForbidReadRoots: forbidReadRoots, Network: networkEnabled}
 	bashSpec.Shell = shell
-	// The session-data guard blocks agent writes into Reasonix's own session
+	// The session-data guard blocks agent writes into Corvus's own session
 	// stores (they race the app's saves and surface as conflict-copy loops);
 	// explicit allow_write entries stay a sanctioned escape hatch.
 	allowWriteRoots := cfg.AllowWriteRoots()
@@ -523,9 +523,9 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	pluginSpecOptions := PluginSpecOptions{
 		DefaultStartupTimeout: time.Duration(cfg.MCPStartupTimeoutSeconds()) * time.Second,
 		DefaultCallTimeout:    time.Duration(cfg.MCPCallTimeoutSeconds()) * time.Second,
-		LaunchManager:         mcplaunch.ForWorkspace(config.ReasonixHomeDir(), root),
+		LaunchManager:         mcplaunch.ForWorkspace(config.CorvusHomeDir(), root),
 		ConfigSource:          "workspace_config",
-		StateHome:             config.ReasonixHomeDir(),
+		StateHome:             config.CorvusHomeDir(),
 		WriterRoots:           writeRoots,
 		ForbidReadRoots:       forbidReadRoots,
 		Network:               networkEnabled,
@@ -748,7 +748,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	// Permission policy gates every tool call. With no HeadlessApprovalMode
 	// (interactive bootstrap), the temporary gate preserves the legacy behavior
 	// until chat/desktop installs an interactive gate. A real headless caller
-	// such as `reasonix run` always supplies a mode: Ask fails closed, Auto
+	// such as `corvus run` always supplies a mode: Ask fails closed, Auto
 	// allows ordinary writer fallbacks, and DontAsk denies them (#6927).
 	// The selected contract is also applied to sub-agents, so they cannot be a
 	// weaker path around the parent gate.
@@ -1140,7 +1140,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		parentSession := agent.ParentSession(sctx)
 		var run *agent.SubagentRun
 		if subagentStore == nil || parentSession == "" {
-			// Headless runs (e.g. `reasonix run`) have no persistent session to
+			// Headless runs (e.g. `corvus run`) have no persistent session to
 			// own a transcript. Run the skill sub-agent ephemerally, as before
 			// persisted transcripts existed, instead of failing. Continuation needs
 			// a persisted owner, so it errors here.
@@ -1213,7 +1213,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		}
 		return &event.Profile{Model: model, Effort: effort}
 	}
-	// Custom slash commands (.reasonix/commands + user dir). Best-effort: a malformed
+	// Custom slash commands (.corvus/commands + user dir). Best-effort: a malformed
 	// file is skipped, and a load error never blocks the session.
 	cmds, _ := command.LoadRoots(config.CommandRootsForRoot(root)...)
 	slashCommandAdded := false
@@ -1775,7 +1775,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 			}
 		}
 		// HeadlessApprovalMode is an explicit declaration that this frontend has
-		// no decision channel (`reasonix run`). ApprovalTimeout is not a proxy for
+		// no decision channel (`corvus run`). ApprovalTimeout is not a proxy for
 		// that capability: bots have a bounded timeout and can still answer cards.
 		ctrlOpts.RecoveryHeadless = recoveryHeadlessMode(opts)
 	}
@@ -1879,11 +1879,11 @@ func rememberPermissionRule(workspaceRoot, rule string) control.RememberResult {
 func rememberPermissionConfigPath(workspaceRoot string) string {
 	workspaceRoot = strings.TrimSpace(workspaceRoot)
 	if workspaceRoot != "" {
-		return filepath.Join(workspaceRoot, "reasonix.toml")
+		return filepath.Join(workspaceRoot, "corvus.toml")
 	}
 	path := config.SourcePath()
 	if path == "" {
-		path = "reasonix.toml" // match Config.Save() fallback
+		path = "corvus.toml" // match Config.Save() fallback
 	}
 	return path
 }
@@ -2126,7 +2126,7 @@ func appendUniquePaths(base []string, extra ...string) []string {
 	return out
 }
 
-// RuntimeForbidReadRoots returns the configured deny roots plus Reasonix's
+// RuntimeForbidReadRoots returns the configured deny roots plus Corvus's
 // global credential FILE when it exists. It also registers the corresponding
 // credential environment names for subprocess filtering. Runtime tool
 // assemblers outside Build must use this helper instead of reading the config
@@ -2307,9 +2307,9 @@ func NewProviderWithProxy(e *config.ProviderEntry, proxy netclient.ProxySpec) (p
 // the listed directories.
 // When workDir is non-empty, tools resolve relative paths against it instead of
 // the process cwd, enabling concurrent multi-project sessions.
-// sessionGuard blocks writer-tool targets inside Reasonix's own session stores
+// sessionGuard blocks writer-tool targets inside Corvus's own session stores
 // and makes bash warn when a command references them. managedConfig names the
-// Reasonix-owned config files writable outside writeRoots after a fresh
+// Corvus-owned config files writable outside writeRoots after a fresh
 // per-write human approval.
 func addBuiltins(reg *tool.Registry, enabled, writeRoots []string, bashSpec sandbox.Spec, bashTimeout time.Duration, searchSpec builtin.SearchSpec, stderr io.Writer, workDir string, proxySpec netclient.ProxySpec, forbidReadRoots []string, readPathResolver *builtin.PathResolver, sessionGuard builtin.SessionDataGuard, managedConfig builtin.ManagedConfigPaths, overlay builtin.FileOverlay, terminal builtin.TerminalRunner) {
 	// If a workspace directory is set, use workspace-bound tools that resolve
@@ -2477,7 +2477,7 @@ func skillMCPBindings(sk skill.Skill, reg *tool.Registry, specs []plugin.Spec, c
 	}
 	// A valid cached schema also supplies stable bindings for an on-demand
 	// package server before it is connected. The skill can then route through
-	// use_capability without inventing Reasonix's canonical name.
+	// use_capability without inventing Corvus's canonical name.
 	for _, spec := range specs {
 		if spec.Package != sk.Plugin || liveServers[spec.Name] || !cacheKeyOK[spec.Name] {
 			continue

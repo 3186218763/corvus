@@ -11,9 +11,9 @@ func testModelFallbackConfig(t *testing.T) *Config {
 	c := Default()
 	c.DefaultModel = "prov-a"
 	c.Providers = []ProviderEntry{
-		{Name: "prov-a", Kind: "openai", BaseURL: "https://a.example.com", Model: "model-a1", Models: []string{"model-a1", "model-a2"}, APIKeyEnv: "REASONIX_TEST_KEY", resolvedAPIKey: "sk-test"},
-		{Name: "prov-b", Kind: "openai", BaseURL: "https://b.example.com", Model: "model-b1", Models: []string{"model-b1", "model-b2"}, APIKeyEnv: "REASONIX_TEST_KEY", resolvedAPIKey: "sk-test"},
-		{Name: "prov-nokey", Kind: "openai", BaseURL: "https://nk.example.com", Model: "model-nk", APIKeyEnv: "REASONIX_TEST_EMPTY"},
+		{Name: "prov-a", Kind: "openai", BaseURL: "https://a.example.com", Model: "model-a1", Models: []string{"model-a1", "model-a2"}, APIKeyEnv: "CORVUS_TEST_KEY", resolvedAPIKey: "sk-test"},
+		{Name: "prov-b", Kind: "openai", BaseURL: "https://b.example.com", Model: "model-b1", Models: []string{"model-b1", "model-b2"}, APIKeyEnv: "CORVUS_TEST_KEY", resolvedAPIKey: "sk-test"},
+		{Name: "prov-nokey", Kind: "openai", BaseURL: "https://nk.example.com", Model: "model-nk", APIKeyEnv: "CORVUS_TEST_EMPTY"},
 	}
 	return c
 }
@@ -55,7 +55,7 @@ func TestResolveModelWithFallbackSkipsKeylessProvider(t *testing.T) {
 	// Make the first provider keyless. A fallback must skip it and pick the next
 	// configured provider, rather than booting a tab onto a provider with no API
 	// key (which just fails on first use).
-	c.Providers[0].APIKeyEnv = "REASONIX_TEST_EMPTY"
+	c.Providers[0].APIKeyEnv = "CORVUS_TEST_EMPTY"
 	c.Providers[0].resolvedAPIKey = ""
 
 	got, fallback, ok := c.ResolveModelWithFallback("")
@@ -96,7 +96,7 @@ func TestResolveModelWithFallbackHonorsDefaultModel(t *testing.T) {
 	}
 
 	// DefaultModel pointing to a keyless provider must be skipped
-	c.Providers[1].APIKeyEnv = "REASONIX_TEST_EMPTY" // prov-b, the DefaultModel
+	c.Providers[1].APIKeyEnv = "CORVUS_TEST_EMPTY" // prov-b, the DefaultModel
 	c.Providers[1].resolvedAPIKey = ""
 	got, fallback, ok = c.ResolveModelWithFallback("stale/ref")
 	if !ok || !fallback {
@@ -194,7 +194,7 @@ func TestRemoveProviderMigratesDanglingRefs(t *testing.T) {
 func TestRemoveProviderBlocksDefaultWithoutFallback(t *testing.T) {
 	c := testModelFallbackConfig(t)
 	c.DefaultModel = "prov-a/model-a1"
-	c.Providers[1].APIKeyEnv = "REASONIX_TEST_EMPTY"
+	c.Providers[1].APIKeyEnv = "CORVUS_TEST_EMPTY"
 	c.Providers[1].resolvedAPIKey = ""
 
 	err := c.RemoveProvider("prov-a")
@@ -215,7 +215,7 @@ func TestRemoveProviderClearsOptionalRefsWithoutFallback(t *testing.T) {
 	c.Agent.PlannerModel = "prov-a/model-a1"
 	c.Agent.SubagentModel = "prov-a"
 	c.Agent.SubagentModels = map[string]string{"review": "prov-a/model-a2"}
-	c.Providers[1].APIKeyEnv = "REASONIX_TEST_EMPTY"
+	c.Providers[1].APIKeyEnv = "CORVUS_TEST_EMPTY"
 	c.Providers[1].resolvedAPIKey = ""
 
 	if err := c.RemoveProvider("prov-a"); err != nil {

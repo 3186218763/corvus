@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"reasonix/internal/event"
+	"corvus/internal/event"
 )
 
 // TestWorkspaceRootForDir covers the --dir plumbing: no --dir yields no override
@@ -47,7 +47,7 @@ name = "test-model"
 kind = "openai"
 base_url = "https://example.invalid"
 model = "x"
-api_key_env = "REASONIX_TEST_KEY_UNSET"
+api_key_env = "CORVUS_TEST_KEY_UNSET"
 `
 
 // TestSetupProfilePinsExplicitDirOverGitRoot drives the real chdirTo ->
@@ -68,7 +68,7 @@ func TestSetupProfilePinsExplicitDirOverGitRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, dir := range []string{repo, sub} {
-		if err := os.WriteFile(filepath.Join(dir, "reasonix.toml"), []byte(minimalTestModelTOML), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "corvus.toml"), []byte(minimalTestModelTOML), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

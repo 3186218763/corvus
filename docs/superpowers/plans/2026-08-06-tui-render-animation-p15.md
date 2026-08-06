@@ -32,7 +32,7 @@ All paths that change `m.transcript` and how the cache tracks them:
 
 ## Opening 2: Test seams (required by spec §7)
 
-- **Env:** tests use `t.Setenv("REASONIX_REDUCE_MOTION", "1")` / `"REASONIX_TUI_SCROLL_REPAINT"`; helpers read env per call.
+- **Env:** tests use `t.Setenv("CORVUS_REDUCE_MOTION", "1")` / `"CORVUS_TUI_SCROLL_REPAINT"`; helpers read env per call.
 - **Synthetic ticks:** smooth-scroll tests construct `smoothScrollTickMsg{now: ...}` directly (no wall-clock sleeps).
 - **Nil-cmd gating:** `workingCmds()` returns `nil` spinner cmd when motion is off — tests assert nil, never execute ticks.
 - **Panel hook:** `chatTUI.panelRenderHook func(string)` (nil in prod) lets tests count renders.
@@ -89,27 +89,27 @@ package cli
 import "testing"
 
 func TestMotionEnvHelpers(t *testing.T) {
-	t.Setenv("REASONIX_REDUCE_MOTION", "1")
+	t.Setenv("CORVUS_REDUCE_MOTION", "1")
 	if motionEnabled() {
-		t.Fatal("motionEnabled should be false with REASONIX_REDUCE_MOTION=1")
+		t.Fatal("motionEnabled should be false with CORVUS_REDUCE_MOTION=1")
 	}
-	t.Setenv("REASONIX_REDUCE_MOTION", "0")
+	t.Setenv("CORVUS_REDUCE_MOTION", "0")
 	if !motionEnabled() {
-		t.Fatal("motionEnabled should be true with REASONIX_REDUCE_MOTION=0")
+		t.Fatal("motionEnabled should be true with CORVUS_REDUCE_MOTION=0")
 	}
-	t.Setenv("REASONIX_REDUCE_MOTION", "")
+	t.Setenv("CORVUS_REDUCE_MOTION", "")
 	if !motionEnabled() {
 		t.Fatal("motionEnabled should be true when unset")
 	}
-	t.Setenv("REASONIX_TUI_SCROLL_REPAINT", "1")
+	t.Setenv("CORVUS_TUI_SCROLL_REPAINT", "1")
 	if !scrollRepaintEnabled() {
-		t.Fatal("scrollRepaintEnabled should be true with REASONIX_TUI_SCROLL_REPAINT=1")
+		t.Fatal("scrollRepaintEnabled should be true with CORVUS_TUI_SCROLL_REPAINT=1")
 	}
-	t.Setenv("REASONIX_TUI_SCROLL_REPAINT", "0")
+	t.Setenv("CORVUS_TUI_SCROLL_REPAINT", "0")
 	if scrollRepaintEnabled() {
-		t.Fatal("scrollRepaintEnabled should be false with REASONIX_TUI_SCROLL_REPAINT=0")
+		t.Fatal("scrollRepaintEnabled should be false with CORVUS_TUI_SCROLL_REPAINT=0")
 	}
-	t.Setenv("REASONIX_TUI_SCROLL_REPAINT", "")
+	t.Setenv("CORVUS_TUI_SCROLL_REPAINT", "")
 	if scrollRepaintEnabled() {
 		t.Fatal("scrollRepaintEnabled should be false when unset")
 	}
@@ -117,11 +117,11 @@ func TestMotionEnvHelpers(t *testing.T) {
 
 func TestWorkingCmdsGatesSpinnerTick(t *testing.T) {
 	m := newTestChatTUI()
-	t.Setenv("REASONIX_REDUCE_MOTION", "1")
+	t.Setenv("CORVUS_REDUCE_MOTION", "1")
 	if _, sp := m.workingCmds(); sp != nil {
 		t.Fatal("spinner tick must be suppressed when reduced motion is on")
 	}
-	t.Setenv("REASONIX_REDUCE_MOTION", "0")
+	t.Setenv("CORVUS_REDUCE_MOTION", "0")
 	if _, sp := m.workingCmds(); sp == nil {
 		t.Fatal("spinner tick must be scheduled when motion is on")
 	}
@@ -151,17 +151,17 @@ import (
 )
 
 // motionEnabled reports whether decorative animation is enabled. Reduced motion
-// (REASONIX_REDUCE_MOTION=1) disables spinner motion, smooth scroll, and any
+// (CORVUS_REDUCE_MOTION=1) disables spinner motion, smooth scroll, and any
 // shimmer. Read on every call so tests observe the current environment.
 func motionEnabled() bool {
-	v := strings.TrimSpace(os.Getenv("REASONIX_REDUCE_MOTION"))
+	v := strings.TrimSpace(os.Getenv("CORVUS_REDUCE_MOTION"))
 	return v == "" || v == "0"
 }
 
 // scrollRepaintEnabled reports whether the legacy full-screen repaint on every
-// viewport scroll is requested (REASONIX_TUI_SCROLL_REPAINT=1).
+// viewport scroll is requested (CORVUS_TUI_SCROLL_REPAINT=1).
 func scrollRepaintEnabled() bool {
-	v := strings.TrimSpace(os.Getenv("REASONIX_TUI_SCROLL_REPAINT"))
+	v := strings.TrimSpace(os.Getenv("CORVUS_TUI_SCROLL_REPAINT"))
 	return v != "" && v != "0"
 }
 
@@ -307,7 +307,7 @@ Expected: FAIL — wrapper still emits ClearScreen unconditionally.
 
 ```go
 	// scrollRepaint restores the legacy full-screen repaint on every viewport
-	// scroll (REASONIX_TUI_SCROLL_REPAINT=1) for terminals that strand stale
+	// scroll (CORVUS_TUI_SCROLL_REPAINT=1) for terminals that strand stale
 	// rows under the cell-diff renderer.
 	scrollRepaint bool
 ```
@@ -1066,14 +1066,14 @@ func TestToolFramesFreezeUnderReducedMotion(t *testing.T) {
 	m := newTestChatTUI()
 	m.transcript = append(m.transcript, "")
 	m.toolStreamIdx = 0
-	t.Setenv("REASONIX_REDUCE_MOTION", "1")
+	t.Setenv("CORVUS_REDUCE_MOTION", "1")
 	m.tickToolRunning()
 	frozen := m.transcript[0]
 	m.tickToolRunning()
 	if m.transcript[0] != frozen {
 		t.Fatal("tool working line must not advance frames under reduced motion")
 	}
-	t.Setenv("REASONIX_REDUCE_MOTION", "0")
+	t.Setenv("CORVUS_REDUCE_MOTION", "0")
 	m.tickToolRunning()
 	if m.transcript[0] == frozen {
 		t.Fatal("tool working line should advance frames when motion is on")
@@ -1082,11 +1082,11 @@ func TestToolFramesFreezeUnderReducedMotion(t *testing.T) {
 
 func TestWorkingBatchSuppressesSpinner(t *testing.T) {
 	m := newTestChatTUI()
-	t.Setenv("REASONIX_REDUCE_MOTION", "1")
+	t.Setenv("CORVUS_REDUCE_MOTION", "1")
 	if got := m.workingBatch(); got == nil {
 		t.Fatal("workingBatch must still return the elapsed ticker")
 	}
-	t.Setenv("REASONIX_REDUCE_MOTION", "0")
+	t.Setenv("CORVUS_REDUCE_MOTION", "0")
 	if got := m.workingBatch(); got == nil {
 		t.Fatal("workingBatch must return a batch with motion on")
 	}
@@ -1219,7 +1219,7 @@ func TestSmoothScrollStartsAndSnaps(t *testing.T) {
 }
 
 func TestSmoothScrollInstantWhenMotionOff(t *testing.T) {
-	t.Setenv("REASONIX_REDUCE_MOTION", "1")
+	t.Setenv("CORVUS_REDUCE_MOTION", "1")
 	m := scrollFixture()
 	next, cmd := m.startSmoothScroll(50)
 	if cmd != nil {
@@ -1449,7 +1449,7 @@ func TestRenderTUIBannerWideAndNarrow(t *testing.T) {
 	if strings.Contains(narrow, i18n.M.ChatTip) {
 		t.Fatalf("narrow banner must not contain the tip, got %q", narrow)
 	}
-	if !strings.Contains(narrow, "reasonix") {
+	if !strings.Contains(narrow, "corvus") {
 		t.Fatalf("narrow banner should keep the wordmark, got %q", narrow)
 	}
 }
@@ -1471,10 +1471,10 @@ Replace `renderTUIBanner` (chat_tui.go ~4696):
 func renderTUIBanner(label, missing string, width int) string {
 	var b strings.Builder
 	if width >= 60 {
-		b.WriteString(accent("◆") + " " + bold("reasonix") + "  " + dim("· "+label) + "\n")
+		b.WriteString(accent("◆") + " " + bold("corvus") + "  " + dim("· "+label) + "\n")
 		b.WriteString(dim("  "+i18n.M.ChatTip) + "\n")
 	} else {
-		line := accent("◆") + " " + bold("reasonix") + " " + dim("· "+label)
+		line := accent("◆") + " " + bold("corvus") + " " + dim("· "+label)
 		b.WriteString(ansi.Truncate(line, width, "…"))
 	}
 	if missing != "" {
@@ -1873,9 +1873,9 @@ Add to the environment/configuration section of both READMEs:
 
 ```markdown
 TUI environment:
-- `REASONIX_REDUCE_MOTION=1` — disable decorative animation (spinner motion,
+- `CORVUS_REDUCE_MOTION=1` — disable decorative animation (spinner motion,
   smooth scroll, tool frame cycling). Elapsed counters still tick.
-- `REASONIX_TUI_SCROLL_REPAINT=1` — legacy full-screen repaint on every scroll;
+- `CORVUS_TUI_SCROLL_REPAINT=1` — legacy full-screen repaint on every scroll;
   only for terminals that strand stale rows under the cell-diff renderer
   (disables smooth scroll).
 ```
@@ -1897,8 +1897,8 @@ Expected: all PASS; build succeeds; benchmark contrast (append vs full wrap) rec
 Verify on the user's terminal (and at least one of Warp / iTerm2 / Windows Terminal / konsole):
 1. Streaming a long answer at 5k+ lines feels fluid, no per-token jank.
 2. PgUp/PgDn/wheel scroll smoothly; Ctrl+Home/End still jump instantly.
-3. `REASONIX_REDUCE_MOTION=1` → static spinner, frozen tool frames, instant scroll, elapsed still ticks.
-4. `REASONIX_TUI_SCROLL_REPAINT=1` → no stale rows on the problem terminal, scroll instant.
+3. `CORVUS_REDUCE_MOTION=1` → static spinner, frozen tool frames, instant scroll, elapsed still ticks.
+4. `CORVUS_TUI_SCROLL_REPAINT=1` → no stale rows on the problem terminal, scroll instant.
 5. First screen shows the narrow/wide banner per terminal width.
 6. Tables with code spans look calmer; diff view colors match the theme.
 

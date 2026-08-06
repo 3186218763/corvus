@@ -1,4 +1,4 @@
-// Package builtin provides Reasonix's compile-time built-in tools. Each tool
+// Package builtin provides Corvus's compile-time built-in tools. Each tool
 // self-registers via init(); main blank-imports this package to wire them in.
 package builtin
 
@@ -15,8 +15,8 @@ import (
 
 	"golang.org/x/text/transform"
 
-	fileenc "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/tool"
+	fileenc "corvus/internal/fileutil/encoding"
+	"corvus/internal/tool"
 )
 
 const (

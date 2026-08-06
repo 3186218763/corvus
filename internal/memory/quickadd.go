@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/fileutil"
-	fileencoding "reasonix/internal/fileutil/encoding"
+	"corvus/internal/fileutil"
+	fileencoding "corvus/internal/fileutil/encoding"
 )
 
 // quickAddHeading marks the section quick-added notes accumulate under, so

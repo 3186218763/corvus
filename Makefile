@@ -5,7 +5,7 @@ GOEXE := $(shell go env GOEXE)
 .PHONY: build vet fmt test clean
 
 build:
-	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/reasonix$(GOEXE) ./cmd/reasonix
+	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/corvus$(GOEXE) ./cmd/corvus
 
 vet:
 	go vet ./...

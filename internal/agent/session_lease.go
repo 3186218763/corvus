@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"reasonix/internal/fileutil"
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/store"
+	"corvus/internal/fileutil"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/store"
 )
 
 var ErrSessionLeaseHeld = errors.New("session lease held by another runtime")

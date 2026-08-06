@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/evidence"
-	"reasonix/internal/tool"
+	"corvus/internal/evidence"
+	"corvus/internal/tool"
 )
 
 func init() { tool.RegisterBuiltin(todoWrite{}) }

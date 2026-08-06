@@ -3,7 +3,7 @@ package boot
 import (
 	"testing"
 
-	"reasonix/internal/config"
+	"corvus/internal/config"
 )
 
 func TestPlannerOffHasHighestPrecedence(t *testing.T) {

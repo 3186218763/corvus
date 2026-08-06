@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
-	"reasonix/internal/workspacelease"
+	"corvus/internal/event"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
+	"corvus/internal/workspacelease"
 )
 
 func TestParallelTasksToolIsReadOnly(t *testing.T) {

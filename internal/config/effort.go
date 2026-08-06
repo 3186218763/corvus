@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/provider/openai"
+	"corvus/internal/provider/openai"
 )
 
 const (

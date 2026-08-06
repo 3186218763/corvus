@@ -2,7 +2,7 @@
 
 > 调研日期：2026-08-06。对象：QwenLM/qwen-code（Ink 渲染的 TUI）、xAI Grok Build（Rust TUI，xai-org/grok-build）。
 > 事实 = 官方 issue/PR/文档/源码可见内容；推断 = 基于上述材料的分析，已显式标注。
-> Reasonix 定位：Go + Bubble Tea v2 的单会话、纯键盘线性聊天 TUI（README.zh-CN.md、PROJECT_DEEP_DIVE.zh-CN.md）。
+> Corvus 定位：Go + Bubble Tea v2 的单会话、纯键盘线性聊天 TUI（README.zh-CN.md、PROJECT_DEEP_DIVE.zh-CN.md）。
 
 ## 1. Qwen Code Issue #4588（Epic）逐条
 
@@ -25,7 +25,7 @@
 - 落地（事实）：#4595（2026-06-12 合并）集中 `getHistoryItemMarginTop()`——多数消息类型默认 0，仅模型输出返回 1（thinking→answer 空隙）；ToolGroupMessage `gap 1→0`；ToolMessage 结果容器 `marginTop 1→0`；thinking 文本 `trimEnd()` 防尾随换行造成双空行。
 - #4595 附带用户消息半行色带（事实）：真彩色终端上三行 `▄ / > msg / ▀`；色带颜色 = 终端背景向白/黑做 6% 亮度偏移（`subtleBandColor`），无色调变化；非真彩/读屏/零宽全部降级为纯 `> text`。
 - 回合级 `⏱ X.Xs` 指示（事实）：仅存在于未合并的 #4422；2026-08-06 的 main 源码中未找到。已合并的近似物：#4598 思考时长、#3155 工具耗时（执行 3s 后右对齐显示）、#6533 状态行耗时固定小数位宽度（0.5s/1.0s…，修 `Xs↔X.Xs` 每秒两次的两列抖动）、#5287 亚分钟舍入。
-- 推断：回合耗时指示被"思考时长 + 工具耗时"组合替代，未按原样落地；Reasonix 若做 `X.Xs` 必须固定宽度（#6533 教训）。
+- 推断：回合耗时指示被"思考时长 + 工具耗时"组合替代，未按原样落地；Corvus 若做 `X.Xs` 必须固定宽度（#6533 教训）。
 
 ### Track 3：去掉重型工具边框
 - 目标（事实）：边框可被缩进、简洁前缀、图标、标题替代；工具名/状态/元数据仍可见；长工具输出应融入对话而非大面板。
@@ -90,10 +90,10 @@
 - 事实：ink-spinner dots；tmux 下降级为 750ms 两帧 `. ` / `..`（防 tmux 状态栏闪烁）；LoadingIndicator = spinner + 短语 + 计时 + token 计数（可选 tokens/s）；`useAnimationFrame` 平滑计数（规则同 Claude Code SpinnerAnimationRow：gap<70 每帧 +3，70-200 +20%，>200 +50，50ms 轮询，下降立即 snap）；`useAnimatedScrollbar` 拇指强调 1.5s（源码注释明确"终端渲染不了平滑颜色渐变"，刻意不做逐帧 RGB 插值）；OSC 9;4 tab 进度（iTerm2/Ghostty/ConEmu/Windows Terminal 白名单）；LiveAgentPanel 1s tick；InsightProgressMessage `█░` 30 列进度条；thinking 固定 1 行头 + 时长；web-shell 有 skeleton.tsx（shimmer，仅 web 端）。
 - 推断：两家共识——TUI 动效 = 低频 tick + 字形/宽度稳定，不做平滑渐变与过渡；动画服务"状态可读"而非"美观"。Qwen 防布局跳动的核心手段是固定高度/1 行占位 + 截断窗口（#8077、#4477），这比动画本身更值得学。
 
-## 5. 适合 Reasonix 的可借鉴点（按价值排序）
+## 5. 适合 Corvus 的可借鉴点（按价值排序）
 
 1. 思考痕迹默认折叠为 1 行 `∴ Thinking… Xs` → 完成后 `Thought for Xs`，一键就地展开全部（Ctrl+O 式）；固定 1 行头从根上防回流（#8077 最终形态）。
-2. 并行/子 agent 密集行面板：#4477 每行"状态字形·名·活动·耗时·tokens" + `X/N done` 计数 + 从输入框 ↓ 进入导航、可打印字符自动回输入框的焦点逃逸（Reasonix 的 Coordinator 双模型场景直接适用）。
+2. 并行/子 agent 密集行面板：#4477 每行"状态字形·名·活动·耗时·tokens" + `X/N done` 计数 + 从输入框 ↓ 进入导航、可打印字符自动回输入框的焦点逃逸（Corvus 的 Coordinator 双模型场景直接适用）。
 3. 紧凑间距体系：#4595 marginTop 集中管理（默认 0）、回合间 1 空行、用户消息半行色带（真彩色 6% 亮度偏移，非真彩/读屏降级）；#5003 去边框 + 紧凑模式折叠已完成工具为单行头。
 4. 表格内代码单元格单一中性色 + 纯 ANSI 构建保证对齐 + 格式锚定首行防流式翻转 + OSC8 链接（TableRenderer）；耗时显示学 #3155（工具 3s 后显示）+ #6533（固定宽度防抖动）。
 5. 数字键 1-9 内联授权（Grok）：仅当选项列表可见时激活，避免与输入冲突；配合 ↑/↓ + Enter。
@@ -103,7 +103,7 @@
 
 ## 6. 不该照搬（Grok dashboard 特有）
 
-1. 全屏多会话 dashboard（状态分组、peek、dispatch）：Reasonix 是单会话线性 TUI，没有并行多会话管理面；并行子代理应在会话内用 #4477 式内联面板解决，而不是另开管理平面。
+1. 全屏多会话 dashboard（状态分组、peek、dispatch）：Corvus 是单会话线性 TUI，没有并行多会话管理面；并行子代理应在会话内用 #4477 式内联面板解决，而不是另开管理平面。
 2. 底部输入框"永远派发新会话"语义、Ctrl+S attach、Ctrl+[ / Ctrl+] 会话循环、Ctrl+\ dashboard 切换——全部依赖多会话存在。
 3. Inactive/Idle "N more" 折叠、Ctrl+T pin、Ctrl+R rename、Shift+↑/↓ 重排 pinned——多会话列表管理，单会话无意义。
 4. Peek 面板的"选中即回复、切行清草稿"状态机——没有行列表就没有这套交互。

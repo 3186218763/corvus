@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"reasonix/internal/command"
+	"corvus/internal/command"
 )
 
 var (
@@ -40,27 +40,27 @@ func userConfigPath() string {
 }
 
 func userConfigDir() string {
-	return reasonixHomeDir()
+	return corvusHomeDir()
 }
 
-func reasonixHomeDir() string {
-	if dir := cleanEnvDir("REASONIX_HOME"); dir != "" {
+func corvusHomeDir() string {
+	if dir := cleanEnvDir("CORVUS_HOME"); dir != "" {
 		return dir
 	}
 	if runtimeGOOS == "windows" {
 		if dir := osUserConfigDir(); dir != "" {
-			return filepath.Join(dir, "reasonix")
+			return filepath.Join(dir, "corvus")
 		}
 		if home, err := osUserHomeDir(); err == nil && home != "" {
-			return filepath.Join(home, "AppData", "Roaming", "reasonix")
+			return filepath.Join(home, "AppData", "Roaming", "corvus")
 		}
 		return ""
 	}
 	if home, err := osUserHomeDir(); err == nil && home != "" {
-		return filepath.Join(home, ".reasonix")
+		return filepath.Join(home, ".corvus")
 	}
 	if dir := osUserConfigDir(); dir != "" {
-		return filepath.Join(dir, "reasonix")
+		return filepath.Join(dir, "corvus")
 	}
 	return ""
 }
@@ -134,19 +134,19 @@ func legacyXDGConfigPaths() []string {
 		paths = append(paths, path)
 	}
 	if dir := cleanEnvDir("XDG_CONFIG_HOME"); dir != "" {
-		add(filepath.Join(dir, "reasonix", "config.toml"))
+		add(filepath.Join(dir, "corvus", "config.toml"))
 	}
 	if home, err := osUserHomeDir(); err == nil && home != "" {
-		add(filepath.Join(home, ".config", "reasonix", "config.toml"))
+		add(filepath.Join(home, ".config", "corvus", "config.toml"))
 	}
 	return paths
 }
 
 func userSupportDir() string {
-	if dir := cleanEnvDir("REASONIX_STATE_HOME"); dir != "" {
+	if dir := cleanEnvDir("CORVUS_STATE_HOME"); dir != "" {
 		return dir
 	}
-	return reasonixHomeDir()
+	return corvusHomeDir()
 }
 
 func legacyOSSupportDir() string {
@@ -157,25 +157,25 @@ func legacyOSSupportDir() string {
 	if dir == "" {
 		return ""
 	}
-	path := filepath.Join(dir, "reasonix")
-	if current := reasonixHomeDir(); current != "" && samePath(path, current) {
+	path := filepath.Join(dir, "corvus")
+	if current := corvusHomeDir(); current != "" && samePath(path, current) {
 		return ""
 	}
 	return path
 }
 
 func userCacheDir() string {
-	if dir := cleanEnvDir("REASONIX_CACHE_HOME"); dir != "" {
+	if dir := cleanEnvDir("CORVUS_CACHE_HOME"); dir != "" {
 		return dir
 	}
-	if dir := cleanEnvDir("REASONIX_HOME"); dir != "" {
+	if dir := cleanEnvDir("CORVUS_HOME"); dir != "" {
 		return filepath.Join(dir, "cache")
 	}
 	dir := osUserCacheDir()
 	if dir == "" {
 		return ""
 	}
-	return filepath.Join(dir, "reasonix")
+	return filepath.Join(dir, "corvus")
 }
 
 func cleanEnvDir(name string) string {
@@ -216,21 +216,21 @@ func samePath(a, b string) bool {
 	return filepath.Clean(a) == filepath.Clean(b)
 }
 
-// IsolatedHomeDir returns the REASONIX_HOME directory when it has been
+// IsolatedHomeDir returns the CORVUS_HOME directory when it has been
 // explicitly set via the environment variable. A non-empty return signals a
 // self-contained runtime that must not fall back to legacy OS-default data
 // paths or import data from the system-wide production install.
 func IsolatedHomeDir() string {
-	return cleanEnvDir("REASONIX_HOME")
+	return cleanEnvDir("CORVUS_HOME")
 }
 
 // userConfigDisplayPath is userConfigPath collapsed to a ~-relative form for
 // comments rendered into the user's own config.toml, so Windows users see the
-// real location instead of a hardcoded ~/.reasonix path.
+// real location instead of a hardcoded ~/.corvus path.
 func userConfigDisplayPath() string {
 	p := userConfigPath()
 	if p == "" {
-		return "<os-config-dir>/reasonix/config.toml"
+		return "<os-config-dir>/corvus/config.toml"
 	}
 	if home, err := osUserHomeDir(); err == nil && home != "" {
 		if rel, err := filepath.Rel(home, p); err == nil && !strings.HasPrefix(rel, "..") {
@@ -240,10 +240,10 @@ func userConfigDisplayPath() string {
 	return p
 }
 
-// UserConfigPath is the user-global config.toml. It lives under Reasonix home:
-// REASONIX_HOME/config.toml, then ~/.reasonix/config.toml on Unix-like systems,
-// or %AppData%/reasonix/config.toml on Windows. If %AppData% is unavailable on
-// Windows, it falls back to %USERPROFILE%/AppData/Roaming/reasonix/config.toml.
+// UserConfigPath is the user-global config.toml. It lives under Corvus home:
+// CORVUS_HOME/config.toml, then ~/.corvus/config.toml on Unix-like systems,
+// or %AppData%/corvus/config.toml on Windows. If %AppData% is unavailable on
+// Windows, it falls back to %USERPROFILE%/AppData/Roaming/corvus/config.toml.
 // "" when the user config dir can't be resolved.
 func UserConfigPath() string { return userConfigPath() }
 
@@ -253,7 +253,7 @@ func UserConfigPath() string { return userConfigPath() }
 func LegacyUserConfigPath() string { return legacyUserConfigPath() }
 
 // LegacyUserConfigPaths returns every known legacy user config path that differs
-// from the current v1.8.1 Reasonix-home config path.
+// from the current v1.8.1 Corvus-home config path.
 func LegacyUserConfigPaths() []string {
 	primary := userConfigPath()
 	var out []string
@@ -275,14 +275,14 @@ func LegacyUserConfigPaths() []string {
 	return out
 }
 
-// ReasonixManagedConfigPaths returns the Reasonix-owned user configuration
+// CorvusManagedConfigPaths returns the Corvus-owned user configuration
 // FILES that model-driven tools may repair on the user's request, each gated
 // by a fresh per-write human approval: the current config.toml, compatibility
-// TOML locations, and the legacy v0.x ~/.reasonix/config.json. Individual
-// files, never directories — the Reasonix home also holds credentials (.env),
+// TOML locations, and the legacy v0.x ~/.corvus/config.json. Individual
+// files, never directories — the Corvus home also holds credentials (.env),
 // global hooks (settings.json), skills, and session stores, and none of those
 // may ride along on a config repair.
-func ReasonixManagedConfigPaths() []string {
+func CorvusManagedConfigPaths() []string {
 	var out []string
 	out = appendUniquePath(out, UserConfigPath())
 	for _, path := range LegacyUserConfigPaths() {
@@ -306,24 +306,24 @@ func appendUniquePath(paths []string, path string) []string {
 	return append(paths, clean)
 }
 
-// ReasonixHomeDir is the current Reasonix home directory. It honors
-// REASONIX_HOME, then uses ~/.reasonix on macOS/Linux or %APPDATA%/reasonix on
+// CorvusHomeDir is the current Corvus home directory. It honors
+// CORVUS_HOME, then uses ~/.corvus on macOS/Linux or %APPDATA%/corvus on
 // Windows, with a %USERPROFILE%/AppData/Roaming fallback when %APPDATA% is
 // unavailable.
-func ReasonixHomeDir() string { return reasonixHomeDir() }
+func CorvusHomeDir() string { return corvusHomeDir() }
 
 // RemoteStateDir is local state for the remote-SSH module (the managed
-// known_hosts file, cached host metadata): <Reasonix home>/remote. Routed
-// through the home resolver so REASONIX_HOME isolation holds.
+// known_hosts file, cached host metadata): <Corvus home>/remote. Routed
+// through the home resolver so CORVUS_HOME isolation holds.
 func RemoteStateDir() string {
-	home := reasonixHomeDir()
+	home := corvusHomeDir()
 	if strings.TrimSpace(home) == "" {
 		return ""
 	}
 	return filepath.Join(home, "remote")
 }
 
-// RemoteKnownHostsPath is the Reasonix-managed known_hosts file (OpenSSH
+// RemoteKnownHostsPath is the Corvus-managed known_hosts file (OpenSSH
 // format) that records TOFU-accepted host keys. The user's own
 // ~/.ssh/known_hosts is only ever read, never written.
 func RemoteKnownHostsPath() string {
@@ -335,11 +335,11 @@ func RemoteKnownHostsPath() string {
 }
 
 // MissingReasoningWarnStateDir is the shared directory for the rate-limited
-// missing tool-call thinking recovery gate (#7059): <Reasonix home>/state. The
+// missing tool-call thinking recovery gate (#7059): <Corvus home>/state. The
 // legacy name preserves callers and the existing state-file contract. Routed
-// through the home resolver so REASONIX_HOME isolation holds.
+// through the home resolver so CORVUS_HOME isolation holds.
 func MissingReasoningWarnStateDir() string {
-	home := reasonixHomeDir()
+	home := corvusHomeDir()
 	if strings.TrimSpace(home) == "" {
 		return ""
 	}
@@ -350,44 +350,44 @@ func MissingReasoningWarnStateDir() string {
 // workspaces. It intentionally follows the cache root rather than project or
 // session state: taking a lease must never dirty the repository it protects.
 func WorkspaceLeaseDir() string {
-	// Deliberately ignore REASONIX_HOME/REASONIX_CACHE_HOME here. Two app
+	// Deliberately ignore CORVUS_HOME/CORVUS_CACHE_HOME here. Two app
 	// instances with different state profiles can still open the same user
 	// workspace, so their safety lock must converge on one OS-user cache root.
 	dir := osUserCacheDir()
 	if strings.TrimSpace(dir) == "" {
 		return ""
 	}
-	return filepath.Join(dir, "reasonix", "workspace-leases")
+	return filepath.Join(dir, "corvus", "workspace-leases")
 }
 
 // RepairMutationLockDir stores target-path repair locks in the OS-user cache.
-// It deliberately ignores Reasonix home/cache overrides: isolated instances
-// can still repair the same project reasonix.toml, so their locks must converge.
+// It deliberately ignores Corvus home/cache overrides: isolated instances
+// can still repair the same project corvus.toml, so their locks must converge.
 func RepairMutationLockDir() string {
 	dir := osUserCacheDir()
 	if strings.TrimSpace(dir) == "" {
 		return ""
 	}
-	return filepath.Join(dir, "reasonix", "repair-mutation-locks")
+	return filepath.Join(dir, "corvus", "repair-mutation-locks")
 }
 
 // DeliveryWorktreeDir is durable storage for user-visible isolated Delivery
 // workspaces. Explicit state/home overrides remain authoritative. Windows uses
 // LocalAppData by default so large Git worktrees do not roam with the user's
-// profile; other platforms keep using Reasonix state storage.
+// profile; other platforms keep using Corvus state storage.
 func DeliveryWorktreeDir() string {
-	if dir := cleanEnvDir("REASONIX_STATE_HOME"); dir != "" {
+	if dir := cleanEnvDir("CORVUS_STATE_HOME"); dir != "" {
 		return filepath.Join(dir, "worktrees")
 	}
-	if dir := cleanEnvDir("REASONIX_HOME"); dir != "" {
+	if dir := cleanEnvDir("CORVUS_HOME"); dir != "" {
 		return filepath.Join(dir, "worktrees")
 	}
 	if runtimeGOOS == "windows" {
 		if dir := osUserCacheDir(); dir != "" {
-			return filepath.Join(dir, "reasonix", "worktrees")
+			return filepath.Join(dir, "corvus", "worktrees")
 		}
 		if home, err := osUserHomeDir(); err == nil && home != "" {
-			return filepath.Join(home, "AppData", "Local", "reasonix", "worktrees")
+			return filepath.Join(home, "AppData", "Local", "corvus", "worktrees")
 		}
 		return ""
 	}
@@ -398,13 +398,13 @@ func DeliveryWorktreeDir() string {
 	return filepath.Join(dir, "worktrees")
 }
 
-// UserCredentialsPath is the reasonix-owned global .env file under Reasonix
+// UserCredentialsPath is the corvus-owned global .env file under Corvus
 // home. It is the persistent fallback for provider credentials saved by
-// Reasonix (setup/settings). At runtime a non-empty key in the workspace
+// Corvus (setup/settings). At runtime a non-empty key in the workspace
 // project .env takes priority over this store; shell/home env vars still cannot
-// silently override either source. "" when Reasonix home can't be resolved.
+// silently override either source. "" when Corvus home can't be resolved.
 func UserCredentialsPath() string {
-	dir := reasonixHomeDir()
+	dir := corvusHomeDir()
 	if dir == "" {
 		return ""
 	}
@@ -423,7 +423,7 @@ func ArchiveDir() string {
 }
 
 // SessionDir is where chat sessions are persisted (one .jsonl per session).
-// Used by `reasonix --continue` / `--resume` to find the recent ones. Empty
+// Used by `corvus --continue` / `--resume` to find the recent ones. Empty
 // if the user state dir can't be resolved — sessions then aren't saved.
 func SessionDir() string {
 	dir := userSupportDir()
@@ -519,24 +519,24 @@ func CacheDir() string {
 	return dir
 }
 
-// MemoryUserDir returns the reasonix user state root (…/reasonix), under which
-// the user-global REASONIX.md and the per-project auto-memory store live. Empty
+// MemoryUserDir returns the corvus user state root (…/corvus), under which
+// the user-global CORVUS.md and the per-project auto-memory store live. Empty
 // when the user state dir can't be resolved, which disables user-scoped memory.
 func MemoryUserDir() string {
 	return userSupportDir()
 }
 
 // ConventionDirs are the parent directories scanned for agent assets (skills,
-// commands), in canonical-first order. .reasonix is ours; .agents / .agent /
+// commands), in canonical-first order. .corvus is ours; .agents / .agent /
 // .claude let users drop in assets authored for other agent tools without moving
 // files. Shared so skills (internal/skill) and commands (CommandDirs) discover
 // the same set. Note: hooks are NOT scanned across these — a .claude/settings.json
 // uses a different hook schema that can't be parsed as ours, so hooks stay in
-// .reasonix/settings.json (see internal/hook).
-var ConventionDirs = []string{".reasonix", ".agents", ".agent", ".claude"}
+// .corvus/settings.json (see internal/hook).
+var ConventionDirs = []string{".corvus", ".agents", ".agent", ".claude"}
 
 // conventionSubdirsAsc joins sub under each ConventionDir of base, in ascending
-// priority (reverse of ConventionDirs) so the canonical .reasonix ends up the
+// priority (reverse of ConventionDirs) so the canonical .corvus ends up the
 // highest-priority entry — command.Load lets a later directory win on a clash.
 func conventionSubdirsAsc(base, sub string) []string {
 	out := make([]string, 0, len(ConventionDirs))
@@ -549,9 +549,9 @@ func conventionSubdirsAsc(base, sub string) []string {
 // CommandDirs returns the directories scanned for custom slash commands, lowest
 // priority first, so a later (more specific) directory overrides an earlier one
 // on a name clash. Order: home-dir convention dirs (~/.claude/commands …
-// ~/.reasonix/commands), the Reasonix home commands dir, the legacy OS
+// ~/.corvus/commands), the Corvus home commands dir, the legacy OS
 // app-support dir if different, then the project's
-// convention dirs (.claude/commands … .reasonix/commands). Scanning the .claude /
+// convention dirs (.claude/commands … .corvus/commands). Scanning the .claude /
 // .agents / .agent dirs lets commands authored for other agent tools (same .md +
 // frontmatter format) work here unchanged.
 func CommandDirs() []string {
@@ -624,9 +624,9 @@ func SourcePath() string {
 // root, or "" if none. Equivalent to SourcePath() when root is ".".
 func SourcePathForRoot(root string) string {
 	root = resolveRoot(root)
-	projectTOML := "reasonix.toml"
+	projectTOML := "corvus.toml"
 	if root != "." {
-		projectTOML = filepath.Join(root, "reasonix.toml")
+		projectTOML = filepath.Join(root, "corvus.toml")
 	}
 	if _, err := os.Stat(projectTOML); err == nil {
 		return projectTOML

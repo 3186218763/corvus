@@ -40,5 +40,5 @@ func (e *RecoveryPauseError) Error() string {
 	if strings.TrimSpace(e.Message) != "" {
 		return e.Message
 	}
-	return "Automatic retries paused. Reasonix stopped repeated attempts and kept completed work. Send \"continue\" to start a fresh attempt, or add instructions to change direction."
+	return "Automatic retries paused. Corvus stopped repeated attempts and kept completed work. Send \"continue\" to start a fresh attempt, or add instructions to change direction."
 }

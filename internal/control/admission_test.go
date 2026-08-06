@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/event"
+	"corvus/internal/event"
 )
 
 // holdFinishingWindow returns a sink that blocks inside the FIRST TurnDone

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
+	"corvus/internal/event"
+	"corvus/internal/provider"
 )
 
 // renderUsage drives a Usage event through a fresh TextSink (no renderer) and

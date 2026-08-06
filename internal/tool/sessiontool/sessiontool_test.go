@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/provider"
+	"corvus/internal/agent"
+	"corvus/internal/provider"
 )
 
 // writeSessionJSONL writes provider.Messages as JSONL to a file, matching

@@ -9,13 +9,13 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/agent/testutil"
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	"reasonix/internal/i18n"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/agent"
+	"corvus/internal/agent/testutil"
+	"corvus/internal/control"
+	"corvus/internal/event"
+	"corvus/internal/i18n"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 func TestTurnReceiptKeepsCompletePerTurnBreakdown(t *testing.T) {
@@ -125,8 +125,8 @@ func TestTurnReceiptAdaptsContrastAcrossThemes(t *testing.T) {
 }
 
 func TestStatusFooterSemanticPaletteAcrossThemes(t *testing.T) {
-	t.Setenv("REASONIX_THEME", "")
-	t.Setenv("REASONIX_THEME_STYLE", "")
+	t.Setenv("CORVUS_THEME", "")
+	t.Setenv("CORVUS_THEME_STYLE", "")
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
 
@@ -173,7 +173,7 @@ func TestStatusFooterThemesKeepIdenticalGeometry(t *testing.T) {
 	m.effortLevel = "max"
 	m.runtimeProfile = "full"
 	m.balance = "¥12.34"
-	m.gitStatus = gitStatus{Repo: "DeepSeek-Reasonix", Branch: "feature/theme-footer", Added: 3}
+	m.gitStatus = gitStatus{Repo: "DeepSeek-Corvus", Branch: "feature/theme-footer", Added: 3}
 
 	render := func(mode string, profile colorprofile.Profile) string {
 		activeColorProfile = profile
@@ -203,9 +203,9 @@ func TestStatusFooterGitAndDividerAdaptToTheme(t *testing.T) {
 			configureCLITheme(tt.mode)
 			// Git porcelain is off default chrome; color still applies when rendered
 			// for /status (gitTag) or other detail hosts.
-			git := gitStatus{Repo: "DeepSeek-Reasonix", Branch: "db4be5e6", Detached: true}.
+			git := gitStatus{Repo: "DeepSeek-Corvus", Branch: "db4be5e6", Detached: true}.
 				RenderWithin(80, activeCLITheme.warn)
-			if !strings.Contains(git, tt.gitSGR+"DeepSeek-Reasonix") {
+			if !strings.Contains(git, tt.gitSGR+"DeepSeek-Corvus") {
 				t.Fatalf("%s Git identity should use warm semantic colour: %q", tt.mode, git)
 			}
 			divider := statusFooterDivider(40)
@@ -380,7 +380,7 @@ func TestStatusFooterWideLayoutKeepsModelOnInteractionRow(t *testing.T) {
 	m.effortLevel = "auto"
 	m.balance = "¥12.34"
 	m.gitStatus = gitStatus{
-		Repo:      "DeepSeek-Reasonix",
+		Repo:      "DeepSeek-Corvus",
 		Branch:    "feature/responsive-footer",
 		Added:     1199,
 		Removed:   244,
@@ -395,7 +395,7 @@ func TestStatusFooterWideLayoutKeepsModelOnInteractionRow(t *testing.T) {
 	if !strings.Contains(lines[0], "MODEL deepseek-v4-flash   EFFORT auto   WORK balanced") {
 		t.Fatalf("first row should keep model, effort, and work in one session group:\n%s", strings.Join(lines, "\n"))
 	}
-	if strings.Contains(lines[0], "DeepSeek-Reasonix@") || strings.Contains(lines[0], "BAL") {
+	if strings.Contains(lines[0], "DeepSeek-Corvus@") || strings.Contains(lines[0], "BAL") {
 		t.Fatalf("first row should not contain Git or balance:\n%s", strings.Join(lines, "\n"))
 	}
 	if strings.Trim(lines[1], "─ ") != "" {
@@ -404,7 +404,7 @@ func TestStatusFooterWideLayoutKeepsModelOnInteractionRow(t *testing.T) {
 	if !strings.Contains(lines[2], "CTX") {
 		t.Fatalf("data band should show context:\n%s", strings.Join(lines, "\n"))
 	}
-	for _, banned := range []string{"DeepSeek-Reasonix", "BAL", "¥12.34", "+1199"} {
+	for _, banned := range []string{"DeepSeek-Corvus", "BAL", "¥12.34", "+1199"} {
 		if strings.Contains(lines[2], banned) {
 			t.Fatalf("data band must omit %q:\n%s", banned, strings.Join(lines, "\n"))
 		}
@@ -512,7 +512,7 @@ func TestStatusFooterNarrowLayoutBreaksBetweenGroups(t *testing.T) {
 	m.runtimeProfile = "delivery"
 	m.balance = "¥123.45"
 	m.gitStatus = gitStatus{
-		Repo:    "DeepSeek-Reasonix-Workspace",
+		Repo:    "DeepSeek-Corvus-Workspace",
 		Branch:  "feature/" + strings.Repeat("long-branch-", 8),
 		Added:   20,
 		Removed: 4,
@@ -549,14 +549,14 @@ func TestStatusFooterCustomLineStillReplacesBuiltInData(t *testing.T) {
 	m.balance = "¥12.34"
 	m.statuslineCmd = "custom-status"
 	m.statuslineOut = "custom telemetry"
-	m.gitStatus = gitStatus{Repo: "Reasonix", Branch: "main"}
+	m.gitStatus = gitStatus{Repo: "Corvus", Branch: "main"}
 
 	primary := m.primaryStatusLine(false, false)
 	block := ansi.Strip(m.renderStatusBlock(primary, 120))
 	if strings.Contains(block, "deepseek-v4-flash") || strings.Contains(block, "work delivery") || strings.Contains(block, "¥12.34") {
 		t.Fatalf("custom statusline should replace built-in data fields:\n%s", block)
 	}
-	if strings.Contains(block, "Reasonix@main") {
+	if strings.Contains(block, "Corvus@main") {
 		t.Fatalf("custom statusline data band should not reintroduce Git porcelain:\n%s", block)
 	}
 	if !strings.Contains(block, "custom telemetry") {
@@ -607,11 +607,11 @@ func TestStatusFooterDefaultOmitsBalanceGitCache(t *testing.T) {
 	m.effortLevel = "auto"
 	m.runtimeProfile = "full"
 	m.balance = "¥12.34"
-	m.gitStatus = gitStatus{Repo: "Reasonix", Branch: "main", Added: 1}
+	m.gitStatus = gitStatus{Repo: "Corvus", Branch: "main", Added: 1}
 
 	plain := ansi.Strip(m.renderStatusBlock(m.primaryStatusLine(false, false), 100))
 	for _, banned := range []string{
-		"BAL", "¥12.34", "Reasonix", "main",
+		"BAL", "¥12.34", "Corvus", "main",
 		i18n.M.ChatStatusCacheLabel, "turn hit", "avg 90",
 	} {
 		if strings.Contains(plain, banned) {
@@ -646,7 +646,7 @@ func TestStatusCommandStillShowsMovedFields(t *testing.T) {
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{Executor: exec})
 	m.balance = "$10.00"
-	m.gitStatus = gitStatus{Repo: "Reasonix", Branch: "feature"}
+	m.gitStatus = gitStatus{Repo: "Corvus", Branch: "feature"}
 	m.runSlashCommand("/status")
 	out := ansi.Strip(strings.Join(m.transcript, "\n"))
 	for _, want := range []string{"$10.00", "feature", "Session status", "turn hit", "cache"} {

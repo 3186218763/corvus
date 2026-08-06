@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/capability"
-	"reasonix/internal/skill"
-	"reasonix/internal/tool"
+	"corvus/internal/capability"
+	"corvus/internal/skill"
+	"corvus/internal/tool"
 )
 
 type capabilityRecordingRunner struct {

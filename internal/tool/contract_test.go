@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
-	_ "reasonix/internal/tool/builtin"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
+	_ "corvus/internal/tool/builtin"
 )
 
 func TestBuiltinToolContractEntries(t *testing.T) {

@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/capability"
-	"reasonix/internal/config"
-	"reasonix/internal/plugin"
+	"corvus/internal/agent"
+	"corvus/internal/capability"
+	"corvus/internal/config"
+	"corvus/internal/plugin"
 )
 
 func (c *Controller) withCapabilityRoute(composed, routeInput string) string {

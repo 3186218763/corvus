@@ -144,7 +144,7 @@ func Decode(data []byte, enc Kind) []byte {
 	return data
 }
 
-// DecodeToUTF8 converts raw text-like file bytes to UTF-8 using Reasonix's
+// DecodeToUTF8 converts raw text-like file bytes to UTF-8 using Corvus's
 // shared detection cascade. It is intended for user-editable structured files
 // (TOML, JSON, dotenv, Markdown) before handing the content to strict parsers.
 func DecodeToUTF8(data []byte) []byte {

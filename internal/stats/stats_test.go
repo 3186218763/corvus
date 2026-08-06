@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/event"
-	"reasonix/internal/filelock"
-	"reasonix/internal/provider"
+	"corvus/internal/event"
+	"corvus/internal/filelock"
+	"corvus/internal/provider"
 )
 
 func flushRecorder(t *testing.T, recorder *Recorder) {

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/event"
-	"reasonix/internal/jobs"
-	"reasonix/internal/sandbox"
+	"corvus/internal/event"
+	"corvus/internal/jobs"
+	"corvus/internal/sandbox"
 )
 
 type fakeSandboxEscapeApprover struct {

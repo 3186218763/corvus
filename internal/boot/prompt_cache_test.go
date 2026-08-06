@@ -3,8 +3,8 @@ package boot
 import (
 	"testing"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/config"
+	"corvus/internal/agent"
+	"corvus/internal/config"
 )
 
 func TestPromptCacheOptionsMainSession(t *testing.T) {

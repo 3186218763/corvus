@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sort"
 
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
+	"corvus/internal/event"
+	"corvus/internal/provider"
 )
 
 // PrefixShape hashes the portions of the request prefix that influence

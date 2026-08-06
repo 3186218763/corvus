@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"reasonix/internal/diff"
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
-	"reasonix/internal/tool/builtin"
+	"corvus/internal/diff"
+	"corvus/internal/event"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
+	"corvus/internal/tool/builtin"
 )
 
 type failingWriterTool struct {

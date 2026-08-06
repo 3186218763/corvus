@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/config"
+	"corvus/internal/config"
 )
 
 func (m *chatTUI) runReasoningLanguageCommand(input string) {

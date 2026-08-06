@@ -20,10 +20,10 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/config"
-	"reasonix/internal/fileutil"
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/tool"
+	"corvus/internal/config"
+	"corvus/internal/fileutil"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/tool"
 )
 
 // cacheableToolsOf extracts the persistable subset of remote tools so Start()

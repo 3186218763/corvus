@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/mcplaunch"
+	"corvus/internal/mcplaunch"
 )
 
 func TestStoredNPXLauncherLockUsesExactOfflinePackage(t *testing.T) {

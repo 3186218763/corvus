@@ -14,15 +14,15 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"reasonix/internal/agent"
-	"reasonix/internal/boot"
-	"reasonix/internal/config"
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/i18n"
-	"reasonix/internal/provider"
-	"reasonix/internal/provider/openai"
+	"corvus/internal/agent"
+	"corvus/internal/boot"
+	"corvus/internal/config"
+	"corvus/internal/control"
+	"corvus/internal/event"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/i18n"
+	"corvus/internal/provider"
+	"corvus/internal/provider/openai"
 	"sort"
 	"strings"
 	"syscall"
@@ -51,7 +51,7 @@ func Run(args []string, version string) int {
 		return code
 	}
 	if !cliIsInteractive() {
-		fmt.Fprintln(os.Stderr, "reasonix requires an interactive terminal; use the TUI entry point from a TTY")
+		fmt.Fprintln(os.Stderr, "corvus requires an interactive terminal; use the TUI entry point from a TTY")
 		return 1
 	}
 	return runInteractiveSession(args, version)
@@ -69,7 +69,7 @@ func handleInfoArgs(args []string, version string) (code int, handled bool) {
 		fmt.Println(i18n.M.UsageBody)
 		return 0, true
 	case "version":
-		fmt.Println("reasonix", version)
+		fmt.Println("corvus", version)
 		return 0, true
 	}
 	// Flag-style help/version may appear anywhere before "--".
@@ -82,7 +82,7 @@ func handleInfoArgs(args []string, version string) (code int, handled bool) {
 			fmt.Println(i18n.M.UsageBody)
 			return 0, true
 		case "--version", "-v":
-			fmt.Println("reasonix", version)
+			fmt.Println("corvus", version)
 			return 0, true
 		}
 	}
@@ -292,7 +292,7 @@ func registerContinueFlag(fs *pflag.FlagSet) *bool {
 }
 
 func chatREPL(args []string, version string) int {
-	fs := pflag.NewFlagSet("reasonix", pflag.ContinueOnError)
+	fs := pflag.NewFlagSet("corvus", pflag.ContinueOnError)
 	fs.SetInterspersed(true)
 	model := fs.String("model", "", "provider name (default: config default_model)")
 	profileFlag := fs.String("profile", "balanced", "runtime profile: economy | balanced | delivery")
@@ -300,7 +300,7 @@ func chatREPL(args []string, version string) int {
 	cont := registerContinueFlag(fs)
 	resume := fs.StringP("resume", "r", "", "resume by session ID/query, or open the picker when no value is given")
 	fs.Lookup("resume").NoOptDefVal = resumePickerSentinel
-	copySession := fs.Bool("copy", false, "with --resume/--continue: duplicate the selected session and continue in the copy (escape hatch when the original is held by another Reasonix process)")
+	copySession := fs.Bool("copy", false, "with --resume/--continue: duplicate the selected session and continue in the copy (escape hatch when the original is held by another Corvus process)")
 	yolo := fs.Bool("dangerously-skip-permissions", false, "YOLO: auto-approve approval-gated tool calls this session; same runtime mode as Ctrl+Y")
 	fs.BoolVar(yolo, "yolo", false, "alias for --dangerously-skip-permissions")
 	dir := fs.String("dir", "", "change to this directory first (project root); config, sandbox and file tools resolve from here")
@@ -346,7 +346,7 @@ func chatREPL(args []string, version string) int {
 	// Bubble Tea owns the terminal from the resume picker through controller
 	// shutdown. Route process logs and plugin stderr to a private, bounded file
 	// for that whole lifetime; user-facing warnings arrive as typed TUI events.
-	diagnostics := startTUIDiagnostics(config.ReasonixHomeDir())
+	diagnostics := startTUIDiagnostics(config.CorvusHomeDir())
 	defer diagnostics.Close()
 
 	// Decide whether we're starting fresh or resuming. --resume opens an
@@ -639,7 +639,7 @@ func defaultConfigTarget() string {
 	if p := config.UserConfigPath(); p != "" {
 		return p
 	}
-	return "reasonix.toml"
+	return "corvus.toml"
 }
 
 func defaultEnvTarget() string {
@@ -677,7 +677,7 @@ func interactiveSetup(configPath, envPath string) int {
 	// in their language before any substantive prompt.
 	fmt.Println()
 	fmt.Print(boxed([]string{
-		accent("◆") + " " + fmt.Sprintf(i18n.M.WelcomeTitleFmt, bold("reasonix")),
+		accent("◆") + " " + fmt.Sprintf(i18n.M.WelcomeTitleFmt, bold("corvus")),
 		"",
 		dim(i18n.M.NoConfigYet),
 	}))

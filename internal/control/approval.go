@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"reasonix/internal/event"
-	"reasonix/internal/i18n"
-	"reasonix/internal/permission"
+	"corvus/internal/event"
+	"corvus/internal/i18n"
+	"corvus/internal/permission"
 )
 
 // approvalManager owns the approval/ask prompt bookkeeping and the runtime

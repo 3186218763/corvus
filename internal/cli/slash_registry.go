@@ -3,7 +3,7 @@ package cli
 import (
 	"strings"
 
-	"reasonix/internal/i18n"
+	"corvus/internal/i18n"
 )
 
 // builtinSlashSpec is the single source of truth for a built-in command's

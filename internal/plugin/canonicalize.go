@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"sort"
 
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 // sortToolsByName returns a new slice of tools sorted alphabetically by Name().

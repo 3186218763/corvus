@@ -15,11 +15,11 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"reasonix/internal/config"
-	"reasonix/internal/pluginpkg"
-	"reasonix/internal/skill"
-	"reasonix/internal/testenv"
-	"reasonix/internal/tool"
+	"corvus/internal/config"
+	"corvus/internal/pluginpkg"
+	"corvus/internal/skill"
+	"corvus/internal/testenv"
+	"corvus/internal/tool"
 )
 
 func TestMain(m *testing.M) {
@@ -131,7 +131,7 @@ func TestApplyLocalSkillRootRegistersPath(t *testing.T) {
 	if resp.PlanID == "" {
 		t.Error("PlanID should be populated on apply")
 	}
-	cfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
 	if len(cfg.Skills.Paths) != 1 || cfg.Skills.Paths[0] != root {
 		t.Fatalf("skills.paths = %v, want %q", cfg.Skills.Paths, root)
 	}
@@ -174,7 +174,7 @@ func TestApplyLocalCodexPluginPackage(t *testing.T) {
 	if !done.OK || done.Status != "done" {
 		t.Fatalf("apply response = %+v", done)
 	}
-	statePath := filepath.Join(home, ".reasonix", "plugin-packages.json")
+	statePath := filepath.Join(home, ".corvus", "plugin-packages.json")
 	raw, err := os.ReadFile(statePath)
 	if err != nil {
 		t.Fatalf("state file missing: %v", err)
@@ -182,7 +182,7 @@ func TestApplyLocalCodexPluginPackage(t *testing.T) {
 	if !strings.Contains(string(raw), `"name": "superpowers"`) || !strings.Contains(string(raw), `"manifestKind": "codex"`) {
 		t.Fatalf("state file = %s", raw)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".reasonix", "plugins", "superpowers", ".codex-plugin", "plugin.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(home, ".corvus", "plugins", "superpowers", ".codex-plugin", "plugin.json")); err != nil {
 		t.Fatalf("installed plugin missing: %v", err)
 	}
 }
@@ -220,7 +220,7 @@ func TestApplyLocalClaudePluginPackage(t *testing.T) {
 	if !done.OK || done.Status != "done" {
 		t.Fatalf("apply response = %+v", done)
 	}
-	statePath := filepath.Join(home, ".reasonix", "plugin-packages.json")
+	statePath := filepath.Join(home, ".corvus", "plugin-packages.json")
 	raw, err := os.ReadFile(statePath)
 	if err != nil {
 		t.Fatalf("state file missing: %v", err)
@@ -228,7 +228,7 @@ func TestApplyLocalClaudePluginPackage(t *testing.T) {
 	if !strings.Contains(string(raw), `"name": "ui-ux-pro-max"`) || !strings.Contains(string(raw), `"manifestKind": "claude"`) {
 		t.Fatalf("state file = %s", raw)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".reasonix", "plugins", "ui-ux-pro-max", ".claude-plugin", "plugin.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(home, ".corvus", "plugins", "ui-ux-pro-max", ".claude-plugin", "plugin.json")); err != nil {
 		t.Fatalf("installed plugin missing: %v", err)
 	}
 }
@@ -256,7 +256,7 @@ func TestApplyCopiedPluginPreservesExecutableHookCommand(t *testing.T) {
 	if !resp.OK {
 		t.Fatalf("response = %+v", resp)
 	}
-	installed := filepath.Join(home, ".reasonix", "plugins", "executable-plugin", "bin", "hook")
+	installed := filepath.Join(home, ".corvus", "plugins", "executable-plugin", "bin", "hook")
 	info, err := os.Stat(installed)
 	if err != nil {
 		t.Fatal(err)
@@ -280,7 +280,7 @@ func TestPlanClaudeCompatibilityReportsAgentsHooksAndMCP(t *testing.T) {
 		t.Fatalf("actions = %+v", planned.Actions)
 	}
 	a := planned.Actions[0]
-	// A Stop hook is imported best-effort, but Reasonix's Stop hook is
+	// A Stop hook is imported best-effort, but Corvus's Stop hook is
 	// observation-only and can't block the turn the way Claude's contract
 	// does, so this must report "partial" rather than silently claiming full
 	// compatibility for semantics it doesn't honor.
@@ -328,7 +328,7 @@ func TestApplyLocalSkillFileCopiesToProject(t *testing.T) {
 	if resp.Actions[0].RiskLevel != RiskLow {
 		t.Errorf("copy of a single file should be RiskLow, got %q", resp.Actions[0].RiskLevel)
 	}
-	target := filepath.Join(project, ".reasonix", "skills", "beta", "SKILL.md")
+	target := filepath.Join(project, ".corvus", "skills", "beta", "SKILL.md")
 	if raw, err := os.ReadFile(target); err != nil || !strings.Contains(string(raw), "Beta helper") {
 		t.Fatalf("copied skill = %q err=%v", raw, err)
 	}
@@ -340,7 +340,7 @@ func TestApplyLocalSkillFileCopiesToProject(t *testing.T) {
 func TestApplyLocalSkillFileDoesNotShadowFlatCompatInstall(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
-	existing := filepath.Join(project, ".reasonix", "skills", "beta.md")
+	existing := filepath.Join(project, ".corvus", "skills", "beta.md")
 	writeFile(t, existing, "---\nname: beta\ndescription: Existing beta\n---\nold")
 	src := filepath.Join(t.TempDir(), "beta.md")
 	writeFile(t, src, "---\nname: beta\ndescription: New beta\n---\nnew")
@@ -383,14 +383,14 @@ func TestApplyLocalSKILLFileCopiesSiblingResources(t *testing.T) {
 	if resp.Actions[0].RiskLevel != RiskMedium {
 		t.Fatalf("directory package copy should be RiskMedium, got %q", resp.Actions[0].RiskLevel)
 	}
-	target := filepath.Join(project, ".reasonix", "skills", "frontend-design", "SKILL.md")
+	target := filepath.Join(project, ".corvus", "skills", "frontend-design", "SKILL.md")
 	if resp.Actions[0].CanonicalPath != target {
 		t.Fatalf("canonicalPath = %q, want %q", resp.Actions[0].CanonicalPath, target)
 	}
-	if _, err := os.Stat(filepath.Join(project, ".reasonix", "skills", "frontend-design", "references", "style.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(project, ".corvus", "skills", "frontend-design", "references", "style.md")); err != nil {
 		t.Fatalf("reference file should be copied with SKILL.md source: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(project, ".reasonix", "skills", "frontend-design", "scripts", "lint.sh")); err != nil {
+	if _, err := os.Stat(filepath.Join(project, ".corvus", "skills", "frontend-design", "scripts", "lint.sh")); err != nil {
 		t.Fatalf("script file should be copied with SKILL.md source: %v", err)
 	}
 	st := skill.New(skill.Options{HomeDir: home, ProjectRoot: project, DisableBuiltins: true})
@@ -427,7 +427,7 @@ func TestApplyLocalSkillLinkMode(t *testing.T) {
 	if resp.Actions[0].RiskLevel != RiskMedium && resp.Actions[0].RiskLevel != RiskHigh {
 		t.Errorf("link mode should be at least RiskMedium, got %q", resp.Actions[0].RiskLevel)
 	}
-	target := filepath.Join(project, ".reasonix", "skills", "gamma", "SKILL.md")
+	target := filepath.Join(project, ".corvus", "skills", "gamma", "SKILL.md")
 	if fi, err := os.Lstat(target); err != nil || fi.Mode()&os.ModeSymlink == 0 {
 		t.Fatalf("target should be a symlink: lstat err=%v mode=%v", err, fi.Mode())
 	}
@@ -661,7 +661,7 @@ func TestPlanProjectMCPJSONDefaultsProject(t *testing.T) {
 	if !resp.OK || len(resp.Actions) != 1 {
 		t.Fatalf("response = %+v", resp)
 	}
-	wantPath := filepath.Join(project, "reasonix.toml")
+	wantPath := filepath.Join(project, "corvus.toml")
 	if resp.Scope != "project" || resp.Actions[0].Scope != "project" || resp.Actions[0].ConfigPath != wantPath {
 		t.Fatalf("project .mcp.json scope/path = response %q action %q path %q, want project %q", resp.Scope, resp.Actions[0].Scope, resp.Actions[0].ConfigPath, wantPath)
 	}
@@ -825,7 +825,7 @@ func TestApplyRemoteMCPURLConnectsAndPersists(t *testing.T) {
 	if resp.Actions[0].RiskLevel != RiskHigh {
 		t.Errorf("auth headers should produce RiskHigh, got %q", resp.Actions[0].RiskLevel)
 	}
-	cfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
 	if len(cfg.Plugins) != 1 || cfg.Plugins[0].Headers["Authorization"] != "Bearer ${TOKEN}" {
 		t.Fatalf("plugins = %+v", cfg.Plugins)
 	}
@@ -858,7 +858,7 @@ func TestApplyRemoteMCPURLDefaultsGlobal(t *testing.T) {
 	if len(stub.connected) != 1 || stub.connected[0].Source != config.MCPSourceUserConfig {
 		t.Fatalf("global install live source = %+v, want source %q", stub.connected, config.MCPSourceUserConfig)
 	}
-	projectCfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
+	projectCfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
 	if _, ok := findPlugin(projectCfg.Plugins, "global-default"); ok {
 		t.Fatalf("project config should not receive default-global MCP: %+v", projectCfg.Plugins)
 	}
@@ -868,11 +868,11 @@ func TestApplyMCPRejectsDuplicateByDefault(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
 	// Seed an existing entry the same way the first install would have.
-	cfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: "dup", Command: "x"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.SaveTo(filepath.Join(project, "reasonix.toml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(project, "corvus.toml")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -898,11 +898,11 @@ func TestApplyMCPRejectsDuplicateByDefault(t *testing.T) {
 func TestApplyMCPReplaceOverwritesExisting(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
-	cfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: "editable", Command: "old"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.SaveTo(filepath.Join(project, "reasonix.toml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(project, "corvus.toml")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -921,7 +921,7 @@ func TestApplyMCPReplaceOverwritesExisting(t *testing.T) {
 	if !resp.OK {
 		t.Fatalf("response = %+v", resp)
 	}
-	reloaded := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
+	reloaded := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
 	if reloaded.Plugins[0].Command != "" || reloaded.Plugins[0].URL != "https://mcp.example.com/mcp" {
 		t.Errorf("replace did not update entry: %+v", reloaded.Plugins[0])
 	}
@@ -930,11 +930,11 @@ func TestApplyMCPReplaceOverwritesExisting(t *testing.T) {
 func TestApplyMCPReplaceDisconnectsLiveServerBeforeConnect(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
-	cfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: "live", Command: "old"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.SaveTo(filepath.Join(project, "reasonix.toml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(project, "corvus.toml")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -983,7 +983,7 @@ func TestApplyMCPReplaceDisconnectsLiveServerBeforeConnect(t *testing.T) {
 func TestApplyMCPRollsBackOnSaveFailure(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
-	configPath := filepath.Join(project, "reasonix.toml")
+	configPath := filepath.Join(project, "corvus.toml")
 	if err := os.WriteFile(configPath, []byte("# valid before connect\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1048,7 +1048,7 @@ func TestApplyConnectFailureDoesNotPersist(t *testing.T) {
 	if resp.OK {
 		t.Fatalf("expected connect failure, got %+v", resp)
 	}
-	cfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
 	if len(cfg.Plugins) != 0 {
 		t.Errorf("no plugin should be persisted on connect failure, got %+v", cfg.Plugins)
 	}
@@ -1189,7 +1189,7 @@ func TestParseGitHubRepoSourceAcceptsCanonicalRepositoryPaths(t *testing.T) {
 func TestParseGitHubRepoSourceRejectsPagesAndUnsafePaths(t *testing.T) {
 	for _, source := range []string{
 		"https://github.com/o/r/issues/1",
-		"https://github.com/o/r/blob/main/reasonix-plugin.json",
+		"https://github.com/o/r/blob/main/corvus-plugin.json",
 		"https://github.com/o/r/pull/1",
 		"https://github.com/o/r/tree/main/../evil",
 		"https://github.com/o/r/tree/main/%2e%2e/evil",
@@ -1318,12 +1318,12 @@ func TestFetchTextAppliesTimeoutAndUA(t *testing.T) {
 	}
 }
 
-func TestGlobalSkillInstallRootUsesReasonixHome(t *testing.T) {
+func TestGlobalSkillInstallRootUsesCorvusHome(t *testing.T) {
 	home := t.TempDir()
-	reasonixHome := filepath.Join(t.TempDir(), "rx-home")
+	corvusHome := filepath.Join(t.TempDir(), "rx-home")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("REASONIX_HOME", reasonixHome)
+	t.Setenv("CORVUS_HOME", corvusHome)
 	oldUserHomeDir := userHomeDir
 	userHomeDir = func() (string, error) { return home, nil }
 	t.Cleanup(func() { userHomeDir = oldUserHomeDir })
@@ -1333,7 +1333,7 @@ func TestGlobalSkillInstallRootUsesReasonixHome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("skillInstallRoot: %v", err)
 	}
-	want := filepath.Join(reasonixHome, skill.SkillsDirname)
+	want := filepath.Join(corvusHome, skill.SkillsDirname)
 	if root != want {
 		t.Fatalf("global skill root = %q, want %q", root, want)
 	}
@@ -1394,7 +1394,7 @@ func TestPlanMarkdownSkillURL(t *testing.T) {
 func TestUninstallRemovesSkillByName(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
-	target := filepath.Join(project, ".reasonix", "skills", "doomed.md")
+	target := filepath.Join(project, ".corvus", "skills", "doomed.md")
 	writeFile(t, target, "---\nname: doomed\ndescription: Doomed\n---\nbody")
 
 	tl := NewTool(Options{ProjectRoot: project, HomeDir: home})
@@ -1441,7 +1441,7 @@ func TestUninstallRemovesRegisteredSkillRootByContainedSkillName(t *testing.T) {
 	if resp.Actions[0].SkillCount != 2 {
 		t.Errorf("SkillCount = %d, want 2", resp.Actions[0].SkillCount)
 	}
-	cfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
 	if len(cfg.Skills.Paths) != 0 {
 		t.Fatalf("skills.paths should be empty after root uninstall, got %v", cfg.Skills.Paths)
 	}
@@ -1450,11 +1450,11 @@ func TestUninstallRemovesRegisteredSkillRootByContainedSkillName(t *testing.T) {
 func TestUninstallRemovesMCPAndDisconnects(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
-	cfg := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: "ed", Type: "http", URL: "https://mcp.example.com/mcp"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.SaveTo(filepath.Join(project, "reasonix.toml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(project, "corvus.toml")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1479,7 +1479,7 @@ func TestUninstallRemovesMCPAndDisconnects(t *testing.T) {
 	if disconnects.Load() != 1 {
 		t.Errorf("OnDisconnect should fire once, got %d", disconnects.Load())
 	}
-	reloaded := config.LoadForEdit(filepath.Join(project, "reasonix.toml"))
+	reloaded := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
 	if len(reloaded.Plugins) != 0 {
 		t.Errorf("plugin should be removed, got %+v", reloaded.Plugins)
 	}
@@ -1488,8 +1488,8 @@ func TestUninstallRemovesMCPAndDisconnects(t *testing.T) {
 func TestUninstallWithoutScopePrefersProjectSkill(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
-	projectTarget := filepath.Join(project, ".reasonix", "skills", "dupe.md")
-	globalTarget := filepath.Join(home, ".reasonix", "skills", "dupe.md")
+	projectTarget := filepath.Join(project, ".corvus", "skills", "dupe.md")
+	globalTarget := filepath.Join(home, ".corvus", "skills", "dupe.md")
 	writeFile(t, projectTarget, "---\nname: dupe\ndescription: Project\n---\nbody")
 	writeFile(t, globalTarget, "---\nname: dupe\ndescription: Global\n---\nbody")
 
@@ -1641,7 +1641,7 @@ func TestPlanIDIncludesActionDetails(t *testing.T) {
 		Scope:  "project",
 		Mode:   "auto",
 	}
-	a := action{Kind: "mcp", Action: "install_mcp_server", Name: "same", URL: "https://mcp.one.example/mcp", Transport: "http", ConfigPath: "/repo/reasonix.toml"}
+	a := action{Kind: "mcp", Action: "install_mcp_server", Name: "same", URL: "https://mcp.one.example/mcp", Transport: "http", ConfigPath: "/repo/corvus.toml"}
 	b := a
 	b.URL = "https://mcp.two.example/mcp"
 	if computePlanID(req, []action{a}) == computePlanID(req, []action{b}) {
@@ -1967,7 +1967,7 @@ func TestGitHubClaudeMarketplacePlansAndAppliesRelativePlugins(t *testing.T) {
 		t.Fatalf("preview+apply clone/cleanup calls = %d/%d, want 2/2 (one clone per phase)", cloneCalls, cleanupCalls)
 	}
 	for _, name := range []string{"alpha-legal", "beta-legal"} {
-		if _, ok, err := pluginpkg.FindInstalled(filepath.Join(home, ".reasonix"), name); err != nil || !ok {
+		if _, ok, err := pluginpkg.FindInstalled(filepath.Join(home, ".corvus"), name); err != nil || !ok {
 			t.Fatalf("installed plugin %q missing: ok=%v err=%v", name, ok, err)
 		}
 	}
@@ -2250,7 +2250,7 @@ func TestGitHubClaudeMarketplacePlanIDStableAcrossPlanAndApply(t *testing.T) {
 		t.Fatalf("plan ID drifted between plan (%s) and apply (%s)", plan.PlanID, applied.PlanID)
 	}
 	for _, name := range []string{"alpha-legal", "beta-legal"} {
-		if _, ok, err := pluginpkg.FindInstalled(filepath.Join(home, ".reasonix"), name); err != nil || !ok {
+		if _, ok, err := pluginpkg.FindInstalled(filepath.Join(home, ".corvus"), name); err != nil || !ok {
 			t.Fatalf("installed plugin %q missing: ok=%v err=%v", name, ok, err)
 		}
 	}
@@ -2296,7 +2296,7 @@ func TestGitHubPluginApplyRefusesUnpinnableDrift(t *testing.T) {
 	if !strings.Contains(resp.Actions[0].Error, "approved commit cafe0001") {
 		t.Fatalf("action error = %q, want the approved-commit drift refusal", resp.Actions[0].Error)
 	}
-	if _, ok, _ := pluginpkg.FindInstalled(filepath.Join(home, ".reasonix"), "pwf"); ok {
+	if _, ok, _ := pluginpkg.FindInstalled(filepath.Join(home, ".corvus"), "pwf"); ok {
 		t.Fatal("drifted plugin must not be installed")
 	}
 }
@@ -2332,7 +2332,7 @@ func TestCopyMaterializesInRootSymlinkedCommands(t *testing.T) {
 	if resp.Actions[0].CommandCount != 2 {
 		t.Fatalf("planned commands = %d, want 2 (alias followed)", resp.Actions[0].CommandCount)
 	}
-	installedRoot := filepath.Join(home, ".reasonix", "plugins", "aliases")
+	installedRoot := filepath.Join(home, ".corvus", "plugins", "aliases")
 	pkg, _, err := pluginpkg.ParseDir(installedRoot)
 	if err != nil {
 		t.Fatalf("ParseDir installed: %v", err)
@@ -2375,10 +2375,10 @@ func TestCopyRefusesUnmaterializableSymlinkCommands(t *testing.T) {
 	if !strings.Contains(resp.Actions[0].Error, "approved plan counted") {
 		t.Fatalf("action error = %q, want the capability-verification refusal", resp.Actions[0].Error)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".reasonix", "plugins", "escapes")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(home, ".corvus", "plugins", "escapes")); !os.IsNotExist(err) {
 		t.Fatal("failed install must not leave the copied tree behind")
 	}
-	if _, ok, _ := pluginpkg.FindInstalled(filepath.Join(home, ".reasonix"), "escapes"); ok {
+	if _, ok, _ := pluginpkg.FindInstalled(filepath.Join(home, ".corvus"), "escapes"); ok {
 		t.Fatal("failed install must not be registered")
 	}
 }
@@ -2430,7 +2430,7 @@ func TestFailedReplaceKeepsExistingPluginInstall(t *testing.T) {
 		t.Fatalf("update = %+v, want a failed apply for the unmaterializable symlink", update)
 	}
 
-	installedRoot := filepath.Join(home, ".reasonix", "plugins", "pwf")
+	installedRoot := filepath.Join(home, ".corvus", "plugins", "pwf")
 	if _, err := os.Stat(filepath.Join(installedRoot, "commands", "plan.md")); err != nil {
 		t.Fatalf("previous install must survive a failed update: %v", err)
 	}
@@ -2441,7 +2441,7 @@ func TestFailedReplaceKeepsExistingPluginInstall(t *testing.T) {
 	if pkg.Manifest.Version != "1.0.0" {
 		t.Fatalf("installed version = %q, want the previous 1.0.0 kept", pkg.Manifest.Version)
 	}
-	if p, ok, _ := pluginpkg.FindInstalled(filepath.Join(home, ".reasonix"), "pwf"); !ok || !p.Enabled {
+	if p, ok, _ := pluginpkg.FindInstalled(filepath.Join(home, ".corvus"), "pwf"); !ok || !p.Enabled {
 		t.Fatal("previous registration must survive a failed update")
 	}
 	if _, err := os.Stat(installedRoot + ".pre-replace"); !os.IsNotExist(err) {
@@ -2503,14 +2503,14 @@ func TestBackupPathCannotCollideWithSiblingPlugin(t *testing.T) {
 		t.Fatalf("update = %+v", update)
 	}
 
-	siblingRoot := filepath.Join(home, ".reasonix", "plugins", "foo.pre-replace")
+	siblingRoot := filepath.Join(home, ".corvus", "plugins", "foo.pre-replace")
 	if _, err := os.Stat(filepath.Join(siblingRoot, "commands", "keep.md")); err != nil {
 		t.Fatalf("sibling plugin's files must survive the update of foo: %v", err)
 	}
-	if _, ok, _ := pluginpkg.FindInstalled(filepath.Join(home, ".reasonix"), "foo.pre-replace"); !ok {
+	if _, ok, _ := pluginpkg.FindInstalled(filepath.Join(home, ".corvus"), "foo.pre-replace"); !ok {
 		t.Fatal("sibling plugin must stay registered")
 	}
-	pkg, _, err := pluginpkg.ParseDir(filepath.Join(home, ".reasonix", "plugins", "foo"))
+	pkg, _, err := pluginpkg.ParseDir(filepath.Join(home, ".corvus", "plugins", "foo"))
 	if err != nil {
 		t.Fatalf("ParseDir foo: %v", err)
 	}

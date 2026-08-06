@@ -13,15 +13,15 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/checkpoint"
-	"reasonix/internal/event"
-	"reasonix/internal/evidence"
-	"reasonix/internal/jobs"
-	"reasonix/internal/permission"
-	"reasonix/internal/planmode"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
-	"reasonix/internal/workspacelease"
+	"corvus/internal/checkpoint"
+	"corvus/internal/event"
+	"corvus/internal/evidence"
+	"corvus/internal/jobs"
+	"corvus/internal/permission"
+	"corvus/internal/planmode"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
+	"corvus/internal/workspacelease"
 )
 
 // DefaultTaskSystemPrompt steers a sub-agent toward focused, terse delivery —

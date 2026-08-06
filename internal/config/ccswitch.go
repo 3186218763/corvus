@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	fileencoding "reasonix/internal/fileutil/encoding"
-	"reasonix/internal/secrets"
+	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/secrets"
 )
 
 const ccSwitchDir = ".cc-switch"
@@ -27,7 +27,7 @@ type ccSwitchLegacyServer struct {
 	Server mcpServerSpec `json:"server"`
 	Apps   struct {
 		Codex    bool  `json:"codex"`
-		Reasonix *bool `json:"reasonix"`
+		Corvus *bool `json:"corvus"`
 	} `json:"apps"`
 }
 
@@ -49,13 +49,13 @@ func LoadCCSwitchMCPCandidates() ([]MCPImportCandidate, error) {
 	return candidates, nil
 }
 
-// LoadCCSwitchMCP reads MCP servers enabled for Reasonix from cc-switch and maps
-// them to Reasonix plugin entries. Newer cc-switch stores servers in SQLite;
+// LoadCCSwitchMCP reads MCP servers enabled for Corvus from cc-switch and maps
+// them to Corvus plugin entries. Newer cc-switch stores servers in SQLite;
 // older installs kept them in config.json(.migrated/.bak), so we support both.
 //
-// CC Switch v16+ stores dedicated enabled_reasonix / apps.reasonix flags.
+// CC Switch v16+ stores dedicated enabled_corvus / apps.corvus flags.
 // Treat those as authoritative when present, and fall back to Codex only for
-// pre-v16 SQLite schemas or legacy JSON entries without Reasonix enablement.
+// pre-v16 SQLite schemas or legacy JSON entries without Corvus enablement.
 func LoadCCSwitchMCP() ([]PluginEntry, error) {
 	if IsolatedHomeDir() != "" {
 		return nil, nil
@@ -88,15 +88,15 @@ func loadCCSwitchMCPFromRoot(root string) ([]PluginEntry, error) {
 			return nil, err
 		}
 	}
-	return nil, fmt.Errorf("cc-switch import: no Reasonix-enabled MCP servers found in %s", root)
+	return nil, fmt.Errorf("cc-switch import: no Corvus-enabled MCP servers found in %s", root)
 }
 
 func ImportCCSwitchMCPEntries(entries []PluginEntry) (total, added, updated int, err error) {
 	return importMCPEntries(entries)
 }
 
-// ImportCCSwitchMCP upserts cc-switch's Reasonix-enabled MCP servers into the
-// user-global Reasonix config and saves it.
+// ImportCCSwitchMCP upserts cc-switch's Corvus-enabled MCP servers into the
+// user-global Corvus config and saves it.
 func ImportCCSwitchMCP() (total, added, updated int, err error) {
 	entries, err := LoadCCSwitchMCP()
 	if err != nil {
@@ -144,12 +144,12 @@ func loadCCSwitchMCPDB(path string) ([]PluginEntry, error) {
 		return nil, fmt.Errorf("cc-switch import: sqlite3 not found to read %s", path)
 	}
 	query := `SELECT id, name, server_config FROM mcp_servers WHERE enabled_codex = 1 ORDER BY name, id`
-	hasReasonix, err := ccSwitchDBHasReasonixColumn(sqlite, path)
+	hasCorvus, err := ccSwitchDBHasCorvusColumn(sqlite, path)
 	if err != nil {
 		return nil, err
 	}
-	if hasReasonix {
-		query = `SELECT id, name, server_config FROM mcp_servers WHERE enabled_reasonix = 1 ORDER BY name, id`
+	if hasCorvus {
+		query = `SELECT id, name, server_config FROM mcp_servers WHERE enabled_corvus = 1 ORDER BY name, id`
 	}
 	cmd := exec.Command(sqlite, "-readonly", "-json", path, query)
 	cmd.Env = secrets.ProcessEnv()
@@ -167,8 +167,8 @@ func loadCCSwitchMCPDB(path string) ([]PluginEntry, error) {
 	return ccSwitchRowsToPlugins(rows)
 }
 
-func ccSwitchDBHasReasonixColumn(sqlite, path string) (bool, error) {
-	const query = `SELECT COUNT(*) FROM pragma_table_info('mcp_servers') WHERE name = 'enabled_reasonix'`
+func ccSwitchDBHasCorvusColumn(sqlite, path string) (bool, error) {
+	const query = `SELECT COUNT(*) FROM pragma_table_info('mcp_servers') WHERE name = 'enabled_corvus'`
 	cmd := exec.Command(sqlite, "-readonly", path, query)
 	cmd.Env = secrets.ProcessEnv()
 	out, err := cmd.Output()
@@ -181,7 +181,7 @@ func ccSwitchDBHasReasonixColumn(sqlite, path string) (bool, error) {
 	case "1":
 		return true, nil
 	default:
-		return false, fmt.Errorf("cc-switch import: inspect %s: unexpected enabled_reasonix column count %q", path, strings.TrimSpace(string(out)))
+		return false, fmt.Errorf("cc-switch import: inspect %s: unexpected enabled_corvus column count %q", path, strings.TrimSpace(string(out)))
 	}
 }
 
@@ -227,8 +227,8 @@ func loadCCSwitchLegacyConfig(path string) ([]PluginEntry, error) {
 	for _, key := range keys {
 		srv := doc.MCP.Servers[key]
 		enabled := srv.Apps.Codex
-		if srv.Apps.Reasonix != nil {
-			enabled = *srv.Apps.Reasonix
+		if srv.Apps.Corvus != nil {
+			enabled = *srv.Apps.Corvus
 		}
 		if !enabled {
 			continue

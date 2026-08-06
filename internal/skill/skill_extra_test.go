@@ -256,7 +256,7 @@ func TestCreateProjectScopeRequiresRoot(t *testing.T) {
 
 func TestCreateDirectoryLayoutSkill(t *testing.T) {
 	home := t.TempDir()
-	skillsRoot := filepath.Join(home, ".reasonix", "skills", "existing", "SKILL.md")
+	skillsRoot := filepath.Join(home, ".corvus", "skills", "existing", "SKILL.md")
 	os.MkdirAll(filepath.Dir(skillsRoot), 0o755)
 	os.WriteFile(skillsRoot, []byte("---\ndescription: exists\n---\nbody"), 0o644)
 	st := New(Options{HomeDir: home, DisableBuiltins: true})
@@ -320,7 +320,7 @@ func TestUpdateContentRefusesSymlinkedFlatSkill(t *testing.T) {
 	if err := os.WriteFile(outside, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	root := filepath.Join(home, ".reasonix", SkillsDirname)
+	root := filepath.Join(home, ".corvus", SkillsDirname)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +348,7 @@ func TestUpdateContentRefusesSymlinkedDirectorySkill(t *testing.T) {
 	if err := os.WriteFile(outside, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	root := filepath.Join(home, ".reasonix", SkillsDirname)
+	root := filepath.Join(home, ".corvus", SkillsDirname)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +370,7 @@ func TestUpdateContentRefusesSymlinkedDirectorySkill(t *testing.T) {
 
 func TestDeleteSymlinkedSkillsRemovesLinksNotTargets(t *testing.T) {
 	home := t.TempDir()
-	root := filepath.Join(home, ".reasonix", SkillsDirname)
+	root := filepath.Join(home, ".corvus", SkillsDirname)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}

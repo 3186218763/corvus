@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"reasonix/internal/event"
+	"corvus/internal/event"
 )
 
 // TestReplayPendingPromptsReEmitsBlockedApproval proves a tool approval that is

@@ -3,7 +3,7 @@ package store
 import "testing"
 
 func TestSessionSidecarLayout(t *testing.T) {
-	const p = "/home/u/.reasonix/sessions/abc.jsonl"
+	const p = "/home/u/.corvus/sessions/abc.jsonl"
 	cases := []struct {
 		name string
 		got  string
@@ -11,17 +11,17 @@ func TestSessionSidecarLayout(t *testing.T) {
 	}{
 		// .meta appends to the full path (historical layout); the rest replace .jsonl.
 		{"meta", SessionMeta(p), p + ".meta"},
-		{"goal-state", SessionGoalState(p), "/home/u/.reasonix/sessions/abc.goal-state.json"},
-		{"event-log", SessionEventLog(p), "/home/u/.reasonix/sessions/abc.events.jsonl"},
-		{"event-log-damaged", SessionEventLogDamaged(p), "/home/u/.reasonix/sessions/abc.events.jsonl.damaged"},
-		{"event-index", SessionEventIndex(p), "/home/u/.reasonix/sessions/abc.event-index.json"},
-		{"conflict-log", SessionConflictLog(p), "/home/u/.reasonix/sessions/abc.conflicts.jsonl"},
+		{"goal-state", SessionGoalState(p), "/home/u/.corvus/sessions/abc.goal-state.json"},
+		{"event-log", SessionEventLog(p), "/home/u/.corvus/sessions/abc.events.jsonl"},
+		{"event-log-damaged", SessionEventLogDamaged(p), "/home/u/.corvus/sessions/abc.events.jsonl.damaged"},
+		{"event-index", SessionEventIndex(p), "/home/u/.corvus/sessions/abc.event-index.json"},
+		{"conflict-log", SessionConflictLog(p), "/home/u/.corvus/sessions/abc.conflicts.jsonl"},
 		{"lock", SessionLockFile(p), p + ".lock"},
 		{"lease-lock", SessionLeaseLock(p), p + ".lease.lock"},
 		{"lease-info", SessionLeaseInfo(p), p + ".lease.json"},
-		{"checkpoint", SessionCheckpointDir(p), "/home/u/.reasonix/sessions/abc.ckpt"},
-		{"jobs", SessionJobsDir(p), "/home/u/.reasonix/sessions/abc.jobs"},
-		{"cleanup-pending", SessionCleanupPending(p), "/home/u/.reasonix/sessions/abc.cleanup-pending.json"},
+		{"checkpoint", SessionCheckpointDir(p), "/home/u/.corvus/sessions/abc.ckpt"},
+		{"jobs", SessionJobsDir(p), "/home/u/.corvus/sessions/abc.jobs"},
+		{"cleanup-pending", SessionCleanupPending(p), "/home/u/.corvus/sessions/abc.cleanup-pending.json"},
 	}
 	for _, c := range cases {
 		if c.got != c.want {
@@ -77,16 +77,16 @@ func TestIsSessionTranscriptName(t *testing.T) {
 }
 
 func TestSessionSidecarFiles(t *testing.T) {
-	const p = "/home/u/.reasonix/sessions/abc.jsonl"
+	const p = "/home/u/.corvus/sessions/abc.jsonl"
 	got := SessionSidecarFiles(p)
 	want := []string{
 		p + ".meta",
-		"/home/u/.reasonix/sessions/abc.goal-state.json",
-		"/home/u/.reasonix/sessions/abc.events.jsonl",
-		"/home/u/.reasonix/sessions/abc.events.jsonl.damaged",
-		"/home/u/.reasonix/sessions/abc.event-index.json",
-		"/home/u/.reasonix/sessions/abc.conflicts.jsonl",
-		"/home/u/.reasonix/sessions/abc.recovery.json",
+		"/home/u/.corvus/sessions/abc.goal-state.json",
+		"/home/u/.corvus/sessions/abc.events.jsonl",
+		"/home/u/.corvus/sessions/abc.events.jsonl.damaged",
+		"/home/u/.corvus/sessions/abc.event-index.json",
+		"/home/u/.corvus/sessions/abc.conflicts.jsonl",
+		"/home/u/.corvus/sessions/abc.recovery.json",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("SessionSidecarFiles = %v, want %v", got, want)

@@ -34,7 +34,7 @@
 
 1. **smooth scroll 的 lerp（P1）。** §5.2 只写「lerp + ease-out」，未定义曲线、取整、终值。指定：固定 `dur=150ms`（单一常量，不要区间 120–180ms）、tick 16ms；`t=(now-start)/dur` 截断 [0,1]；ease-out cubic `e=1-(1-t)^3`；`y=from+round((to-from)*e)`；最后一拍强制 `y=to`（防取整停滞）。目标页距：PgUp/PgDn = `±(viewport.Height()-1)`（与现 PageUp/PageDown 一致），wheel = ±3 行。
 2. **offsets 数组精确维护与 O(1) 断言（P1）。** §4.2 的「O(1) truncate」与不变量「len==nBlocks+1、offsets[0]==0、last==total」矛盾：头截断后剩余 offsets 需整体减去基址（O(nBlocks) rebase，或放弃首元素恒 0 的不变量）。指定：不变量保持 `offsets[0]==0`；Append = wrap 新块 + 追加 lines + `offsets=append(offsets, len(wrappedLines))`；Set i = 替换 `[offsets[i],offsets[i+1])` + 对 `j>i` 全部 `offsets[j]+=delta`（允许 O(nBlocks)）；头截断 = `lines=lines[offsets[L]:]`、丢弃 `offsets[:L]`、剩余全部减去 `offsets[L]`（写为 O(nBlocks) rebase，压实测即可，别再宣称 O(1)）。
-3. **reduce_motion 判定位置（P1）。** `motionEnabled()` 未定义求值位置。指定：包级函数、每次调用读 env（t.Setenv 可测、无启动缓存状态）；`scrollRepaint` 则在 `newChatTUI()` 内读一次存字段（与 `REASONIX_DISABLE_MOUSE` 同一处，chat_tui.go:612）。§4.1 的「(cli.go, same place other env toggles are read)」与事实不符——现有 TUI env 开关都在 chat_tui.go/theme.go 读，cli.go 只负责 API key；改法：改为「newChatTUI 内、与 REASONIX_DISABLE_MOUSE 同处」。
+3. **reduce_motion 判定位置（P1）。** `motionEnabled()` 未定义求值位置。指定：包级函数、每次调用读 env（t.Setenv 可测、无启动缓存状态）；`scrollRepaint` 则在 `newChatTUI()` 内读一次存字段（与 `CORVUS_DISABLE_MOUSE` 同一处，chat_tui.go:612）。§4.1 的「(cli.go, same place other env toggles are read)」与事实不符——现有 TUI env 开关都在 chat_tui.go/theme.go 读，cli.go 只负责 API key；改法：改为「newChatTUI 内、与 CORVUS_DISABLE_MOUSE 同处」。
 4. **窄屏 branding 阈值（P2）。** 「≥60 cols」未说明是哪个宽度。指定：以 `renderTUIBanner` 收到的 width 参数（= `transcriptContentWidth(m.width, m.nativeScrollback)`）为准，≥60 宽版、<60 窄版；窄版截断规则（如超宽省略号）由实现定。
 5. **渲染计数 harness（P1）。** 指定机制：包级测试钩子 `var panelRenderHook func(name string)`（生产仅一行 `if panelRenderHook != nil { panelRenderHook(name) }`），`renderTodoPanel` 等经 `m.renderPanel("todo", fn)` 走钩子；测试断言每轮 Update 后各面板计数为 1。明确「不引生产计数器字段」。
 6. **motion off 的静态 spinner 字形（P2）。** 指定：固定显示 `spinner.View()` 当前帧且不再调度 `spinner.Tick`（保持现有帧字形，避免引入新字符）；tool 行同理固定第一帧。
@@ -54,7 +54,7 @@
 **结论：需修改，缺 4 项关键风险：**
 
 1. **增量 wrap 与现有 live tool/reasoning 更新路径的交互（P1，§9 未覆盖）。** 现有 re-wrap 由 `len(transcript)!=prevLines || width!=prevWidth || transcriptDirty` 触发（chat_tui.go:841），而 mutation 点不止 append：`transcript[i]` 原地改写（tool working 2452、reasoning tail）、collapse、/clear（chat_tui.go:1832–1833 同时清 wrappedLines）、session switch replay、banner commit——任一漏接都会让 offsets 缓存漂移。改法：§9 加风险行，并规定 plan 开头必须有「transcript mutation inventory」章节（先例：总 spec §16.1 要求 P2 plan 先做 runtime inventory），逐点列出 cache 接线。
-2. **smooth scroll × ClearScreen env 兜底并存（P1，审查重点点名）。** env=1 时每个 16ms 滚动 tick 都改变 YOffset → 每次 Update 触发一次 ClearScreen（16ms 风暴，闪烁反而更严重）。指定：`REASONIX_TUI_SCROLL_REPAINT=1` 时禁用平滑滚动（退回瞬时跳），并在 §8 加一条测试。
+2. **smooth scroll × ClearScreen env 兜底并存（P1，审查重点点名）。** env=1 时每个 16ms 滚动 tick 都改变 YOffset → 每次 Update 触发一次 ClearScreen（16ms 风暴，闪烁反而更严重）。指定：`CORVUS_TUI_SCROLL_REPAINT=1` 时禁用平滑滚动（退回瞬时跳），并在 §8 加一条测试。
 3. **`tea.Batch` 中 tick 调度 × motion gate 的测试可行性（P1，审查重点点名）。** tea.Cmd 是不透明闭包，无法断言「没有调度 tick」。指定测试缝：门控时调度函数直接返回 `nil` cmd（`spinner` 分支只返回 `elapsedTick()`；scroll 分支返回 nil），测试断言 `cmd == nil`；动画推进用合成消息（如 `scrollTickMsg`）驱动 + 可注入时钟（`from,to,start,dur,now` 纯函数），不用真实 time.Sleep。
 4. **panel cache 首帧/无 Update 的 View（P2）。** bubbletea 首帧 View 可能先于任何 Update；指定 cache 为空时回退为「按需渲染且不缓存」或「渲染一次并缓存」，与 bottomRows 现有 fallback（statusLineCount==0 → +2）一致。
 

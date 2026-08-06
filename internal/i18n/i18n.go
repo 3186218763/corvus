@@ -37,7 +37,7 @@ type Messages struct {
 	NoKey           string // status dot — no API key set
 	Ready           string // status dot — provider ready
 	GetStarted      string // section title above numbered steps
-	StepScaffold    string // step 1 desc — reasonix setup
+	StepScaffold    string // step 1 desc — corvus setup
 	StepSetKey      string // step 2 command label
 
 	StepChatDesc string // interactive session step desc
@@ -129,7 +129,7 @@ type Messages struct {
 	SandboxEscapeWrapReason                string // reason when no OS sandbox can wrap the command
 	SandboxEscapeRuntimeReason             string // fallback reason when an OS sandbox cannot start the command
 	SandboxEscapeDeclined                  string // model-facing denial when the user declines a one-shot unconfined retry
-	ApprovalToolLabelConfigWrite           string // user-facing label for Reasonix-managed config write approvals
+	ApprovalToolLabelConfigWrite           string // user-facing label for Corvus-managed config write approvals
 	ConfigWriteSubjectPrefix               string // subject prefix before the config file path for managed config write approval
 	ConfigWriteReason                      string // reason shown for managed config write approval
 	ConfigWriteDeclined                    string // model-facing denial when the user declines a managed config write
@@ -422,7 +422,7 @@ type Messages struct {
 	SelectProvidersLabel     string // multi-select label
 	EnterAPIKeysHeader       string // header before the per-env-var prompts
 	MissingKeyIntro          string // shown when re-running the key step on a configured setup
-	WroteFileFmt             string // "Wrote %s" — used for reasonix.toml and .env both
+	WroteFileFmt             string // "Wrote %s" — used for corvus.toml and .env both
 	SetupComplete            string // success line at end of init
 	SetupCancelled           string // shown when the user aborts the wizard
 	ConfirmReconfigureFmt    string // "%s already exists. Reconfigure and overwrite?"
@@ -472,7 +472,7 @@ type Messages struct {
 	NoModelsAvailableFmt       string // "%s: no models available, skipping"
 	CustomFetchEmpty           string // "/models returned an empty list — falling back to manual entry"
 	AnthropicFetchEmpty        string // "/models returned an empty list — Anthropic-compatible providers usually don't expose one, falling back to manual entry"
-	SkipStaleCustomEntryFmt    string // "skipping stale %q entry from reasonix.toml (pointing at %s) — please remove it"
+	SkipStaleCustomEntryFmt    string // "skipping stale %q entry from corvus.toml (pointing at %s) — please remove it"
 	APIKeyAlreadySetFmt        string // "reusing existing value for %s"
 	APIKeyResetPromptFmt       string // "Re-enter %s?"
 	InvalidAPIKeyEnvFmt        string // "%q is not a valid API Key variable name..."
@@ -583,7 +583,7 @@ func CurrentLanguage() string {
 // environment and installs it as M. Returns the resolved tag ("en", "zh") so
 // callers can log or expose it.
 //
-// Priority: override > REASONIX_LANG > LC_ALL > LC_MESSAGES > LANG > "en".
+// Priority: override > CORVUS_LANG > LC_ALL > LC_MESSAGES > LANG > "en".
 func DetectLanguage(override string) string {
 	for _, c := range append([]string{override}, envCandidates()...) {
 		if tag := normalize(c); tag != "" {
@@ -594,7 +594,7 @@ func DetectLanguage(override string) string {
 }
 
 func envCandidates() []string {
-	keys := []string{"REASONIX_LANG", "LC_ALL", "LC_MESSAGES", "LANG"}
+	keys := []string{"CORVUS_LANG", "LC_ALL", "LC_MESSAGES", "LANG"}
 	out := make([]string, len(keys))
 	for i, k := range keys {
 		out[i] = os.Getenv(k)

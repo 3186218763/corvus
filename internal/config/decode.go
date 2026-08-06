@@ -3,7 +3,7 @@ package config
 import (
 	"github.com/BurntSushi/toml"
 
-	fileencoding "reasonix/internal/fileutil/encoding"
+	fileencoding "corvus/internal/fileutil/encoding"
 )
 
 func decodeTOMLFile(path string, v any) (toml.MetaData, error) {

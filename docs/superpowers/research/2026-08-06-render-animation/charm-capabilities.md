@@ -1,6 +1,6 @@
 # Bubble Tea v2 / Lip Gloss v2 / bubbles v2 渲染能力与终端协议调研
 
-调研对象：Reasonix（Go agent CLI）。版本：`charm.land/bubbletea/v2@v2.0.7`、`charm.land/lipgloss/v2@v2.0.4`、`charm.land/bubbles/v2@v2.1.0`（本地模块缓存 `/home/miku/go/pkg/mod`）。标注：【事实】= 源码/官方文档已验证；【推断】= 基于源码的合理推导，需自行验证。
+调研对象：Corvus（Go agent CLI）。版本：`charm.land/bubbletea/v2@v2.0.7`、`charm.land/lipgloss/v2@v2.0.4`、`charm.land/bubbles/v2@v2.1.0`（本地模块缓存 `/home/miku/go/pkg/mod`）。标注：【事实】= 源码/官方文档已验证；【推断】= 基于源码的合理推导，需自行验证。
 
 ---
 

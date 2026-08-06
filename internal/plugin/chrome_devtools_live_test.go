@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/secrets"
-	"reasonix/internal/tool"
+	"corvus/internal/secrets"
+	"corvus/internal/tool"
 )
 
 // TestChromeDevtoolsMCPLive is an opt-in release smoke test for the real npm
@@ -20,11 +20,11 @@ import (
 //
 // Run with:
 //
-//	REASONIX_LIVE_CHROME_MCP=1 go test ./internal/plugin \
+//	CORVUS_LIVE_CHROME_MCP=1 go test ./internal/plugin \
 //	  -run '^TestChromeDevtoolsMCPLive$' -v -count=1 -timeout=3m
 func TestChromeDevtoolsMCPLive(t *testing.T) {
-	if os.Getenv("REASONIX_LIVE_CHROME_MCP") != "1" {
-		t.Skip("set REASONIX_LIVE_CHROME_MCP=1 to run the real Chrome MCP smoke test")
+	if os.Getenv("CORVUS_LIVE_CHROME_MCP") != "1" {
+		t.Skip("set CORVUS_LIVE_CHROME_MCP=1 to run the real Chrome MCP smoke test")
 	}
 	// The package TestMain redirects HOME to keep normal tests isolated. A login
 	// shell under that empty home cannot load the user's Node manager and would
@@ -115,29 +115,29 @@ func TestChromeDevtoolsMCPLive(t *testing.T) {
 	}
 	t.Logf("step 06/12 new_page=%s", strings.TrimSpace(out))
 
-	pageHTML := `data:text/html,<title>Reasonix%20MCP</title><h1>Reasonix%20MCP%20Ready</h1>`
+	pageHTML := `data:text/html,<title>Corvus%20MCP</title><h1>Corvus%20MCP%20Ready</h1>`
 	out = executeLiveChromeTool(t, callCtx, tools, "navigate_page", map[string]any{"type": "url", "url": pageHTML})
 	t.Logf("step 07/12 navigate_page=%s", strings.TrimSpace(out))
-	out = executeLiveChromeTool(t, callCtx, tools, "wait_for", map[string]any{"text": []string{"Reasonix MCP Ready"}, "timeout": 10_000})
-	if !strings.Contains(out, "Reasonix MCP Ready") {
+	out = executeLiveChromeTool(t, callCtx, tools, "wait_for", map[string]any{"text": []string{"Corvus MCP Ready"}, "timeout": 10_000})
+	if !strings.Contains(out, "Corvus MCP Ready") {
 		t.Fatalf("step 08/12 wait_for output = %q", out)
 	}
 	t.Log("step 08/12 page content became observable")
 	out = executeLiveChromeTool(t, callCtx, tools, "take_snapshot", map[string]any{})
-	if !strings.Contains(out, "Reasonix MCP Ready") {
+	if !strings.Contains(out, "Corvus MCP Ready") {
 		t.Fatalf("step 09/12 snapshot output = %q", out)
 	}
 	t.Log("step 09/12 accessibility snapshot captured")
 	out = executeLiveChromeTool(t, callCtx, tools, "evaluate_script", map[string]any{
-		"function": `() => { console.log("reasonix-mcp-console"); return document.title; }`,
+		"function": `() => { console.log("corvus-mcp-console"); return document.title; }`,
 	})
-	if !strings.Contains(out, "Reasonix MCP") {
+	if !strings.Contains(out, "Corvus MCP") {
 		t.Fatalf("step 10/12 evaluate_script output = %q", out)
 	}
 	t.Log("step 10/12 evaluate_script returned the document title")
 	consoleOut := executeLiveChromeTool(t, callCtx, tools, "list_console_messages", map[string]any{})
 	networkOut := executeLiveChromeTool(t, callCtx, tools, "list_network_requests", map[string]any{})
-	if !strings.Contains(consoleOut, "reasonix-mcp-console") || strings.TrimSpace(networkOut) == "" {
+	if !strings.Contains(consoleOut, "corvus-mcp-console") || strings.TrimSpace(networkOut) == "" {
 		t.Fatalf("step 11/12 diagnostics console=%q network=%q", consoleOut, networkOut)
 	}
 	t.Log("step 11/12 console and network diagnostics are readable")

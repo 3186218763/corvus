@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/event"
-	"reasonix/internal/evidence"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/event"
+	"corvus/internal/evidence"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 type recordingRecoveryGate struct {

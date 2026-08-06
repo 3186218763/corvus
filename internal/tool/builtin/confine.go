@@ -9,16 +9,16 @@ import (
 	"strings"
 	"time"
 
-	"reasonix/internal/netclient"
-	"reasonix/internal/sandbox"
-	"reasonix/internal/secrets"
-	"reasonix/internal/tool"
+	"corvus/internal/netclient"
+	"corvus/internal/sandbox"
+	"corvus/internal/secrets"
+	"corvus/internal/tool"
 )
 
 // ConfineBash returns the bash built-in bound to an OS-sandbox spec, overriding
 // the unconfined instance registered at init. When the spec enforces, bash runs
 // each command through the sandbox (see package sandbox). guard appends a
-// warning to command output when the command references Reasonix's own session
+// warning to command output when the command references Corvus's own session
 // stores (see SessionDataGuard).
 func ConfineBash(spec sandbox.Spec, guard SessionDataGuard, timeout ...time.Duration) tool.Tool {
 	shell := spec.Shell
@@ -58,7 +58,7 @@ func RebindBashWriteRoots(tl tool.Tool, roots []string) (tool.Tool, bool) {
 	return b, true
 }
 
-// ConfineWebFetch returns the web_fetch built-in bound to Reasonix proxy
+// ConfineWebFetch returns the web_fetch built-in bound to Corvus proxy
 // settings while preserving its SSRF-guarded dialer.
 func ConfineWebFetch(proxySpec netclient.ProxySpec) tool.Tool {
 	return webFetch{proxySpec: proxySpec}
@@ -70,9 +70,9 @@ func ConfineWebFetch(proxySpec netclient.ProxySpec) tool.Tool {
 // the unconfined instances registered at init time, so writes stay inside the
 // workspace by default. roots may be relative; they are resolved to absolute,
 // symlink-free paths once here. An empty roots slice yields unconfined writers.
-// guard additionally rejects writes into Reasonix's own session stores even
+// guard additionally rejects writes into Corvus's own session stores even
 // when the roots would allow them (see SessionDataGuard). managed names the
-// Reasonix-owned config files writable outside the roots after a fresh human
+// Corvus-owned config files writable outside the roots after a fresh human
 // approval (see ManagedConfigPaths).
 func ConfineWriters(roots []string, guard SessionDataGuard, managed ManagedConfigPaths) []tool.Tool {
 	rs := realRoots(roots)
@@ -103,7 +103,7 @@ func ConfineReaders(forbidRoots []string) []tool.Tool {
 }
 
 // confineRead reports whether target is inside any forbidRoot or, when the
-// user enabled [secrets] protect_sensitive_files, matches Reasonix's built-in
+// user enabled [secrets] protect_sensitive_files, matches Corvus's built-in
 // sensitive credential path denylist. An empty forbidRoots slice with the
 // denylist off is unconfined (returns false). Callers should return a result
 // that mimics the directory appearing empty, matching the tmpfs semantics the
@@ -182,15 +182,15 @@ func confine(roots []string, target string) error {
 		}
 	}
 	return fmt.Errorf("path %q is outside the writable roots (writes are confined to %s); "+
-		"write inside the workspace or a configured allow_write root, or widen [sandbox] workspace_root / allow_write in reasonix.toml",
+		"write inside the workspace or a configured allow_write root, or widen [sandbox] workspace_root / allow_write in corvus.toml",
 		target, strings.Join(roots, ", "))
 }
 
 // confineWrite is the write-tool boundary check: workspace confinement first,
 // then the session-data guard, so a write can be inside the roots (e.g. a
 // home-directory workspace covering the state root) and still be refused when
-// it targets Reasonix's own session stores. A target outside every root that
-// matches a Reasonix-managed config file (see ManagedConfigPaths) may proceed
+// it targets Corvus's own session stores. A target outside every root that
+// matches a Corvus-managed config file (see ManagedConfigPaths) may proceed
 // after a fresh per-write human approval carried on ctx; without an approver it
 // fails closed with the original confinement error semantics.
 func confineWrite(ctx context.Context, roots []string, guard SessionDataGuard, managed ManagedConfigPaths, target string) error {

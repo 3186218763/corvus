@@ -7,15 +7,15 @@ import (
 
 func TestDeliveryWorktreeDirUsesLocalAppDataOnWindows(t *testing.T) {
 	setRuntimeGOOS(t, "windows")
-	t.Setenv("REASONIX_STATE_HOME", "")
-	t.Setenv("REASONIX_HOME", "")
+	t.Setenv("CORVUS_STATE_HOME", "")
+	t.Setenv("CORVUS_HOME", "")
 
 	localAppData := filepath.Join(t.TempDir(), "AppData", "Local")
 	oldCacheDir := osUserCacheDir
 	osUserCacheDir = func() string { return localAppData }
 	t.Cleanup(func() { osUserCacheDir = oldCacheDir })
 
-	want := filepath.Join(localAppData, "reasonix", "worktrees")
+	want := filepath.Join(localAppData, "corvus", "worktrees")
 	if got := DeliveryWorktreeDir(); got != want {
 		t.Fatalf("DeliveryWorktreeDir() = %q, want local durable storage %q", got, want)
 	}
@@ -23,8 +23,8 @@ func TestDeliveryWorktreeDirUsesLocalAppDataOnWindows(t *testing.T) {
 
 func TestDeliveryWorktreeDirFallsBackToLocalAppDataUnderUserProfile(t *testing.T) {
 	setRuntimeGOOS(t, "windows")
-	t.Setenv("REASONIX_STATE_HOME", "")
-	t.Setenv("REASONIX_HOME", "")
+	t.Setenv("CORVUS_STATE_HOME", "")
+	t.Setenv("CORVUS_HOME", "")
 
 	home := t.TempDir()
 	oldCacheDir := osUserCacheDir
@@ -36,7 +36,7 @@ func TestDeliveryWorktreeDirFallsBackToLocalAppDataUnderUserProfile(t *testing.T
 		osUserHomeDir = oldHomeDir
 	})
 
-	want := filepath.Join(home, "AppData", "Local", "reasonix", "worktrees")
+	want := filepath.Join(home, "AppData", "Local", "corvus", "worktrees")
 	if got := DeliveryWorktreeDir(); got != want {
 		t.Fatalf("DeliveryWorktreeDir() = %q, want fallback %q", got, want)
 	}
@@ -45,8 +45,8 @@ func TestDeliveryWorktreeDirFallsBackToLocalAppDataUnderUserProfile(t *testing.T
 func TestDeliveryWorktreeDirHonorsExplicitStateHomeOnWindows(t *testing.T) {
 	setRuntimeGOOS(t, "windows")
 	stateHome := filepath.Join(t.TempDir(), "state")
-	t.Setenv("REASONIX_STATE_HOME", stateHome)
-	t.Setenv("REASONIX_HOME", filepath.Join(t.TempDir(), "reasonix-home"))
+	t.Setenv("CORVUS_STATE_HOME", stateHome)
+	t.Setenv("CORVUS_HOME", filepath.Join(t.TempDir(), "corvus-home"))
 
 	want := filepath.Join(stateHome, "worktrees")
 	if got := DeliveryWorktreeDir(); got != want {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 func TestBranchMetaIgnoresRetiredAutoRecoveryField(t *testing.T) {

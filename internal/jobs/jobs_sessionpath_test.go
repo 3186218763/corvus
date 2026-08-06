@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"reasonix/internal/event"
-	"reasonix/internal/store"
+	"corvus/internal/event"
+	"corvus/internal/store"
 )
 
 // captureSink records every event the manager emits so tests can assert that
@@ -59,11 +59,11 @@ func TestValidateTrustedSessionPath(t *testing.T) {
 		// Empty is rejected (caller must provide a transcript path).
 		{"empty is rejected", "", true},
 		// Absolute and relative transcript paths in normal use.
-		{"absolute posix path", "/home/u/.reasonix/sessions/abc.jsonl", false},
-		{"absolute windows path", `C:\Users\me\.reasonix\sessions\abc.jsonl`, false},
+		{"absolute posix path", "/home/u/.corvus/sessions/abc.jsonl", false},
+		{"absolute windows path", `C:\Users\me\.corvus\sessions\abc.jsonl`, false},
 		{"workspace-relative", "sessions/abc.jsonl", false},
 		// Filenames with a hidden segment are still legitimate.
-		{"..hidden is allowed", "/home/u/.reasonix/..hidden.jsonl", false},
+		{"..hidden is allowed", "/home/u/.corvus/..hidden.jsonl", false},
 		{"triple-dot is allowed", "/home/u/...jsonl", false},
 		// Trusted paths keep their host-path semantics. This validator is not a
 		// trusted-root containment boundary.

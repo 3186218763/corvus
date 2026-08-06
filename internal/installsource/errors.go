@@ -50,7 +50,7 @@ var (
 	// required fields, unknown transport, etc.).
 	ErrInvalidManifest = errors.New("install_source: manifest did not validate")
 	// ErrNoCompatibleCapabilities: a plugin manifest was valid but none of its
-	// capabilities can run in Reasonix. Preview returns a structured block.
+	// capabilities can run in Corvus. Preview returns a structured block.
 	ErrNoCompatibleCapabilities = errors.New("install_source: plugin has no compatible capabilities")
 	// ErrUnsupportedKind: kind was set explicitly to something the resolver
 	// cannot satisfy (e.g. kind=skill for a remote MCP endpoint).

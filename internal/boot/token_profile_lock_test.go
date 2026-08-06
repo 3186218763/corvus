@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/event"
+	"corvus/internal/agent"
+	"corvus/internal/event"
 )
 
 func TestConnectToolSourcePlanModeLoadsOptionalSources(t *testing.T) {

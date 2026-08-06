@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/checkpoint"
-	"reasonix/internal/event"
-	"reasonix/internal/evidence"
-	"reasonix/internal/instruction"
-	"reasonix/internal/jobs"
-	"reasonix/internal/memory"
-	"reasonix/internal/planmode"
-	"reasonix/internal/provider"
-	"reasonix/internal/sandbox"
-	"reasonix/internal/tool"
+	"corvus/internal/checkpoint"
+	"corvus/internal/event"
+	"corvus/internal/evidence"
+	"corvus/internal/instruction"
+	"corvus/internal/jobs"
+	"corvus/internal/memory"
+	"corvus/internal/planmode"
+	"corvus/internal/provider"
+	"corvus/internal/sandbox"
+	"corvus/internal/tool"
 )
 
 // toolCallPlan holds the resolved, policy-checked state for one tool call.

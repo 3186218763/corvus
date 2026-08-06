@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"reasonix/internal/evidence"
-	"reasonix/internal/tool"
+	"corvus/internal/evidence"
+	"corvus/internal/tool"
 )
 
 // ReviewReportTool is visible only inside review/security_review subagent

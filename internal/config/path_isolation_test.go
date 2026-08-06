@@ -19,7 +19,7 @@ func TestProcessTestEnvironmentContainsAllUserStatePaths(t *testing.T) {
 	home := os.Getenv("HOME")
 	paths := map[string]string{
 		"operating system cache": osUserCacheDir(),
-		"Reasonix cache":         CacheDir(),
+		"Corvus cache":         CacheDir(),
 		"workspace leases":       WorkspaceLeaseDir(),
 		"delivery worktrees":     DeliveryWorktreeDir(),
 	}
@@ -31,18 +31,18 @@ func TestProcessTestEnvironmentContainsAllUserStatePaths(t *testing.T) {
 }
 
 // TestStatsDirResolution pins the stats data root: <state home>/stats, where
-// the state home is REASONIX_STATE_HOME when set and REASONIX_HOME otherwise.
+// the state home is CORVUS_STATE_HOME when set and CORVUS_HOME otherwise.
 // Usage records live under the state root — not the install directory, which
 // is replaced on upgrade — so a wrong resolution would silently lose stats.
 func TestStatsDirResolution(t *testing.T) {
 	home := t.TempDir()
 	state := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	if got := StatsDir(); got != filepath.Join(home, "stats") {
-		t.Fatalf("REASONIX_HOME stats dir: want %q, got %q", filepath.Join(home, "stats"), got)
+		t.Fatalf("CORVUS_HOME stats dir: want %q, got %q", filepath.Join(home, "stats"), got)
 	}
-	t.Setenv("REASONIX_STATE_HOME", state)
+	t.Setenv("CORVUS_STATE_HOME", state)
 	if got := StatsDir(); got != filepath.Join(state, "stats") {
-		t.Fatalf("REASONIX_STATE_HOME stats dir: want %q, got %q", filepath.Join(state, "stats"), got)
+		t.Fatalf("CORVUS_STATE_HOME stats dir: want %q, got %q", filepath.Join(state, "stats"), got)
 	}
 }

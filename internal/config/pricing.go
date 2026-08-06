@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 func deepSeekV4FlashPriceCNY() *provider.Pricing {
@@ -401,7 +401,7 @@ func IsOfficialDeepSeekProvider(p *ProviderEntry) bool {
 	return officialProviderKind(p) == "deepseek"
 }
 
-// IsKnownDeepSeekOfficialPricing reports whether price is one of Reasonix's
+// IsKnownDeepSeekOfficialPricing reports whether price is one of Corvus's
 // built-in DeepSeek regional defaults for model.
 func IsKnownDeepSeekOfficialPricing(model string, price *provider.Pricing) bool {
 	return isKnownDeepSeekOfficialPricing(model, price)

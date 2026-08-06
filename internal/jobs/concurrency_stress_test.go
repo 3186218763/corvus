@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"reasonix/internal/event"
+	"corvus/internal/event"
 )
 
 // TestManagerConcurrentAccess hammers every public Manager method from many

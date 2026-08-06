@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"reasonix/internal/event"
-	"reasonix/internal/provider"
-	"reasonix/internal/tool"
+	"corvus/internal/event"
+	"corvus/internal/provider"
+	"corvus/internal/tool"
 )
 
 func TestStreamAttachesPromptCacheKey(t *testing.T) {
@@ -21,7 +21,7 @@ func TestStreamAttachesPromptCacheKey(t *testing.T) {
 	if err := a.Run(context.Background(), "hi"); err != nil {
 		t.Fatal(err)
 	}
-	if prov.request.PromptCacheKey != "reasonix:session:abc123" {
+	if prov.request.PromptCacheKey != "corvus:session:abc123" {
 		t.Fatalf("got %q", prov.request.PromptCacheKey)
 	}
 }
@@ -50,7 +50,7 @@ func TestStreamSubagentPromptCacheKey(t *testing.T) {
 		SubagentCacheID:    "sa_ref1",
 	}, event.Discard)
 	_ = a.Run(context.Background(), "hi")
-	if prov.request.PromptCacheKey != "reasonix:session:parent1:sub:sa_ref1" {
+	if prov.request.PromptCacheKey != "corvus:session:parent1:sub:sa_ref1" {
 		t.Fatalf("got %q", prov.request.PromptCacheKey)
 	}
 }
@@ -85,7 +85,7 @@ func TestSetSessionCacheIDUpdatesResolvedKey(t *testing.T) {
 	}, event.Discard)
 	a.SetSessionCacheID("newid")
 	_ = a.Run(context.Background(), "hi")
-	if prov.request.PromptCacheKey != "reasonix:session:newid" {
+	if prov.request.PromptCacheKey != "corvus:session:newid" {
 		t.Fatalf("got %q", prov.request.PromptCacheKey)
 	}
 }

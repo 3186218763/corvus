@@ -8,7 +8,7 @@ import (
 
 func TestBuiltinDefaultsDoNotReadOrRewriteMalformedConfig(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	path := filepath.Join(home, "config.toml")
 	bad := []byte("[broken\n")
 	if err := os.WriteFile(path, bad, 0o600); err != nil {
@@ -29,7 +29,7 @@ func TestBuiltinDefaultsDoNotReadOrRewriteMalformedConfig(t *testing.T) {
 
 func TestRecoveryDefaultsAliasBuiltin(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	cfg := LoadRecoveryDefaultsForRoot(t.TempDir())
 	if cfg == nil {
 		t.Fatal("recovery defaults must return a configuration")

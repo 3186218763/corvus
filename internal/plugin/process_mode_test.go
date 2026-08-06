@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"reasonix/internal/sandbox"
+	"corvus/internal/sandbox"
 )
 
 func TestResolvedProcessModeDefaultsToHost(t *testing.T) {

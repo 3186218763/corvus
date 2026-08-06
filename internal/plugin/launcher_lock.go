@@ -15,8 +15,8 @@ import (
 	"sort"
 	"strings"
 
-	"reasonix/internal/mcplaunch"
-	"reasonix/internal/secrets"
+	"corvus/internal/mcplaunch"
+	"corvus/internal/secrets"
 )
 
 type launcherLocator struct {
@@ -153,7 +153,7 @@ func applyLauncherResolution(spec *Spec, locator launcherLocator, lock mcplaunch
 	args[locator.arg] = locator.prefix + resolved
 	// Authorization is granted against the exact resolved package and its verified
 	// digest. The stored-lock start additionally injects --offline/--no-install
-	// to force that cached artifact, but this Reasonix-owned enforcement flag is
+	// to force that cached artifact, but this Corvus-owned enforcement flag is
 	// not a change in the server the user approved. Preserve the canonical
 	// identity args before adding it so preflight and subsequent starts compare
 	// equal while the actual process still runs offline.

@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"reasonix/internal/i18n"
+	"corvus/internal/i18n"
 
 	"github.com/spf13/pflag"
 )

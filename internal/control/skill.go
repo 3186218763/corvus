@@ -1,6 +1,6 @@
 package control
 
-import "reasonix/internal/skill"
+import "corvus/internal/skill"
 
 // skillSet owns the session's discovered skills: the enabled subset surfaced to
 // the model, the full set (including config-disabled ones) for management

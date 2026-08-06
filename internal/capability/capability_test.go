@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/skill"
-	"reasonix/internal/tool"
+	"corvus/internal/skill"
+	"corvus/internal/tool"
 )
 
 func TestRoutePrefersReviewSkillForReviewRequest(t *testing.T) {

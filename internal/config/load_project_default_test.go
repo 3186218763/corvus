@@ -15,14 +15,14 @@ func writeProjectDefaultTestConfig(t *testing.T, dir, name, body string) string 
 	return path
 }
 
-// #4218: pre-v1.11 persistence paths full-rendered ./reasonix.toml and pinned
+// #4218: pre-v1.11 persistence paths full-rendered ./corvus.toml and pinned
 // the built-in default_model ("deepseek-flash") into it. Once the user's
 // [[providers]] replaced the built-in presets, that stale name resolved to
 // nothing and every launch from that folder failed. The load must fall back to
 // the user/global default_model instead.
 func TestLoadForRoot_UnresolvableProjectDefaultModelFallsBackToUserDefault(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	writeProjectDefaultTestConfig(t, home, "config.toml", `default_model = "deepseek-pro"
 
 [[providers]]
@@ -34,7 +34,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 `)
 
 	project := t.TempDir()
-	writeProjectDefaultTestConfig(t, project, "reasonix.toml", `default_model = "deepseek-flash"
+	writeProjectDefaultTestConfig(t, project, "corvus.toml", `default_model = "deepseek-flash"
 
 [permissions]
 allow = ["Bash(go test*)"]
@@ -59,7 +59,7 @@ allow = ["Bash(go test*)"]
 // keep winning over the user config.
 func TestLoadForRoot_ResolvableProjectDefaultModelStillWins(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	writeProjectDefaultTestConfig(t, home, "config.toml", `default_model = "deepseek-pro"
 
 [[providers]]
@@ -77,7 +77,7 @@ model       = "local-model"
 `)
 
 	project := t.TempDir()
-	writeProjectDefaultTestConfig(t, project, "reasonix.toml", `default_model = "local"
+	writeProjectDefaultTestConfig(t, project, "corvus.toml", `default_model = "local"
 `)
 
 	cfg, err := LoadForRoot(project)
@@ -96,7 +96,7 @@ model       = "local-model"
 // project value so the existing boot error names what the user actually wrote.
 func TestLoadForRoot_ProjectDefaultModelKeptWhenUserDefaultUnresolvable(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	writeProjectDefaultTestConfig(t, home, "config.toml", `default_model = "gone-too"
 
 [[providers]]
@@ -108,7 +108,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 `)
 
 	project := t.TempDir()
-	writeProjectDefaultTestConfig(t, project, "reasonix.toml", `default_model = "gone"
+	writeProjectDefaultTestConfig(t, project, "corvus.toml", `default_model = "gone"
 `)
 
 	cfg, err := LoadForRoot(project)
@@ -129,17 +129,17 @@ api_key_env = "DEEPSEEK_API_KEY"
 // because no user config explicitly defines default_model.
 func TestLoadForRoot_NoUserConfigKeepsBrokenProjectDefaultModel(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 
 	project := t.TempDir()
-	writeProjectDefaultTestConfig(t, project, "reasonix.toml", `default_model = "legacy-missing"
+	writeProjectDefaultTestConfig(t, project, "corvus.toml", `default_model = "legacy-missing"
 
 [[providers]]
 name        = "deepseek-flash"
 kind        = "openai"
 base_url    = "https://example.invalid"
 model       = "deepseek-v4-flash"
-api_key_env = "REASONIX_TEST_KEY_UNSET"
+api_key_env = "CORVUS_TEST_KEY_UNSET"
 `)
 
 	cfg, err := LoadForRoot(project)
@@ -158,7 +158,7 @@ api_key_env = "REASONIX_TEST_KEY_UNSET"
 // as ignored, even when the user default itself is stale.
 func TestLoadForRoot_NoProjectOverrideLeavesUserDefaultAlone(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("CORVUS_HOME", home)
 	writeProjectDefaultTestConfig(t, home, "config.toml", `default_model = "deepseek-pro"
 
 [[providers]]

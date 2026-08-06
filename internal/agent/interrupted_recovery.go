@@ -5,7 +5,7 @@ import (
 	"html"
 	"strings"
 
-	"reasonix/internal/provider"
+	"corvus/internal/provider"
 )
 
 const interruptedRecoveryTag = "interrupted-turn-recovery"

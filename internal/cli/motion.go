@@ -8,17 +8,17 @@ import (
 )
 
 // motionEnabled reports whether decorative animation is enabled. Reduced motion
-// (REASONIX_REDUCE_MOTION=1) disables spinner motion, smooth scroll, and any
+// (CORVUS_REDUCE_MOTION=1) disables spinner motion, smooth scroll, and any
 // shimmer. Read on every call so tests observe the current environment.
 func motionEnabled() bool {
-	v := strings.TrimSpace(os.Getenv("REASONIX_REDUCE_MOTION"))
+	v := strings.TrimSpace(os.Getenv("CORVUS_REDUCE_MOTION"))
 	return v == "" || v == "0"
 }
 
 // scrollRepaintEnabled reports whether the legacy full-screen repaint on every
-// viewport scroll is requested (REASONIX_TUI_SCROLL_REPAINT=1).
+// viewport scroll is requested (CORVUS_TUI_SCROLL_REPAINT=1).
 func scrollRepaintEnabled() bool {
-	v := strings.TrimSpace(os.Getenv("REASONIX_TUI_SCROLL_REPAINT"))
+	v := strings.TrimSpace(os.Getenv("CORVUS_TUI_SCROLL_REPAINT"))
 	return v != "" && v != "0"
 }
 

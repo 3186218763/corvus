@@ -1,4 +1,4 @@
-# Reasonix TUI Clarity & Keyboard-First Design
+# Corvus TUI Clarity & Keyboard-First Design
 
 **Date:** 2026-08-06  
 **Status:** Design approved for P1 planning; P1 implementation plan written  
@@ -15,7 +15,7 @@
 
 ## 1. Problem
 
-Reasonix already has a capable Bubble Tea TUI: themes, tool cards, status footer, slash commands, pickers, plan/YOLO modes, custom statusline command, mouse optional. Gaps versus the best coding-agent TUIs:
+Corvus already has a capable Bubble Tea TUI: themes, tool cards, status footer, slash commands, pickers, plan/YOLO modes, custom statusline command, mouse optional. Gaps versus the best coding-agent TUIs:
 
 | Gap | User impact |
 |-----|-------------|
@@ -48,7 +48,7 @@ Reasonix already has a capable Bubble Tea TUI: themes, tool cards, status footer
 4. User-configurable keymap file (table-driven built-ins only; leave a seam for later).  
 5. Replacing Bubble Tea / adopting Ultraviolet-style full screen buffer rewrite.  
 6. New default skin or user JSON theme system (keep existing themes; improve hierarchy).  
-7. Making Claude Code statusline JSON the sole contract (Reasonix owns schema; optional shim later).  
+7. Making Claude Code statusline JSON the sole contract (Corvus owns schema; optional shim later).  
 8. Grok-style dual-focus + vim scrollback as the default navigation model.  
 9. Big-bang split of all of `chat_tui.go` without feature delivery.
 
@@ -94,7 +94,7 @@ Reasonix already has a capable Bubble Tea TUI: themes, tool cards, status footer
 
 **Product one-liner:** *Claude clarity and keyboard completeness; OpenCode-style palette discoverability; Grok multi-agent *inspection* as a linear-shell overlay (Peek first).*
 
-**Chord semantics note:** Reasonix **Ctrl+B** = expand shell/tool body (existing). Claude Code often uses Ctrl+B for backgrounding. Cheatsheet must document Reasonix meaning—not Claude parity for every chord.
+**Chord semantics note:** Corvus **Ctrl+B** = expand shell/tool body (existing). Claude Code often uses Ctrl+B for backgrounding. Cheatsheet must document Corvus meaning—not Claude parity for every chord.
 
 ---
 
@@ -332,7 +332,7 @@ Until then, multi-agent success = **keyboard list + Peek + cancel/stop when avai
 
 ## 10. Statusline schema (P3; design now)
 
-Extend the existing `[statusline].command` JSON stdin contract. Keep **Reasonix-owned** field names with `schema_version`.
+Extend the existing `[statusline].command` JSON stdin contract. Keep **Corvus-owned** field names with `schema_version`.
 
 ### 10.1 Required direction (fields)
 
@@ -366,7 +366,7 @@ Extend the existing `[statusline].command` JSON stdin contract. Keep **Reasonix-
 
 ### 10.2 Non-goal
 
-Byte-for-byte Claude Code statusline JSON compatibility. A future adapter script may map Reasonix → Claude-like shapes.
+Byte-for-byte Claude Code statusline JSON compatibility. A future adapter script may map Corvus → Claude-like shapes.
 
 ---
 
@@ -409,7 +409,7 @@ not change P2/P3/P4 scope.
 | Esc | Esc stack | tighten + **priority-order tests** |
 | Shift+Tab | Plan axis | existing semantics |
 | Ctrl+Y | YOLO | existing |
-| Ctrl+B | Expand shell/tool body | existing Reasonix meaning; document in `?` |
+| Ctrl+B | Expand shell/tool body | existing Corvus meaning; document in `?` |
 | Ctrl+O | Reasoning verbose | existing |
 | PgUp/PgDn | Scroll transcript | existing |
 | `?` (empty input) | Cheatsheet | **new**; non-empty inserts `?` |
@@ -511,7 +511,7 @@ These are intentionally not blocking design approval **after** the review locks 
 | 6 | Enter on task | C — Peek default, Attach via `a` |
 | 7 | Focus model | A — composer default, simple scroll |
 | 8 | Mode chrome | B — composer left text badge |
-| 9 | Statusline schema | B — Reasonix schema + `schema_version` |
+| 9 | Statusline schema | B — Corvus schema + `schema_version` |
 | 10 | Theme | A — keep defaults; improve hierarchy |
 | 11 | P1 keys | A — clarity + `?` + palette skeleton |
 | 12 | Non-goals | Confirmed as §2 |

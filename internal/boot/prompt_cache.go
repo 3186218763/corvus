@@ -3,8 +3,8 @@ package boot
 import (
 	"strings"
 
-	"reasonix/internal/agent"
-	"reasonix/internal/config"
+	"corvus/internal/agent"
+	"corvus/internal/config"
 )
 
 // promptCacheFields are the sticky prompt_cache_key Options fields shared by

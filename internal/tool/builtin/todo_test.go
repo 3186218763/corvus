@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/evidence"
-	"reasonix/internal/tool"
+	"corvus/internal/evidence"
+	"corvus/internal/tool"
 )
 
 func TestTodoWriteAcceptsLevels(t *testing.T) {

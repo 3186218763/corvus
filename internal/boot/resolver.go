@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"reasonix/internal/config"
-	"reasonix/internal/netclient"
-	"reasonix/internal/provider"
+	"corvus/internal/config"
+	"corvus/internal/netclient"
+	"corvus/internal/provider"
 )
 
 // LocalProviderResolver preserves the historical config-backed provider path.
@@ -99,7 +99,7 @@ func resolveModelEntry(opts Options, cfg *config.Config, modelName string) (*con
 	if entry, ok := cfg.ResolveModel(modelName); ok {
 		return entry, modelRefFromEntry(entry), nil
 	}
-	return nil, "", fmt.Errorf("%w %q (configured: %s); note: defining [[providers]] replaces the built-in presets, so add a [[providers]] entry for it or use a configured name, or run `reasonix setup` to reconfigure", ErrUnknownModel, modelName, providerNames(cfg))
+	return nil, "", fmt.Errorf("%w %q (configured: %s); note: defining [[providers]] replaces the built-in presets, so add a [[providers]] entry for it or use a configured name, or run `corvus setup` to reconfigure", ErrUnknownModel, modelName, providerNames(cfg))
 }
 
 func resolveOptionalEntry(opts Options, cfg *config.Config, ref string) (*config.ProviderEntry, bool) {

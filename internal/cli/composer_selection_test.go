@@ -9,9 +9,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"reasonix/internal/control"
-	"reasonix/internal/event"
-	"reasonix/internal/i18n"
+	"corvus/internal/control"
+	"corvus/internal/event"
+	"corvus/internal/i18n"
 )
 
 func newComposerMouseTestTUI(t *testing.T, width, height int) chatTUI {
@@ -387,7 +387,7 @@ func TestComposerImagePasteShortcutKeepsSelectionUntilImageArrives(t *testing.T)
 		t.Fatalf("%s should keep the selection until the clipboard arrives, got %q", shortcutName, got)
 	}
 
-	m = updateComposerMouseTestTUI(t, m, clipboardImageMsg{path: ".reasonix/attachments/test.png"})
+	m = updateComposerMouseTestTUI(t, m, clipboardImageMsg{path: ".corvus/attachments/test.png"})
 	if got := m.input.Value(); got != "alpha [image #1] " {
 		t.Fatalf("image paste over selection produced %q, want %q", got, "alpha [image #1] ")
 	}

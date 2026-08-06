@@ -11,7 +11,7 @@ func TestExtractHostChecksFromStructuredSection(t *testing.T) {
 		Scope: ScopeProject,
 		Body: strings.Join([]string{
 			"# Project rules",
-			"## Reasonix host checks",
+			"## Corvus host checks",
 			"- verify: go test ./internal/...",
 			"* verify: git diff --check",
 			"- verify: go test ./internal/...",
@@ -35,7 +35,7 @@ func TestExtractHostChecksFromStructuredSection(t *testing.T) {
 
 func TestExtractHostChecksIgnoresOrdinaryGuidance(t *testing.T) {
 	docs := []Document{{
-		Path: "REASONIX.md",
+		Path: "CORVUS.md",
 		Body: "Always run go test before committing.\n\n- verify: go test ./...",
 	}}
 
@@ -46,8 +46,8 @@ func TestExtractHostChecksIgnoresOrdinaryGuidance(t *testing.T) {
 
 func TestExtractHostChecksIsCaseInsensitive(t *testing.T) {
 	docs := []Document{{
-		Path: "REASONIX.md",
-		Body: "## reasonix HOST checks\n- verify: go test ./...",
+		Path: "CORVUS.md",
+		Body: "## corvus HOST checks\n- verify: go test ./...",
 	}}
 
 	checks := ExtractHostChecks(docs)
