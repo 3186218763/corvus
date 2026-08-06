@@ -355,7 +355,7 @@ func TestUpdateKeepsWrapCacheInSyncAcrossRemoveAndSet(t *testing.T) {
 	// block. The wrapper's drain must re-wrap BOTH mutated blocks.
 	m.setTranscriptBlock(2, strings.Repeat("mutated second block ", 8), transcriptSource{kind: transcriptSourceFixed})
 	m.removeTranscriptBlock(1)
-	m.setLiveBlock(3, strings.Repeat("mutated fourth block ", 8))
+	m.setLiveBlock(2, strings.Repeat("mutated fourth block ", 8))
 	m0, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = m0.(chatTUI)
 

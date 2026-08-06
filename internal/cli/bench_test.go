@@ -58,7 +58,9 @@ func BenchmarkAppendBlock(b *testing.B) {
 // exactly what a streamed answer/paragraph does per Update pass.
 func BenchmarkRewrapLastBlock(b *testing.B) {
 	m := newTestChatTUI()
-	m.appendTranscriptBlock(benchTranscriptContent(1), transcriptSource{kind: transcriptSourceFixed})
+	for i := 0; i < 100; i++ {
+		m.appendTranscriptBlock(benchTranscriptContent(1), transcriptSource{kind: transcriptSourceFixed})
+	}
 	m.appendWrappedBlocks(0, 120)
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
