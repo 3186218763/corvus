@@ -41,6 +41,66 @@ type transcriptSource struct {
 	history  []provider.Message
 }
 
+// transcriptMarker marks the live block in the transcript: the bottom-most
+// conversation keeps full-strength styling (full accent user bubble, named
+// assistant header) while everything above renders as demoted history. Markers
+// are derived from transcriptSources at render time, never stored.
+type transcriptMarker uint8
+
+const (
+	markerNone           transcriptMarker = 0
+	markerUserCurrent    transcriptMarker = 1 // render user content full accent
+	markerAssistantNamed transcriptMarker = 2 // render assistant name
+)
+
+// currentTranscriptMarkers derives per-block liveness markers. The last user
+// block is "current"; the last markdown/replayBundle block is "named" unless a
+// user block follows it. A replayBundle additionally keeps its last internal
+// user message "current" when no user source follows the bundle (invariant:
+// replayBundle only appears at index 0, so [bundle, bundle] is unreachable).
+func currentTranscriptMarkers(sources []transcriptSource) []transcriptMarker {
+	if len(sources) == 0 {
+		return nil
+	}
+	markers := make([]transcriptMarker, len(sources))
+	lastUser := -1
+	for i, s := range sources {
+		if s.kind == transcriptSourceUser {
+			lastUser = i
+		}
+	}
+	lastAssistant := -1
+	for i, s := range sources {
+		if s.kind == transcriptSourceMarkdown || s.kind == transcriptSourceReplayBundle {
+			lastAssistant = i
+		}
+	}
+	namedIdx := lastAssistant
+	if namedIdx >= 0 && lastUser > namedIdx {
+		namedIdx = -1
+	}
+	for i, s := range sources {
+		switch s.kind {
+		case transcriptSourceUser:
+			if i == lastUser {
+				markers[i] |= markerUserCurrent
+			}
+		case transcriptSourceMarkdown:
+			if i == namedIdx {
+				markers[i] |= markerAssistantNamed
+			}
+		case transcriptSourceReplayBundle:
+			if i == namedIdx {
+				markers[i] |= markerAssistantNamed
+			}
+			if lastUser < i {
+				markers[i] |= markerUserCurrent
+			}
+		}
+	}
+	return markers
+}
+
 func (m *chatTUI) ensureTranscriptSources() {
 	if len(m.transcriptSources) > len(m.transcript) {
 		m.transcriptSources = m.transcriptSources[:len(m.transcript)]
