@@ -3830,6 +3830,103 @@ func TestEscInPlanModeDoesNotExitPlan(t *testing.T) {
 	}
 }
 
+// escCheckpointsController stubs SessionHistory.Checkpoints so double-Esc can
+// open the rewind picker without a full session/checkpoint store.
+type escCheckpointsController struct {
+	control.SessionAPI
+	metas []checkpoint.Meta
+}
+
+func (c *escCheckpointsController) Checkpoints() []checkpoint.Meta { return c.metas }
+
+// TestEscPriorityCompletionClosesBeforeCancelWhenIdle locks the modal if-chain
+// rule that an open completion menu consumes Esc first when idle (close only;
+// no cancel — there is no running turn).
+func TestEscPriorityCompletionClosesBeforeCancelWhenIdle(t *testing.T) {
+	m := newTestChatTUI()
+	m.completion = completion{active: true, kind: compSlash, items: []compItem{{label: "/status"}}, sel: 0}
+	next, _ := m.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(chatTUI)
+	if m.completion.active {
+		t.Fatal("Esc should close completion menu when idle")
+	}
+}
+
+// TestEscIdleClearsDraftDoesNotFlipPlan locks idle Esc: clear typed draft, keep plan mode.
+func TestEscIdleClearsDraftDoesNotFlipPlan(t *testing.T) {
+	m := newTestChatTUI()
+	m.ctrl = control.New(control.Options{})
+	m.planMode = true
+	m.ctrl.SetPlanMode(true)
+	m.input.SetValue("draft text")
+
+	next, _ := m.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(chatTUI)
+
+	if got := strings.TrimSpace(m.input.Value()); got != "" {
+		t.Fatalf("Esc should clear draft, got %q", got)
+	}
+	if !m.planMode || !m.ctrl.PlanMode() {
+		t.Fatalf("Esc must not flip plan mode, tui=%v controller=%v", m.planMode, m.ctrl.PlanMode())
+	}
+}
+
+// TestDoubleEscOpensRewindWithin600ms locks Claude-style double-Esc rewind arming.
+func TestDoubleEscOpensRewindWithin600ms(t *testing.T) {
+	m := newTestChatTUI()
+	m.ctrl = &escCheckpointsController{
+		metas: []checkpoint.Meta{{Turn: 0, Prompt: "first turn"}},
+	}
+	// Empty composer is required for the double-Esc rewind gesture.
+	if strings.TrimSpace(m.input.Value()) != "" {
+		t.Fatal("precondition: composer must be empty")
+	}
+
+	next, _ := m.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(chatTUI)
+	if m.rewind != nil {
+		t.Fatal("first Esc should only arm lastEsc, not open rewind")
+	}
+	if m.lastEsc.IsZero() {
+		t.Fatal("first Esc should arm lastEsc")
+	}
+
+	next, _ = m.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(chatTUI)
+	if m.rewind == nil {
+		t.Fatal("second Esc within 600ms should open rewind picker")
+	}
+	if !m.lastEsc.IsZero() {
+		t.Fatal("opening rewind should clear lastEsc arm")
+	}
+}
+
+// TestEscNeverChangesYoloOrPlan re-asserts Esc is not a mode switch for Plan or YOLO.
+func TestEscNeverChangesYoloOrPlan(t *testing.T) {
+	m := newTestChatTUI()
+	m.ctrl = control.New(control.Options{})
+	m.planMode = true
+	m.ctrl.SetPlanMode(true)
+
+	next, _ := m.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(chatTUI)
+	if !m.planMode || !m.ctrl.PlanMode() {
+		t.Fatalf("Esc must not exit plan mode, tui=%v controller=%v", m.planMode, m.ctrl.PlanMode())
+	}
+
+	m = newTestChatTUI()
+	m.ctrl = control.New(control.Options{})
+	m.ctrl.SetToolApprovalMode(control.ToolApprovalYolo)
+	next, _ = m.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(chatTUI)
+	if got := m.ctrl.ToolApprovalMode(); got != control.ToolApprovalYolo {
+		t.Fatalf("Esc must not leave YOLO, got %q", got)
+	}
+	if m.planMode {
+		t.Fatal("Esc must not enter plan mode")
+	}
+}
+
 func TestDesktopShortcutLayoutShiftTabCyclesSafeModes(t *testing.T) {
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{})
