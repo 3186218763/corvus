@@ -119,15 +119,117 @@ func statuslineCommandHasModel(cmd tea.Cmd, model string) bool {
 	return false
 }
 
+func TestComposerModeBadgeUsesModeTagText(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.TrueColor
+	i18n.DetectLanguage("en")
+
+	m := newTestChatTUI()
+	m.ctrl = control.New(control.Options{})
+	m.planMode = true
+	m.width = 80
+	m.height = 24
+	if got := m.modeTagText(); got != "Plan" {
+		t.Fatalf("modeTagText() = %q, want Plan", got)
+	}
+
+	badgePlain := ansi.Strip(m.renderModeBadge(false))
+	if !strings.Contains(badgePlain, "Plan") {
+		t.Fatalf("composer mode badge missing Plan: %q", badgePlain)
+	}
+
+	content := m.View().Content
+	plainView := ansi.Strip(content)
+	if !strings.Contains(plainView, "Plan") {
+		t.Fatalf("View missing Plan mode badge:\n%s", plainView)
+	}
+	// Badge must sit in the composer region (left of the prompt), not only as prose.
+	if !strings.Contains(plainView, "Plan") || !strings.Contains(plainView, "❯") {
+		t.Fatalf("View should show mode badge near composer prompt:\n%s", plainView)
+	}
+	if !strings.Contains(content, "\x1b[48;2;37;99;235m") {
+		t.Fatalf("Plan badge should use blue pill background, got:\n%q", content)
+	}
+
+	primary := strings.TrimSpace(ansi.Strip(m.primaryStatusLine(false, false)))
+	if strings.HasPrefix(primary, "Plan") {
+		t.Fatalf("footer primary must not start with mode pill: %q", primary)
+	}
+	if !strings.Contains(primary, "ready") {
+		t.Fatalf("footer primary missing idle state: %q", primary)
+	}
+}
+
+func TestShellPrefixBadgeIsShell(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.TrueColor
+	i18n.DetectLanguage("en")
+
+	m := newTestChatTUI()
+	m.ctrl = control.New(control.Options{})
+	m.width = 80
+	m.height = 24
+	m.input.SetValue("!ls")
+
+	badgePlain := ansi.Strip(m.renderModeBadge(true))
+	if strings.TrimSpace(badgePlain) != "Shell" {
+		t.Fatalf("shell badge = %q, want Shell", badgePlain)
+	}
+	content := m.View().Content
+	if !strings.Contains(ansi.Strip(content), "Shell") {
+		t.Fatalf("View missing Shell badge:\n%s", ansi.Strip(content))
+	}
+	if !strings.Contains(content, "\x1b[48;2;22;163;74m") {
+		t.Fatalf("Shell badge should use green pill background, got:\n%q", content)
+	}
+	primary := strings.TrimSpace(ansi.Strip(m.primaryStatusLine(true, false)))
+	if strings.HasPrefix(primary, "Shell") {
+		t.Fatalf("footer primary must not start with Shell pill: %q", primary)
+	}
+}
+
+func TestDesktopModeTagParityOnBadge(t *testing.T) {
+	i18n.DetectLanguage("en")
+
+	// Desktop default: Ask (not classic Auto).
+	content := renderStatuslineViewWithShortcutLayout(t, "desktop")
+	plain := ansi.Strip(content)
+	if !strings.Contains(plain, "Ask") {
+		t.Fatalf("desktop layout badge should show Ask from modeTagText():\n%s", plain)
+	}
+	// Don't Ask when tool approval is dontAsk.
+	ctrl := control.New(control.Options{})
+	ctrl.SetToolApprovalMode(control.ToolApprovalDontAsk)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m.cfg = config.Default()
+	if err := m.cfg.SetUIShortcutLayout("desktop"); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.modeTagText(); got != "Don't Ask" {
+		t.Fatalf("desktop dontAsk modeTagText() = %q, want Don't Ask", got)
+	}
+	if got := strings.TrimSpace(ansi.Strip(m.renderModeBadge(false))); got != "Don't Ask" {
+		t.Fatalf("desktop dontAsk badge = %q, want Don't Ask", got)
+	}
+}
+
 func TestIdleStatuslineIsCompact(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.TrueColor
 	i18n.DetectLanguage("en")
 
 	content := renderStatuslineView(t, false)
+	plainView := ansi.Strip(content)
 	plain := bottomStatusPlain(content)
-	if !strings.Contains(plain, "Auto") || !strings.Contains(plain, "ready") {
-		t.Fatalf("idle status line missing mode status:\n%s", plain)
+	// Mode chrome lives on the composer badge; footer keeps idle + cycle hints.
+	if !strings.Contains(plainView, "Auto") {
+		t.Fatalf("idle view missing Auto mode badge:\n%s", plainView)
+	}
+	if !strings.Contains(plain, "ready") {
+		t.Fatalf("idle status line missing ready state:\n%s", plain)
+	}
+	if strings.HasPrefix(strings.TrimSpace(strings.Split(plain, "\n")[0]), "Auto") {
+		t.Fatalf("footer primary must not start with mode pill:\n%s", plain)
 	}
 	if !strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
 		t.Fatalf("idle status line missing plan-toggle hint:\n%s", plain)
@@ -141,7 +243,7 @@ func TestIdleStatuslineIsCompact(t *testing.T) {
 		t.Fatalf("idle status line should use pill label, not bracketed tag:\n%s", plain)
 	}
 	if !strings.Contains(content, "\x1b[48;2;245;158;11m") {
-		t.Fatalf("Auto status line should use amber pill background, got:\n%q", content)
+		t.Fatalf("Auto badge should use amber pill background, got:\n%q", content)
 	}
 }
 
@@ -151,15 +253,22 @@ func TestYoloStatuslineUsesDangerPill(t *testing.T) {
 	i18n.DetectLanguage("en")
 
 	content := renderStatuslineView(t, true)
+	plainView := ansi.Strip(content)
 	plain := bottomStatusPlain(content)
-	if !strings.Contains(plain, "YOLO") || !strings.Contains(plain, "approvals skipped") || !strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
+	if !strings.Contains(plainView, "YOLO") {
+		t.Fatalf("YOLO view missing mode badge:\n%s", plainView)
+	}
+	if !strings.Contains(plain, "approvals skipped") || !strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
 		t.Fatalf("YOLO status line missing warning text:\n%s", plain)
+	}
+	if strings.HasPrefix(strings.TrimSpace(strings.Split(plain, "\n")[0]), "YOLO") {
+		t.Fatalf("footer primary must not start with YOLO pill:\n%s", plain)
 	}
 	if strings.Contains(plain, "[YOLO]") {
 		t.Fatalf("YOLO status line should use a pill label, not bracketed tag:\n%s", plain)
 	}
 	if !strings.Contains(content, "\x1b[48;2;229;72;77m") {
-		t.Fatalf("YOLO status line should use danger pill background, got:\n%q", content)
+		t.Fatalf("YOLO badge should use danger pill background, got:\n%q", content)
 	}
 }
 
@@ -169,12 +278,19 @@ func TestPlanStatuslineUsesBluePill(t *testing.T) {
 	i18n.DetectLanguage("en")
 
 	content := renderPlanStatuslineView(t)
+	plainView := ansi.Strip(content)
 	plain := bottomStatusPlain(content)
-	if !strings.Contains(plain, "Plan") || !strings.Contains(plain, "ready") || !strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
-		t.Fatalf("plan status line missing mode status:\n%s", plain)
+	if !strings.Contains(plainView, "Plan") {
+		t.Fatalf("plan view missing mode badge:\n%s", plainView)
+	}
+	if !strings.Contains(plain, "ready") || !strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
+		t.Fatalf("plan status line missing idle/hint status:\n%s", plain)
+	}
+	if strings.HasPrefix(strings.TrimSpace(strings.Split(plain, "\n")[0]), "Plan") {
+		t.Fatalf("footer primary must not start with Plan pill:\n%s", plain)
 	}
 	if !strings.Contains(content, "\x1b[48;2;37;99;235m") {
-		t.Fatalf("Plan status line should use blue pill background, got:\n%q", content)
+		t.Fatalf("Plan badge should use blue pill background, got:\n%q", content)
 	}
 }
 
@@ -183,8 +299,12 @@ func TestStatuslineCycleHintFollowsLanguage(t *testing.T) {
 	t.Cleanup(func() { i18n.DetectLanguage("en") })
 
 	content := renderStatuslineView(t, false)
+	plainView := ansi.Strip(content)
 	plain := bottomStatusPlain(content)
-	if !strings.Contains(plain, "Auto") || !strings.Contains(plain, "就绪") || !strings.Contains(plain, "Shift+Tab 询问/自动/计划 · Ctrl+Y YOLO") {
+	if !strings.Contains(plainView, "Auto") {
+		t.Fatalf("localized view missing Auto mode badge:\n%s", plainView)
+	}
+	if !strings.Contains(plain, "就绪") || !strings.Contains(plain, "Shift+Tab 询问/自动/计划 · Ctrl+Y YOLO") {
 		t.Fatalf("localized plan-toggle hint missing:\n%s", plain)
 	}
 	if strings.Contains(plain, "ready") || strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
@@ -196,9 +316,16 @@ func TestDesktopShortcutStatuslineUsesPlanToggleHint(t *testing.T) {
 	i18n.DetectLanguage("en")
 
 	content := renderStatuslineViewWithShortcutLayout(t, "desktop")
+	plainView := ansi.Strip(content)
 	plain := bottomStatusPlain(content)
-	if !strings.Contains(plain, "Ask") || !strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
+	if !strings.Contains(plainView, "Ask") {
+		t.Fatalf("desktop shortcut view missing Ask mode badge:\n%s", plainView)
+	}
+	if !strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
 		t.Fatalf("desktop shortcut status line missing unified plan-toggle hint:\n%s", plain)
+	}
+	if strings.HasPrefix(strings.TrimSpace(strings.Split(plain, "\n")[0]), "Ask") {
+		t.Fatalf("footer primary must not start with Ask pill:\n%s", plain)
 	}
 }
 

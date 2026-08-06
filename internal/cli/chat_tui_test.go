@@ -629,8 +629,8 @@ func TestComposerPromptReservesWidthAndOffsetsCJKCursor(t *testing.T) {
 	if !strings.HasPrefix(firstLine, "❯ 你好") {
 		t.Fatalf("composer first line = %q, want prompt before CJK input", firstLine)
 	}
-	if got, want := m.input.Width(), 40-4-composerPromptWidth; got != want {
-		t.Fatalf("textarea content width = %d, want %d after prompt gutter", got, want)
+	if got, want := m.input.Width(), m.composerContentWidth()-composerPromptWidth; got != want {
+		t.Fatalf("textarea content width = %d, want %d after prompt gutter and mode badge", got, want)
 	}
 	cursor := m.input.Cursor()
 	if cursor == nil {
@@ -686,8 +686,10 @@ func TestMCPManagerHidesComposerBox(t *testing.T) {
 	if !strings.Contains(content, "Enter for details") {
 		t.Fatalf("MCP footer hint missing from view:\n%s", content)
 	}
-	if !strings.Contains(content, "· MCP") {
-		t.Fatalf("MCP status line missing from view:\n%s", content)
+	// Mode chrome lives on the composer badge (hidden here); the interaction
+	// row only shows the MCP contextual state without a leading mode pill.
+	if primary := ansi.Strip(m.primaryStatusLine(false, false)); !strings.Contains(primary, "MCP") {
+		t.Fatalf("MCP status line missing from primary footer: %q\nview:\n%s", primary, content)
 	}
 }
 

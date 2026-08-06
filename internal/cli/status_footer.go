@@ -96,43 +96,46 @@ func renderTurnReceipt(u *provider.Usage, p *provider.Pricing, d *event.CacheDia
 	return receipt
 }
 
-// primaryStatusLine renders the interaction half of the first footer row. The
-// model/profile group is laid out separately so it can stay right-anchored on
-// wide terminals and move as one unit on narrow terminals.
-func (m chatTUI) primaryStatusLine(modeTag string, shellMode, cancelRequested bool) string {
-	status := statusFooterIndent + modeTag
+// primaryStatusLine renders the interaction half of the first footer row. Mode
+// chrome lives on the composer badge (renderModeBadge); this row only carries
+// contextual UI state and short action hints. The model/profile group is laid
+// out separately so it can stay right-anchored on wide terminals and move as
+// one unit on narrow terminals.
+func (m chatTUI) primaryStatusLine(shellMode, cancelRequested bool) string {
+	var body string
 	switch {
 	case m.rewind != nil:
-		status += " · ⟲ rewind"
+		body = "⟲ rewind"
 	case m.mcpImport != nil:
-		status += " · MCP import"
+		body = "MCP import"
 	case m.resumePick != nil:
-		status += " · " + i18n.M.StatusResumePicker
+		body = i18n.M.StatusResumePicker
 	case m.quickPick != nil:
-		status += " · " + m.quickPick.title
+		body = m.quickPick.title
 	case m.mcp != nil:
-		status += " · MCP"
+		body = "MCP"
 	case m.skillPick != nil:
-		status += " · " + i18n.M.SkillPickerStatusLabel
+		body = i18n.M.SkillPickerStatusLabel
 	case m.chooser != nil:
-		status += " · " + i18n.M.ChatStatusQuestion
+		body = i18n.M.ChatStatusQuestion
 	case m.pendingApproval != nil && m.pendingApproval.Tool == planApprovalTool:
-		status += " · " + i18n.M.ChatStatusPlanApproval
+		body = i18n.M.ChatStatusPlanApproval
 	case m.pendingApproval != nil:
-		status += " · " + i18n.M.ChatStatusToolApproval
+		body = i18n.M.ChatStatusToolApproval
 	case m.clipboardImagePending:
-		status += " · " + yellow(i18n.M.ClipboardImagePastingHint)
+		body = yellow(i18n.M.ClipboardImagePastingHint)
 	case m.copyNoticeText != "":
-		status += " · " + green(m.copyNoticeText)
+		body = green(m.copyNoticeText)
 	case cancelRequested:
-		status += " · " + i18n.M.CtrlCQuitHint
+		body = i18n.M.CtrlCQuitHint
 	case shellMode:
-		status += " · " + i18n.M.ShellModeHint
+		body = i18n.M.ShellModeHint
 	case m.ctrl != nil && m.ctrl.AutoApproveTools():
-		status += " · " + footerValue(i18n.M.ChatStatusYoloIdle) + " · " + footerHint(i18n.M.ChatStatusCycleHintCompact)
+		body = footerValue(i18n.M.ChatStatusYoloIdle) + " · " + footerHint(i18n.M.ChatStatusCycleHintCompact)
 	default:
-		status += " · " + footerValue(i18n.M.ChatStatusIdle) + " · " + footerHint(i18n.M.ChatStatusCycleHintCompact)
+		body = footerValue(i18n.M.ChatStatusIdle) + " · " + footerHint(i18n.M.ChatStatusCycleHintCompact)
 	}
+	status := statusFooterIndent + body
 	if mt := m.mouseTag(); mt != "" {
 		status += " · " + mt
 	}

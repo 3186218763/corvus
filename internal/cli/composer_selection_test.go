@@ -16,8 +16,13 @@ import (
 
 func newComposerMouseTestTUI(t *testing.T, width, height int) chatTUI {
 	t.Helper()
-	m := newChatTUI(control.New(control.Options{}), "", make(chan event.Event, 1), width)
-	next, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: height})
+	// `width` is the historical terminal budget that produced SetWidth(width-4).
+	// Expand the real terminal by the mode-badge column so the textarea content
+	// width (and soft-wrap geometry) stays identical after the composer badge.
+	probe := newChatTUI(control.New(control.Options{}), "", make(chan event.Event, 1), width)
+	termWidth := width + probe.modeBadgeColumnWidth()
+	m := newChatTUI(control.New(control.Options{}), "", make(chan event.Event, 1), termWidth)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: termWidth, Height: height})
 	return next.(chatTUI)
 }
 

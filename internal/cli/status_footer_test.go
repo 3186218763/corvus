@@ -173,7 +173,7 @@ func TestStatusFooterSemanticPaletteAcrossThemes(t *testing.T) {
 					t.Fatalf("model/work group %q missing semantic style %q", got, want)
 				}
 			}
-			primary := m.primaryStatusLine(" Auto ", false, false)
+			primary := m.primaryStatusLine(false, false)
 			if !strings.Contains(primary, tt.valueSGR+i18n.M.ChatStatusIdle) ||
 				!strings.Contains(primary, tt.labelSGR+i18n.M.ChatStatusCycleHintCompact) {
 				t.Fatalf("%s interaction hints should use readable semantic contrast: %q", tt.mode, primary)
@@ -196,7 +196,7 @@ func TestStatusFooterThemesKeepIdenticalGeometry(t *testing.T) {
 	render := func(mode string, profile colorprofile.Profile) string {
 		activeColorProfile = profile
 		configureCLITheme(mode)
-		primary := m.primaryStatusLine(" Auto ", false, false)
+		primary := m.primaryStatusLine(false, false)
 		return ansi.Strip(m.renderStatusBlock(primary, 132))
 	}
 	dark := render("dark", colorprofile.ANSI256)
@@ -264,7 +264,7 @@ func TestStatusFooterNoColorKeepsSemanticLabels(t *testing.T) {
 	m.effortLevel = "auto"
 	m.runtimeProfile = "full"
 	m.balance = "¥12.34"
-	block := m.renderStatusBlock(m.primaryStatusLine(" Auto ", false, false), 120)
+	block := m.renderStatusBlock(m.primaryStatusLine(false, false), 120)
 	if strings.Contains(block, "\033[") {
 		t.Fatalf("NO_COLOR footer contains escapes: %q", block)
 	}
@@ -292,17 +292,23 @@ func TestStatusFooterUsesReadableLocalizedHintAndWrapsCleanly(t *testing.T) {
 			m.runtimeProfile = "full"
 			m.effortLevel = "auto"
 
-			primary := m.primaryStatusLine(" Auto ", false, false)
+			primary := m.primaryStatusLine(false, false)
 			block := ansi.Strip(m.renderStatusBlock(primary, 100))
 			lines := strings.Split(block, "\n")
-			if len(lines) != 2 {
-				t.Fatalf("localized footer rows = %d, want wrapped primary/session rows without an empty data band:\n%s", len(lines), block)
+			// Without a mode pill, some locales fit interaction + session on one
+			// row at width 100; others still split. Either is fine as long as both
+			// groups are present and there is no empty data band/divider.
+			if len(lines) < 1 || len(lines) > 2 {
+				t.Fatalf("localized footer rows = %d, want 1–2 (no empty data band):\n%s", len(lines), block)
 			}
-			if !strings.Contains(lines[0], tt.compact) || !strings.Contains(lines[1], tt.session) {
+			if !strings.Contains(block, tt.compact) || !strings.Contains(block, tt.session) {
 				t.Fatalf("localized footer did not keep readable shortcut and session groups:\n%s", block)
 			}
 			if strings.Contains(block, "⇧Tab") || strings.Contains(block, "^Y") {
 				t.Fatalf("localized footer fell back to symbolic shortcut notation:\n%s", block)
+			}
+			if strings.Contains(block, "─") {
+				t.Fatalf("localized footer should not paint a data-band divider without Git/telemetry:\n%s", block)
 			}
 			for row, line := range lines {
 				if width := visibleWidth(line); width > 100 {
@@ -389,7 +395,7 @@ func TestStatusFooterSwapsModelAndGitGroups(t *testing.T) {
 		Untracked: 3,
 	}
 
-	primary := m.primaryStatusLine(" Auto ", false, false)
+	primary := m.primaryStatusLine(false, false)
 	lines := strings.Split(ansi.Strip(m.renderStatusBlock(primary, 160)), "\n")
 	if len(lines) != 3 {
 		t.Fatalf("wide status block lines = %d, want two data rows plus divider:\n%s", len(lines), strings.Join(lines, "\n"))
@@ -452,7 +458,7 @@ func TestStatusFooterMediumLayoutLeftAlignsModelWork(t *testing.T) {
 	m.runtimeProfile = "full"
 	m.effortLevel = "auto"
 
-	primary := m.primaryStatusLine(" Auto ", false, false)
+	primary := m.primaryStatusLine(false, false)
 	lines := strings.Split(ansi.Strip(m.renderStatusBlock(primary, 82)), "\n")
 	if len(lines) != 2 {
 		t.Fatalf("medium footer rows = %d, want primary plus model/work without an empty data band:\n%s", len(lines), strings.Join(lines, "\n"))
@@ -503,7 +509,7 @@ func TestStatusFooterNarrowLayoutBreaksBetweenGroups(t *testing.T) {
 		Removed: 4,
 	}
 
-	primary := m.primaryStatusLine(" Auto ", false, false)
+	primary := m.primaryStatusLine(false, false)
 	block := ansi.Strip(m.renderStatusBlock(primary, 40))
 	lines := strings.Split(block, "\n")
 	if len(lines) <= 2 {
@@ -531,7 +537,7 @@ func TestStatusFooterCustomLineStillReplacesBuiltInData(t *testing.T) {
 	m.statuslineOut = "custom telemetry"
 	m.gitStatus = gitStatus{Repo: "Reasonix", Branch: "main"}
 
-	primary := m.primaryStatusLine(" Auto ", false, false)
+	primary := m.primaryStatusLine(false, false)
 	block := ansi.Strip(m.renderStatusBlock(primary, 120))
 	if strings.Contains(block, "deepseek-v4-flash") || strings.Contains(block, "work delivery") || strings.Contains(block, "¥12.34") {
 		t.Fatalf("custom statusline should replace built-in data fields:\n%s", block)
@@ -552,8 +558,7 @@ func TestStatusFooterHeightCountUsesRenderedLayout(t *testing.T) {
 	m.gitStatus = gitStatus{Repo: "VeryLongWorkspaceName", Branch: strings.Repeat("branch/", 8)}
 	m.balance = "¥12.34"
 
-	modeTag := " " + m.modeTagText() + " "
-	primary := m.primaryStatusLine(modeTag, false, false)
+	primary := m.primaryStatusLine(false, false)
 	want := strings.Count(m.renderStatusBlock(primary, m.width), "\n") + 1
 	if got := m.computeStatusLineCount(m.width); got != want {
 		t.Fatalf("computed status rows = %d, rendered rows = %d", got, want)
