@@ -112,6 +112,8 @@ type chatTUI struct {
 	// flicker when the viewport content is completely rebuilt during a session
 	// switch (#5441). Cleared after one Update cycle.
 	sessionSwitch bool
+	// smooth is the in-flight scroll interpolation (nil when idle).
+	smooth *smoothScroll
 	// scrollRepaint restores the legacy full-screen repaint on every viewport
 	// scroll (REASONIX_TUI_SCROLL_REPAINT=1) for terminals that strand stale
 	// rows under the cell-diff renderer.
@@ -932,11 +934,12 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// ordinary nested-scroll behavior and avoids a dead wheel at boundaries.
 		switch msg.Button {
 		case tea.MouseWheelUp:
-			m.viewport.ScrollUp(3)
+			next, sc := m.startSmoothScroll(m.viewport.YOffset() - 3)
+			return next, sc
 		case tea.MouseWheelDown:
-			m.viewport.ScrollDown(3)
+			next, sc := m.startSmoothScroll(m.viewport.YOffset() + 3)
+			return next, sc
 		}
-		return m, nil
 
 	case tea.MouseClickMsg:
 		// Match the complete terminal right-click convention while Reasonix owns
@@ -1165,11 +1168,11 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Transcript scroll keys work in any state (PgUp/PgDn are never text).
 		switch msg.String() {
 		case "pgup":
-			m.viewport.PageUp()
-			return m, finalize(m, cmds)
+			next, sc := m.startSmoothScroll(m.viewport.YOffset() - m.viewport.Height())
+			return next, finalize(next, append(cmds, sc))
 		case "pgdown":
-			m.viewport.PageDown()
-			return m, finalize(m, cmds)
+			next, sc := m.startSmoothScroll(m.viewport.YOffset() + m.viewport.Height())
+			return next, finalize(next, append(cmds, sc))
 		case "ctrl+home":
 			m.viewport.GotoTop()
 			return m, finalize(m, cmds)
@@ -1801,6 +1804,18 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinner, cmd = m.spinner.Update(msg)
 			cmds = append(cmds, cmd)
 		}
+
+	case smoothScrollTickMsg:
+		if m.smooth == nil {
+			return m, nil
+		}
+		off, done := m.smooth.offsetAt(msg.now)
+		m.viewport.SetYOffset(off)
+		if done {
+			m.smooth = nil
+			return m, nil
+		}
+		cmds = append(cmds, smoothScrollTick())
 	}
 
 	beforeInput := m.input.Value()

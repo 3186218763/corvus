@@ -1574,6 +1574,17 @@ func TestCtrlHomeEndScrollKeyBindings(t *testing.T) {
 	}
 }
 
+// settleScroll drives an in-flight smooth scroll to its final position with a
+// synthetic far-future tick, so tests that assert scroll outcomes can run
+// synchronously without wall-clock sleeps.
+func settleScroll(m chatTUI) chatTUI {
+	if m.smooth == nil {
+		return m
+	}
+	n, _ := m.update(smoothScrollTickMsg{now: time.Now().Add(time.Hour)})
+	return n.(chatTUI)
+}
+
 func TestMouseWheelAndPageKeysScrollTranscript(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	ch := make(chan event.Event, 1)
@@ -1596,22 +1607,26 @@ func TestMouseWheelAndPageKeysScrollTranscript(t *testing.T) {
 	}
 
 	cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur = settleScroll(cur)
 	if got, want := cur.viewport.YOffset(), bottom-3; got != want {
 		t.Fatalf("wheel-up YOffset = %d, want %d", got, want)
 	}
 
 	cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	cur = settleScroll(cur)
 	if got := cur.viewport.YOffset(); got != bottom {
 		t.Fatalf("wheel-down should return by one wheel step, YOffset=%d want bottom=%d", got, bottom)
 	}
 
 	cur = adv(cur, tea.KeyPressMsg{Code: tea.KeyPgUp})
+	cur = settleScroll(cur)
 	pageUp := cur.viewport.YOffset()
 	if got, want := pageUp, bottom-cur.viewport.Height(); got != want {
 		t.Fatalf("PageUp YOffset = %d, want %d", got, want)
 	}
 
 	cur = adv(cur, tea.KeyPressMsg{Code: tea.KeyPgDown})
+	cur = settleScroll(cur)
 	if got := cur.viewport.YOffset(); got != bottom {
 		t.Fatalf("PageDown should return to bottom from one page up, YOffset=%d want %d", got, bottom)
 	}
@@ -1632,6 +1647,7 @@ func TestRunningStreamPreservesScrolledReadingPosition(t *testing.T) {
 	}
 	cur.state = tuiRunning
 	cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur = settleScroll(cur)
 	readOffset := cur.viewport.YOffset()
 	if cur.viewport.AtBottom() {
 		t.Fatal("wheel-up should leave the bottom before streaming output arrives")
@@ -1646,6 +1662,7 @@ func TestRunningStreamPreservesScrolledReadingPosition(t *testing.T) {
 	}
 
 	cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	cur = settleScroll(cur)
 	if got, want := cur.viewport.YOffset(), readOffset+3; got != want {
 		t.Fatalf("wheel-down while running should move one wheel step, got %d want %d", got, want)
 	}
@@ -2883,6 +2900,7 @@ func TestTranscriptTailFollow(t *testing.T) {
 	}
 
 	cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur = settleScroll(cur)
 	if cur.viewport.AtBottom() {
 		t.Fatal("wheel-up should break the bottom pin")
 	}
@@ -2913,6 +2931,7 @@ func TestEmptyEnterScrollsToBottom(t *testing.T) {
 		}
 		// Scroll up to leave the bottom.
 		cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+		cur = settleScroll(cur)
 		if cur.viewport.AtBottom() {
 			t.Fatal("wheel-up should break the bottom pin")
 		}
@@ -2931,6 +2950,7 @@ func TestEmptyEnterScrollsToBottom(t *testing.T) {
 		}
 		cur.state = tuiRunning
 		cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+		cur = settleScroll(cur)
 		if cur.viewport.AtBottom() {
 			t.Fatal("wheel-up should break the bottom pin")
 		}
@@ -2958,6 +2978,7 @@ func TestRegularForceGotoBottomScrollJumpNoClearScreenByDefault(t *testing.T) {
 		cur = next(cur, agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"}))
 	}
 	cur = next(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur = settleScroll(cur)
 	if cur.viewport.AtBottom() {
 		t.Fatal("wheel-up should break the bottom pin")
 	}
@@ -3027,6 +3048,7 @@ func TestSessionSwitchSuppressesOneClearScreen(t *testing.T) {
 		cur = next(cur, notice)
 	}
 	cur = next(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur = settleScroll(cur)
 	if cur.viewport.AtBottom() {
 		t.Fatal("wheel-up should break the bottom pin")
 	}

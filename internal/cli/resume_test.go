@@ -199,6 +199,7 @@ func TestResumeWhileScrolledUpPinsViewportToBottom(t *testing.T) {
 	}
 
 	cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur = settleScroll(cur)
 	if cur.viewport.AtBottom() {
 		t.Fatal("wheel-up should move the old transcript away from the bottom")
 	}
