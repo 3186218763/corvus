@@ -2845,13 +2845,16 @@ func (m chatTUI) View() tea.View {
 		badge := m.renderModeBadge(shellMode)
 		const badgeGap = " "
 		badgeCols = visibleWidth(badge) + visibleWidth(badgeGap)
-		style := inputBoxStyle.Width(max(boxW-badgeCols, 10))
+		// Floor at 1 (not 10): badgeCols + max(boxW-badgeCols, 10) can exceed the
+		// terminal when the badge is wide on a narrow screen. Keep joined width
+		// ≤ boxW in lockstep with composerContentWidth / SetWidth.
+		style := inputBoxStyle.Width(m.composerBoxWidth(badgeCols))
 		if shellMode {
 			style = withThemeBorderFG(style, statusShellColor)
 		}
-		// Mode badge sits left of the bordered input box on the same bottom
-		// region. Continuation rows keep a blank gutter so the box stays aligned.
-		box = joinHorizontalTop(badge+badgeGap, style.Render(m.renderComposerInput()))
+		// Mode badge sits left of the first content row (beside ❯), not the top
+		// border. Other rows keep a blank gutter so the box stays aligned.
+		box = joinModeBadgeLeftOfComposer(badge+badgeGap, style.Render(m.renderComposerInput()))
 	}
 
 	primaryStatus := m.primaryStatusLine(shellMode, cancelRequested)
@@ -3405,43 +3408,52 @@ func (m chatTUI) modeBadgeColumnWidth() int {
 	return visibleWidth(m.renderModeBadge(shellMode)) + 1
 }
 
-// composerContentWidth is the textarea SetWidth budget: terminal width minus
-// the historical box chrome (-4) and the live mode-badge column.
-func (m chatTUI) composerContentWidth() int {
+// composerFrameWidth is the terminal width View uses for the bottom frame
+// (composer join + status block). Matches View's boxW floor.
+func (m chatTUI) composerFrameWidth() int {
 	w := m.width
 	if w <= 0 {
 		w = 80
 	}
-	return max(w-4-m.modeBadgeColumnWidth(), 1)
+	if w < 10 {
+		return 10
+	}
+	return w
 }
 
-// joinHorizontalTop places left beside right, top-aligned. Shorter left content
-// is padded with spaces on continuation rows so a one-line badge sits cleanly
-// left of a multi-line bordered composer box.
-func joinHorizontalTop(left, right string) string {
-	leftLines := strings.Split(left, "\n")
-	rightLines := strings.Split(right, "\n")
-	leftW := 0
-	for _, ln := range leftLines {
-		if w := visibleWidth(ln); w > leftW {
-			leftW = w
-		}
+// composerBoxWidth is the bordered input box width after reserving the mode
+// badge column. Floor is 1 so badgeCols+box never exceeds the frame width.
+func (m chatTUI) composerBoxWidth(badgeCols int) int {
+	return max(m.composerFrameWidth()-badgeCols, 1)
+}
+
+// composerContentWidth is the textarea SetWidth budget derived from the same
+// clamped box width View paints (historical -4 chrome inside the box).
+func (m chatTUI) composerContentWidth() int {
+	return max(m.composerBoxWidth(m.modeBadgeColumnWidth())-4, 1)
+}
+
+// joinModeBadgeLeftOfComposer places the mode badge beside the first content
+// row of a top+bottom bordered input box (index 1), so the chip shares a line
+// with the ❯ prompt. Top/bottom borders and wrapped continuation rows get a
+// blank left gutter of the same width.
+func joinModeBadgeLeftOfComposer(badgeWithGap, box string) string {
+	rightLines := strings.Split(box, "\n")
+	leftW := visibleWidth(badgeWithGap)
+	gutter := strings.Repeat(" ", leftW)
+	out := make([]string, len(rightLines))
+	// Bordered box is top border, ≥1 content rows, bottom border. Degenerate
+	// single-line renders still get the badge on row 0.
+	badgeRow := 0
+	if len(rightLines) >= 3 {
+		badgeRow = 1
 	}
-	n := len(rightLines)
-	if len(leftLines) > n {
-		n = len(leftLines)
-	}
-	out := make([]string, n)
-	for i := 0; i < n; i++ {
-		l := ""
-		if i < len(leftLines) {
-			l = leftLines[i]
+	for i, r := range rightLines {
+		if i == badgeRow {
+			out[i] = badgeWithGap + r
+			continue
 		}
-		r := ""
-		if i < len(rightLines) {
-			r = rightLines[i]
-		}
-		out[i] = padRight(l, leftW) + r
+		out[i] = gutter + r
 	}
 	return strings.Join(out, "\n")
 }

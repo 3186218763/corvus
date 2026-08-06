@@ -40,7 +40,9 @@ func overflowingComposerMouseTestTUI(t *testing.T) chatTUI {
 		lines[i] = "composer-line-" + strconv.Itoa(i)
 	}
 	m.input.SetValue(strings.Join(lines, "\n"))
-	return updateComposerMouseTestTUI(t, m, tea.WindowSizeMsg{Width: 50, Height: 18})
+	// Keep the expanded terminal width from newComposerMouseTestTUI (includes
+	// mode-badge columns); do not snap back to the pre-badge budget of 50.
+	return updateComposerMouseTestTUI(t, m, tea.WindowSizeMsg{Width: m.width, Height: 18})
 }
 
 func TestComposerWheelScrollsViewWithoutMovingInsertionCursor(t *testing.T) {

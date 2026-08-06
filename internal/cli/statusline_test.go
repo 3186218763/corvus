@@ -143,9 +143,16 @@ func TestComposerModeBadgeUsesModeTagText(t *testing.T) {
 	if !strings.Contains(plainView, "Plan") {
 		t.Fatalf("View missing Plan mode badge:\n%s", plainView)
 	}
-	// Badge must sit in the composer region (left of the prompt), not only as prose.
-	if !strings.Contains(plainView, "Plan") || !strings.Contains(plainView, "❯") {
-		t.Fatalf("View should show mode badge near composer prompt:\n%s", plainView)
+	// Badge must sit left of the prompt on the same composer content row.
+	shared := false
+	for _, line := range strings.Split(plainView, "\n") {
+		if strings.Contains(line, "Plan") && strings.Contains(line, "❯") {
+			shared = true
+			break
+		}
+	}
+	if !shared {
+		t.Fatalf("Plan badge and composer prompt must share a line:\n%s", plainView)
 	}
 	if !strings.Contains(content, "\x1b[48;2;37;99;235m") {
 		t.Fatalf("Plan badge should use blue pill background, got:\n%q", content)
@@ -157,6 +164,43 @@ func TestComposerModeBadgeUsesModeTagText(t *testing.T) {
 	}
 	if !strings.Contains(primary, "ready") {
 		t.Fatalf("footer primary missing idle state: %q", primary)
+	}
+}
+
+func TestComposerBadgeJoinDoesNotExceedFrameWidth(t *testing.T) {
+	// Wide badge ("Don't Ask") + former min box width of 10 overflowed narrow
+	// terminals. Joined composer row must stay ≤ frame width.
+	ctrl := control.New(control.Options{})
+	ctrl.SetToolApprovalMode(control.ToolApprovalDontAsk)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 20)
+	m.cfg = config.Default()
+	if err := m.cfg.SetUIShortcutLayout("desktop"); err != nil {
+		t.Fatal(err)
+	}
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 20, Height: 12})
+	m = next.(chatTUI)
+	if got := m.modeTagText(); got != "Don't Ask" {
+		t.Fatalf("modeTagText() = %q, want Don't Ask", got)
+	}
+	badgeCols := m.modeBadgeColumnWidth()
+	boxW := m.composerBoxWidth(badgeCols)
+	if boxW < 1 {
+		t.Fatalf("composerBoxWidth = %d, want >= 1", boxW)
+	}
+	if total := badgeCols + boxW; total > m.composerFrameWidth() {
+		t.Fatalf("badgeCols(%d)+box(%d)=%d exceeds frame %d", badgeCols, boxW, total, m.composerFrameWidth())
+	}
+	// Same floor for SetWidth path.
+	if got, want := m.composerContentWidth(), max(boxW-4, 1); got != want {
+		t.Fatalf("composerContentWidth = %d, want %d (aligned with box)", got, want)
+	}
+	for _, line := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+		if w := visibleWidth(line); w > m.composerFrameWidth() {
+			// Transcript viewport may pad; only check composer-ish rows with badge.
+			if strings.Contains(line, "Don't Ask") || strings.Contains(line, "❯") {
+				t.Fatalf("composer-related row width %d > frame %d: %q", w, m.composerFrameWidth(), line)
+			}
+		}
 	}
 }
 
@@ -220,27 +264,27 @@ func TestIdleStatuslineIsCompact(t *testing.T) {
 
 	content := renderStatuslineView(t, false)
 	plainView := ansi.Strip(content)
-	plain := bottomStatusPlain(content)
 	// Mode chrome lives on the composer badge; footer keeps idle + cycle hints.
 	if !strings.Contains(plainView, "Auto") {
 		t.Fatalf("idle view missing Auto mode badge:\n%s", plainView)
 	}
-	if !strings.Contains(plain, "ready") {
-		t.Fatalf("idle status line missing ready state:\n%s", plain)
+	footer := footerInteractionPlain(content)
+	if !strings.Contains(footer, "ready") {
+		t.Fatalf("idle status line missing ready state:\n%s", footer)
 	}
-	if strings.HasPrefix(strings.TrimSpace(strings.Split(plain, "\n")[0]), "Auto") {
-		t.Fatalf("footer primary must not start with mode pill:\n%s", plain)
+	if strings.HasPrefix(strings.TrimSpace(footer), "Auto") {
+		t.Fatalf("footer primary must not start with mode pill: %q", footer)
 	}
-	if !strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
-		t.Fatalf("idle status line missing plan-toggle hint:\n%s", plain)
+	if !strings.Contains(footer, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
+		t.Fatalf("idle status line missing plan-toggle hint:\n%s", footer)
 	}
 	for _, old := range []string{"Shift-Tab", "Ctrl-O", "Ctrl-D", "Enter sends", "Esc clears/exits state", "PgUp/PgDn"} {
-		if strings.Contains(plain, old) {
-			t.Fatalf("idle status line should not contain %q:\n%s", old, plain)
+		if strings.Contains(footer, old) {
+			t.Fatalf("idle status line should not contain %q:\n%s", old, footer)
 		}
 	}
-	if strings.Contains(plain, "[auto]") {
-		t.Fatalf("idle status line should use pill label, not bracketed tag:\n%s", plain)
+	if strings.Contains(footer, "[auto]") {
+		t.Fatalf("idle status line should use pill label, not bracketed tag:\n%s", footer)
 	}
 	if !strings.Contains(content, "\x1b[48;2;245;158;11m") {
 		t.Fatalf("Auto badge should use amber pill background, got:\n%q", content)
@@ -254,18 +298,18 @@ func TestYoloStatuslineUsesDangerPill(t *testing.T) {
 
 	content := renderStatuslineView(t, true)
 	plainView := ansi.Strip(content)
-	plain := bottomStatusPlain(content)
+	footer := footerInteractionPlain(content)
 	if !strings.Contains(plainView, "YOLO") {
 		t.Fatalf("YOLO view missing mode badge:\n%s", plainView)
 	}
-	if !strings.Contains(plain, "approvals skipped") || !strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
-		t.Fatalf("YOLO status line missing warning text:\n%s", plain)
+	if !strings.Contains(footer, "approvals skipped") || !strings.Contains(footer, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
+		t.Fatalf("YOLO status line missing warning text:\n%s", footer)
 	}
-	if strings.HasPrefix(strings.TrimSpace(strings.Split(plain, "\n")[0]), "YOLO") {
-		t.Fatalf("footer primary must not start with YOLO pill:\n%s", plain)
+	if strings.HasPrefix(strings.TrimSpace(footer), "YOLO") {
+		t.Fatalf("footer primary must not start with YOLO pill: %q", footer)
 	}
-	if strings.Contains(plain, "[YOLO]") {
-		t.Fatalf("YOLO status line should use a pill label, not bracketed tag:\n%s", plain)
+	if strings.Contains(footer, "[YOLO]") {
+		t.Fatalf("YOLO status line should use a pill label, not bracketed tag:\n%s", footer)
 	}
 	if !strings.Contains(content, "\x1b[48;2;229;72;77m") {
 		t.Fatalf("YOLO badge should use danger pill background, got:\n%q", content)
@@ -279,15 +323,15 @@ func TestPlanStatuslineUsesBluePill(t *testing.T) {
 
 	content := renderPlanStatuslineView(t)
 	plainView := ansi.Strip(content)
-	plain := bottomStatusPlain(content)
+	footer := footerInteractionPlain(content)
 	if !strings.Contains(plainView, "Plan") {
 		t.Fatalf("plan view missing mode badge:\n%s", plainView)
 	}
-	if !strings.Contains(plain, "ready") || !strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
-		t.Fatalf("plan status line missing idle/hint status:\n%s", plain)
+	if !strings.Contains(footer, "ready") || !strings.Contains(footer, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
+		t.Fatalf("plan status line missing idle/hint status:\n%s", footer)
 	}
-	if strings.HasPrefix(strings.TrimSpace(strings.Split(plain, "\n")[0]), "Plan") {
-		t.Fatalf("footer primary must not start with Plan pill:\n%s", plain)
+	if strings.HasPrefix(strings.TrimSpace(footer), "Plan") {
+		t.Fatalf("footer primary must not start with Plan pill: %q", footer)
 	}
 	if !strings.Contains(content, "\x1b[48;2;37;99;235m") {
 		t.Fatalf("Plan badge should use blue pill background, got:\n%q", content)
@@ -317,15 +361,15 @@ func TestDesktopShortcutStatuslineUsesPlanToggleHint(t *testing.T) {
 
 	content := renderStatuslineViewWithShortcutLayout(t, "desktop")
 	plainView := ansi.Strip(content)
-	plain := bottomStatusPlain(content)
+	footer := footerInteractionPlain(content)
 	if !strings.Contains(plainView, "Ask") {
 		t.Fatalf("desktop shortcut view missing Ask mode badge:\n%s", plainView)
 	}
-	if !strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
-		t.Fatalf("desktop shortcut status line missing unified plan-toggle hint:\n%s", plain)
+	if !strings.Contains(footer, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
+		t.Fatalf("desktop shortcut status line missing unified plan-toggle hint:\n%s", footer)
 	}
-	if strings.HasPrefix(strings.TrimSpace(strings.Split(plain, "\n")[0]), "Ask") {
-		t.Fatalf("footer primary must not start with Ask pill:\n%s", plain)
+	if strings.HasPrefix(strings.TrimSpace(footer), "Ask") {
+		t.Fatalf("footer primary must not start with Ask pill: %q", footer)
 	}
 }
 
@@ -528,4 +572,32 @@ func bottomStatusPlainLines(content string) []string {
 		return lines
 	}
 	return lines[len(lines)-3:]
+}
+
+// footerInteractionPlain returns the footer interaction row (idle/hint/state),
+// skipping composer rows that bottomStatusPlainLines may include when the
+// status block is only one line tall.
+func footerInteractionPlain(content string) string {
+	for _, line := range strings.Split(ansi.Strip(content), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		// Interaction row carries idle/yolo state or contextual chrome labels.
+		if strings.Contains(line, "ready") ||
+			strings.Contains(line, "就绪") ||
+			strings.Contains(line, "就緒") ||
+			strings.Contains(line, "approvals skipped") ||
+			strings.Contains(line, "Shift+Tab") ||
+			strings.Contains(line, "tool approvals") {
+			return line
+		}
+	}
+	// Fallback: last non-empty line of the previous 3-line heuristic.
+	for i := len(bottomStatusPlainLines(content)) - 1; i >= 0; i-- {
+		if s := strings.TrimSpace(bottomStatusPlainLines(content)[i]); s != "" {
+			return bottomStatusPlainLines(content)[i]
+		}
+	}
+	return ""
 }
