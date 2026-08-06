@@ -217,8 +217,11 @@ type chatTUI struct {
 	wrappedLines      []string // transcript wrapped to viewport width (rendered each frame)
 	blockLineCounts   []int    // wrapped line count per transcript block
 	liveDirtyIdx      []int    // blocks mutated this Update, re-wrapped by the wrapper
-	viewport          viewport.Model
-	sel               selection
+	// turnReceipt holds the latest completed turn's token/cost line, rendered
+	// under the composer instead of staying in the transcript scrollback.
+	turnReceipt string
+	viewport    viewport.Model
+	sel         selection
 	// autoScroll drives edge-drag scrolling: -1 up, +1 down, 0 off. dragX is the
 	// column the drag is held at, so the ticker can extend the selection head.
 	autoScroll int
@@ -934,12 +937,11 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// ordinary nested-scroll behavior and avoids a dead wheel at boundaries.
 		switch msg.Button {
 		case tea.MouseWheelUp:
-			next, sc := m.startSmoothScroll(m.viewport.YOffset() - 3)
-			return next, sc
+			m.viewport.ScrollUp(3)
 		case tea.MouseWheelDown:
-			next, sc := m.startSmoothScroll(m.viewport.YOffset() + 3)
-			return next, sc
+			m.viewport.ScrollDown(3)
 		}
+		return m, nil
 
 	case tea.MouseClickMsg:
 		// Match the complete terminal right-click convention while Reasonix owns
@@ -1876,6 +1878,7 @@ func (m *chatTUI) clearTranscriptDisplay() {
 	m.wrappedLines = nil
 	m.blockLineCounts = nil
 	m.liveDirtyIdx = nil
+	m.turnReceipt = ""
 	m.viewport.SetContent("")
 	m.shellOutputs = make(map[string]string)
 	m.shellExpanded = make(map[string]bool)
@@ -2986,6 +2989,12 @@ func (m chatTUI) View() tea.View {
 		}
 		parts = append(parts, box)
 	}
+	// The latest turn's token/cost receipt pins under the composer (Claude
+	// Code-style stats line), wrapped to width so narrow terminals never push
+	// the status block off-screen.
+	if m.turnReceipt != "" {
+		parts = append(parts, statusBlockStyle.Width(boxW).MaxWidth(boxW).Render(wrapStatusLine(m.turnReceipt, boxW)))
+	}
 	parts = append(parts, statusBlockStyle.Width(boxW).MaxWidth(boxW).Render(statusBlock))
 
 	if m.nativeScrollback {
@@ -3429,6 +3438,9 @@ func (m chatTUI) computeStatusLineCount(width int) int {
 	if m.state == tuiRunning {
 		// working (spinner) line — wraps independently of the status block below.
 		lines += strings.Count(wrapStatusLine(working, width), "\n") + 1
+	}
+	if m.turnReceipt != "" {
+		lines += strings.Count(wrapStatusLine(m.turnReceipt, width), "\n") + 1
 	}
 	lines += strings.Count(statusBlock, "\n") + 1
 	return lines
@@ -3927,8 +3939,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		}
 		if line := renderTurnReceipt(e.Usage, e.Pricing, e.CacheDiagnostics); line != "" {
 			m.finalizeStreamed()
-			m.commitSpacer()
-			m.commitTranscriptSource(transcriptSource{kind: transcriptSourceTurnReceipt, raw: line})
+			m.turnReceipt = line
 		}
 
 	case event.Notice:

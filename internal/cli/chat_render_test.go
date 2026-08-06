@@ -5,9 +5,11 @@ import (
 	"testing"
 
 	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
+	"reasonix/internal/control"
 	"reasonix/internal/event"
 	"reasonix/internal/i18n"
 	"reasonix/internal/provider"
@@ -110,22 +112,36 @@ func TestAssistantAnswerWithoutReasoningHasNoLeadingSpacer(t *testing.T) {
 	}
 }
 
-func TestTurnReceiptLeavesOneBlankRowAfterAssistantAnswer(t *testing.T) {
-	m := newTestChatTUI()
+func TestTurnReceiptMovesBelowComposer(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	ch := make(chan event.Event, 1)
+	m := newChatTUI(ctrl, "", ch, 80)
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
 	m.ingestEvent(event.Event{Kind: event.Text, Text: "Answer"})
 	m.ingestEvent(event.Event{Kind: event.Message})
 	m.ingestEvent(event.Event{Kind: event.Usage, Usage: &provider.Usage{
 		PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12,
 	}})
 
-	if len(m.transcript) != 3 {
-		t.Fatalf("answer + spacer + receipt should be three blocks, got %d: %v", len(m.transcript), m.transcript)
+	for _, block := range m.transcript {
+		if strings.Contains(ansi.Strip(block), "TURN") {
+			t.Fatalf("receipt must not stay in the transcript scrollback, got %q", block)
+		}
 	}
-	if strings.TrimSpace(m.transcript[1]) != "" {
-		t.Fatalf("answer/receipt separator = %q, want one blank block", m.transcript[1])
+	if !strings.Contains(ansi.Strip(m.turnReceipt), "TURN") {
+		t.Fatalf("turn receipt not captured, got %q", m.turnReceipt)
 	}
-	if !strings.Contains(ansi.Strip(m.transcript[2]), "TURN") {
-		t.Fatalf("last block should be the turn receipt, got %q", m.transcript[2])
+	view := m.View().Content
+	if !strings.Contains(ansi.Strip(view), "TURN") {
+		t.Fatalf("View should render the receipt below the composer:\n%s", ansi.Strip(view))
+	}
+	// The receipt sits after the composer box: it must appear after "❯" input
+	// prompt marker in the rendered output.
+	boxIdx := strings.LastIndex(view, "❯")
+	receiptIdx := strings.Index(view, "TURN")
+	if boxIdx < 0 || receiptIdx < 0 || receiptIdx < boxIdx {
+		t.Fatalf("receipt should render below the composer (box at %d, receipt at %d)", boxIdx, receiptIdx)
 	}
 }
 

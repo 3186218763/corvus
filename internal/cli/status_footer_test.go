@@ -95,27 +95,6 @@ func TestTurnReceiptMarksEstimatedUsage(t *testing.T) {
 	}
 }
 
-func TestTurnReceiptBandUsesSingleQuietBoundary(t *testing.T) {
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
-	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
-
-	band := renderTurnReceiptBand("  TURN  14.0K tok · in 13.6K", 48)
-	lines := strings.Split(band, "\n")
-	if len(lines) != 2 {
-		t.Fatalf("turn receipt band rows = %d, want top rule and receipt:\n%s", len(lines), band)
-	}
-	if strings.Trim(lines[0], "─ ") != "" {
-		t.Fatalf("turn receipt band boundary is not a rule:\n%s", band)
-	}
-	if got := visibleWidth(lines[0]); got != 48 {
-		t.Fatalf("receipt rule width = %d, want 48: %q", got, lines[0])
-	}
-	if !strings.Contains(lines[1], "TURN  14.0K tok") {
-		t.Fatalf("receipt body missing from quiet band:\n%s", band)
-	}
-}
-
 func TestTurnReceiptAdaptsContrastAcrossThemes(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	defer i18n.DetectLanguage("en")
@@ -123,24 +102,23 @@ func TestTurnReceiptAdaptsContrastAcrossThemes(t *testing.T) {
 	i18n.DetectLanguage("en")
 
 	for _, tt := range []struct {
-		mode, borderSGR, labelSGR, valueSGR string
+		mode, labelSGR, valueSGR string
 	}{
-		{mode: "dark", borderSGR: "\033[38;5;236m", labelSGR: "\033[38;5;247m", valueSGR: "\033[38;5;252m"},
-		{mode: "light", borderSGR: "\033[38;5;253m", labelSGR: "\033[38;5;243m", valueSGR: "\033[38;5;238m"},
+		{mode: "dark", labelSGR: "\033[38;5;247m", valueSGR: "\033[38;5;252m"},
+		{mode: "light", labelSGR: "\033[38;5;243m", valueSGR: "\033[38;5;238m"},
 	} {
 		t.Run(tt.mode, func(t *testing.T) {
 			configureCLITheme(tt.mode)
 			receipt := renderTurnReceipt(&provider.Usage{
 				PromptTokens: 900, CompletionTokens: 100, TotalTokens: 1_000,
 			}, nil, nil)
-			band := renderTurnReceiptBand(receipt, 80)
-			for _, want := range []string{tt.borderSGR + "─", tt.labelSGR + "TURN", tt.valueSGR + "1.0K tok"} {
-				if !strings.Contains(band, want) {
-					t.Fatalf("%s receipt %q missing semantic style %q", tt.mode, band, want)
+			for _, want := range []string{tt.labelSGR + "TURN", tt.valueSGR + "1.0K tok"} {
+				if !strings.Contains(receipt, want) {
+					t.Fatalf("%s receipt %q missing semantic style %q", tt.mode, receipt, want)
 				}
 			}
-			if strings.Count(ansi.Strip(band), "\n") != 1 {
-				t.Fatalf("%s receipt should keep one rule and one body row: %q", tt.mode, ansi.Strip(band))
+			if strings.Contains(receipt, "─") {
+				t.Fatalf("%s receipt should have no rule separator: %q", tt.mode, ansi.Strip(receipt))
 			}
 		})
 	}

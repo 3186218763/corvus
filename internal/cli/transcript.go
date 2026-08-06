@@ -26,7 +26,6 @@ const (
 	transcriptSourceToolCard
 	transcriptSourceBanner
 	transcriptSourceReplayBundle
-	transcriptSourceTurnReceipt
 )
 
 // transcriptSource retains only the semantic inputs needed to reproduce a
@@ -123,8 +122,6 @@ func (m *chatTUI) renderTranscriptSource(source transcriptSource, terminalWidth 
 		return strings.TrimRight(renderTUIBanner(m.label, source.raw, contentWidth), "\n")
 	case transcriptSourceReplayBundle:
 		return m.renderReplayBundle(source, contentWidth, renderAssistantMarkdown)
-	case transcriptSourceTurnReceipt:
-		return renderTurnReceiptBand(source.raw, contentWidth)
 	default:
 		return ""
 	}
@@ -219,22 +216,6 @@ func indentTranscriptBlock(block, indent string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
-}
-
-func renderTurnReceiptBand(receipt string, contentWidth int) string {
-	if strings.TrimSpace(ansi.Strip(receipt)) == "" {
-		return ""
-	}
-	contentWidth = max(contentWidth, 1)
-	if contentWidth <= visibleWidth(statusFooterIndent) {
-		rule := themeFg(activeCLITheme.border, strings.Repeat("─", contentWidth))
-		return rule + "\n" + wrapTranscript(receipt, contentWidth)
-	}
-	indent := statusFooterIndent
-	innerWidth := contentWidth - visibleWidth(indent)
-	rule := indent + themeFg(activeCLITheme.border, strings.Repeat("─", innerWidth))
-	body := wrapTranscript(receipt, contentWidth)
-	return rule + "\n" + body
 }
 
 func (m *chatTUI) reflowTranscript(terminalWidth int) {

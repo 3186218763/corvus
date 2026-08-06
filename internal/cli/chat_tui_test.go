@@ -1345,8 +1345,6 @@ func TestIngestEventRoutesByKind(t *testing.T) {
 	}{
 		{"dispatch", event.Event{Kind: event.ToolDispatch, Tool: event.Tool{Name: "read_file", Args: `{"path":"x"}`}}, "● Read(x)"},
 		{"blocked", event.Event{Kind: event.ToolResult, Tool: event.Tool{Name: "bash", Err: "blocked by permission policy"}}, "● Bash ⊘ blocked by permission policy"},
-		{"usage", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200, CacheHitTokens: 900, CacheMissTokens: 100}}, "TURN  1.2K tok"},
-		{"usage-diagnostics", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200}, CacheDiagnostics: &event.CacheDiagnostics{PrefixChanged: true, PrefixChangeReasons: []string{"tools"}}}, "cache prefix changed: tools"},
 		{"notice-info", event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "compacted 8 messages → summary"}, "  · compacted 8 messages → summary"},
 		{"notice-warn", event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "response truncated: hit max output tokens"}, "  ! response truncated: hit max output tokens"},
 		{"phase", event.Event{Kind: event.Phase, Text: "planner · planning"}, "[planner · planning]"},
@@ -1361,6 +1359,25 @@ func TestIngestEventRoutesByKind(t *testing.T) {
 		want := strings.Join(strings.Fields(tc.want), " ")
 		if len(got) != 1 || !strings.Contains(normalized, want) {
 			t.Errorf("%s: committed=%v, want a single line containing %q", tc.name, got, tc.want)
+		}
+	}
+
+	// Usage does not commit a scrollback line; it feeds the bottom turn receipt.
+	for _, tc := range []struct {
+		name string
+		ev   event.Event
+		want string
+	}{
+		{"usage", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200, CacheHitTokens: 900, CacheMissTokens: 100}}, "TURN  1.2K tok"},
+		{"usage-diagnostics", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200}, CacheDiagnostics: &event.CacheDiagnostics{PrefixChanged: true, PrefixChangeReasons: []string{"tools"}}}, "cache prefix changed: tools"},
+	} {
+		m := newTestChatTUI()
+		m.ingestEvent(tc.ev)
+		if got := *m.pendingCommit; len(got) != 0 {
+			t.Errorf("%s: usage must not commit a scrollback line, got %v", tc.name, got)
+		}
+		if !strings.Contains(ansi.Strip(m.turnReceipt), tc.want) {
+			t.Errorf("%s: turn receipt %q missing %q", tc.name, m.turnReceipt, tc.want)
 		}
 	}
 

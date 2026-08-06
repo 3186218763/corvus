@@ -119,3 +119,28 @@ func TestSmoothScrollClampsTarget(t *testing.T) {
 		t.Fatalf("target must clamp to content bounds, offset=%d", next2.viewport.YOffset())
 	}
 }
+
+func TestWheelScrollsInstantly(t *testing.T) {
+	m := scrollFixture()
+	m.viewport.SetYOffset(100)
+	before := m.viewport.YOffset()
+	next, cmd := m.update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	n := next.(chatTUI)
+	if cmd != nil {
+		t.Fatal("wheel scroll must not start an animation")
+	}
+	if got := n.viewport.YOffset(); got != before-3 {
+		t.Fatalf("wheel-up offset = %d, want %d (instant, no animation)", got, before-3)
+	}
+	if n.smooth != nil {
+		t.Fatal("wheel scroll must not arm smooth state")
+	}
+	next, cmd = n.update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	n = next.(chatTUI)
+	if cmd != nil {
+		t.Fatal("wheel-down must not start an animation")
+	}
+	if got := n.viewport.YOffset(); got != before {
+		t.Fatalf("wheel-down offset = %d, want %d", got, before)
+	}
+}
