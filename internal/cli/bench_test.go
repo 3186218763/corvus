@@ -39,3 +39,16 @@ func BenchmarkWrapTranscript(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkAppendBlock(b *testing.B) {
+	base := benchTranscriptContent(10000)
+	m := newTestChatTUI()
+	m.appendTranscriptBlock(base, transcriptSource{kind: transcriptSourceFixed})
+	m.appendWrappedBlocks(0, 120)
+	newBlock := benchTranscriptContent(1)
+	for i := 0; i < b.N; i++ {
+		m.appendTranscriptBlock(newBlock, transcriptSource{kind: transcriptSourceFixed})
+		from := len(m.blockLineCounts) - 1
+		m.appendWrappedBlocks(from, 120)
+	}
+}

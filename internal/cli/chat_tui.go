@@ -213,6 +213,8 @@ type chatTUI struct {
 	// cards, and replay bundles are regenerated after a resize.
 	transcriptSources []transcriptSource
 	wrappedLines      []string // transcript wrapped to viewport width (rendered each frame)
+	blockLineCounts   []int    // wrapped line count per transcript block
+	liveDirtyIdx      []int    // blocks mutated this Update, re-wrapped by the wrapper
 	viewport          viewport.Model
 	sel               selection
 	// autoScroll drives edge-drag scrolling: -1 up, +1 down, 0 off. dragX is the
@@ -836,16 +838,24 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cm.viewport.SetHeight(cm.transcriptHeight())
 	if cm.width != prevWidth {
 		cm.reflowTranscript(cm.width)
+		cm.rebuildWrappedLines(contentW)
 		// Selection coordinates are visual-line based and cannot survive a
 		// semantic reflow without selecting unrelated text.
 		cm.sel = selection{}
+	} else if len(cm.transcript) != prevLines || len(cm.liveDirtyIdx) > 0 {
+		// Cache sync: wrap any blocks appended since the last pass (from the
+		// current cache count, which remove/truncate already adjusted), then
+		// re-wrap blocks mutated in place by setLiveBlock/setTranscriptBlock.
+		cm.appendWrappedBlocks(len(cm.blockLineCounts), contentW)
+		for _, idx := range cm.liveDirtyIdx {
+			cm.rewrapBlock(idx, contentW)
+		}
+	} else if cm.transcriptDirty {
+		cm.rebuildWrappedLines(contentW) // dirty without a tracked block: full rebuild
 	}
-	// Re-feed only when the content grew or the width changed (re-wrapping is
-	// the expensive part); a bare scroll or spinner tick keeps the offset.
-	if len(cm.transcript) != prevLines || cm.width != prevWidth || cm.transcriptDirty {
-		wrapped := wrapTranscript(strings.Join(cm.transcript, "\n"), contentW)
-		cm.viewport.SetContent(wrapped)
-		cm.wrappedLines = strings.Split(wrapped, "\n")
+	cm.liveDirtyIdx = cm.liveDirtyIdx[:0]
+	if cm.width != prevWidth || len(cm.transcript) != prevLines || cm.transcriptDirty {
+		cm.viewport.SetContent(strings.Join(cm.wrappedLines, "\n"))
 		if wasAtBottom {
 			cm.viewport.GotoBottom() // tail-follow: stay pinned to newest output
 		} else if cm.width != prevWidth && resizeAnchor.valid {
@@ -1836,6 +1846,8 @@ func (m *chatTUI) clearTranscriptDisplay() {
 	m.transcript = nil
 	m.transcriptSources = nil
 	m.wrappedLines = nil
+	m.blockLineCounts = nil
+	m.liveDirtyIdx = nil
 	m.viewport.SetContent("")
 	m.shellOutputs = make(map[string]string)
 	m.shellExpanded = make(map[string]bool)
@@ -2204,8 +2216,7 @@ func (m *chatTUI) streamToolOutput(id, chunk string) {
 	for i, ln := range vis {
 		lines[i] = dim(clampPlain(ln, m.width-len([]rune(connector))))
 	}
-	m.transcript[m.toolStreamIdx] = connectorBlock(lines)
-	m.transcriptDirty = true
+	m.setLiveBlock(m.toolStreamIdx, connectorBlock(lines))
 }
 
 // pushToolLine appends a completed output line to the bounded tail, dropping the
@@ -2320,7 +2331,7 @@ func (m *chatTUI) collapseShellSlot(id string, idx int, resultOutput string) {
 	if n == 0 {
 		// Tool finished with no output: clear the "working…" placeholder but
 		// keep the slot (shellTranscriptIdx still points here for late progress).
-		m.transcript[idx] = ""
+		m.setLiveBlock(idx, "")
 		return
 	}
 	if full, ok := m.shellOutputs[id]; ok {
@@ -2333,16 +2344,16 @@ func (m *chatTUI) collapseShellSlot(id string, idx int, resultOutput string) {
 				preview[i] = dim(clampPlain(lines[i], m.width-len([]rune(connector))))
 			}
 			preview[shellPreviewLines] = dim(fmt.Sprintf("… %d more lines (Ctrl+B)", total-shellPreviewLines))
-			m.transcript[idx] = connectorBlock(preview)
+			m.setLiveBlock(idx, connectorBlock(preview))
 		} else {
 			rendered := make([]string, total)
 			for i, ln := range lines {
 				rendered[i] = dim(clampPlain(ln, m.width-len([]rune(connector))))
 			}
-			m.transcript[idx] = connectorBlock(rendered)
+			m.setLiveBlock(idx, connectorBlock(rendered))
 		}
 	} else {
-		m.transcript[idx] = connectorBlock([]string{dim(fmt.Sprintf("%d lines", n))})
+		m.setLiveBlock(idx, connectorBlock([]string{dim(fmt.Sprintf("%d lines", n))}))
 	}
 	m.shellTranscriptIdx[id] = idx
 }
@@ -2454,8 +2465,7 @@ func (m *chatTUI) tickToolRunning() {
 	m.toolStreamFrame++
 	frame := toolWorkingFrames[m.toolStreamFrame%len(toolWorkingFrames)]
 	secs := int(time.Since(m.toolStreamStart).Seconds())
-	m.transcript[m.toolStreamIdx] = connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, frame, secs))})
-	m.transcriptDirty = true
+	m.setLiveBlock(m.toolStreamIdx, connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, frame, secs))}))
 }
 
 // commitReasoning closes the live thinking block: the "▎ thinking…" marker is
