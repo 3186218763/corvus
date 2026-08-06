@@ -4360,3 +4360,33 @@ func TestBottomPanelsFallbackWhenInvalid(t *testing.T) {
 		t.Fatal("invalidated cache must fall back to byte-identical rendering")
 	}
 }
+
+// TestReplayBundleTrailingUserDemotesInternalAssistant mirrors
+// currentTranscriptMarkers inside a bundle: a user section after the last
+// assistant body must demote it (bare diamond, no name), while the trailing
+// user bubble itself stays full accent.
+func TestReplayBundleTrailingUserDemotesInternalAssistant(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	history := []provider.Message{
+		{Role: provider.RoleUser, Content: "q1"},
+		{Role: provider.RoleAssistant, Content: "a1"},
+		{Role: provider.RoleUser, Content: "q2"},
+	}
+	m := newTestChatTUI()
+	m.label = "model-x"
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceReplayBundle, history: history})
+
+	plain := ansi.Strip(strings.Join(m.transcript, "\n"))
+	if strings.Contains(plain, "Corvus") {
+		t.Fatalf("bundle ending in a user must not name the internal assistant, got %q", plain)
+	}
+	if !strings.Contains(plain, "  ◆\n\n  a1") {
+		t.Fatalf("internal assistant should render a bare diamond, got %q", plain)
+	}
+	if !strings.Contains(m.transcript[0], fgSGR(activeCLITheme.accent)+"› q2") {
+		t.Fatalf("trailing user bubble should stay full accent, got %q", m.transcript[0])
+	}
+}

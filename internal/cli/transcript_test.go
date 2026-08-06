@@ -736,3 +736,34 @@ func TestReplayBundleInternalLiveness(t *testing.T) {
 		t.Fatalf("bundle internal user must fade after a new user message, got %q", strings.Join(m.transcript, "\n"))
 	}
 }
+
+// TestCopyTranscriptDropsNameOnHistoryAnswers pins the unnamed copy variant:
+// only the live (last) assistant answer carries "Corvus" in the clipboard text;
+// earlier answers keep a bare diamond, byte-parity with the displayed transcript.
+func TestCopyTranscriptDropsNameOnHistoryAnswers(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	m := newTestChatTUI()
+	m.width = 80
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q1"})
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "a1"})
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q2"})
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "a2"})
+
+	copied, _, ok := m.buildCopyTranscript(transcriptContentWidth(m.width, m.nativeScrollback))
+	if !ok {
+		t.Fatal("buildCopyTranscript failed on a two-turn transcript")
+	}
+	plain := ansi.Strip(copied)
+	if n := strings.Count(plain, "Corvus"); n != 1 {
+		t.Fatalf("copy should name exactly the last answer, got %d occurrences:\n%s", n, plain)
+	}
+	if !strings.Contains(plain, "  ◆\n\n  a1") {
+		t.Fatalf("first answer should copy as a bare demoted diamond, got:\n%s", plain)
+	}
+	if !strings.Contains(plain, "  ◆ Corvus\n\n  a2") {
+		t.Fatalf("last answer should copy with the name, got:\n%s", plain)
+	}
+}

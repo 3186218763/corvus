@@ -2554,7 +2554,12 @@ func (m *chatTUI) streamAnswer() {
 		m.answerIdx = len(m.transcript)
 		m.commitTranscriptSource(source)
 	} else {
-		block := m.renderTranscriptSource(source, m.width, currentTranscriptMarkers(m.transcriptSources)[m.answerIdx])
+		markers := currentTranscriptMarkers(m.transcriptSources)
+		var marker transcriptMarker
+		if m.answerIdx >= 0 && m.answerIdx < len(markers) {
+			marker = markers[m.answerIdx]
+		}
+		block := m.renderTranscriptSource(source, m.width, marker)
 		m.setTranscriptBlock(m.answerIdx, block, source)
 		m.transcriptDirty = true
 	}
@@ -2575,7 +2580,12 @@ func (m *chatTUI) commitPending() {
 	if m.answerIdx < 0 {
 		m.commitTranscriptSource(source)
 	} else {
-		block := m.renderTranscriptSource(source, m.width, currentTranscriptMarkers(m.transcriptSources)[m.answerIdx])
+		markers := currentTranscriptMarkers(m.transcriptSources)
+		var marker transcriptMarker
+		if m.answerIdx >= 0 && m.answerIdx < len(markers) {
+			marker = markers[m.answerIdx]
+		}
+		block := m.renderTranscriptSource(source, m.width, marker)
 		m.setTranscriptBlock(m.answerIdx, block, source)
 		m.transcriptDirty = true
 	}
@@ -4716,6 +4726,12 @@ func replaySectionsForWithAssistantRenderer(
 				lastAssistantBody = i
 			}
 		}
+	}
+	// Mirror currentTranscriptMarkers: an assistant body is only ever named
+	// when no user section follows it (a trailing user demotes it, as in
+	// [u, a, u]).
+	if lastUserSection > lastAssistantBody {
+		lastAssistantBody = -1
 	}
 	var out []string
 	for i, m := range history {

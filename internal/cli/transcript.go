@@ -131,8 +131,8 @@ func (m *chatTUI) removeTranscriptBlock(index int) {
 	if index < 0 || index >= len(m.transcript) {
 		return
 	}
-	oldMarkers := currentTranscriptMarkers(m.transcriptSources)
 	m.ensureTranscriptSources()
+	oldMarkers := currentTranscriptMarkers(m.transcriptSources)
 	m.transcript = append(m.transcript[:index], m.transcript[index+1:]...)
 	m.transcriptSources = append(m.transcriptSources[:index], m.transcriptSources[index+1:]...)
 	m.removeWrappedBlock(index)
@@ -156,8 +156,8 @@ func (m *chatTUI) removeTranscriptBlock(index int) {
 
 func (m *chatTUI) truncateTranscriptBlocks(length int) {
 	length = min(max(length, 0), len(m.transcript))
-	oldMarkers := currentTranscriptMarkers(m.transcriptSources)
 	m.ensureTranscriptSources()
+	oldMarkers := currentTranscriptMarkers(m.transcriptSources)
 	m.transcript = m.transcript[:length]
 	m.transcriptSources = m.transcriptSources[:length]
 	m.truncateWrappedBlocks(length)
