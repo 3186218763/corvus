@@ -79,11 +79,11 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 **Change:** replace whole-transcript re-wrap per content growth with a per-block wrapped-line cache.
 
 - `wrapBlock(rendered string, width int) []string` — wraps one SGR-balanced transcript block (same lipgloss width render as today's `wrapTranscript`, but per block).
-- New fields on `chatTUI`: `wrappedLines []string` (flat, in display order) and `wrappedBlockOffsets []int` (start index of each block; `len == nBlocks+1`, last = total).
+- New fields on `chatTUI`: `wrappedLines []string` (flat, in display order) and `blockLineCounts []int` (wrapped line count per transcript block; `len(wrappedLines)` is the total).
 - Operations:
   - **Append** (content grew): wrap only the new block(s), append lines + offset. O(new block).
-  - **Set block i** (live tool/reasoning tail): re-wrap only block i and patch `offsets[i+1:]` by the line-count delta. Last-block sets (common streaming case) are O(block); middle-block sets are rare and O(n) for the offset patch — acceptable.
-  - **Remove/truncate** (compaction, collapse): truncate `wrappedLines` at `offsets[L]`, then **rebase** the remaining offsets to [0..n] (O(nBlocks)) so the invariant `offsets[k] == sum(counts[0..k))` stays exact after line counts shift.
+  - **Set block i** (live tool/reasoning tail): re-wrap only block i and replace its line range; last-block sets (common streaming case) are O(block) with an O(1) start lookup (`len(wrappedLines) − old count`); middle-block sets are rare and O(nBlocks) for the prefix sum — acceptable.
+  - **Remove/truncate** (compaction, collapse): drop the block's line range via a prefix sum (O(nBlocks), rare) and splice `blockLineCounts`.
   - **Width change**: full rebuild via `rebuildWrappedLines(contentW)` reusing `wrapBlock` per block (reflow path, rare).
 - **Mutation inventory (mandatory):** `m.transcript[idx]` is written directly at chat_tui.go:2202/2318/2331/2452 (tool stream preview, collapse, `tickToolRunning`), bypassing `setTranscriptBlock`. All four sites must either go through a cache-aware setter or mark the changed block dirty (`dirtyBlockIdx`) so the wrapper re-wraps exactly that block. `transcriptDirty` alone is not enough (it is set at every live update); the plan's first task is a transcript-mutation inventory table.
 - `viewport.SetContent(strings.Join(wrappedLines, "\n"))` remains; join is O(total bytes) memcpy (sub-ms at 10k×80), acceptable and benchmarked.
@@ -135,7 +135,7 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 
 ### 5.4 Fixed-width elapsed
 
-- `formatElapsedFixed(sec int) string` — width-4 right-aligned seconds **without unit**: `"  3"`, `" 12"`, `"123"`, `"999"` (values ≥ 1000 clamp to `"999"`). The unit suffix stays in each locale's fmt string (avoids `"3s 秒"`).
+- `formatElapsedFixed(sec int) string` — `%3d` right-aligned seconds **without unit**: `"  3"`, `" 12"`, `"123"`, `"999"` (values ≥ 1000 clamp to `"999"`). With the locale unit suffix the display is a stable 4 columns (e.g. `"  3s"`, `" 12s"`). The unit stays in each locale's fmt string (avoids `"3s 秒"`).
 - **All six elapsed call sites** (verified): working line `ChatStatusThinkingFmt` (chat_tui.go:2825) + `ChatStatusCancellingFmt` (2823); tool working line `ChatToolWorkingFmt` (2431, 2452); collapsed reasoning marker `ChatThoughtForFmt` (2465, 2480). Each fmt switches its seconds argument from `%d` to `%s` in all three locales (`messages_en/zh/zh_tw`) and callers pass `formatElapsedFixed(...)`.
 - `ChatStatusRetryingFmt` is **not** an elapsed site (its `%d/%d` are attempt/max) — unchanged.
 - `internal/i18n/i18n.go` comments updated (`%s = fixed-width elapsed seconds`).
@@ -241,7 +241,7 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 |---|-------|--------|
 | 1 | Round direction | C — dual track: fluidity foundation + curated motion/art |
 | 2 | Scroll repaint | Default off; env `REASONIX_TUI_SCROLL_REPAINT=1` legacy; read in `newChatTUI()` |
-| 3 | Wrap strategy | Per-block incremental cache + offsets; O(nBlocks) rebase on truncate; mutation inventory required |
+| 3 | Wrap strategy | Per-block incremental cache + `blockLineCounts`; O(1) last-block rewrap, O(nBlocks) prefix sums for rare middle/truncate; mutation inventory required |
 | 4 | Panel rendering | Once per `m.update()`; `View()` is per-event (tea.go:888), not per-frame |
 | 5 | Motion gate | env `REASONIX_REDUCE_MOTION=1` read per call; all 4 animation entries incl. tool frames |
 | 6 | Smooth scroll | 150ms fixed, ease-out cubic, 16ms tick, final snap, per-tick reclamp; instant exceptions incl. legacy env |
