@@ -5,9 +5,11 @@ import (
 	"testing"
 
 	"charm.land/bubbles/v2/textarea"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
 	"reasonix/internal/event"
+	"reasonix/internal/i18n"
 	"reasonix/internal/provider"
 )
 
@@ -482,5 +484,43 @@ func TestReasoningViewBounded(t *testing.T) {
 	}
 	if c := strings.Count(m.transcript[m.reasoningTextIdx], "\n") + 1; c > reasoningTailLines {
 		t.Fatalf("live reasoning block kept %d lines, want <= %d", c, reasoningTailLines)
+	}
+}
+
+func TestRenderTUIBannerWideAndNarrow(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+
+	wide := renderTUIBanner("model-x", "", 120)
+	if strings.Count(wide, "\n") < 1 {
+		t.Fatalf("wide banner should keep the tip line, got %q", wide)
+	}
+	if !strings.Contains(wide, i18n.M.ChatTip) {
+		t.Fatalf("wide banner should contain the tip, got %q", wide)
+	}
+	narrow := renderTUIBanner("model-x", "", 40)
+	if strings.Count(narrow, "\n") != 0 {
+		t.Fatalf("narrow banner must be a single line, got %q", narrow)
+	}
+	if strings.Contains(narrow, i18n.M.ChatTip) {
+		t.Fatalf("narrow banner must not contain the tip, got %q", narrow)
+	}
+	if !strings.Contains(narrow, "reasonix") {
+		t.Fatalf("narrow banner should keep the wordmark, got %q", narrow)
+	}
+	// A long label must actually truncate to the target width, not overflow.
+	truncated := renderTUIBanner(strings.Repeat("long-label-", 8), "", 40)
+	if strings.Count(truncated, "\n") != 0 || !strings.Contains(truncated, "…") {
+		t.Fatalf("narrow banner should truncate a long label, got %q", truncated)
+	}
+	if w := ansi.StringWidth(truncated); w > 40 {
+		t.Fatalf("truncated banner width %d exceeds 40", w)
+	}
+	// 60 is the wide/narrow gate.
+	if got := strings.Count(renderTUIBanner("model-x", "", 59), "\n"); got != 0 {
+		t.Fatalf("width 59 must be narrow (single line), got %d lines", got)
+	}
+	if got := strings.Count(renderTUIBanner("model-x", "", 60), "\n"); got < 1 {
+		t.Fatalf("width 60 must be wide (tip line present), got %d lines", got)
 	}
 }

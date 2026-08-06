@@ -42,4 +42,5 @@ func green(s string) string   { return themeFg(activeCLITheme.success, s) }
 func red(s string) string     { return themeFg(activeCLITheme.err, s) }
 func yellow(s string) string  { return themeFg(activeCLITheme.warn, s) }
 func accent(s string) string  { return themeFg(activeCLITheme.accent, s) }
+func muted(s string) string   { return themeFg(activeCLITheme.muted, s) }
 func reverse(s string) string { return sgr(ansiReverse, s) }

@@ -112,6 +112,12 @@ type chatTUI struct {
 	// flicker when the viewport content is completely rebuilt during a session
 	// switch (#5441). Cleared after one Update cycle.
 	sessionSwitch bool
+	// smooth is the in-flight scroll interpolation (nil when idle).
+	smooth *smoothScroll
+	// scrollRepaint restores the legacy full-screen repaint on every viewport
+	// scroll (REASONIX_TUI_SCROLL_REPAINT=1) for terminals that strand stale
+	// rows under the cell-diff renderer.
+	scrollRepaint bool
 	// yoloRestoreToolApprovalMode remembers the Ask/Auto base mode that Ctrl+Y
 	// should restore after a desktop-style YOLO toggle.
 	yoloRestoreToolApprovalMode string
@@ -209,6 +215,8 @@ type chatTUI struct {
 	// cards, and replay bundles are regenerated after a resize.
 	transcriptSources []transcriptSource
 	wrappedLines      []string // transcript wrapped to viewport width (rendered each frame)
+	blockLineCounts   []int    // wrapped line count per transcript block
+	liveDirtyIdx      []int    // blocks mutated this Update, re-wrapped by the wrapper
 	viewport          viewport.Model
 	sel               selection
 	// autoScroll drives edge-drag scrolling: -1 up, +1 down, 0 off. dragX is the
@@ -350,6 +358,15 @@ type chatTUI struct {
 	// each frame via computeStatusLineCount so bottomRows can reserve the correct
 	// height; starts at 2 (unwrapped) until first render.
 	statusLineCount int
+
+	// panels caches the rendered bottom region (todo / approval / chooser /
+	// rewind / completion / manager panels) from the last Update so bottomRows()
+	// and View() share one render pass per event. panelsValid is false until the
+	// first Update, forcing a render-on-demand fallback. panelRenderHook is a
+	// test seam; nil in production.
+	panels          bottomPanels
+	panelsValid     bool
+	panelRenderHook func(name string)
 
 	// modelSwitchPending is true while any async controller rebuild is in flight.
 	modelSwitchPending bool
@@ -567,6 +584,7 @@ func newChatTUI(ctrl control.SessionAPI, missing string, eventCh chan event.Even
 		modelRef:             ctrl.ModelRef(),
 		missing:              missing,
 		nativeScrollback:     nativeScrollback,
+		scrollRepaint:        scrollRepaintEnabled(),
 		mouseCaptureOff:      mouseCaptureOffByDefault(),
 		input:                ti,
 		spinner:              sp,
@@ -817,6 +835,9 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	next, cmd := m.update(msg)
 	cm := next.(chatTUI)
+	// Render the bottom region once per event; bottomRows()/View() read it.
+	cm.panels = cm.renderBottomPanels()
+	cm.panelsValid = true
 
 	contentW := transcriptContentWidth(cm.width, cm.nativeScrollback)
 	cm.viewport.SetWidth(contentW)
@@ -831,16 +852,24 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cm.viewport.SetHeight(cm.transcriptHeight())
 	if cm.width != prevWidth {
 		cm.reflowTranscript(cm.width)
+		cm.rebuildWrappedLines(contentW)
 		// Selection coordinates are visual-line based and cannot survive a
 		// semantic reflow without selecting unrelated text.
 		cm.sel = selection{}
+	} else if len(cm.transcript) != prevLines || len(cm.liveDirtyIdx) > 0 {
+		// Cache sync: wrap any blocks appended since the last pass (from the
+		// current cache count, which remove/truncate already adjusted), then
+		// re-wrap blocks mutated in place by setLiveBlock/setTranscriptBlock.
+		cm.appendWrappedBlocks(len(cm.blockLineCounts), contentW)
+		for _, idx := range cm.liveDirtyIdx {
+			cm.rewrapBlock(idx, contentW)
+		}
+	} else if cm.transcriptDirty {
+		cm.rebuildWrappedLines(contentW) // dirty without a tracked block: full rebuild
 	}
-	// Re-feed only when the content grew or the width changed (re-wrapping is
-	// the expensive part); a bare scroll or spinner tick keeps the offset.
-	if len(cm.transcript) != prevLines || cm.width != prevWidth || cm.transcriptDirty {
-		wrapped := wrapTranscript(strings.Join(cm.transcript, "\n"), contentW)
-		cm.viewport.SetContent(wrapped)
-		cm.wrappedLines = strings.Split(wrapped, "\n")
+	cm.liveDirtyIdx = cm.liveDirtyIdx[:0]
+	if cm.width != prevWidth || len(cm.transcript) != prevLines || cm.transcriptDirty {
+		cm.viewport.SetContent(strings.Join(cm.wrappedLines, "\n"))
 		if wasAtBottom {
 			cm.viewport.GotoBottom() // tail-follow: stay pinned to newest output
 		} else if cm.width != prevWidth && resizeAnchor.valid {
@@ -855,8 +884,9 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Any viewport scroll (wheel, PgUp/PgDn, edge auto-scroll, or tail-follow to
 	// newest output) shifts the whole window. Some terminals (Warp) mishandle
 	// the renderer's scroll/insert-line optimization and strand stale rows, so
-	// force a full clear+redraw whenever the offset actually moved.
-	if cm.viewport.YOffset() != prevYOff && !cm.nativeScrollback && !cm.sessionSwitch {
+	// legacy repaint mode (REASONIX_TUI_SCROLL_REPAINT=1) force-clears on every
+	// offset move; the default is incremental repaint without ClearScreen.
+	if cm.viewport.YOffset() != prevYOff && !cm.nativeScrollback && !cm.sessionSwitch && cm.scrollRepaint {
 		return cm, tea.Batch(tea.ClearScreen, cmd)
 	}
 	cm.sessionSwitch = false
@@ -904,11 +934,12 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// ordinary nested-scroll behavior and avoids a dead wheel at boundaries.
 		switch msg.Button {
 		case tea.MouseWheelUp:
-			m.viewport.ScrollUp(3)
+			next, sc := m.startSmoothScroll(m.viewport.YOffset() - 3)
+			return next, sc
 		case tea.MouseWheelDown:
-			m.viewport.ScrollDown(3)
+			next, sc := m.startSmoothScroll(m.viewport.YOffset() + 3)
+			return next, sc
 		}
-		return m, nil
 
 	case tea.MouseClickMsg:
 		// Match the complete terminal right-click convention while Reasonix owns
@@ -1137,11 +1168,11 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Transcript scroll keys work in any state (PgUp/PgDn are never text).
 		switch msg.String() {
 		case "pgup":
-			m.viewport.PageUp()
-			return m, finalize(m, cmds)
+			next, sc := m.startSmoothScroll(m.viewport.YOffset() - m.viewport.Height())
+			return next, finalize(next, append(cmds, sc))
 		case "pgdown":
-			m.viewport.PageDown()
-			return m, finalize(m, cmds)
+			next, sc := m.startSmoothScroll(m.viewport.YOffset() + m.viewport.Height())
+			return next, finalize(next, append(cmds, sc))
 		case "ctrl+home":
 			m.viewport.GotoTop()
 			return m, finalize(m, cmds)
@@ -1503,7 +1534,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.turnDiscarded = false
 				m.confirmBubbleSent() // shell events arrive instantly
 				m.ctrl.RunShell(cmd)
-				return m, tea.Batch(m.spinner.Tick, elapsedTick())
+				return m, m.workingBatch()
 			}
 
 			// Slash commands run locally without going through the model. A
@@ -1773,6 +1804,18 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinner, cmd = m.spinner.Update(msg)
 			cmds = append(cmds, cmd)
 		}
+
+	case smoothScrollTickMsg:
+		if m.smooth == nil {
+			return m, nil
+		}
+		off, done := m.smooth.offsetAt(msg.now)
+		m.viewport.SetYOffset(off)
+		if done {
+			m.smooth = nil
+			return m, nil
+		}
+		cmds = append(cmds, smoothScrollTick())
 	}
 
 	beforeInput := m.input.Value()
@@ -1831,6 +1874,8 @@ func (m *chatTUI) clearTranscriptDisplay() {
 	m.transcript = nil
 	m.transcriptSources = nil
 	m.wrappedLines = nil
+	m.blockLineCounts = nil
+	m.liveDirtyIdx = nil
 	m.viewport.SetContent("")
 	m.shellOutputs = make(map[string]string)
 	m.shellExpanded = make(map[string]bool)
@@ -1916,34 +1961,15 @@ func (m *chatTUI) commitSpacer() {
 // scrollback mode they join the bottom rail because there is no main viewport.
 func (m chatTUI) bottomRows() int {
 	rows := 0
-	for _, s := range []string{
-		m.renderTodoPanel(),
-		m.renderApprovalBanner(),
-		m.renderChooser(),
-		m.renderRewind(),
-		m.renderMCPImport(),
-		m.renderResumePicker(),
-		m.renderQuickPicker(),
-		m.renderCopyPicker(),
-		m.renderCheatsheet(),
-		m.renderCompletion(),
-	} {
-		if s != "" {
-			rows += strings.Count(s, "\n") + 1
-		}
+	if m.panelsValid {
+		rows = m.panels.rows
+	} else {
+		rows = m.renderBottomPanels().rows
 	}
 	// Remove the hardcoded working-line increment — it is counted inside
 	// statusLineCount via computeStatusLineCount, which also accounts for
 	// wrapping. The fallback to 2 (unwrapped) covers the initial frame and
 	// tests that don't call Update first.
-	if m.nativeScrollback {
-		if main := m.renderMainManager(); main != "" {
-			rows += strings.Count(main, "\n") + 1
-		}
-	}
-	if footer := m.renderMainManagerFooter(); footer != "" {
-		rows += strings.Count(footer, "\n") + 1
-	}
 	if !m.hideComposer() {
 		rows += m.input.Height() + 2
 	}
@@ -2199,8 +2225,7 @@ func (m *chatTUI) streamToolOutput(id, chunk string) {
 	for i, ln := range vis {
 		lines[i] = dim(clampPlain(ln, m.width-len([]rune(connector))))
 	}
-	m.transcript[m.toolStreamIdx] = connectorBlock(lines)
-	m.transcriptDirty = true
+	m.setLiveBlock(m.toolStreamIdx, connectorBlock(lines))
 }
 
 // pushToolLine appends a completed output line to the bounded tail, dropping the
@@ -2315,7 +2340,7 @@ func (m *chatTUI) collapseShellSlot(id string, idx int, resultOutput string) {
 	if n == 0 {
 		// Tool finished with no output: clear the "working…" placeholder but
 		// keep the slot (shellTranscriptIdx still points here for late progress).
-		m.transcript[idx] = ""
+		m.setLiveBlock(idx, "")
 		return
 	}
 	if full, ok := m.shellOutputs[id]; ok {
@@ -2328,16 +2353,16 @@ func (m *chatTUI) collapseShellSlot(id string, idx int, resultOutput string) {
 				preview[i] = dim(clampPlain(lines[i], m.width-len([]rune(connector))))
 			}
 			preview[shellPreviewLines] = dim(fmt.Sprintf("… %d more lines (Ctrl+B)", total-shellPreviewLines))
-			m.transcript[idx] = connectorBlock(preview)
+			m.setLiveBlock(idx, connectorBlock(preview))
 		} else {
 			rendered := make([]string, total)
 			for i, ln := range lines {
 				rendered[i] = dim(clampPlain(ln, m.width-len([]rune(connector))))
 			}
-			m.transcript[idx] = connectorBlock(rendered)
+			m.setLiveBlock(idx, connectorBlock(rendered))
 		}
 	} else {
-		m.transcript[idx] = connectorBlock([]string{dim(fmt.Sprintf("%d lines", n))})
+		m.setLiveBlock(idx, connectorBlock([]string{dim(fmt.Sprintf("%d lines", n))}))
 	}
 	m.shellTranscriptIdx[id] = idx
 }
@@ -2378,7 +2403,7 @@ func (m *chatTUI) toggleShellOutput() {
 				preview[i] = dim(clampPlain(lines[i], innerW))
 			}
 			preview[shellPreviewLines] = dim(fmt.Sprintf("… %d more lines (Ctrl+B)", total-shellPreviewLines))
-			m.transcript[lastIdx] = connectorBlock(preview)
+			m.setLiveBlock(lastIdx, connectorBlock(preview))
 		}
 	} else {
 		// Expand: show up to shellExpandMaxLines lines.
@@ -2394,9 +2419,8 @@ func (m *chatTUI) toggleShellOutput() {
 		if total > shellExpandMaxLines {
 			rendered = append(rendered, dim(fmt.Sprintf("… %d more lines", total-shellExpandMaxLines)))
 		}
-		m.transcript[lastIdx] = connectorBlock(rendered)
+		m.setLiveBlock(lastIdx, connectorBlock(rendered))
 	}
-	m.transcriptDirty = true
 	if m.nativeScrollback {
 		m.commitLine(m.transcript[lastIdx])
 	}
@@ -2428,7 +2452,7 @@ func (m *chatTUI) beginToolRunning(id string) {
 		return
 	}
 	m.toolStreamIdx = len(m.transcript)
-	m.commitLine(connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, toolWorkingFrames[0], 0))}))
+	m.commitLine(connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, toolWorkingFrames[0], formatElapsedFixed(0)))}))
 	// Remember the transcript slot for this id so a late ToolProgress for a
 	// previously dispatched (and possibly already collapsed) tool can reuse
 	// it instead of appending a fresh slot at the end of the transcript. For
@@ -2446,11 +2470,12 @@ func (m *chatTUI) tickToolRunning() {
 	if m.toolStreamIdx < 0 || m.toolLineCount != 0 || m.toolPartial != "" {
 		return
 	}
-	m.toolStreamFrame++
+	if motionEnabled() {
+		m.toolStreamFrame++
+	}
 	frame := toolWorkingFrames[m.toolStreamFrame%len(toolWorkingFrames)]
 	secs := int(time.Since(m.toolStreamStart).Seconds())
-	m.transcript[m.toolStreamIdx] = connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, frame, secs))})
-	m.transcriptDirty = true
+	m.setLiveBlock(m.toolStreamIdx, connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, frame, formatElapsedFixed(secs)))}))
 }
 
 // commitReasoning closes the live thinking block: the "▎ thinking…" marker is
@@ -2462,7 +2487,7 @@ func (m *chatTUI) commitReasoning() {
 		if strings.TrimSpace(m.reasoning.String()) != "" || !m.thinkStart.IsZero() {
 			secs := int(time.Since(m.thinkStart).Seconds())
 			m.commitSpacer()
-			m.commitLine(dim(fmt.Sprintf("  ▎ "+i18n.M.ChatThoughtForFmt, secs)))
+			m.commitLine(dim(fmt.Sprintf("  ▎ "+i18n.M.ChatThoughtForFmt, formatElapsedFixed(secs))))
 			if m.showReasoning && strings.TrimSpace(m.reasoning.String()) != "" {
 				m.commitLine(reasoningBlock(m.reasoning.String(), m.width, 0))
 			}
@@ -2477,7 +2502,7 @@ func (m *chatTUI) commitReasoning() {
 		return
 	}
 	secs := int(time.Since(m.thinkStart).Seconds())
-	m.setTranscriptBlock(m.reasoningLineIdx, dim(fmt.Sprintf("  ▎ "+i18n.M.ChatThoughtForFmt, secs)), transcriptSource{kind: transcriptSourceFixed})
+	m.setTranscriptBlock(m.reasoningLineIdx, dim(fmt.Sprintf("  ▎ "+i18n.M.ChatThoughtForFmt, formatElapsedFixed(secs))), transcriptSource{kind: transcriptSourceFixed})
 	if m.reasoningTextIdx >= 0 {
 		if m.showReasoning && strings.TrimSpace(m.reasoning.String()) != "" {
 			raw := m.reasoning.String()
@@ -2820,9 +2845,9 @@ func (m chatTUI) runningWorkingLine(cancelRequested, styled bool) string {
 
 	var working string
 	if cancelRequested {
-		working = fmt.Sprintf("  "+i18n.M.ChatStatusCancellingFmt, m.spinner.View(), m.elapsed)
+		working = fmt.Sprintf("  "+i18n.M.ChatStatusCancellingFmt, m.spinner.View(), formatElapsedFixed(m.elapsed))
 	} else {
-		working = fmt.Sprintf("  "+i18n.M.ChatStatusThinkingFmt, m.spinner.View(), m.elapsed)
+		working = fmt.Sprintf("  "+i18n.M.ChatStatusThinkingFmt, m.spinner.View(), formatElapsedFixed(m.elapsed))
 	}
 	if m.turnTokens > 0 {
 		working += " · ↓" + shortTokens(m.turnTokens)
@@ -2889,53 +2914,55 @@ func (m chatTUI) View() tea.View {
 	// Bottom region pinned under the transcript viewport: optional panels, the
 	// composer when visible, then the two status rows. Its height feeds
 	// transcriptHeight so the viewport above fills exactly the rest of the screen.
+	panels := m.panels
+	if !m.panelsValid {
+		panels = m.renderBottomPanels()
+	}
 	var parts []string
 	rowsAboveBox := 0 // terminal rows occupied by panels/working line before the composer
-	if todo := m.renderTodoPanel(); todo != "" {
-		parts = append(parts, todo)
-		rowsAboveBox += strings.Count(todo, "\n") + 1
+	if panels.todo != "" {
+		parts = append(parts, panels.todo)
+		rowsAboveBox += strings.Count(panels.todo, "\n") + 1
 	}
-	if banner := m.renderApprovalBanner(); banner != "" {
-		parts = append(parts, banner)
-		rowsAboveBox += strings.Count(banner, "\n") + 1
+	if panels.banner != "" {
+		parts = append(parts, panels.banner)
+		rowsAboveBox += strings.Count(panels.banner, "\n") + 1
 	}
-	if card := m.renderChooser(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.chooser != "" {
+		parts = append(parts, panels.chooser)
+		rowsAboveBox += strings.Count(panels.chooser, "\n") + 1
 	}
-	if card := m.renderRewind(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.rewind != "" {
+		parts = append(parts, panels.rewind)
+		rowsAboveBox += strings.Count(panels.rewind, "\n") + 1
 	}
-	if card := m.renderMCPImport(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.mcpImport != "" {
+		parts = append(parts, panels.mcpImport)
+		rowsAboveBox += strings.Count(panels.mcpImport, "\n") + 1
 	}
-	if card := m.renderResumePicker(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.resumePick != "" {
+		parts = append(parts, panels.resumePick)
+		rowsAboveBox += strings.Count(panels.resumePick, "\n") + 1
 	}
-	if card := m.renderQuickPicker(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.quickPick != "" {
+		parts = append(parts, panels.quickPick)
+		rowsAboveBox += strings.Count(panels.quickPick, "\n") + 1
 	}
-	if card := m.renderCopyPicker(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.copyPick != "" {
+		parts = append(parts, panels.copyPick)
+		rowsAboveBox += strings.Count(panels.copyPick, "\n") + 1
 	}
-	if card := m.renderCheatsheet(); card != "" {
-		parts = append(parts, card)
-		rowsAboveBox += strings.Count(card, "\n") + 1
+	if panels.cheatsheet != "" {
+		parts = append(parts, panels.cheatsheet)
+		rowsAboveBox += strings.Count(panels.cheatsheet, "\n") + 1
 	}
-	if menu := m.renderCompletion(); menu != "" {
-		parts = append(parts, menu)
-		rowsAboveBox += strings.Count(menu, "\n") + 1
+	if panels.completion != "" {
+		parts = append(parts, panels.completion)
+		rowsAboveBox += strings.Count(panels.completion, "\n") + 1
 	}
-	if m.nativeScrollback {
-		if card := m.renderMainManager(); card != "" {
-			parts = append(parts, card)
-			rowsAboveBox += strings.Count(card, "\n") + 1
-		}
+	if m.nativeScrollback && panels.manager != "" {
+		parts = append(parts, panels.manager)
+		rowsAboveBox += strings.Count(panels.manager, "\n") + 1
 	}
 	// Layout: the working spinner (when running), then the composer when visible,
 	// then the persistent status block. Wide terminals keep two information rows
@@ -2947,7 +2974,7 @@ func (m chatTUI) View() tea.View {
 		parts = append(parts, workingStyle.Width(boxW).MaxWidth(boxW).Render(wrapStatusLine(working, boxW)))
 		rowsAboveBox++
 	}
-	if footer := m.renderMainManagerFooter(); footer != "" {
+	if footer := panels.managerFooter; footer != "" {
 		parts = append(parts, footer)
 		rowsAboveBox += strings.Count(footer, "\n") + 1
 	}
@@ -3753,7 +3780,7 @@ func (m *chatTUI) startControllerTurn(displayed, restore string, start func()) t
 	// The controller owns the run goroutine, its context, and cancellation; it
 	// streams events to eventCh and emits TurnDone when the turn settles.
 	start()
-	return tea.Batch(m.spinner.Tick, elapsedTick())
+	return m.workingBatch()
 }
 
 // confirmBubbleSent marks the already-echoed user bubble as really sent once a
@@ -4695,8 +4722,13 @@ func interruptedTurnDisplayNotice() string {
 // at the top of the session.
 func renderTUIBanner(label, missing string, width int) string {
 	var b strings.Builder
-	b.WriteString(accent("◆") + " " + bold("reasonix") + "  " + dim("· "+label) + "\n")
-	b.WriteString(dim("  "+i18n.M.ChatTip) + "\n")
+	if width >= 60 {
+		b.WriteString(accent("◆") + " " + bold("reasonix") + "  " + dim("· "+label) + "\n")
+		b.WriteString(dim("  "+i18n.M.ChatTip) + "\n")
+	} else {
+		line := accent("◆") + " " + bold("reasonix") + " " + dim("· "+label)
+		b.WriteString(ansi.Truncate(line, width, "…"))
+	}
 	if missing != "" {
 		b.WriteString(wrapForViewport("  ! "+missing, width, activeCLITheme.warn) + "\n")
 	}

@@ -129,6 +129,7 @@ func TestComposerWheelChainsToTranscriptAtInternalBoundary(t *testing.T) {
 	}
 
 	m = updateComposerMouseTestTUI(t, m, wheelUp)
+	m = settleScroll(m)
 	if got, want := m.viewport.YOffset(), bottom-composerWheelRows; got != want {
 		t.Fatalf("wheel at composer top chained transcript to %d, want %d", got, want)
 	}

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -386,5 +387,158 @@ func TestCopyToClipboard(t *testing.T) {
 	got = copyToClipboard("remote")().(clipboardCopyMsg)
 	if !got.osc52 || got.text != "remote" {
 		t.Fatalf("SSH clipboard result = %+v, want OSC 52", got)
+	}
+}
+
+// mixedBlocks mirrors real transcript content: ANSI-dim tool lines, accent
+// tool cards, CJK user bubbles, and plain assistant text.
+func mixedBlocks() []string {
+	return []string{
+		"\x1b[2m  ⎿  " + strings.Repeat("tool output line", 4) + "\x1b[0m",
+		"\x1b[38;5;173m● Tool(verb)\x1b[0m",
+		"普通文本行 1：中文内容用于宽度与换行测试",
+		"\x1b[38;5;245m· \x1b[0m\x1b[38;5;252m" + strings.Repeat("assistant text ", 8) + "\x1b[0m",
+		"",
+	}
+}
+
+func fullWrap(blocks []string, width int) []string {
+	return strings.Split(wrapTranscript(strings.Join(blocks, "\n"), width), "\n")
+}
+
+func TestWrappedCacheEqualsFullWrapAfterMutations(t *testing.T) {
+	const width = 80
+	m := newTestChatTUI()
+	blocks := mixedBlocks()
+	for _, b := range blocks {
+		m.appendTranscriptBlock(b, transcriptSource{kind: transcriptSourceFixed})
+	}
+	m.appendWrappedBlocks(0, width)
+	if !reflect.DeepEqual(m.wrappedLines, fullWrap(blocks, width)) {
+		t.Fatalf("initial cache mismatch:\n%q\nvs\n%q", m.wrappedLines, fullWrap(blocks, width))
+	}
+
+	// Live update of the LAST block (streaming hot path).
+	m.setLiveBlock(len(m.transcript)-1, "\x1b[2m  ⎿  new tail line\x1b[0m")
+	m.rewrapBlock(len(m.transcript)-1, width)
+	blocks[len(blocks)-1] = "\x1b[2m  ⎿  new tail line\x1b[0m"
+	if !reflect.DeepEqual(m.wrappedLines, fullWrap(blocks, width)) {
+		t.Fatalf("last-block rewrite mismatch")
+	}
+
+	// Live update of a MIDDLE block (late tool progress).
+	m.setLiveBlock(1, "\x1b[38;5;173m● Tool(verb)\x1b[0m\x1b[0m")
+	m.rewrapBlock(1, width)
+	blocks[1] = "\x1b[38;5;173m● Tool(verb)\x1b[0m\x1b[0m"
+	if !reflect.DeepEqual(m.wrappedLines, fullWrap(blocks, width)) {
+		t.Fatalf("middle-block rewrite mismatch")
+	}
+
+	// Append two more blocks.
+	extra := []string{"extra a", "extra b"}
+	for _, b := range extra {
+		m.appendTranscriptBlock(b, transcriptSource{kind: transcriptSourceFixed})
+	}
+	m.appendWrappedBlocks(len(blocks), width)
+	blocks = append(blocks, extra...)
+	if !reflect.DeepEqual(m.wrappedLines, fullWrap(blocks, width)) {
+		t.Fatalf("append mismatch")
+	}
+
+	// Truncate to 3 blocks (transcript-level op keeps the cache in sync).
+	m.truncateTranscriptBlocks(3)
+	blocks = blocks[:3]
+	if !reflect.DeepEqual(m.wrappedLines, fullWrap(blocks, width)) {
+		t.Fatalf("truncate mismatch")
+	}
+
+	// Remove block 1 (transcript-level op keeps the cache in sync).
+	m.removeTranscriptBlock(1)
+	blocks = append(blocks[:1], blocks[2:]...)
+	if !reflect.DeepEqual(m.wrappedLines, fullWrap(blocks, width)) {
+		t.Fatalf("remove mismatch")
+	}
+
+	// Rebuild from scratch (width change path).
+	m.rebuildWrappedLines(60)
+	if !reflect.DeepEqual(m.wrappedLines, fullWrap(blocks, 60)) {
+		t.Fatalf("rebuild mismatch")
+	}
+	// ANSI safety: every wrapped line must carry balanced SGR (no dangling dim).
+	// lipgloss may normalize the reset to "\x1b[m", so accept either form.
+	for _, ln := range m.wrappedLines {
+		if strings.Contains(ln, "\x1b[2m") && !strings.Contains(ln, "\x1b[0m") && !strings.Contains(ln, "\x1b[m") {
+			t.Fatalf("dangling SGR in %q", ln)
+		}
+	}
+}
+
+// TestClearTranscriptDisplayResetsWrapCache proves a display clear drops the
+// whole wrap cache together with any pending re-wrap indices, so the next
+// append starts from a clean slate instead of re-wrapping stale blocks.
+func TestClearTranscriptDisplayResetsWrapCache(t *testing.T) {
+	m := newTestChatTUI()
+	m.appendTranscriptBlock("block a", transcriptSource{kind: transcriptSourceFixed})
+	m.appendTranscriptBlock("block b", transcriptSource{kind: transcriptSourceFixed})
+	m.appendWrappedBlocks(0, 80)
+	m.setLiveBlock(0, "block a'")
+	if len(m.wrappedLines) == 0 || len(m.blockLineCounts) == 0 || len(m.liveDirtyIdx) == 0 {
+		t.Fatalf("precondition: wrap cache should be populated and dirty, got wrappedLines=%d blockLineCounts=%d liveDirtyIdx=%v",
+			len(m.wrappedLines), len(m.blockLineCounts), m.liveDirtyIdx)
+	}
+	m.clearTranscriptDisplay()
+	if len(m.wrappedLines) != 0 || len(m.blockLineCounts) != 0 || len(m.liveDirtyIdx) != 0 {
+		t.Fatalf("clearTranscriptDisplay should reset the wrap cache, got wrappedLines=%d blockLineCounts=%d liveDirtyIdx=%v",
+			len(m.wrappedLines), len(m.blockLineCounts), m.liveDirtyIdx)
+	}
+}
+
+func TestWrapBlockEquivalence(t *testing.T) {
+	blocks := mixedBlocks()
+	for _, width := range []int{20, 40, 80} {
+		var joined []string
+		for _, b := range blocks {
+			joined = append(joined, wrapBlock(b, width)...)
+		}
+		if want := fullWrap(blocks, width); !reflect.DeepEqual(joined, want) {
+			t.Fatalf("width %d: per-block wrap != full wrap:\n%q\nvs\n%q", width, joined, want)
+		}
+	}
+	// ANSI must survive wrapping (the reason lipgloss width render is used).
+	// Wrapped lines are padded to width like the full wrap; the text content
+	// must survive wrapping.
+	if got := strings.TrimRight(ansi.Strip(wrapBlock("\x1b[2mdimmed\x1b[0m", 80)[0]), " "); got != "dimmed" {
+		t.Fatalf("ANSI stripped wrong: %q", got)
+	}
+}
+
+func TestTranscriptNeverDoubleBlanks(t *testing.T) {
+	m := newTestChatTUI()
+	m.commitLine("user bubble")
+	m.commitSpacer()
+	m.commitLine(dim("  ▎ thinking…"))
+	m.commitSpacer()
+	m.commitLine("  ⎿  tool line")
+	m.commitSpacer()
+	m.commitLine("assistant answer")
+	m.commitSpacer()
+	m.commitLine("receipt")
+	joined := strings.Join(m.transcript, "\n")
+	if strings.Contains(joined, "\n\n\n") {
+		t.Fatalf("double blank line detected:\n%q", joined)
+	}
+	if strings.Count(joined, "\n\n") != 4 {
+		t.Fatalf("want exactly one blank line between the 5 blocks, got:\n%q", joined)
+	}
+}
+
+func TestCommitSpacerNeverDoubleSpaces(t *testing.T) {
+	m := newTestChatTUI()
+	m.commitLine("a")
+	m.commitSpacer()
+	m.commitSpacer() // second spacer must be a no-op
+	m.commitLine("b")
+	if strings.Contains(strings.Join(m.transcript, "\n"), "\n\n\n") {
+		t.Fatalf("spacer double-spaced:\n%q", m.transcript)
 	}
 }

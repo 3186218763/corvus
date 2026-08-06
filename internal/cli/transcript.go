@@ -64,6 +64,8 @@ func (m *chatTUI) setTranscriptBlock(index int, rendered string, source transcri
 	m.ensureTranscriptSources()
 	m.transcript[index] = rendered
 	m.transcriptSources[index] = source
+	m.markLiveDirty(index)
+	m.transcriptDirty = true
 }
 
 func (m *chatTUI) removeTranscriptBlock(index int) {
@@ -73,6 +75,22 @@ func (m *chatTUI) removeTranscriptBlock(index int) {
 	m.ensureTranscriptSources()
 	m.transcript = append(m.transcript[:index], m.transcript[index+1:]...)
 	m.transcriptSources = append(m.transcriptSources[:index], m.transcriptSources[index+1:]...)
+	m.removeWrappedBlock(index)
+	// Pending re-wrap indices move with the transcript: entries above the
+	// removed block shift down by one, the removed block's own entry (if any)
+	// is gone. Without this a later setLiveBlock would re-wrap the wrong block
+	// and the mutated one would keep its stale wrap.
+	kept := m.liveDirtyIdx[:0]
+	for _, idx := range m.liveDirtyIdx {
+		switch {
+		case idx == index:
+		case idx > index:
+			kept = append(kept, idx-1)
+		default:
+			kept = append(kept, idx)
+		}
+	}
+	m.liveDirtyIdx = kept
 }
 
 func (m *chatTUI) truncateTranscriptBlocks(length int) {
@@ -80,6 +98,14 @@ func (m *chatTUI) truncateTranscriptBlocks(length int) {
 	m.ensureTranscriptSources()
 	m.transcript = m.transcript[:length]
 	m.transcriptSources = m.transcriptSources[:length]
+	m.truncateWrappedBlocks(length)
+	kept := m.liveDirtyIdx[:0]
+	for _, idx := range m.liveDirtyIdx {
+		if idx < length {
+			kept = append(kept, idx)
+		}
+	}
+	m.liveDirtyIdx = kept
 }
 
 func (m *chatTUI) renderTranscriptSource(source transcriptSource, terminalWidth int) string {
@@ -329,6 +355,113 @@ func wrapTranscript(s string, width int) string {
 		return s
 	}
 	return lipgloss.NewStyle().Width(width).Render(s)
+}
+
+// wrapBlock wraps one SGR-balanced transcript block to width, returning its
+// visual lines. Equivalent to wrapping the block as part of the joined
+// transcript (lipgloss width render wraps each line independently).
+func wrapBlock(rendered string, width int) []string {
+	if width <= 0 {
+		width = 1
+	}
+	if rendered == "" {
+		return []string{strings.Repeat(" ", width)}
+	}
+	return strings.Split(lipgloss.NewStyle().Width(width).Render(rendered), "\n")
+}
+
+// appendWrappedBlocks wraps transcript blocks [from, len) into the wrappedLines
+// cache. If the cache was cleared while blocks remain, rebuilds from 0.
+func (m *chatTUI) appendWrappedBlocks(from, width int) {
+	if len(m.wrappedLines) == 0 && from > 0 {
+		m.rebuildWrappedLines(width)
+		return
+	}
+	for i := from; i < len(m.transcript); i++ {
+		lines := wrapBlock(m.transcript[i], width)
+		m.wrappedLines = append(m.wrappedLines, lines...)
+		m.blockLineCounts = append(m.blockLineCounts, len(lines))
+	}
+}
+
+// rewrapBlock re-wraps block i in place. O(block) for the last block (common
+// streaming case); O(nBlocks) prefix scan for rare middle-block updates.
+func (m *chatTUI) rewrapBlock(i, width int) {
+	if i < 0 || i >= len(m.transcript) {
+		return
+	}
+	start := 0
+	for j := 0; j < i; j++ {
+		start += m.blockLineCounts[j]
+	}
+	old := m.blockLineCounts[i]
+	lines := wrapBlock(m.transcript[i], width)
+	if len(lines) == old {
+		copy(m.wrappedLines[start:], lines)
+		return
+	}
+	m.wrappedLines = append(m.wrappedLines[:start], append(lines, m.wrappedLines[start+old:]...)...)
+	m.blockLineCounts[i] = len(lines)
+}
+
+// rebuildWrappedLines rebuilds the whole cache from the current transcript
+// (width-change / reflow path).
+func (m *chatTUI) rebuildWrappedLines(width int) {
+	m.wrappedLines = m.wrappedLines[:0]
+	m.blockLineCounts = m.blockLineCounts[:0]
+	m.appendWrappedBlocks(0, width)
+}
+
+// truncateWrappedBlocks drops the cache to the first length blocks.
+func (m *chatTUI) truncateWrappedBlocks(length int) {
+	if length >= len(m.blockLineCounts) {
+		return
+	}
+	end := 0
+	for j := 0; j < length; j++ {
+		end += m.blockLineCounts[j]
+	}
+	m.wrappedLines = m.wrappedLines[:end]
+	m.blockLineCounts = m.blockLineCounts[:length]
+}
+
+// removeWrappedBlock removes block i's lines from the cache.
+func (m *chatTUI) removeWrappedBlock(i int) {
+	if i < 0 || i >= len(m.blockLineCounts) {
+		return
+	}
+	start := 0
+	for j := 0; j < i; j++ {
+		start += m.blockLineCounts[j]
+	}
+	n := m.blockLineCounts[i]
+	m.wrappedLines = append(m.wrappedLines[:start], m.wrappedLines[start+n:]...)
+	m.blockLineCounts = append(m.blockLineCounts[:i], m.blockLineCounts[i+1:]...)
+}
+
+// setLiveBlock replaces transcript block idx and marks it for re-wrapping on
+// the next Update pass. This is the single setter for live tool/reasoning
+// updates (historical direct m.transcript[idx] writers moved here).
+func (m *chatTUI) setLiveBlock(idx int, rendered string) {
+	if idx < 0 || idx >= len(m.transcript) {
+		return
+	}
+	m.transcript[idx] = rendered
+	m.markLiveDirty(idx)
+	m.transcriptDirty = true
+}
+
+// markLiveDirty records idx for re-wrapping at the next Update pass. Repeated
+// sets of the same block within one pass collapse to a single entry, so a
+// streaming burst doesn't re-run rewrapBlock's O(nBlocks) prefix scan for the
+// same block.
+func (m *chatTUI) markLiveDirty(idx int) {
+	for _, d := range m.liveDirtyIdx {
+		if d == idx {
+			return
+		}
+	}
+	m.liveDirtyIdx = append(m.liveDirtyIdx, idx)
 }
 
 type clipboardCopyMsg struct {

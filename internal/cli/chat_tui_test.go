@@ -323,6 +323,72 @@ func TestTranscriptViewportSizing(t *testing.T) {
 	}
 }
 
+// TestUpdateKeepsWrapCacheInSyncAcrossRemoveAndSet reproduces the stale-cache
+// bug: a block mutated via setTranscriptBlock, then a block BEFORE it removed
+// in the same Update pass, then setLiveBlock on the new last block. The
+// pending re-wrap index must shift with the removal; otherwise the mutated
+// early block is never re-wrapped and the cache keeps its pre-mutation wrap.
+func TestUpdateKeepsWrapCacheInSyncAcrossRemoveAndSet(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+
+	blocks := []string{
+		"first block",
+		strings.Repeat("second block content ", 6),
+		"third block",
+		strings.Repeat("fourth block content ", 6),
+	}
+	for _, b := range blocks {
+		m.appendTranscriptBlock(b, transcriptSource{kind: transcriptSourceFixed})
+	}
+	// Pre-wrap the appended blocks exactly as a previous Update pass would
+	// have (the wrapper only wraps blocks appended during update()).
+	m.appendWrappedBlocks(len(m.blockLineCounts), m.viewport.Width())
+	if want := fullWrap(m.transcript, m.viewport.Width()); !reflect.DeepEqual(m.wrappedLines, want) {
+		t.Fatalf("precondition: cache should be fully wrapped:\n%q\nvs\n%q", m.wrappedLines, want)
+	}
+
+	// One pass worth of mutations, mirroring commitReasoning + commitPending:
+	// dirty an early block, remove a block before it, then dirty the new last
+	// block. The wrapper's drain must re-wrap BOTH mutated blocks.
+	m.setTranscriptBlock(2, strings.Repeat("mutated second block ", 8), transcriptSource{kind: transcriptSourceFixed})
+	m.removeTranscriptBlock(1)
+	m.setLiveBlock(2, strings.Repeat("mutated fourth block ", 8))
+	m0, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+
+	if want := fullWrap(m.transcript, m.viewport.Width()); !reflect.DeepEqual(m.wrappedLines, want) {
+		t.Fatalf("wrapped cache out of sync after remove+set pass:\n%q\nvs\n%q", m.wrappedLines, want)
+	}
+}
+
+// TestUpdateTranscriptDirtyOnlyRebuildsWrapCache proves the fallback for a
+// transcriptDirty flag with no tracked live index: the wrapper rebuilds the
+// whole wrap cache, so a direct (setter-bypassing) write still renders fresh.
+func TestUpdateTranscriptDirtyOnlyRebuildsWrapCache(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+
+	for _, b := range []string{"alpha", "beta", strings.Repeat("gamma content ", 8)} {
+		m.appendTranscriptBlock(b, transcriptSource{kind: transcriptSourceFixed})
+	}
+	m0, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+
+	m.transcript[2] = strings.Repeat("mutated gamma ", 10)
+	m.transcriptDirty = true
+	m0, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+
+	if want := fullWrap(m.transcript, m.viewport.Width()); !reflect.DeepEqual(m.wrappedLines, want) {
+		t.Fatalf("transcriptDirty-only rebuild mismatch:\n%q\nvs\n%q", m.wrappedLines, want)
+	}
+}
+
 // TestStatusLineWrapAccounting proves that computeStatusLineCount correctly
 // predicts the rendered row count of the status block (working + mode/state line
 // + data line) when wrapping is triggered on a narrow terminal, and that
@@ -1508,6 +1574,17 @@ func TestCtrlHomeEndScrollKeyBindings(t *testing.T) {
 	}
 }
 
+// settleScroll drives an in-flight smooth scroll to its final position with a
+// synthetic far-future tick, so tests that assert scroll outcomes can run
+// synchronously without wall-clock sleeps.
+func settleScroll(m chatTUI) chatTUI {
+	if m.smooth == nil {
+		return m
+	}
+	n, _ := m.update(smoothScrollTickMsg{now: time.Now().Add(time.Hour)})
+	return n.(chatTUI)
+}
+
 func TestMouseWheelAndPageKeysScrollTranscript(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	ch := make(chan event.Event, 1)
@@ -1530,22 +1607,26 @@ func TestMouseWheelAndPageKeysScrollTranscript(t *testing.T) {
 	}
 
 	cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur = settleScroll(cur)
 	if got, want := cur.viewport.YOffset(), bottom-3; got != want {
 		t.Fatalf("wheel-up YOffset = %d, want %d", got, want)
 	}
 
 	cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	cur = settleScroll(cur)
 	if got := cur.viewport.YOffset(); got != bottom {
 		t.Fatalf("wheel-down should return by one wheel step, YOffset=%d want bottom=%d", got, bottom)
 	}
 
 	cur = adv(cur, tea.KeyPressMsg{Code: tea.KeyPgUp})
+	cur = settleScroll(cur)
 	pageUp := cur.viewport.YOffset()
 	if got, want := pageUp, bottom-cur.viewport.Height(); got != want {
 		t.Fatalf("PageUp YOffset = %d, want %d", got, want)
 	}
 
 	cur = adv(cur, tea.KeyPressMsg{Code: tea.KeyPgDown})
+	cur = settleScroll(cur)
 	if got := cur.viewport.YOffset(); got != bottom {
 		t.Fatalf("PageDown should return to bottom from one page up, YOffset=%d want %d", got, bottom)
 	}
@@ -1566,6 +1647,7 @@ func TestRunningStreamPreservesScrolledReadingPosition(t *testing.T) {
 	}
 	cur.state = tuiRunning
 	cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur = settleScroll(cur)
 	readOffset := cur.viewport.YOffset()
 	if cur.viewport.AtBottom() {
 		t.Fatal("wheel-up should leave the bottom before streaming output arrives")
@@ -1580,6 +1662,7 @@ func TestRunningStreamPreservesScrolledReadingPosition(t *testing.T) {
 	}
 
 	cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	cur = settleScroll(cur)
 	if got, want := cur.viewport.YOffset(), readOffset+3; got != want {
 		t.Fatalf("wheel-down while running should move one wheel step, got %d want %d", got, want)
 	}
@@ -2817,6 +2900,7 @@ func TestTranscriptTailFollow(t *testing.T) {
 	}
 
 	cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur = settleScroll(cur)
 	if cur.viewport.AtBottom() {
 		t.Fatal("wheel-up should break the bottom pin")
 	}
@@ -2847,6 +2931,7 @@ func TestEmptyEnterScrollsToBottom(t *testing.T) {
 		}
 		// Scroll up to leave the bottom.
 		cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+		cur = settleScroll(cur)
 		if cur.viewport.AtBottom() {
 			t.Fatal("wheel-up should break the bottom pin")
 		}
@@ -2865,6 +2950,7 @@ func TestEmptyEnterScrollsToBottom(t *testing.T) {
 		}
 		cur.state = tuiRunning
 		cur = adv(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+		cur = settleScroll(cur)
 		if cur.viewport.AtBottom() {
 			t.Fatal("wheel-up should break the bottom pin")
 		}
@@ -2875,12 +2961,9 @@ func TestEmptyEnterScrollsToBottom(t *testing.T) {
 	})
 }
 
-// TestForceGotoBottomScrollsWithoutTranscriptChange keeps the force-bottom
-// contract independent from transcript length, width, or dirty-state changes.
-func TestForceGotoBottomScrollsWithoutTranscriptChange(t *testing.T) {
+func TestRegularForceGotoBottomScrollJumpNoClearScreenByDefault(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	ch := make(chan event.Event, 1)
-	notice := agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"})
 	adv := func(m chatTUI, msg tea.Msg) (chatTUI, tea.Cmd) {
 		n, cmd := m.Update(msg)
 		return n.(chatTUI), cmd
@@ -2892,17 +2975,13 @@ func TestForceGotoBottomScrollsWithoutTranscriptChange(t *testing.T) {
 
 	cur := next(newChatTUI(ctrl, "", ch, 80), tea.WindowSizeMsg{Width: 80, Height: 8})
 	for i := 0; i < 12; i++ {
-		cur = next(cur, notice)
+		cur = next(cur, agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"}))
 	}
-	if !cur.viewport.AtBottom() {
-		t.Fatal("new output while pinned should keep the viewport at the bottom")
-	}
-
 	cur = next(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur = settleScroll(cur)
 	if cur.viewport.AtBottom() {
 		t.Fatal("wheel-up should break the bottom pin")
 	}
-
 	cur.forceGotoBottom = true
 	cur.transcriptDirty = false
 	cur, cmd := adv(cur, tea.WindowSizeMsg{Width: 80, Height: 8})
@@ -2913,8 +2992,41 @@ func TestForceGotoBottomScrollsWithoutTranscriptChange(t *testing.T) {
 	if cur.forceGotoBottom {
 		t.Fatal("forceGotoBottom should be cleared after scrolling")
 	}
+	if cmd != nil {
+		t.Fatal("default scroll jumps must not request ClearScreen")
+	}
+}
+
+func TestScrollRepaintEnvRestoresClearScreen(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	ch := make(chan event.Event, 1)
+	t.Setenv("REASONIX_TUI_SCROLL_REPAINT", "1")
+	adv := func(m chatTUI, msg tea.Msg) (chatTUI, tea.Cmd) {
+		n, cmd := m.Update(msg)
+		return n.(chatTUI), cmd
+	}
+	next := func(m chatTUI, msg tea.Msg) chatTUI {
+		n, _ := adv(m, msg)
+		return n
+	}
+
+	cur := next(newChatTUI(ctrl, "", ch, 80), tea.WindowSizeMsg{Width: 80, Height: 8})
+	for i := 0; i < 12; i++ {
+		cur = next(cur, agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"}))
+	}
+	cur = next(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur.forceGotoBottom = true
+	cur.transcriptDirty = false
+	cur, cmd := adv(cur, tea.WindowSizeMsg{Width: 80, Height: 8})
+
+	if !cur.scrollRepaint {
+		t.Fatal("REASONIX_TUI_SCROLL_REPAINT=1 should enable legacy repaint")
+	}
 	if cmd == nil {
-		t.Fatal("regular forceGotoBottom scroll jump should request ClearScreen")
+		t.Fatal("legacy repaint mode must still request ClearScreen on scroll jumps")
+	}
+	if !cur.viewport.AtBottom() {
+		t.Fatal("legacy repaint mode should still land at bottom")
 	}
 }
 
@@ -2936,10 +3048,14 @@ func TestSessionSwitchSuppressesOneClearScreen(t *testing.T) {
 		cur = next(cur, notice)
 	}
 	cur = next(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur = settleScroll(cur)
 	if cur.viewport.AtBottom() {
 		t.Fatal("wheel-up should break the bottom pin")
 	}
 
+	// Legacy repaint mode + session switch: the ClearScreen workaround must be
+	// suppressed for exactly one Update, then resume once sessionSwitch clears.
+	cur.scrollRepaint = true
 	cur.sessionSwitch = true
 	cur.forceGotoBottom = true
 	cur.transcriptDirty = false
@@ -2959,7 +3075,7 @@ func TestSessionSwitchSuppressesOneClearScreen(t *testing.T) {
 	cur.forceGotoBottom = true
 	cur, cmd = adv(cur, tea.WindowSizeMsg{Width: 80, Height: 8})
 	if cmd == nil {
-		t.Fatal("later scroll jumps must still request ClearScreen")
+		t.Fatal("legacy repaint mode should request ClearScreen once sessionSwitch is cleared")
 	}
 	if cur.sessionSwitch {
 		t.Fatal("sessionSwitch should remain false after the suppressed cycle")
@@ -3522,14 +3638,15 @@ func TestDoubleCtrlCQuit(t *testing.T) {
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
 	ctrlC := tea.KeyPressMsg{Code: 'c', Mod: 4} // 4 = ModCtrl
 
-	// First Ctrl+C while idle: arms quit, flushes hint via finalize cmd.
-	out, cmd := m.Update(ctrlC)
-	if cmd == nil {
-		t.Error("first Ctrl+C should return a finalize cmd to flush the hint")
-	}
+	// First Ctrl+C while idle: arms quit and commits the hint to the transcript
+	// (visible on the next frame; no command is needed in alt-screen mode).
+	out, _ := m.Update(ctrlC)
 	m2, ok := out.(chatTUI)
 	if !ok {
 		t.Fatalf("Update returned %T, want chatTUI", out)
+	}
+	if strings.Count(strings.Join(m2.transcript, "\n"), i18n.M.CtrlCQuitHint) != 1 {
+		t.Error("first Ctrl+C should commit the quit hint to the transcript")
 	}
 	if m2.lastCtrlCAt.IsZero() {
 		t.Error("first Ctrl+C should set lastCtrlCAt")
@@ -3542,16 +3659,16 @@ func TestDoubleCtrlCQuit(t *testing.T) {
 	}
 	_ = out2
 
-	// Window expired: re-arms instead of quitting (still flushes hint via finalize).
+	// Window expired: re-arms instead of quitting (commits the hint again).
 	m3 := m2
 	m3.lastCtrlCAt = time.Now().Add(-2 * time.Second)
-	out4, cmd4 := m3.Update(ctrlC)
-	if cmd4 == nil {
-		t.Error("expired Ctrl+C should return a finalize cmd to flush the re-armed hint")
-	}
+	out4, _ := m3.Update(ctrlC)
 	m4, ok := out4.(chatTUI)
 	if !ok {
 		t.Fatalf("Update returned %T, want chatTUI", out4)
+	}
+	if strings.Count(strings.Join(m4.transcript, "\n"), i18n.M.CtrlCQuitHint) != 2 {
+		t.Error("expired Ctrl+C should commit the re-armed quit hint to the transcript")
 	}
 	// lastCtrlCAt should be refreshed to now.
 	if time.Since(m4.lastCtrlCAt) > time.Second {
@@ -3726,9 +3843,13 @@ func TestCtrlCCopySelection(t *testing.T) {
 	cmd()
 
 	// Second Ctrl+C should now arm quit (selection is gone).
-	_, cmd2 := m2.Update(ctrlC)
-	if cmd2 == nil {
-		t.Error("Ctrl+C after copy should arm quit (return a finalize cmd)")
+	out3, _ := m2.Update(ctrlC)
+	m3, ok := out3.(chatTUI)
+	if !ok {
+		t.Fatalf("Update returned %T, want chatTUI", out3)
+	}
+	if m3.lastCtrlCAt.IsZero() {
+		t.Error("Ctrl+C after copy should arm quit")
 	}
 }
 
@@ -4161,5 +4282,64 @@ func TestShiftTabLeavesDontAskForAskMode(t *testing.T) {
 	m.cycleMode()
 	if got := m.ctrl.ToolApprovalMode(); got != control.ToolApprovalAsk {
 		t.Fatalf("Shift+Tab from dontAsk = %q, want ask", got)
+	}
+}
+
+func TestBottomPanelsRenderOncePerEvent(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	ch := make(chan event.Event, 1)
+	m := newChatTUI(ctrl, "", ch, 80)
+	counts := map[string]int{}
+	m.panelRenderHook = func(name string) { counts[name]++ }
+	next := func(msg tea.Msg) chatTUI {
+		n, _ := m.Update(msg)
+		return n.(chatTUI)
+	}
+	notice := agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"})
+	m = next(tea.WindowSizeMsg{Width: 80, Height: 8})
+	m.cheatsheetOpen = true
+	m = next(notice)
+	if m.panels.cheatsheet == "" {
+		t.Fatal("open cheatsheet should be cached by the panel render pass")
+	}
+	if !strings.Contains(m.View().Content, i18n.M.CheatsheetSectionNavigation) {
+		t.Fatal("View should render the cached cheatsheet without re-rendering")
+	}
+	m.cheatsheetOpen = false
+	m = next(notice)
+	if m.panels.cheatsheet != "" {
+		t.Fatal("closed cheatsheet should be dropped from the cache")
+	}
+	m = next(notice)
+	// View() and bottomRows() must consume the cache without re-rendering.
+	_ = m.View()
+	_ = m.bottomRows()
+	// 1 resize + 3 notices = exactly 4 renders per panel, no more.
+	for name, n := range counts {
+		if n != 4 {
+			t.Fatalf("panel %q rendered %d times across 4 events, want exactly 4", name, n)
+		}
+	}
+	if fresh := m.renderBottomPanels(); m.panels.rows != fresh.rows {
+		t.Fatalf("cached rows %d != fresh render %d", m.panels.rows, fresh.rows)
+	}
+}
+
+func TestBottomPanelsFallbackWhenInvalid(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	ch := make(chan event.Event, 1)
+	m := newChatTUI(ctrl, "", ch, 80)
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 8})
+	m = m0.(chatTUI)
+	m.cheatsheetOpen = true
+	m.panels = m.renderBottomPanels()
+	m.panelsValid = true
+	if m.panels.cheatsheet == "" {
+		t.Fatal("fixture should have a non-empty cached panel")
+	}
+	cached := m.View().Content
+	m.panelsValid = false
+	if got := m.View().Content; got != cached {
+		t.Fatal("invalidated cache must fall back to byte-identical rendering")
 	}
 }

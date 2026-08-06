@@ -677,3 +677,29 @@ func TestStatusCommandStillShowsMovedFields(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatElapsedFixed(t *testing.T) {
+	for _, tc := range []struct {
+		sec  int
+		want string
+	}{
+		{0, "  0"}, {3, "  3"}, {12, " 12"}, {123, "123"}, {999, "999"}, {1000, "999"}, {9999, "999"},
+	} {
+		if got := formatElapsedFixed(tc.sec); got != tc.want {
+			t.Fatalf("formatElapsedFixed(%d) = %q, want %q", tc.sec, got, tc.want)
+		}
+	}
+}
+
+func TestWorkingLineElapsedStableWidth(t *testing.T) {
+	m := newTestChatTUI()
+	m.state = tuiRunning
+	m.elapsed = 3
+	line3 := m.runningWorkingLine(false, false)
+	m.elapsed = 12
+	line12 := m.runningWorkingLine(false, false)
+	// The time segment keeps a stable 4-column width ("  3s" vs " 12s").
+	if !strings.Contains(line3, "  3s") || !strings.Contains(line12, " 12s") {
+		t.Fatalf("elapsed width must be fixed: %q vs %q", line3, line12)
+	}
+}

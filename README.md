@@ -24,6 +24,13 @@ The TUI supports session recovery, model selection, local workspace tools,
 permissions, MCP servers, skills, and project memory. Run `reasonix --help` in
 an interactive terminal to view its session flags.
 
+TUI environment variables:
+- `REASONIX_REDUCE_MOTION=1` — disable decorative animation (spinner motion,
+  smooth scroll, tool frame cycling). Elapsed counters still tick.
+- `REASONIX_TUI_SCROLL_REPAINT=1` — legacy full-screen repaint on every scroll;
+  only for terminals that strand stale rows under the cell-diff renderer
+  (disables smooth scroll).
+
 ## Development
 
 ```sh
