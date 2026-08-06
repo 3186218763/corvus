@@ -25,25 +25,27 @@ type cliColor struct {
 }
 
 type cliPalette struct {
-	name         string
-	style        string
-	accent       cliColor
-	muted        cliColor
-	faint        cliColor
-	subtle       cliColor
-	success      cliColor
-	warn         cliColor
-	err          cliColor
-	danger       cliColor
-	info         cliColor
-	secondary    cliColor
-	border       cliColor
-	selection    cliColor
-	userBubbleBG cliColor
-	diffAddBG    cliColor
-	diffDelBG    cliColor
-	toolRead     cliColor
-	toolProc     cliColor
+	name            string
+	style           string
+	accent          cliColor
+	muted           cliColor
+	faint           cliColor
+	subtle          cliColor
+	success         cliColor
+	warn            cliColor
+	err             cliColor
+	danger          cliColor
+	info            cliColor
+	secondary       cliColor
+	border          cliColor
+	selection       cliColor
+	userBubbleBG    cliColor
+	diffAddBG       cliColor
+	diffDelBG       cliColor
+	toolRead        cliColor
+	toolProc        cliColor
+	userBubbleFaded cliColor
+	toolArg         cliColor
 }
 
 type cliThemeStyle struct {
@@ -58,46 +60,50 @@ var (
 	// labels/dim text, border is low-chroma chrome for rules and tool-card edges.
 	// Accents stay style-driven; do not add new default theme names here.
 	cliDarkTheme = cliPalette{
-		name:         "dark",
-		style:        "graphite",
-		accent:       cliColor{"#d97757", 173},
-		muted:        cliColor{"#cbd0d8", 252},
-		faint:        cliColor{"#858b96", 245},
-		subtle:       cliColor{"#969ba5", 247},
-		success:      cliColor{"#74b87a", 108},
-		warn:         cliColor{"#d9a441", 179},
-		err:          cliColor{"#e0696a", 167},
-		danger:       cliColor{"#e5484d", 167},
-		info:         cliColor{"#56b6c2", 80},
-		secondary:    cliColor{"#b18cff", 141},
-		border:       cliColor{"#2a2f3b", 236},
-		selection:    cliColor{"#d97757", 173},
-		userBubbleBG: cliColor{"#222631", 235},
-		diffAddBG:    cliColor{"#14351d", 22},
-		diffDelBG:    cliColor{"#3a1619", 52},
-		toolRead:     cliColor{"#56b6c2", 80},
-		toolProc:     cliColor{"#c678dd", 176},
+		name:            "dark",
+		style:           "graphite",
+		accent:          cliColor{"#d97757", 173},
+		muted:           cliColor{"#cbd0d8", 252},
+		faint:           cliColor{"#858b96", 245},
+		subtle:          cliColor{"#969ba5", 247},
+		success:         cliColor{"#74b87a", 108},
+		warn:            cliColor{"#d9a441", 179},
+		err:             cliColor{"#e0696a", 167},
+		danger:          cliColor{"#e5484d", 167},
+		info:            cliColor{"#56b6c2", 80},
+		secondary:       cliColor{"#b18cff", 141},
+		border:          cliColor{"#2a2f3b", 236},
+		selection:       cliColor{"#d97757", 173},
+		userBubbleBG:    cliColor{"#222631", 235},
+		diffAddBG:       cliColor{"#14351d", 22},
+		diffDelBG:       cliColor{"#3a1619", 52},
+		toolRead:        cliColor{"#56b6c2", 80},
+		toolProc:        cliColor{"#c678dd", 176},
+		userBubbleFaded: cliColor{"#a87c6e", 95},
+		toolArg:         cliColor{"#a5b0bd", 145},
 	}
 	cliLightTheme = cliPalette{
-		name:         "light",
-		style:        "sandstone",
-		accent:       cliColor{"#2f5fa8", 25},
-		muted:        cliColor{"#4a453e", 238},
-		faint:        cliColor{"#82796f", 243},
-		subtle:       cliColor{"#7a7269", 243},
-		success:      cliColor{"#5d9b66", 65},
-		warn:         cliColor{"#b68120", 136},
-		err:          cliColor{"#b94b4d", 131},
-		danger:       cliColor{"#e5484d", 167},
-		info:         cliColor{"#2f5fa8", 25},
-		secondary:    cliColor{"#7d63c8", 104},
-		border:       cliColor{"#e6ddd0", 253},
-		selection:    cliColor{"#6f91d9", 68},
-		userBubbleBG: cliColor{"#f5f0e8", 255},
-		diffAddBG:    cliColor{"#e5f3e7", 254},
-		diffDelBG:    cliColor{"#fae8e8", 255},
-		toolRead:     cliColor{"#6f91d9", 68},
-		toolProc:     cliColor{"#8a6bb8", 97},
+		name:            "light",
+		style:           "sandstone",
+		accent:          cliColor{"#2f5fa8", 25},
+		muted:           cliColor{"#4a453e", 238},
+		faint:           cliColor{"#82796f", 243},
+		subtle:          cliColor{"#7a7269", 243},
+		success:         cliColor{"#5d9b66", 65},
+		warn:            cliColor{"#b68120", 136},
+		err:             cliColor{"#b94b4d", 131},
+		danger:          cliColor{"#e5484d", 167},
+		info:            cliColor{"#2f5fa8", 25},
+		secondary:       cliColor{"#7d63c8", 104},
+		border:          cliColor{"#e6ddd0", 253},
+		selection:       cliColor{"#6f91d9", 68},
+		userBubbleBG:    cliColor{"#f5f0e8", 255},
+		diffAddBG:       cliColor{"#e5f3e7", 254},
+		diffDelBG:       cliColor{"#fae8e8", 255},
+		toolRead:        cliColor{"#6f91d9", 68},
+		toolProc:        cliColor{"#8a6bb8", 97},
+		userBubbleFaded: cliColor{"#9e7263", 95},
+		toolArg:         cliColor{"#5a6470", 240},
 	}
 	cliThemeStyles = []cliThemeStyle{
 		{name: "graphite", mode: "dark", accent: cliColor{"#d97757", 173}, description: "warm clay accent"},
@@ -193,10 +199,41 @@ func buildCLITheme(mode, style string) cliPalette {
 	return applyCLIThemeStyle(base, st)
 }
 
+// userBubbleFadedXTerm is the hand-picked 256-color fallback for the faded
+// user-bubble tint per accent style (repo convention: hand-chosen fallbacks).
+var userBubbleFadedXTerm = map[string]int{
+	"graphite":  95,
+	"ember":     131,
+	"aurora":    72,
+	"midnight":  140,
+	"sandstone": 95,
+	"porcelain": 103,
+	"linen":     131,
+	"glacier":   67,
+}
+
+// fadedUserBubbleColor derives the history user-bubble tint from the accent:
+// 45% accent + 55% neutral gray keeps the hue while desaturating it. The xterm
+// fallback is hand-picked per accent style, falling back to the accent's own
+// index for unknown styles.
+func fadedUserBubbleColor(accent cliColor, style string) cliColor {
+	hex := accent.hex
+	if r, g, b, ok := parseHexColor(accent.hex); ok {
+		mix := func(c int) int { return (45*c + 7090) / 100 }
+		hex = fmt.Sprintf("#%02x%02x%02x", mix(r), mix(g), mix(b))
+	}
+	xterm := accent.xterm
+	if v, ok := userBubbleFadedXTerm[style]; ok {
+		xterm = v
+	}
+	return cliColor{hex: hex, xterm: xterm}
+}
+
 func applyCLIThemeStyle(base cliPalette, style cliThemeStyle) cliPalette {
 	base.style = style.name
 	base.accent = style.accent
 	base.selection = style.accent
+	base.userBubbleFaded = fadedUserBubbleColor(style.accent, style.name)
 	return base
 }
 

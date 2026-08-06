@@ -413,3 +413,35 @@ func restoreThemeForTest(prevColor colorprofile.Profile, prevTheme cliPalette) {
 	activeCLITheme = prevTheme
 	refreshCLIStyles()
 }
+
+func TestUserBubbleFadedFollowsAccent(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	configureCLIThemeWithStyle("dark", "graphite")
+	if activeCLITheme.userBubbleFaded.hex == activeCLITheme.accent.hex {
+		t.Fatalf("faded must differ from accent: %s", activeCLITheme.userBubbleFaded.hex)
+	}
+	if got, want := activeCLITheme.userBubbleFaded.hex, "#a87c6e"; got != want {
+		t.Fatalf("graphite faded hex = %s, want %s", got, want)
+	}
+	if got, want := activeCLITheme.userBubbleFaded.xterm, 95; got != want {
+		t.Fatalf("graphite faded xterm = %d, want 95", got)
+	}
+	configureCLIThemeWithStyle("dark", "aurora")
+	if got, want := activeCLITheme.userBubbleFaded.hex, "#5e9e91"; got != want {
+		t.Fatalf("aurora faded hex = %s, want %s", got, want)
+	}
+	if got, want := activeCLITheme.userBubbleFaded.xterm, 72; got != want {
+		t.Fatalf("aurora faded xterm = %d, want 72", got)
+	}
+	configureCLIThemeWithStyle("light", "sandstone")
+	if got := activeCLITheme.userBubbleFaded.hex; got == "" || got == activeCLITheme.accent.hex {
+		t.Fatalf("light faded must be set and differ from accent, got %s", got)
+	}
+	if got, want := activeCLITheme.toolArg.hex, "#5a6470"; got != want {
+		t.Fatalf("light toolArg = %s, want %s", got, want)
+	}
+	configureCLIThemeWithStyle("dark", "graphite")
+	if got, want := activeCLITheme.toolArg.hex, "#a5b0bd"; got != want {
+		t.Fatalf("dark toolArg = %s, want %s", got, want)
+	}
+}
