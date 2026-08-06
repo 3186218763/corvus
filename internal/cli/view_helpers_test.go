@@ -110,7 +110,7 @@ func TestRenderHelpGroupsCommands(t *testing.T) {
 		[]skill.Skill{{Name: "explore", Description: "inspect repo"}},
 		[]plugin.Prompt{{Name: "mcp__docs__summarize", Description: "summarize docs"}},
 	)
-	for _, want := range []string{"commands", "built-in", "/tree", "custom", "/review", "skills", "/explore", "MCP prompts", "/mcp__docs__summarize"} {
+	for _, want := range []string{"commands", "built-in", "/tree", "custom", "/review", "skills", "/explore", "MCP prompts", "/mcp__docs__summarize", "press ? on empty input for keyboard shortcuts"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("help view missing %q:\n%s", want, got)
 		}
