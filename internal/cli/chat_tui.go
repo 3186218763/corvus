@@ -112,6 +112,10 @@ type chatTUI struct {
 	// flicker when the viewport content is completely rebuilt during a session
 	// switch (#5441). Cleared after one Update cycle.
 	sessionSwitch bool
+	// scrollRepaint restores the legacy full-screen repaint on every viewport
+	// scroll (REASONIX_TUI_SCROLL_REPAINT=1) for terminals that strand stale
+	// rows under the cell-diff renderer.
+	scrollRepaint bool
 	// yoloRestoreToolApprovalMode remembers the Ask/Auto base mode that Ctrl+Y
 	// should restore after a desktop-style YOLO toggle.
 	yoloRestoreToolApprovalMode string
@@ -567,6 +571,7 @@ func newChatTUI(ctrl control.SessionAPI, missing string, eventCh chan event.Even
 		modelRef:             ctrl.ModelRef(),
 		missing:              missing,
 		nativeScrollback:     nativeScrollback,
+		scrollRepaint:        scrollRepaintEnabled(),
 		mouseCaptureOff:      mouseCaptureOffByDefault(),
 		input:                ti,
 		spinner:              sp,
@@ -856,7 +861,7 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// newest output) shifts the whole window. Some terminals (Warp) mishandle
 	// the renderer's scroll/insert-line optimization and strand stale rows, so
 	// force a full clear+redraw whenever the offset actually moved.
-	if cm.viewport.YOffset() != prevYOff && !cm.nativeScrollback && !cm.sessionSwitch {
+	if cm.viewport.YOffset() != prevYOff && !cm.nativeScrollback && !cm.sessionSwitch && cm.scrollRepaint {
 		return cm, tea.Batch(tea.ClearScreen, cmd)
 	}
 	cm.sessionSwitch = false

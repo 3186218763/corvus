@@ -2875,12 +2875,9 @@ func TestEmptyEnterScrollsToBottom(t *testing.T) {
 	})
 }
 
-// TestForceGotoBottomScrollsWithoutTranscriptChange keeps the force-bottom
-// contract independent from transcript length, width, or dirty-state changes.
-func TestForceGotoBottomScrollsWithoutTranscriptChange(t *testing.T) {
+func TestRegularForceGotoBottomScrollJumpNoClearScreenByDefault(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	ch := make(chan event.Event, 1)
-	notice := agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"})
 	adv := func(m chatTUI, msg tea.Msg) (chatTUI, tea.Cmd) {
 		n, cmd := m.Update(msg)
 		return n.(chatTUI), cmd
@@ -2892,17 +2889,12 @@ func TestForceGotoBottomScrollsWithoutTranscriptChange(t *testing.T) {
 
 	cur := next(newChatTUI(ctrl, "", ch, 80), tea.WindowSizeMsg{Width: 80, Height: 8})
 	for i := 0; i < 12; i++ {
-		cur = next(cur, notice)
+		cur = next(cur, agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"}))
 	}
-	if !cur.viewport.AtBottom() {
-		t.Fatal("new output while pinned should keep the viewport at the bottom")
-	}
-
 	cur = next(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	if cur.viewport.AtBottom() {
 		t.Fatal("wheel-up should break the bottom pin")
 	}
-
 	cur.forceGotoBottom = true
 	cur.transcriptDirty = false
 	cur, cmd := adv(cur, tea.WindowSizeMsg{Width: 80, Height: 8})
@@ -2913,8 +2905,38 @@ func TestForceGotoBottomScrollsWithoutTranscriptChange(t *testing.T) {
 	if cur.forceGotoBottom {
 		t.Fatal("forceGotoBottom should be cleared after scrolling")
 	}
+	if cmd != nil {
+		t.Fatal("default scroll jumps must not request ClearScreen")
+	}
+}
+
+func TestScrollRepaintEnvRestoresClearScreen(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	ch := make(chan event.Event, 1)
+	adv := func(m chatTUI, msg tea.Msg) (chatTUI, tea.Cmd) {
+		n, cmd := m.Update(msg)
+		return n.(chatTUI), cmd
+	}
+	next := func(m chatTUI, msg tea.Msg) chatTUI {
+		n, _ := adv(m, msg)
+		return n
+	}
+
+	cur := next(newChatTUI(ctrl, "", ch, 80), tea.WindowSizeMsg{Width: 80, Height: 8})
+	for i := 0; i < 12; i++ {
+		cur = next(cur, agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"}))
+	}
+	cur = next(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	cur.scrollRepaint = true
+	cur.forceGotoBottom = true
+	cur.transcriptDirty = false
+	cur, cmd := adv(cur, tea.WindowSizeMsg{Width: 80, Height: 8})
+
 	if cmd == nil {
-		t.Fatal("regular forceGotoBottom scroll jump should request ClearScreen")
+		t.Fatal("legacy repaint mode must still request ClearScreen on scroll jumps")
+	}
+	if !cur.viewport.AtBottom() {
+		t.Fatal("legacy repaint mode should still land at bottom")
 	}
 }
 
@@ -2958,8 +2980,8 @@ func TestSessionSwitchSuppressesOneClearScreen(t *testing.T) {
 	cur = next(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	cur.forceGotoBottom = true
 	cur, cmd = adv(cur, tea.WindowSizeMsg{Width: 80, Height: 8})
-	if cmd == nil {
-		t.Fatal("later scroll jumps must still request ClearScreen")
+	if cmd != nil {
+		t.Fatal("later scroll jumps must not request ClearScreen by default")
 	}
 	if cur.sessionSwitch {
 		t.Fatal("sessionSwitch should remain false after the suppressed cycle")
@@ -3522,14 +3544,15 @@ func TestDoubleCtrlCQuit(t *testing.T) {
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
 	ctrlC := tea.KeyPressMsg{Code: 'c', Mod: 4} // 4 = ModCtrl
 
-	// First Ctrl+C while idle: arms quit, flushes hint via finalize cmd.
-	out, cmd := m.Update(ctrlC)
-	if cmd == nil {
-		t.Error("first Ctrl+C should return a finalize cmd to flush the hint")
-	}
+	// First Ctrl+C while idle: arms quit and commits the hint to the transcript
+	// (visible on the next frame; no command is needed in alt-screen mode).
+	out, _ := m.Update(ctrlC)
 	m2, ok := out.(chatTUI)
 	if !ok {
 		t.Fatalf("Update returned %T, want chatTUI", out)
+	}
+	if strings.Count(strings.Join(m2.transcript, "\n"), i18n.M.CtrlCQuitHint) != 1 {
+		t.Error("first Ctrl+C should commit the quit hint to the transcript")
 	}
 	if m2.lastCtrlCAt.IsZero() {
 		t.Error("first Ctrl+C should set lastCtrlCAt")
@@ -3542,16 +3565,16 @@ func TestDoubleCtrlCQuit(t *testing.T) {
 	}
 	_ = out2
 
-	// Window expired: re-arms instead of quitting (still flushes hint via finalize).
+	// Window expired: re-arms instead of quitting (commits the hint again).
 	m3 := m2
 	m3.lastCtrlCAt = time.Now().Add(-2 * time.Second)
-	out4, cmd4 := m3.Update(ctrlC)
-	if cmd4 == nil {
-		t.Error("expired Ctrl+C should return a finalize cmd to flush the re-armed hint")
-	}
+	out4, _ := m3.Update(ctrlC)
 	m4, ok := out4.(chatTUI)
 	if !ok {
 		t.Fatalf("Update returned %T, want chatTUI", out4)
+	}
+	if strings.Count(strings.Join(m4.transcript, "\n"), i18n.M.CtrlCQuitHint) != 2 {
+		t.Error("expired Ctrl+C should commit the re-armed quit hint to the transcript")
 	}
 	// lastCtrlCAt should be refreshed to now.
 	if time.Since(m4.lastCtrlCAt) > time.Second {
@@ -3726,9 +3749,13 @@ func TestCtrlCCopySelection(t *testing.T) {
 	cmd()
 
 	// Second Ctrl+C should now arm quit (selection is gone).
-	_, cmd2 := m2.Update(ctrlC)
-	if cmd2 == nil {
-		t.Error("Ctrl+C after copy should arm quit (return a finalize cmd)")
+	out3, _ := m2.Update(ctrlC)
+	m3, ok := out3.(chatTUI)
+	if !ok {
+		t.Fatalf("Update returned %T, want chatTUI", out3)
+	}
+	if m3.lastCtrlCAt.IsZero() {
+		t.Error("Ctrl+C after copy should arm quit")
 	}
 }
 
