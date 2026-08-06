@@ -65,17 +65,15 @@ func TestDiffHeaderUsesCategoryAndArgColors(t *testing.T) {
 	activeColorProfile = colorprofile.ANSI256
 	configureCLITheme("dark")
 
-	d := event.FileDiff{Diff: "--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n-old\n+new\n", Added: 1, Removed: 1}
-	lines := diffBlock("write_file", `{"path":"x.go"}`, d, 80, 40)
-	if len(lines) == 0 {
-		t.Fatal("diffBlock returned no lines")
+	head := toolHead("write_file", "x.go", 80)
+	if !strings.Contains(head, fgSGR(activeCLITheme.success)) {
+		t.Fatalf("write diff header verb should carry success SGR, got %q", head)
 	}
-	header := lines[0]
-	if !strings.Contains(header, fgSGR(activeCLITheme.success)) {
-		t.Fatalf("write diff header verb should carry success SGR, got %q", header)
+	if !strings.Contains(head, ansiBold) {
+		t.Fatalf("write diff header verb should stay bold, got %q", head)
 	}
-	if !strings.Contains(header, fgSGR(activeCLITheme.toolArg)) {
-		t.Fatalf("diff header path should carry toolArg SGR, got %q", header)
+	if !strings.Contains(head, fgSGR(activeCLITheme.toolArg)) {
+		t.Fatalf("diff header path should carry toolArg SGR, got %q", head)
 	}
 }
 
