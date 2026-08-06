@@ -267,6 +267,10 @@ type chatTUI struct {
 	quickPick *quickPicker
 	copyPick  *copyPicker
 	lastEsc   time.Time
+	// cheatsheetOpen is the empty-input "?" keyboard shortcuts overlay. Esc
+	// closes it (higher priority than cancel/clear). Composer stays visible and
+	// the draft is preserved (open only when empty).
+	cheatsheetOpen bool
 
 	// mcp is the interactive "/mcp" manager overlay. mcpDisabled tracks servers
 	// turned off only for this chat session, matching the desktop connector
@@ -1256,6 +1260,16 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		// Empty-input "?" cheatsheet: Esc closes before cancel/clear (spec §7.2 #2).
+		// While open, other keys are swallowed so the parent draft is not mutated.
+		if m.cheatsheetOpen {
+			return m.handleCheatsheetKey(msg)
+		}
+		// Idle empty-input "?" opens the keyboard cheatsheet (does not insert).
+		// Non-empty composer falls through so "?" is typed normally.
+		if m.openCheatsheetIfEmpty(msg) {
+			return m, nil
+		}
 		switch msg.String() {
 		case "up":
 			if m.state == tuiRunning {
@@ -1902,6 +1916,7 @@ func (m chatTUI) bottomRows() int {
 		m.renderResumePicker(),
 		m.renderQuickPicker(),
 		m.renderCopyPicker(),
+		m.renderCheatsheet(),
 		m.renderCompletion(),
 	} {
 		if s != "" {
@@ -2896,6 +2911,10 @@ func (m chatTUI) View() tea.View {
 		rowsAboveBox += strings.Count(card, "\n") + 1
 	}
 	if card := m.renderCopyPicker(); card != "" {
+		parts = append(parts, card)
+		rowsAboveBox += strings.Count(card, "\n") + 1
+	}
+	if card := m.renderCheatsheet(); card != "" {
 		parts = append(parts, card)
 		rowsAboveBox += strings.Count(card, "\n") + 1
 	}

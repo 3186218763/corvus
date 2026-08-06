@@ -116,6 +116,8 @@ func (m chatTUI) primaryStatusLine(shellMode, cancelRequested bool) string {
 		body = "MCP"
 	case m.skillPick != nil:
 		body = i18n.M.SkillPickerStatusLabel
+	case m.cheatsheetOpen:
+		body = i18n.M.CheatsheetStatusLabel
 	case m.chooser != nil:
 		body = i18n.M.ChatStatusQuestion
 	case m.pendingApproval != nil && m.pendingApproval.Tool == planApprovalTool:
