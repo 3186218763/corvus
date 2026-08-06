@@ -109,7 +109,7 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 
 ### 5.1 Reduced-motion gate
 
-- New `motion.go`: `motionEnabled() bool` reads env `REASONIX_REDUCE_MOTION=1` **on every call** (no config section exists; env only, YAGNI). Pattern follows `mouseCaptureOffByDefault()`.
+- New `motion.go`: `motionEnabled() bool` is **true when animation is enabled** — it reads env `REASONIX_REDUCE_MOTION` on every call and returns false when that env is set to `1` (pattern follows `mouseCaptureOffByDefault()`; no config section exists, env only, YAGNI).
 - Consumers (must consult the gate):
   - Spinner scheduling: motion off → the working line shows a static glyph (first frame) and does **not** schedule `spinner.Tick` (elapsed ticker still runs — it is information).
   - **Tool working line**: `tickToolRunning` (driven by `elapsedTickMsg`) must not advance `toolStreamFrame` when motion is off — the braille frames freeze on the first glyph. (It animates today because the elapsed ticker keeps running.)
@@ -243,7 +243,7 @@ P1 delivered clarity and keyboard completeness. Measured and researched gaps rem
 | 2 | Scroll repaint | Default off; env `REASONIX_TUI_SCROLL_REPAINT=1` legacy; read in `newChatTUI()` |
 | 3 | Wrap strategy | Per-block incremental cache + `blockLineCounts`; O(1) last-block rewrap, O(nBlocks) prefix sums for rare middle/truncate; mutation inventory required |
 | 4 | Panel rendering | Once per `m.update()`; `View()` is per-event (tea.go:888), not per-frame |
-| 5 | Motion gate | env `REASONIX_REDUCE_MOTION=1` read per call; all 4 animation entries incl. tool frames |
+| 5 | Motion gate | `motionEnabled()` = animation enabled; env `REASONIX_REDUCE_MOTION=1` disables it (read per call); all 4 animation entries incl. tool frames |
 | 6 | Smooth scroll | 150ms fixed, ease-out cubic, 16ms tick, final snap, per-tick reclamp; instant exceptions incl. legacy env |
 | 7 | Shimmer | Spike-gated; bounded optional task with go/no-go |
 | 8 | Thinking tail | Keep 12-line live tail; only elapsed width fixed |
