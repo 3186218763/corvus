@@ -3,6 +3,8 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/colorprofile"
 )
 
 // TestRenderEmpty covers the contract that empty / whitespace-only input
@@ -112,5 +114,36 @@ func TestWrapAnsiCJK(t *testing.T) {
 	}
 	if visibleWidth(lines[0]) > 10 {
 		t.Errorf("first line exceeds width: %d > 10", visibleWidth(lines[0]))
+	}
+}
+
+// TestTableCodeSpanNeutral proves inline code inside a table cell renders with
+// the muted theme color rather than the accent used elsewhere.
+func TestTableCodeSpanNeutral(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	r := newMarkdownRenderer(80)
+	md := "| lang | code |\n| --- | --- |\n| go | `fmt.Println` |\n"
+	got := r.Render(md)
+	accentEsc := fgSGR(activeCLITheme.accent)
+	mutedEsc := fgSGR(activeCLITheme.muted)
+	if strings.Contains(got, accentEsc+"fmt.Println") {
+		t.Fatalf("table code span must not use accent:\n%s", got)
+	}
+	if !strings.Contains(got, mutedEsc+"fmt.Println") {
+		t.Fatalf("table code span should use the muted theme color:\n%s", got)
+	}
+}
+
+// TestInlineCodeSpanStillAccentOutsideTable guards the non-table path: inline
+// code outside tables keeps the accent style.
+func TestInlineCodeSpanStillAccentOutsideTable(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	r := newMarkdownRenderer(80)
+	got := r.Render("use `os.Exit` here")
+	accentEsc := fgSGR(activeCLITheme.accent)
+	if !strings.Contains(got, accentEsc+"os.Exit") {
+		t.Fatalf("inline code outside tables must keep accent:\n%s", got)
 	}
 }

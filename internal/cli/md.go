@@ -27,6 +27,7 @@ type mdRenderer struct {
 	copyMath       bool
 	copyMathPrefix string
 	nextCopyMathID int
+	inTable        bool
 }
 
 func newMarkdownRenderer(width int) *mdRenderer {
@@ -362,7 +363,11 @@ func (r *mdRenderer) appendInline(b *strings.Builder, n ast.Node, src []byte) {
 		case *ast.CodeSpan:
 			var inner strings.Builder
 			r.appendInline(&inner, v, src)
-			b.WriteString(accent(inner.String()))
+			if r.inTable {
+				b.WriteString(muted(inner.String()))
+			} else {
+				b.WriteString(accent(inner.String()))
+			}
 		case *ast.Link:
 			var inner strings.Builder
 			r.appendInline(&inner, v, src)
@@ -526,6 +531,9 @@ func (r *mdRenderer) renderTableRow(buf *strings.Builder, prefix, sep string, ce
 // collectCells walks a TableHeader / TableRow node and pulls each TableCell's
 // inline content as an ANSI-styled string. Non-cell children are ignored.
 func (r *mdRenderer) collectCells(parent ast.Node, src []byte) []string {
+	prev := r.inTable
+	r.inTable = true
+	defer func() { r.inTable = prev }()
 	var out []string
 	for c := parent.FirstChild(); c != nil; c = c.NextSibling() {
 		if cell, ok := c.(*extast.TableCell); ok {
