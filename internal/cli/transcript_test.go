@@ -511,3 +511,34 @@ func TestWrapBlockEquivalence(t *testing.T) {
 		t.Fatalf("ANSI stripped wrong: %q", got)
 	}
 }
+
+func TestTranscriptNeverDoubleBlanks(t *testing.T) {
+	m := newTestChatTUI()
+	m.commitLine("user bubble")
+	m.commitSpacer()
+	m.commitLine(dim("  ▎ thinking…"))
+	m.commitSpacer()
+	m.commitLine("  ⎿  tool line")
+	m.commitSpacer()
+	m.commitLine("assistant answer")
+	m.commitSpacer()
+	m.commitLine("receipt")
+	joined := strings.Join(m.transcript, "\n")
+	if strings.Contains(joined, "\n\n\n") {
+		t.Fatalf("double blank line detected:\n%q", joined)
+	}
+	if strings.Count(joined, "\n\n") != 4 {
+		t.Fatalf("want exactly one blank line between the 5 blocks, got:\n%q", joined)
+	}
+}
+
+func TestCommitSpacerNeverDoubleSpaces(t *testing.T) {
+	m := newTestChatTUI()
+	m.commitLine("a")
+	m.commitSpacer()
+	m.commitSpacer() // second spacer must be a no-op
+	m.commitLine("b")
+	if strings.Contains(strings.Join(m.transcript, "\n"), "\n\n\n") {
+		t.Fatalf("spacer double-spaced:\n%q", m.transcript)
+	}
+}
