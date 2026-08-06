@@ -4722,8 +4722,13 @@ func interruptedTurnDisplayNotice() string {
 // at the top of the session.
 func renderTUIBanner(label, missing string, width int) string {
 	var b strings.Builder
-	b.WriteString(accent("◆") + " " + bold("reasonix") + "  " + dim("· "+label) + "\n")
-	b.WriteString(dim("  "+i18n.M.ChatTip) + "\n")
+	if width >= 60 {
+		b.WriteString(accent("◆") + " " + bold("reasonix") + "  " + dim("· "+label) + "\n")
+		b.WriteString(dim("  "+i18n.M.ChatTip) + "\n")
+	} else {
+		line := accent("◆") + " " + bold("reasonix") + " " + dim("· "+label)
+		b.WriteString(ansi.Truncate(line, width, "…"))
+	}
 	if missing != "" {
 		b.WriteString(wrapForViewport("  ! "+missing, width, activeCLITheme.warn) + "\n")
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"reasonix/internal/event"
+	"reasonix/internal/i18n"
 	"reasonix/internal/provider"
 )
 
@@ -482,5 +483,25 @@ func TestReasoningViewBounded(t *testing.T) {
 	}
 	if c := strings.Count(m.transcript[m.reasoningTextIdx], "\n") + 1; c > reasoningTailLines {
 		t.Fatalf("live reasoning block kept %d lines, want <= %d", c, reasoningTailLines)
+	}
+}
+
+func TestRenderTUIBannerWideAndNarrow(t *testing.T) {
+	wide := renderTUIBanner("model-x", "", 120)
+	if strings.Count(wide, "\n") < 1 {
+		t.Fatalf("wide banner should keep the tip line, got %q", wide)
+	}
+	if !strings.Contains(wide, i18n.M.ChatTip) {
+		t.Fatalf("wide banner should contain the tip, got %q", wide)
+	}
+	narrow := renderTUIBanner("model-x", "", 40)
+	if strings.Count(narrow, "\n") != 0 {
+		t.Fatalf("narrow banner must be a single line, got %q", narrow)
+	}
+	if strings.Contains(narrow, i18n.M.ChatTip) {
+		t.Fatalf("narrow banner must not contain the tip, got %q", narrow)
+	}
+	if !strings.Contains(narrow, "reasonix") {
+		t.Fatalf("narrow banner should keep the wordmark, got %q", narrow)
 	}
 }
