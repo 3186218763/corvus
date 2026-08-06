@@ -25,25 +25,27 @@ type cliColor struct {
 }
 
 type cliPalette struct {
-	name         string
-	style        string
-	accent       cliColor
-	muted        cliColor
-	faint        cliColor
-	subtle       cliColor
-	success      cliColor
-	warn         cliColor
-	err          cliColor
-	danger       cliColor
-	info         cliColor
-	secondary    cliColor
-	border       cliColor
-	selection    cliColor
-	userBubbleBG cliColor
-	diffAddBG    cliColor
-	diffDelBG    cliColor
-	toolRead     cliColor
-	toolProc     cliColor
+	name            string
+	style           string
+	accent          cliColor
+	muted           cliColor
+	faint           cliColor
+	subtle          cliColor
+	success         cliColor
+	warn            cliColor
+	err             cliColor
+	danger          cliColor
+	info            cliColor
+	secondary       cliColor
+	border          cliColor
+	selection       cliColor
+	userBubbleBG    cliColor
+	diffAddBG       cliColor
+	diffDelBG       cliColor
+	toolRead        cliColor
+	toolProc        cliColor
+	userBubbleFaded cliColor
+	toolArg         cliColor
 }
 
 type cliThemeStyle struct {
@@ -77,6 +79,10 @@ var (
 		diffDelBG:    cliColor{"#3a1619", 52},
 		toolRead:     cliColor{"#56b6c2", 80},
 		toolProc:     cliColor{"#c678dd", 176},
+		// userBubbleFaded is derived per accent style by applyCLIThemeStyle;
+		// this literal only documents the graphite value.
+		userBubbleFaded: cliColor{"#a87c6e", 95},
+		toolArg:         cliColor{"#a5b0bd", 145},
 	}
 	cliLightTheme = cliPalette{
 		name:         "light",
@@ -98,6 +104,10 @@ var (
 		diffDelBG:    cliColor{"#fae8e8", 255},
 		toolRead:     cliColor{"#6f91d9", 68},
 		toolProc:     cliColor{"#8a6bb8", 97},
+		// userBubbleFaded is derived per accent style by applyCLIThemeStyle;
+		// this literal only documents the sandstone value.
+		userBubbleFaded: cliColor{"#9e7263", 95},
+		toolArg:         cliColor{"#5a6470", 240},
 	}
 	cliThemeStyles = []cliThemeStyle{
 		{name: "graphite", mode: "dark", accent: cliColor{"#d97757", 173}, description: "warm clay accent"},
@@ -193,10 +203,43 @@ func buildCLITheme(mode, style string) cliPalette {
 	return applyCLIThemeStyle(base, st)
 }
 
+// userBubbleFadedXTerm is the hand-picked 256-color fallback for the faded
+// user-bubble tint per accent style (repo convention: hand-chosen fallbacks).
+var userBubbleFadedXTerm = map[string]int{
+	"graphite":  95,
+	"ember":     131,
+	"aurora":    72,
+	"midnight":  140,
+	"sandstone": 95,
+	"porcelain": 103,
+	"linen":     131,
+	"glacier":   67,
+}
+
+// fadedUserBubbleColor derives the history user-bubble tint from the accent:
+// 45% accent + 55% neutral gray (#808080) keeps the hue while desaturating it;
+// the 7090 constant is 55*128 + 50, i.e. the gray term plus a rounding offset.
+// If the accent hex is unparsable the accent color is kept as-is. The xterm
+// fallback is hand-picked per accent style, falling back to the accent's own
+// index for unknown styles.
+func fadedUserBubbleColor(accent cliColor, style string) cliColor {
+	hex := accent.hex
+	if r, g, b, ok := parseHexColor(accent.hex); ok {
+		mix := func(c int) int { return (45*c + 7090) / 100 }
+		hex = fmt.Sprintf("#%02x%02x%02x", mix(r), mix(g), mix(b))
+	}
+	xterm := accent.xterm
+	if v, ok := userBubbleFadedXTerm[style]; ok {
+		xterm = v
+	}
+	return cliColor{hex: hex, xterm: xterm}
+}
+
 func applyCLIThemeStyle(base cliPalette, style cliThemeStyle) cliPalette {
 	base.style = style.name
 	base.accent = style.accent
 	base.selection = style.accent
+	base.userBubbleFaded = fadedUserBubbleColor(style.accent, style.name)
 	return base
 }
 

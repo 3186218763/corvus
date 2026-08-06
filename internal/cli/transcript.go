@@ -41,6 +41,66 @@ type transcriptSource struct {
 	history  []provider.Message
 }
 
+// transcriptMarker marks the live block in the transcript: the bottom-most
+// conversation keeps full-strength styling (full accent user bubble, named
+// assistant header) while everything above renders as demoted history. Markers
+// are derived from transcriptSources at render time, never stored.
+type transcriptMarker uint8
+
+const (
+	markerNone           transcriptMarker = 0
+	markerUserCurrent    transcriptMarker = 1 // render user content full accent
+	markerAssistantNamed transcriptMarker = 2 // render assistant name
+)
+
+// currentTranscriptMarkers derives per-block liveness markers. The last user
+// block is "current"; the last markdown/replayBundle block is "named" unless a
+// user block follows it. A replayBundle additionally keeps its last internal
+// user message "current" when no user source follows the bundle (invariant:
+// replayBundle only appears at index 0, so [bundle, bundle] is unreachable).
+func currentTranscriptMarkers(sources []transcriptSource) []transcriptMarker {
+	if len(sources) == 0 {
+		return nil
+	}
+	markers := make([]transcriptMarker, len(sources))
+	lastUser := -1
+	for i, s := range sources {
+		if s.kind == transcriptSourceUser {
+			lastUser = i
+		}
+	}
+	lastAssistant := -1
+	for i, s := range sources {
+		if s.kind == transcriptSourceMarkdown || s.kind == transcriptSourceReplayBundle {
+			lastAssistant = i
+		}
+	}
+	namedIdx := lastAssistant
+	if namedIdx >= 0 && lastUser > namedIdx {
+		namedIdx = -1
+	}
+	for i, s := range sources {
+		switch s.kind {
+		case transcriptSourceUser:
+			if i == lastUser {
+				markers[i] |= markerUserCurrent
+			}
+		case transcriptSourceMarkdown:
+			if i == namedIdx {
+				markers[i] |= markerAssistantNamed
+			}
+		case transcriptSourceReplayBundle:
+			if i == namedIdx {
+				markers[i] |= markerAssistantNamed
+			}
+			if lastUser < i {
+				markers[i] |= markerUserCurrent
+			}
+		}
+	}
+	return markers
+}
+
 func (m *chatTUI) ensureTranscriptSources() {
 	if len(m.transcriptSources) > len(m.transcript) {
 		m.transcriptSources = m.transcriptSources[:len(m.transcript)]
@@ -72,6 +132,7 @@ func (m *chatTUI) removeTranscriptBlock(index int) {
 		return
 	}
 	m.ensureTranscriptSources()
+	oldMarkers := currentTranscriptMarkers(m.transcriptSources)
 	m.transcript = append(m.transcript[:index], m.transcript[index+1:]...)
 	m.transcriptSources = append(m.transcriptSources[:index], m.transcriptSources[index+1:]...)
 	m.removeWrappedBlock(index)
@@ -90,11 +151,13 @@ func (m *chatTUI) removeTranscriptBlock(index int) {
 		}
 	}
 	m.liveDirtyIdx = kept
+	m.resyncMarkers(oldMarkers)
 }
 
 func (m *chatTUI) truncateTranscriptBlocks(length int) {
 	length = min(max(length, 0), len(m.transcript))
 	m.ensureTranscriptSources()
+	oldMarkers := currentTranscriptMarkers(m.transcriptSources)
 	m.transcript = m.transcript[:length]
 	m.transcriptSources = m.transcriptSources[:length]
 	m.truncateWrappedBlocks(length)
@@ -105,15 +168,24 @@ func (m *chatTUI) truncateTranscriptBlocks(length int) {
 		}
 	}
 	m.liveDirtyIdx = kept
+	m.resyncMarkers(oldMarkers)
 }
 
-func (m *chatTUI) renderTranscriptSource(source transcriptSource, terminalWidth int) string {
+// replaySectionRenderers adapts the production renderers to the section list.
+// user wraps renderUserBubble with a fixed planMode=false (replay history never
+// carries the plan prefix).
+type replaySectionRenderers struct {
+	assistant func(raw string, width int, named bool) string
+	user      func(raw string, width int, current bool) string
+}
+
+func (m *chatTUI) renderTranscriptSource(source transcriptSource, terminalWidth int, marker transcriptMarker) string {
 	contentWidth := transcriptContentWidth(terminalWidth, m.nativeScrollback)
 	switch source.kind {
 	case transcriptSourceMarkdown:
-		return renderAssistantMarkdown(source.raw, contentWidth)
+		return renderAssistantMarkdown(source.raw, contentWidth, marker&markerAssistantNamed != 0)
 	case transcriptSourceUser:
-		return renderUserBubble(source.raw, terminalWidth, source.planMode)
+		return renderUserBubble(source.raw, terminalWidth, source.planMode, marker&markerUserCurrent != 0)
 	case transcriptSourceReasoning:
 		return reasoningBlock(source.raw, terminalWidth, source.maxLines)
 	case transcriptSourceToolCard:
@@ -121,7 +193,12 @@ func (m *chatTUI) renderTranscriptSource(source transcriptSource, terminalWidth 
 	case transcriptSourceBanner:
 		return strings.TrimRight(renderTUIBanner(m.label, source.raw, contentWidth), "\n")
 	case transcriptSourceReplayBundle:
-		return m.renderReplayBundle(source, contentWidth, renderAssistantMarkdown)
+		return m.renderReplayBundle(source, contentWidth, replaySectionRenderers{
+			assistant: renderAssistantMarkdown,
+			user: func(raw string, width int, current bool) string {
+				return renderUserBubble(raw, width, false, current)
+			},
+		}, marker)
 	default:
 		return ""
 	}
@@ -130,14 +207,18 @@ func (m *chatTUI) renderTranscriptSource(source transcriptSource, terminalWidth 
 func (m chatTUI) renderReplayBundle(
 	source transcriptSource,
 	contentWidth int,
-	renderAssistant func(string, int) string,
+	r replaySectionRenderers,
+	marker transcriptMarker,
 ) string {
 	var b strings.Builder
 	b.WriteString(renderTUIBanner(m.label, source.raw, contentWidth))
 	for _, section := range replaySectionsForWithAssistantRenderer(
 		source.history,
 		contentWidth,
-		renderAssistant,
+		r.assistant,
+		r.user,
+		marker&markerAssistantNamed != 0,
+		marker&markerUserCurrent != 0,
 	) {
 		b.WriteString(section)
 	}
@@ -148,13 +229,19 @@ func (m chatTUI) renderReplayBundleCopy(
 	source transcriptSource,
 	contentWidth int,
 	prefix string,
+	marker transcriptMarker,
 ) string {
 	assistantIndex := 0
-	return m.renderReplayBundle(source, contentWidth, func(raw string, width int) string {
-		messagePrefix := prefix + "-" + strconv.Itoa(assistantIndex)
-		assistantIndex++
-		return renderAssistantMarkdownCopy(raw, width, messagePrefix)
-	})
+	return m.renderReplayBundle(source, contentWidth, replaySectionRenderers{
+		assistant: func(raw string, width int, named bool) string {
+			messagePrefix := prefix + "-" + strconv.Itoa(assistantIndex)
+			assistantIndex++
+			return renderAssistantMarkdownCopy(raw, width, messagePrefix, named)
+		},
+		user: func(raw string, width int, current bool) string {
+			return renderUserBubble(raw, width, false, current)
+		},
+	}, marker)
 }
 
 const assistantTranscriptIndent = "  "
@@ -163,7 +250,9 @@ const assistantTranscriptIndent = "  "
 // identity that user, reasoning, tool, and receipt blocks already have. The
 // body keeps a restrained two-cell gutter instead of using a heavy card, and
 // rendering at the reduced width keeps every indented row inside the viewport.
-func renderAssistantMarkdown(raw string, contentWidth int) string {
+// Only the live (bottom-most) assistant block carries the name; history blocks
+// render a bare faint diamond.
+func renderAssistantMarkdown(raw string, contentWidth int, named bool) string {
 	contentWidth = max(contentWidth, 1)
 	indent := assistantTranscriptIndent
 	if contentWidth <= visibleWidth(indent) {
@@ -176,7 +265,10 @@ func renderAssistantMarkdown(raw string, contentWidth int) string {
 		rendered = raw
 	}
 	body := strings.TrimRight(rendered, "\n")
-	header := indent + accent("◆") + " " + bold("Corvus")
+	header := indent + dim("◆")
+	if named {
+		header = indent + accent("◆") + " " + bold("Corvus")
+	}
 	if body == "" {
 		return header
 	}
@@ -185,7 +277,7 @@ func renderAssistantMarkdown(raw string, contentWidth int) string {
 
 // renderAssistantMarkdownCopy mirrors renderAssistantMarkdown's visible output
 // and adds zero-width math markers for on-demand clipboard reconstruction.
-func renderAssistantMarkdownCopy(raw string, contentWidth int, prefix string) string {
+func renderAssistantMarkdownCopy(raw string, contentWidth int, prefix string, named bool) string {
 	contentWidth = max(contentWidth, 1)
 	indent := assistantTranscriptIndent
 	if contentWidth <= visibleWidth(indent) {
@@ -198,7 +290,10 @@ func renderAssistantMarkdownCopy(raw string, contentWidth int, prefix string) st
 		rendered = raw
 	}
 	body := strings.TrimRight(rendered, "\n")
-	header := indent + accent("◆") + " " + bold("Corvus")
+	header := indent + dim("◆")
+	if named {
+		header = indent + accent("◆") + " " + bold("Corvus")
+	}
 	if body == "" {
 		return header
 	}
@@ -220,18 +315,42 @@ func indentTranscriptBlock(block, indent string) string {
 
 func (m *chatTUI) reflowTranscript(terminalWidth int) {
 	m.ensureTranscriptSources()
+	markers := currentTranscriptMarkers(m.transcriptSources)
 	for i, source := range m.transcriptSources {
 		if source.kind == transcriptSourceFixed {
 			continue
 		}
-		m.transcript[i] = m.renderTranscriptSource(source, terminalWidth)
+		m.transcript[i] = m.renderTranscriptSource(source, terminalWidth, markers[i])
 	}
 }
 
 func (m *chatTUI) commitTranscriptSource(source transcriptSource) {
-	rendered := m.renderTranscriptSource(source, m.width)
+	oldMarkers := currentTranscriptMarkers(m.transcriptSources)
+	newMarker := markerNone
+	switch source.kind {
+	case transcriptSourceUser:
+		newMarker = markerUserCurrent
+	case transcriptSourceMarkdown:
+		newMarker = markerAssistantNamed
+	case transcriptSourceReplayBundle:
+		newMarker = markerAssistantNamed | markerUserCurrent
+	}
+	rendered := m.renderTranscriptSource(source, m.width, newMarker)
 	*m.pendingCommit = append(*m.pendingCommit, rendered)
 	m.appendTranscriptBlock(rendered, source)
+	m.resyncMarkers(oldMarkers)
+}
+
+// resyncMarkers re-renders blocks whose liveness marker changed since
+// oldMarkers (bounded: at most two indices change per mutation).
+func (m *chatTUI) resyncMarkers(oldMarkers []transcriptMarker) {
+	newMarkers := currentTranscriptMarkers(m.transcriptSources)
+	n := min(len(oldMarkers), len(newMarkers))
+	for i := 0; i < n; i++ {
+		if oldMarkers[i] != newMarkers[i] {
+			m.setTranscriptBlock(i, m.renderTranscriptSource(m.transcriptSources[i], m.width, newMarkers[i]), m.transcriptSources[i])
+		}
+	}
 }
 
 const (
@@ -258,17 +377,18 @@ func (m chatTUI) buildCopyTranscript(contentWidth int) (string, int, bool) {
 	}
 	var b strings.Builder
 	markers := 0
+	live := currentTranscriptMarkers(m.transcriptSources)
 	for i, source := range m.transcriptSources {
 		if i > 0 {
 			b.WriteByte('\n')
 		}
 		switch source.kind {
 		case transcriptSourceMarkdown:
-			rendered := renderAssistantMarkdownCopy(source.raw, contentWidth, strconv.Itoa(i))
+			rendered := renderAssistantMarkdownCopy(source.raw, contentWidth, strconv.Itoa(i), live[i]&markerAssistantNamed != 0)
 			markers += strings.Count(rendered, copyMathStartPrefix)
 			b.WriteString(rendered)
 		case transcriptSourceReplayBundle:
-			rendered := m.renderReplayBundleCopy(source, contentWidth, strconv.Itoa(i))
+			rendered := m.renderReplayBundleCopy(source, contentWidth, strconv.Itoa(i), live[i])
 			markers += strings.Count(rendered, copyMathStartPrefix)
 			b.WriteString(rendered)
 		default:

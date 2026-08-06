@@ -413,3 +413,79 @@ func restoreThemeForTest(prevColor colorprofile.Profile, prevTheme cliPalette) {
 	activeCLITheme = prevTheme
 	refreshCLIStyles()
 }
+
+func TestUserBubbleFadedFollowsAccent(t *testing.T) {
+	t.Setenv("CORVUS_THEME", "")
+	t.Setenv("CORVUS_THEME_STYLE", "")
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+
+	configureCLIThemeWithStyle("dark", "graphite")
+	if activeCLITheme.userBubbleFaded.hex == activeCLITheme.accent.hex {
+		t.Fatalf("faded must differ from accent: %s", activeCLITheme.userBubbleFaded.hex)
+	}
+	if got, want := activeCLITheme.userBubbleFaded.hex, "#a87c6e"; got != want {
+		t.Fatalf("graphite faded hex = %s, want %s", got, want)
+	}
+	if got, want := activeCLITheme.userBubbleFaded.xterm, 95; got != want {
+		t.Fatalf("graphite faded xterm = %d, want 95", got)
+	}
+	// Faded must stay distinguishable from the quiet chrome (spec §8
+	// three-tier distinguishability: accent / userBubbleFaded / faint).
+	if activeCLITheme.userBubbleFaded.hex == activeCLITheme.faint.hex {
+		t.Fatalf("faded must differ from faint: %s", activeCLITheme.userBubbleFaded.hex)
+	}
+	if activeCLITheme.userBubbleFaded.hex == activeCLITheme.muted.hex {
+		t.Fatalf("faded must differ from muted: %s", activeCLITheme.userBubbleFaded.hex)
+	}
+
+	configureCLIThemeWithStyle("dark", "ember")
+	if got, want := activeCLITheme.userBubbleFaded.xterm, 131; got != want {
+		t.Fatalf("ember faded xterm = %d, want 131", got)
+	}
+	configureCLIThemeWithStyle("dark", "aurora")
+	if got, want := activeCLITheme.userBubbleFaded.hex, "#5e9e91"; got != want {
+		t.Fatalf("aurora faded hex = %s, want %s", got, want)
+	}
+	if got, want := activeCLITheme.userBubbleFaded.xterm, 72; got != want {
+		t.Fatalf("aurora faded xterm = %d, want 72", got)
+	}
+	configureCLIThemeWithStyle("dark", "midnight")
+	if got, want := activeCLITheme.userBubbleFaded.xterm, 140; got != want {
+		t.Fatalf("midnight faded xterm = %d, want 140", got)
+	}
+
+	configureCLIThemeWithStyle("light", "sandstone")
+	if got, want := activeCLITheme.userBubbleFaded.hex, "#9e7263"; got != want {
+		t.Fatalf("sandstone faded hex = %s, want %s", got, want)
+	}
+	if got, want := activeCLITheme.userBubbleFaded.xterm, 95; got != want {
+		t.Fatalf("sandstone faded xterm = %d, want 95", got)
+	}
+	configureCLIThemeWithStyle("light", "porcelain")
+	if got, want := activeCLITheme.userBubbleFaded.xterm, 103; got != want {
+		t.Fatalf("porcelain faded xterm = %d, want 103", got)
+	}
+	configureCLIThemeWithStyle("light", "linen")
+	if got, want := activeCLITheme.userBubbleFaded.xterm, 131; got != want {
+		t.Fatalf("linen faded xterm = %d, want 131", got)
+	}
+	configureCLIThemeWithStyle("light", "glacier")
+	if got, want := activeCLITheme.userBubbleFaded.xterm, 67; got != want {
+		t.Fatalf("glacier faded xterm = %d, want 67", got)
+	}
+
+	configureCLIThemeWithStyle("light", "sandstone")
+	if got, want := activeCLITheme.toolArg.hex, "#5a6470"; got != want {
+		t.Fatalf("light toolArg = %s, want %s", got, want)
+	}
+	if got, want := activeCLITheme.toolArg.xterm, 240; got != want {
+		t.Fatalf("light toolArg xterm = %d, want 240", got)
+	}
+	configureCLIThemeWithStyle("dark", "graphite")
+	if got, want := activeCLITheme.toolArg.hex, "#a5b0bd"; got != want {
+		t.Fatalf("dark toolArg = %s, want %s", got, want)
+	}
+	if got, want := activeCLITheme.toolArg.xterm, 145; got != want {
+		t.Fatalf("dark toolArg xterm = %d, want 145", got)
+	}
+}
