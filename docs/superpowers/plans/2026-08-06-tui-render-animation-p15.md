@@ -1884,7 +1884,7 @@ TUI environment:
 
 ```bash
 export PATH="$HOME/.local/go/bin:$HOME/go/bin:$PATH"
-cd /home/miku/dv_project/mk_agent
+cd /home/miku/dv_project/corvus
 go test ./internal/cli/ -count=1
 go test ./internal/cli/ -run '^$' -bench 'BenchmarkAppendBlock|BenchmarkWrapTranscript/lines=10000' -benchmem -count=1
 make build

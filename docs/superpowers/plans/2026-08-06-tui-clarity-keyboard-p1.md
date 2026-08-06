@@ -97,7 +97,7 @@ If `TestEscInPlanModeDoesNotExitPlan` already covers plan, keep it and only add 
 
 ```bash
 export PATH="$HOME/.local/go/bin:$PATH"
-cd /home/miku/dv_project/mk_agent
+cd /home/miku/dv_project/corvus
 go test ./internal/cli/ -count=1 -run 'TestEsc|TestDoubleEsc' -v
 ```
 
@@ -634,7 +634,7 @@ git commit -m "feat(cli): idle Ctrl+P command palette via quick_picker"
 
 ```bash
 export PATH="$HOME/.local/go/bin:$HOME/go/bin:$PATH"
-cd /home/miku/dv_project/mk_agent
+cd /home/miku/dv_project/corvus
 go test ./internal/cli/ -count=1
 ```
 
