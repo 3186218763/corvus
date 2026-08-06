@@ -699,7 +699,7 @@ func TestWorkingLineElapsedStableWidth(t *testing.T) {
 	m.elapsed = 12
 	line12 := m.runningWorkingLine(false, false)
 	// The time segment keeps a stable 4-column width ("  3s" vs " 12s").
-	if strings.Contains(line3, " 3s") && strings.Contains(line12, " 3s") {
+	if !strings.Contains(line3, "  3s") || !strings.Contains(line12, " 12s") {
 		t.Fatalf("elapsed width must be fixed: %q vs %q", line3, line12)
 	}
 }
