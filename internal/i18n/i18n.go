@@ -66,11 +66,11 @@ type Messages struct {
 
 	// chat TUI status line / approval banner.
 	ChatThinking                           string // live reasoning marker label, e.g. "thinking…"
-	ChatThoughtForFmt                      string // collapsed reasoning summary, "%d" = elapsed s
-	ChatStatusThinkingFmt                  string // "%s thinking… (%ds · <cancel hint>)" — %s = spinner, %d = elapsed s
-	ChatToolWorkingFmt                     string // "%s working · %ds" under a running tool — %s = spinner, %d = elapsed s
+	ChatThoughtForFmt                      string // collapsed reasoning summary, "%s" = fixed-width elapsed seconds
+	ChatStatusThinkingFmt                  string // "%s thinking… (%ss …)" — %s = spinner, %s = fixed-width elapsed
+	ChatToolWorkingFmt                     string // "%s working · %ss" — %s = frame, %s = fixed-width elapsed
 	ChatStatusRetryingFmt                  string // "%s retrying (%d/%d)…" — %s = spinner, %d/%d = attempt/max
-	ChatStatusCancellingFmt                string // "%s stopping… (%ds · Ctrl+C exits)" — %s = spinner, %d = elapsed s
+	ChatStatusCancellingFmt                string // "%s stopping… (%ss · Ctrl+C exits)" — %s = spinner, %s = fixed-width elapsed
 	ChatStatusIdle                         string // shortcuts hint when idle
 	ChatStatusYoloIdle                     string // shortcuts hint when idle in YOLO/bypass mode
 	ChatStatusCycleHint                    string // plan-toggle shortcut hint shown when no modal prompt owns the status row

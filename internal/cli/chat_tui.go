@@ -2437,7 +2437,7 @@ func (m *chatTUI) beginToolRunning(id string) {
 		return
 	}
 	m.toolStreamIdx = len(m.transcript)
-	m.commitLine(connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, toolWorkingFrames[0], 0))}))
+	m.commitLine(connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, toolWorkingFrames[0], formatElapsedFixed(0)))}))
 	// Remember the transcript slot for this id so a late ToolProgress for a
 	// previously dispatched (and possibly already collapsed) tool can reuse
 	// it instead of appending a fresh slot at the end of the transcript. For
@@ -2458,7 +2458,7 @@ func (m *chatTUI) tickToolRunning() {
 	m.toolStreamFrame++
 	frame := toolWorkingFrames[m.toolStreamFrame%len(toolWorkingFrames)]
 	secs := int(time.Since(m.toolStreamStart).Seconds())
-	m.setLiveBlock(m.toolStreamIdx, connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, frame, secs))}))
+	m.setLiveBlock(m.toolStreamIdx, connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, frame, formatElapsedFixed(secs)))}))
 }
 
 // commitReasoning closes the live thinking block: the "▎ thinking…" marker is
@@ -2470,7 +2470,7 @@ func (m *chatTUI) commitReasoning() {
 		if strings.TrimSpace(m.reasoning.String()) != "" || !m.thinkStart.IsZero() {
 			secs := int(time.Since(m.thinkStart).Seconds())
 			m.commitSpacer()
-			m.commitLine(dim(fmt.Sprintf("  ▎ "+i18n.M.ChatThoughtForFmt, secs)))
+			m.commitLine(dim(fmt.Sprintf("  ▎ "+i18n.M.ChatThoughtForFmt, formatElapsedFixed(secs))))
 			if m.showReasoning && strings.TrimSpace(m.reasoning.String()) != "" {
 				m.commitLine(reasoningBlock(m.reasoning.String(), m.width, 0))
 			}
@@ -2485,7 +2485,7 @@ func (m *chatTUI) commitReasoning() {
 		return
 	}
 	secs := int(time.Since(m.thinkStart).Seconds())
-	m.setTranscriptBlock(m.reasoningLineIdx, dim(fmt.Sprintf("  ▎ "+i18n.M.ChatThoughtForFmt, secs)), transcriptSource{kind: transcriptSourceFixed})
+	m.setTranscriptBlock(m.reasoningLineIdx, dim(fmt.Sprintf("  ▎ "+i18n.M.ChatThoughtForFmt, formatElapsedFixed(secs))), transcriptSource{kind: transcriptSourceFixed})
 	if m.reasoningTextIdx >= 0 {
 		if m.showReasoning && strings.TrimSpace(m.reasoning.String()) != "" {
 			raw := m.reasoning.String()
@@ -2828,9 +2828,9 @@ func (m chatTUI) runningWorkingLine(cancelRequested, styled bool) string {
 
 	var working string
 	if cancelRequested {
-		working = fmt.Sprintf("  "+i18n.M.ChatStatusCancellingFmt, m.spinner.View(), m.elapsed)
+		working = fmt.Sprintf("  "+i18n.M.ChatStatusCancellingFmt, m.spinner.View(), formatElapsedFixed(m.elapsed))
 	} else {
-		working = fmt.Sprintf("  "+i18n.M.ChatStatusThinkingFmt, m.spinner.View(), m.elapsed)
+		working = fmt.Sprintf("  "+i18n.M.ChatStatusThinkingFmt, m.spinner.View(), formatElapsedFixed(m.elapsed))
 	}
 	if m.turnTokens > 0 {
 		working += " · ↓" + shortTokens(m.turnTokens)

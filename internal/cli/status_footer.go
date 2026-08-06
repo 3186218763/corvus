@@ -43,6 +43,16 @@ func footerMetric(label, value string) string {
 	return footerLabel(label) + " " + value
 }
 
+// formatElapsedFixed renders elapsed seconds right-aligned to a stable 3-column
+// numeric width (>=1000 clamps to 999); locale fmt strings add the unit so the
+// display is a fixed 4 columns and never jitters.
+func formatElapsedFixed(sec int) string {
+	if sec >= 999 {
+		sec = 999
+	}
+	return fmt.Sprintf("%3d", sec)
+}
+
 // renderTurnReceipt attaches the completed turn's token and cost breakdown to
 // the assistant response. Unlike the persistent footer, this is historical
 // message metadata: it stays in transcript scrollback and deliberately uses a
