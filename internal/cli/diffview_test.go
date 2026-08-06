@@ -73,10 +73,10 @@ func TestDiffBarReappliesBackground(t *testing.T) {
 	defer func(prev colorprofile.Profile) { activeColorProfile = prev }(activeColorProfile)
 	activeColorProfile = colorprofile.ANSI256
 
-	line := diffBar('+', "a + b", "x.go", 40, bgDiffAdd, fgDiffAdd, 12, 3)
+	line := diffBar('+', "a + b", "x.go", 40, bgSGR(activeCLITheme.diffAddBG), fgSGR(activeCLITheme.success), 12, 3)
 	// Syntax highlighting emits multiple \033[0m resets; each must re-arm the bar
 	// background, so the bg sequence appears more than once and the row ends reset.
-	if strings.Count(line, bgDiffAdd) < 2 {
+	if strings.Count(line, bgSGR(activeCLITheme.diffAddBG)) < 2 {
 		t.Fatalf("background not re-applied after chroma resets: %q", line)
 	}
 	if !strings.HasSuffix(line, ansiReset) {
