@@ -1,8 +1,9 @@
 # Reasonix TUI Clarity & Keyboard-First Design
 
 **Date:** 2026-08-06  
-**Status:** Draft for implementation planning (revised after design review)  
+**Status:** Design approved for P1 planning; P1 implementation plan written  
 **Branch context:** Design only; does not depend on prompt-cache Phase 1 work  
+**P1 plan:** `docs/superpowers/plans/2026-08-06-tui-clarity-keyboard-p1.md`  
 **Inputs:**  
 - Brainstorming session: optimize TUI aesthetics, fluidity, and interaction logic  
 - Competitive research: Grok Build, Claude Code, Codex CLI, OpenCode (primary peers); Crush (same Charm stack reference)  
@@ -516,8 +517,6 @@ These are intentionally not blocking design approval **after** the review locks 
 
 ## 18. Next step
 
-After this revised spec is approved:
-
-1. Run implementation planning (`writing-plans`) for **P1 only**.  
+1. **P1 plan exists:** `docs/superpowers/plans/2026-08-06-tui-clarity-keyboard-p1.md` — implement via `subagent-driven-development` or `executing-plans` after plan acceptance.  
 2. P2 plan must open with runtime inventory; Attach only as P2.1.  
-3. Do not implement UI changes until the P1 plan exists and is accepted.
+3. Do not start P2/P3/P4 UI until the corresponding plan exists and is accepted.
