@@ -154,6 +154,32 @@ type Messages struct {
 	AskUnanswered      string // placeholder for an unanswered ask question
 	AskSubmitHint      string // submit-tab keyboard hint
 
+	// Empty-input "?" keyboard cheatsheet overlay.
+	CheatsheetTitle              string // panel header
+	CheatsheetCloseHint          string // footer hint (Esc closes)
+	CheatsheetStatusLabel        string // status-row body while open
+	CheatsheetSectionNavigation  string
+	CheatsheetSectionModes       string
+	CheatsheetSectionTranscript  string
+	CheatsheetSectionDiscover    string
+	CheatsheetSectionSession     string
+	CheatsheetHintEnter          string
+	CheatsheetHintEsc            string
+	CheatsheetHintPageScroll     string
+	CheatsheetHintHomeEnd        string
+	CheatsheetHintShiftTab       string
+	CheatsheetHintCtrlY          string
+	CheatsheetHintCtrlB          string
+	CheatsheetHintCtrlO          string
+	CheatsheetHintQuestion       string
+	CheatsheetHintCtrlP          string
+	CheatsheetHintSlash          string
+	CheatsheetHintStatus         string
+	CheatsheetHintResume         string
+	CheatsheetHintNew            string
+	CheatsheetHintClear          string
+	CheatsheetHintHelp           string
+
 	// output style listing (/output-style).
 	OutputStyleNone           string // no styles available
 	OutputStyleHeader         string // header above the listing

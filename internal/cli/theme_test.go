@@ -321,6 +321,93 @@ func TestRuntimeAutoThemeDoesNotProbeStdin(t *testing.T) {
 	}
 }
 
+// TestThemeHierarchyBodyBrighterThanChromeBorder locks body-vs-chrome contrast:
+// muted (body-adjacent values) must stay distinct from quiet border chrome, and
+// borders stay low-chroma so tool cards / footer rules do not shout.
+func TestThemeHierarchyBodyBrighterThanChromeBorder(t *testing.T) {
+	t.Setenv("REASONIX_THEME", "")
+	t.Setenv("REASONIX_THEME_STYLE", "")
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+
+	for _, mode := range []string{"dark", "light"} {
+		t.Run(mode, func(t *testing.T) {
+			configureCLITheme(mode)
+			th := activeCLITheme
+			if th.muted.hex == th.border.hex {
+				t.Fatalf("%s muted hex equals border hex %q — body and chrome must differ", mode, th.muted.hex)
+			}
+			if th.muted.hex == th.subtle.hex {
+				t.Fatalf("%s muted hex equals subtle hex %q — body values and chrome labels must differ", mode, th.muted.hex)
+			}
+			if th.subtle.hex == th.border.hex {
+				t.Fatalf("%s subtle hex equals border hex %q — chrome layers must stay distinct", mode, th.subtle.hex)
+			}
+
+			mutedL := cliColorLuma(th.muted)
+			subtleL := cliColorLuma(th.subtle)
+			borderL := cliColorLuma(th.border)
+			if mode == "dark" {
+				// Dark shell: body-adjacent text is brighter than chrome labels/borders.
+				if mutedL <= subtleL {
+					t.Fatalf("dark muted luma %.1f should exceed subtle chrome %.1f", mutedL, subtleL)
+				}
+				if mutedL <= borderL {
+					t.Fatalf("dark muted luma %.1f should exceed border chrome %.1f", mutedL, borderL)
+				}
+				if subtleL <= borderL {
+					t.Fatalf("dark subtle luma %.1f should exceed border %.1f", subtleL, borderL)
+				}
+			} else {
+				// Light shell: body text is darker (higher contrast) than quiet chrome.
+				if mutedL >= subtleL {
+					t.Fatalf("light muted luma %.1f should be darker than subtle chrome %.1f", mutedL, subtleL)
+				}
+				if mutedL >= borderL {
+					t.Fatalf("light muted luma %.1f should be darker than border chrome %.1f", mutedL, borderL)
+				}
+				if subtleL >= borderL {
+					t.Fatalf("light subtle luma %.1f should be darker than border %.1f", subtleL, borderL)
+				}
+			}
+
+			// Border stays low-chroma (near-neutral grey) so chrome is quiet.
+			if ch := cliColorChroma(th.border); ch > 30 {
+				t.Fatalf("%s border chroma %d too high for quiet chrome (hex %s)", mode, ch, th.border.hex)
+			}
+		})
+	}
+}
+
+func cliColorLuma(c cliColor) float64 {
+	r, g, b, ok := parseHexColor(c.hex)
+	if !ok {
+		return -1
+	}
+	return 0.2126*float64(r) + 0.7152*float64(g) + 0.0722*float64(b)
+}
+
+func cliColorChroma(c cliColor) int {
+	r, g, b, ok := parseHexColor(c.hex)
+	if !ok {
+		return 999
+	}
+	maxC, minC := r, r
+	if g > maxC {
+		maxC = g
+	}
+	if b > maxC {
+		maxC = b
+	}
+	if g < minC {
+		minC = g
+	}
+	if b < minC {
+		minC = b
+	}
+	return maxC - minC
+}
+
 func restoreThemeForTest(prevColor colorprofile.Profile, prevTheme cliPalette) {
 	activeColorProfile = prevColor
 	activeCLITheme = prevTheme

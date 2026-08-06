@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/agent/testutil"
 	"reasonix/internal/checkpoint"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
@@ -27,6 +28,7 @@ import (
 	"reasonix/internal/secrets"
 	"reasonix/internal/skill"
 	"reasonix/internal/testenv"
+	"reasonix/internal/tool"
 )
 
 type blockingTurnRunner struct{ started chan struct{} }
@@ -379,18 +381,33 @@ func TestStatusLineWrapAccounting(t *testing.T) {
 // specifically at the CJK 2-char-overflow boundary where an off-by-one would
 // hide the bottom row of the viewport.
 func TestStatusLineRenderedHeightMatchesBudget(t *testing.T) {
-	ctrl := control.New(control.Options{})
+	// Seed usage so the lean data band (CTX) appears; long CJK model forces wrap.
+	prov := testutil.NewMock("model", testutil.Turn{
+		Text: "ok",
+		Usage: &provider.Usage{
+			PromptTokens: 12_000, CompletionTokens: 200, TotalTokens: 12_200,
+		},
+	})
+	exec := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{MaxSteps: 1, ContextWindow: 200_000}, event.Discard)
+	if err := exec.Run(context.Background(), "hello"); err != nil {
+		t.Fatalf("seed agent usage: %v", err)
+	}
+	ctrl := control.New(control.Options{Executor: exec})
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 46)
 
-	// Manually set a long git repo/branch so the status line contains CJK.
 	m.missing = ""
+	// Long CJK model name + effort/work still live on the interaction row and wrap.
+	m.label = "深度求索/" + strings.Repeat("长模型名", 6)
+	m.effortLevel = "auto"
+	m.runtimeProfile = "full"
+	// Git porcelain is off default chrome; ensure it does not inflate row count.
 	m.gitStatus = gitStatus{Repo: "我的项目名字", Branch: "我的分支"}
 
 	m0, _ := m.Update(tea.WindowSizeMsg{Width: 46, Height: 12})
 	m = m0.(chatTUI)
 
 	if m.statusLineCount <= 2 {
-		t.Fatalf("statusLineCount at width 46 with CJK = %d, want > 2", m.statusLineCount)
+		t.Fatalf("statusLineCount at width 46 with CJK model/context = %d, want > 2", m.statusLineCount)
 	}
 
 	// Verify that computeStatusLineCount matches the actual rendered line count.
@@ -629,8 +646,8 @@ func TestComposerPromptReservesWidthAndOffsetsCJKCursor(t *testing.T) {
 	if !strings.HasPrefix(firstLine, "❯ 你好") {
 		t.Fatalf("composer first line = %q, want prompt before CJK input", firstLine)
 	}
-	if got, want := m.input.Width(), 40-4-composerPromptWidth; got != want {
-		t.Fatalf("textarea content width = %d, want %d after prompt gutter", got, want)
+	if got, want := m.input.Width(), m.composerContentWidth()-composerPromptWidth; got != want {
+		t.Fatalf("textarea content width = %d, want %d after prompt gutter and mode badge", got, want)
 	}
 	cursor := m.input.Cursor()
 	if cursor == nil {
@@ -686,8 +703,10 @@ func TestMCPManagerHidesComposerBox(t *testing.T) {
 	if !strings.Contains(content, "Enter for details") {
 		t.Fatalf("MCP footer hint missing from view:\n%s", content)
 	}
-	if !strings.Contains(content, "· MCP") {
-		t.Fatalf("MCP status line missing from view:\n%s", content)
+	// Mode chrome lives on the composer badge (hidden here); the interaction
+	// row only shows the MCP contextual state without a leading mode pill.
+	if primary := ansi.Strip(m.primaryStatusLine(false, false)); !strings.Contains(primary, "MCP") {
+		t.Fatalf("MCP status line missing from primary footer: %q\nview:\n%s", primary, content)
 	}
 }
 
@@ -1166,9 +1185,14 @@ func TestStatusCommandShowsRuntimeDetails(t *testing.T) {
 	m.effortLevel = "max"
 	m.runtimeProfile = "delivery"
 	m.balance = "$10.00"
+	m.gitStatus = gitStatus{Repo: "Reasonix", Branch: "feature/status-host"}
+	m.mouseCaptureOff = true
 	m.runSlashCommand("/status")
 	out := ansi.Strip(strings.Join(m.transcript, "\n"))
-	for _, want := range []string{"Session status", "provider/model", "delivery", "effort max", "$10.00"} {
+	for _, want := range []string{
+		"Session status", "provider/model", "delivery", "effort max",
+		"$10.00", "feature/status-host", "mode", "mouse",
+	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("/status output missing %q:\n%s", want, out)
 		}
@@ -3827,6 +3851,103 @@ func TestEscInPlanModeDoesNotExitPlan(t *testing.T) {
 
 	if !m2.planMode {
 		t.Error("Esc must not exit plan mode; only Shift+Tab should")
+	}
+}
+
+// escCheckpointsController stubs SessionHistory.Checkpoints so double-Esc can
+// open the rewind picker without a full session/checkpoint store.
+type escCheckpointsController struct {
+	control.SessionAPI
+	metas []checkpoint.Meta
+}
+
+func (c *escCheckpointsController) Checkpoints() []checkpoint.Meta { return c.metas }
+
+// TestEscPriorityCompletionClosesBeforeCancelWhenIdle locks the modal if-chain
+// rule that an open completion menu consumes Esc first when idle (close only;
+// no cancel — there is no running turn).
+func TestEscPriorityCompletionClosesBeforeCancelWhenIdle(t *testing.T) {
+	m := newTestChatTUI()
+	m.completion = completion{active: true, kind: compSlash, items: []compItem{{label: "/status"}}, sel: 0}
+	next, _ := m.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(chatTUI)
+	if m.completion.active {
+		t.Fatal("Esc should close completion menu when idle")
+	}
+}
+
+// TestEscIdleClearsDraftDoesNotFlipPlan locks idle Esc: clear typed draft, keep plan mode.
+func TestEscIdleClearsDraftDoesNotFlipPlan(t *testing.T) {
+	m := newTestChatTUI()
+	m.ctrl = control.New(control.Options{})
+	m.planMode = true
+	m.ctrl.SetPlanMode(true)
+	m.input.SetValue("draft text")
+
+	next, _ := m.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(chatTUI)
+
+	if got := strings.TrimSpace(m.input.Value()); got != "" {
+		t.Fatalf("Esc should clear draft, got %q", got)
+	}
+	if !m.planMode || !m.ctrl.PlanMode() {
+		t.Fatalf("Esc must not flip plan mode, tui=%v controller=%v", m.planMode, m.ctrl.PlanMode())
+	}
+}
+
+// TestDoubleEscOpensRewindWithin600ms locks Claude-style double-Esc rewind arming.
+func TestDoubleEscOpensRewindWithin600ms(t *testing.T) {
+	m := newTestChatTUI()
+	m.ctrl = &escCheckpointsController{
+		metas: []checkpoint.Meta{{Turn: 0, Prompt: "first turn"}},
+	}
+	// Empty composer is required for the double-Esc rewind gesture.
+	if strings.TrimSpace(m.input.Value()) != "" {
+		t.Fatal("precondition: composer must be empty")
+	}
+
+	next, _ := m.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(chatTUI)
+	if m.rewind != nil {
+		t.Fatal("first Esc should only arm lastEsc, not open rewind")
+	}
+	if m.lastEsc.IsZero() {
+		t.Fatal("first Esc should arm lastEsc")
+	}
+
+	next, _ = m.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(chatTUI)
+	if m.rewind == nil {
+		t.Fatal("second Esc within 600ms should open rewind picker")
+	}
+	if !m.lastEsc.IsZero() {
+		t.Fatal("opening rewind should clear lastEsc arm")
+	}
+}
+
+// TestEscNeverChangesYoloOrPlan re-asserts Esc is not a mode switch for Plan or YOLO.
+func TestEscNeverChangesYoloOrPlan(t *testing.T) {
+	m := newTestChatTUI()
+	m.ctrl = control.New(control.Options{})
+	m.planMode = true
+	m.ctrl.SetPlanMode(true)
+
+	next, _ := m.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(chatTUI)
+	if !m.planMode || !m.ctrl.PlanMode() {
+		t.Fatalf("Esc must not exit plan mode, tui=%v controller=%v", m.planMode, m.ctrl.PlanMode())
+	}
+
+	m = newTestChatTUI()
+	m.ctrl = control.New(control.Options{})
+	m.ctrl.SetToolApprovalMode(control.ToolApprovalYolo)
+	next, _ = m.update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(chatTUI)
+	if got := m.ctrl.ToolApprovalMode(); got != control.ToolApprovalYolo {
+		t.Fatalf("Esc must not leave YOLO, got %q", got)
+	}
+	if m.planMode {
+		t.Fatal("Esc must not enter plan mode")
 	}
 }
 

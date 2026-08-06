@@ -96,43 +96,48 @@ func renderTurnReceipt(u *provider.Usage, p *provider.Pricing, d *event.CacheDia
 	return receipt
 }
 
-// primaryStatusLine renders the interaction half of the first footer row. The
-// model/profile group is laid out separately so it can stay right-anchored on
-// wide terminals and move as one unit on narrow terminals.
-func (m chatTUI) primaryStatusLine(modeTag string, shellMode, cancelRequested bool) string {
-	status := statusFooterIndent + modeTag
+// primaryStatusLine renders the interaction half of the first footer row. Mode
+// chrome lives on the composer badge (renderModeBadge); this row only carries
+// contextual UI state and short action hints. The model/profile group is laid
+// out separately so it can stay right-anchored on wide terminals and move as
+// one unit on narrow terminals.
+func (m chatTUI) primaryStatusLine(shellMode, cancelRequested bool) string {
+	var body string
 	switch {
 	case m.rewind != nil:
-		status += " · ⟲ rewind"
+		body = "⟲ rewind"
 	case m.mcpImport != nil:
-		status += " · MCP import"
+		body = "MCP import"
 	case m.resumePick != nil:
-		status += " · " + i18n.M.StatusResumePicker
+		body = i18n.M.StatusResumePicker
 	case m.quickPick != nil:
-		status += " · " + m.quickPick.title
+		body = m.quickPick.title
 	case m.mcp != nil:
-		status += " · MCP"
+		body = "MCP"
 	case m.skillPick != nil:
-		status += " · " + i18n.M.SkillPickerStatusLabel
+		body = i18n.M.SkillPickerStatusLabel
+	case m.cheatsheetOpen:
+		body = i18n.M.CheatsheetStatusLabel
 	case m.chooser != nil:
-		status += " · " + i18n.M.ChatStatusQuestion
+		body = i18n.M.ChatStatusQuestion
 	case m.pendingApproval != nil && m.pendingApproval.Tool == planApprovalTool:
-		status += " · " + i18n.M.ChatStatusPlanApproval
+		body = i18n.M.ChatStatusPlanApproval
 	case m.pendingApproval != nil:
-		status += " · " + i18n.M.ChatStatusToolApproval
+		body = i18n.M.ChatStatusToolApproval
 	case m.clipboardImagePending:
-		status += " · " + yellow(i18n.M.ClipboardImagePastingHint)
+		body = yellow(i18n.M.ClipboardImagePastingHint)
 	case m.copyNoticeText != "":
-		status += " · " + green(m.copyNoticeText)
+		body = green(m.copyNoticeText)
 	case cancelRequested:
-		status += " · " + i18n.M.CtrlCQuitHint
+		body = i18n.M.CtrlCQuitHint
 	case shellMode:
-		status += " · " + i18n.M.ShellModeHint
+		body = i18n.M.ShellModeHint
 	case m.ctrl != nil && m.ctrl.AutoApproveTools():
-		status += " · " + footerValue(i18n.M.ChatStatusYoloIdle) + " · " + footerHint(i18n.M.ChatStatusCycleHintCompact)
+		body = footerValue(i18n.M.ChatStatusYoloIdle) + " · " + footerHint(i18n.M.ChatStatusCycleHintCompact)
 	default:
-		status += " · " + footerValue(i18n.M.ChatStatusIdle) + " · " + footerHint(i18n.M.ChatStatusCycleHintCompact)
+		body = footerValue(i18n.M.ChatStatusIdle) + " · " + footerHint(i18n.M.ChatStatusCycleHintCompact)
 	}
+	status := statusFooterIndent + body
 	if mt := m.mouseTag(); mt != "" {
 		status += " · " + mt
 	}
@@ -195,17 +200,6 @@ func (m chatTUI) statusModelWorkGroup(maxWidth int) string {
 	return footerHint(compactMiddle(ansi.Strip(full), maxWidth))
 }
 
-func cacheStatusColor(rate float64) cliColor {
-	switch {
-	case rate >= 80:
-		return activeCLITheme.success
-	case rate >= 50:
-		return activeCLITheme.info
-	default:
-		return activeCLITheme.warn
-	}
-}
-
 func renderContextStatusGroups(used, window int, ratio float64) []string {
 	if used == 0 || window == 0 {
 		return nil
@@ -245,33 +239,28 @@ func renderContextStatusGroups(used, window int, ratio float64) []string {
 	}
 }
 
-// statusTelemetryGroups returns independently placeable session metrics. Git is
-// intentionally excluded because it owns the flexible identity slot; keeping
-// metrics separate lets narrow layouts wrap only between semantic groups.
+// statusTelemetryGroups returns independently placeable session metrics for the
+// default data band: context (+ compact headroom) and jobs when > 0. Balance,
+// cache diagnostics, and git porcelain live on /status instead of permanent chrome.
+// A custom statusline still replaces this entire band.
 func (m chatTUI) statusTelemetryGroups() []string {
 	if m.statuslineCmd != "" && m.statuslineOut != "" {
 		return []string{m.statuslineOut}
 	}
 	var data []string
 	if m.ctrl != nil {
-		if body, rate, ok := m.cacheStatus(); ok {
-			data = append(data, footerMetric(i18n.M.ChatStatusCacheLabel, themeFg(cacheStatusColor(rate), body)))
-		}
 		used, window := m.ctrl.ContextSnapshot()
 		data = append(data, renderContextStatusGroups(used, window, m.ctrl.CompactRatio())...)
 		if jt := m.jobsTag(); jt != "" {
 			data = append(data, footerMetric(i18n.M.ChatStatusJobsLabel, footerInfo(ansi.Strip(jt))))
 		}
 	}
-	if m.balance != "" {
-		data = append(data, footerMetric(i18n.M.ChatStatusBalanceLabel, footerValue(m.balance)))
-	}
 	return data
 }
 
 // renderStatusBlock owns the complete persistent footer layout. The optional
-// data band is separated from interaction state when Git or telemetry exists;
-// narrow screens add deliberate left-aligned rows only between semantic groups.
+// data band is separated from interaction state when telemetry exists; narrow
+// screens add deliberate left-aligned rows only between semantic groups.
 func (m chatTUI) renderStatusBlock(primary string, width int) string {
 	if width <= 0 {
 		width = 1
@@ -279,7 +268,7 @@ func (m chatTUI) renderStatusBlock(primary string, width int) string {
 	primary = hideStatusHintWhenKeyNamesCannotFit(primary, width)
 	modelWork := m.statusModelWorkGroup(max(width-visibleWidth(statusFooterIndent), 1))
 	first := layoutStatusSides(primary, modelWork, width)
-	second := m.layoutGitTelemetry(width)
+	second := m.layoutDataBand(width)
 	if second == "" {
 		return first
 	}
@@ -362,33 +351,16 @@ func rightAlignStatusGroup(group string, width int) string {
 	return wrapStatusLine(group, width)
 }
 
+// layoutDataBand packs the lean default telemetry groups (or custom statusline
+// output) left-to-right by semantic group. Git/balance/cache are not rendered
+// here; /status hosts that detail.
+func (m chatTUI) layoutDataBand(width int) string {
+	return packStatusGroups(m.statusTelemetryGroups(), width)
+}
+
+// layoutGitTelemetry is retained as a thin alias for older call sites/tests.
 func (m chatTUI) layoutGitTelemetry(width int) string {
-	telemetryGroups := m.statusTelemetryGroups()
-	telemetry := strings.Join(telemetryGroups, "  ")
-	hasGit := strings.TrimSpace(m.gitStatus.Repo) != "" && strings.TrimSpace(m.gitStatus.Branch) != ""
-	if !hasGit {
-		// Without a Git identity there is no left-hand peer to balance. Keep the
-		// telemetry anchored to the normal footer indent instead of leaving a
-		// repo-sized visual hole across most of a wide terminal.
-		return packStatusGroups(telemetryGroups, width)
-	}
-
-	fullGitBudget := max(width-visibleWidth(statusFooterIndent), 1)
-	git := m.gitStatus.RenderWithin(fullGitBudget, activeCLITheme.warn)
-	gitLine := statusFooterIndent + git
-	if telemetry == "" {
-		return gitLine
-	}
-
-	telemetryWidth := visibleWidth(telemetry)
-	if visibleWidth(gitLine)+statusFooterGroupGap+telemetryWidth <= width {
-		return gitLine + strings.Repeat(" ", width-visibleWidth(gitLine)-telemetryWidth) + telemetry
-	}
-
-	// Under width pressure Git gets its own full row instead of being shortened
-	// merely to keep telemetry beside it. Telemetry then packs left-to-right by
-	// semantic group, so no right-aligned fragment floats on a continuation row.
-	return gitLine + "\n" + packStatusGroups(telemetryGroups, width)
+	return m.layoutDataBand(width)
 }
 
 func packStatusGroups(groups []string, width int) string {

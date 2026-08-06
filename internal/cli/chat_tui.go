@@ -267,6 +267,10 @@ type chatTUI struct {
 	quickPick *quickPicker
 	copyPick  *copyPicker
 	lastEsc   time.Time
+	// cheatsheetOpen is the empty-input "?" keyboard shortcuts overlay. Esc
+	// closes it (higher priority than cancel/clear). Composer stays visible and
+	// the draft is preserved (open only when empty).
+	cheatsheetOpen bool
 
 	// mcp is the interactive "/mcp" manager overlay. mcpDisabled tracks servers
 	// turned off only for this chat session, matching the desktop connector
@@ -870,7 +874,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.followComposerCursor()
 		m.width = msg.Width
 		m.height = msg.Height
-		m.input.SetWidth(max(msg.Width-4, 1))
+		m.input.SetWidth(m.composerContentWidth())
 		// Commit the banner — and a resumed session's transcript — once, now
 		// that the width is known.
 		if !m.started {
@@ -1256,6 +1260,16 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		// Empty-input "?" cheatsheet: Esc closes before cancel/clear (spec §7.2 #2).
+		// While open, other keys are swallowed so the parent draft is not mutated.
+		if m.cheatsheetOpen {
+			return m.handleCheatsheetKey(msg)
+		}
+		// Idle empty-input "?" opens the keyboard cheatsheet (does not insert).
+		// Non-empty composer falls through so "?" is typed normally.
+		if m.openCheatsheetIfEmpty(msg) {
+			return m, nil
+		}
 		switch msg.String() {
 		case "up":
 			if m.state == tuiRunning {
@@ -1391,6 +1405,15 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, finalize(m, cmds)
 		case "ctrl+y", "super+y", "meta+y":
 			m.toggleYoloMode()
+			return m, nil
+		case "ctrl+p":
+			// Idle-only command palette. Completion / quick pickers / approvals
+			// already claim Ctrl+P earlier for prev-item navigation (spec §8.2.1).
+			// Cheatsheet also claims keys while open, so we only reach here on
+			// the main shell with no higher modal.
+			if m.state == tuiIdle {
+				m.openCommandPalette()
+			}
 			return m, nil
 		case "ctrl+o":
 			m.toggleVerboseReasoning(m.state != tuiRunning)
@@ -1902,6 +1925,7 @@ func (m chatTUI) bottomRows() int {
 		m.renderResumePicker(),
 		m.renderQuickPicker(),
 		m.renderCopyPicker(),
+		m.renderCheatsheet(),
 		m.renderCompletion(),
 	} {
 		if s != "" {
@@ -2840,32 +2864,24 @@ func (m chatTUI) View() tea.View {
 	shellMode := strings.HasPrefix(strings.TrimSpace(m.input.Value()), "!")
 	cancelRequested := m.cancelRequested()
 	var box string
+	badgeCols := 0
 	if !hideComposer {
-		style := inputBoxStyle.Width(boxW)
+		badge := m.renderModeBadge(shellMode)
+		const badgeGap = " "
+		badgeCols = visibleWidth(badge) + visibleWidth(badgeGap)
+		// Floor at 1 (not 10): badgeCols + max(boxW-badgeCols, 10) can exceed the
+		// terminal when the badge is wide on a narrow screen. Keep joined width
+		// ≤ boxW in lockstep with composerContentWidth / SetWidth.
+		style := inputBoxStyle.Width(m.composerBoxWidth(badgeCols))
 		if shellMode {
 			style = withThemeBorderFG(style, statusShellColor)
 		}
-		box = style.Render(m.renderComposerInput())
+		// Mode badge sits left of the first content row (beside ❯), not the top
+		// border. Other rows keep a blank gutter so the box stays aligned.
+		box = joinModeBadgeLeftOfComposer(badge+badgeGap, style.Render(m.renderComposerInput()))
 	}
 
-	var modeTag string
-	if shellMode {
-		modeTag = modeTagStyle(statusShellColor, modeTagLight).Render("Shell")
-	} else {
-		background := statusAutoColor
-		foreground := modeTagDark
-		switch {
-		case m.ctrl.AutoApproveTools():
-			background = statusYoloColor
-			foreground = modeTagLight
-		case m.planMode:
-			background = statusPlanColor
-			foreground = modeTagLight
-		}
-		modeTag = modeTagStyle(background, foreground).Render(m.modeTagText())
-	}
-
-	primaryStatus := m.primaryStatusLine(modeTag, shellMode, cancelRequested)
+	primaryStatus := m.primaryStatusLine(shellMode, cancelRequested)
 	// The spinning "thinking…" indicator is its own line ABOVE the input box (shown
 	// only while a turn runs); the status/data rows stay below. This mirrors Claude
 	// Code: live progress over the composer, shortcuts + stats under it.
@@ -2907,6 +2923,10 @@ func (m chatTUI) View() tea.View {
 		parts = append(parts, card)
 		rowsAboveBox += strings.Count(card, "\n") + 1
 	}
+	if card := m.renderCheatsheet(); card != "" {
+		parts = append(parts, card)
+		rowsAboveBox += strings.Count(card, "\n") + 1
+	}
 	if menu := m.renderCompletion(); menu != "" {
 		parts = append(parts, menu)
 		rowsAboveBox += strings.Count(menu, "\n") + 1
@@ -2945,7 +2965,8 @@ func (m chatTUI) View() tea.View {
 		v := tea.NewView(strings.Join(parts, "\n"))
 		if !hideComposer {
 			if cur := m.composerCursor(); cur != nil {
-				cur.X += 1
+				// badge column + input box PaddingLeft
+				cur.X += badgeCols + 1
 				cur.Y += rowsAboveBox + 1
 				v.Cursor = cur
 			}
@@ -2972,11 +2993,11 @@ func (m chatTUI) View() tea.View {
 	}
 	// Anchor the real terminal cursor at the textarea's insertion point only when
 	// the composer is visible. input.Cursor() is relative to the textarea; offset
-	// by the viewport height + rows above + the box's top border row (+1 column
-	// for PaddingLeft).
+	// by the viewport height + rows above + the box's top border row, then by the
+	// mode-badge column and the box's PaddingLeft.
 	if !hideComposer {
 		if cur := m.composerCursor(); cur != nil {
-			cur.X += 1
+			cur.X += badgeCols + 1
 			cur.Y += m.viewport.Height() + rowsAboveBox + 1
 			v.Cursor = cur
 		}
@@ -3368,14 +3389,9 @@ func (m chatTUI) computeStatusLineCount(width int) int {
 	shellMode := strings.HasPrefix(strings.TrimSpace(m.input.Value()), "!")
 	cancelRequested := m.cancelRequested()
 
-	// Replicate the first status line (mode tag + state) from View().
-	// ModeTag is rendered with Padding(0,1) in View() — add the same padding
-	// here so the visible width matches exactly.
-	modeTag := " " + m.modeTagText() + " "
-	if shellMode {
-		modeTag = " Shell "
-	}
-	primaryStatus := m.primaryStatusLine(modeTag, shellMode, cancelRequested)
+	// Replicate the interaction row from View(). Mode chrome is on the composer
+	// badge and must not be fake-injected into the status primary width.
+	primaryStatus := m.primaryStatusLine(shellMode, cancelRequested)
 	statusBlock := m.renderStatusBlock(primaryStatus, width)
 
 	// Replicate the working (spinner) line from View(), shown only while a turn runs.
@@ -3389,6 +3405,85 @@ func (m chatTUI) computeStatusLineCount(width int) int {
 	}
 	lines += strings.Count(statusBlock, "\n") + 1
 	return lines
+}
+
+// renderModeBadge returns the styled composer-left mode chip. Shell prefix
+// uses a literal "Shell" tag; otherwise text comes from modeTagText() so
+// desktop vs classic shortcut layouts stay in parity.
+func (m chatTUI) renderModeBadge(shellMode bool) string {
+	if shellMode {
+		return modeTagStyle(statusShellColor, modeTagLight).Render("Shell")
+	}
+	bg, fg := statusAutoColor, modeTagDark
+	switch {
+	case m.ctrl != nil && m.ctrl.AutoApproveTools():
+		bg, fg = statusYoloColor, modeTagLight
+	case m.planMode:
+		bg, fg = statusPlanColor, modeTagLight
+	}
+	text := "Auto"
+	if m.ctrl != nil {
+		text = m.modeTagText()
+	}
+	return modeTagStyle(bg, fg).Render(text)
+}
+
+// modeBadgeColumnWidth is the terminal columns reserved left of the input box
+// for the mode badge plus its trailing gap. Keeps SetWidth / View / cursor math
+// in lockstep as the mode label changes.
+func (m chatTUI) modeBadgeColumnWidth() int {
+	shellMode := strings.HasPrefix(strings.TrimSpace(m.input.Value()), "!")
+	return visibleWidth(m.renderModeBadge(shellMode)) + 1
+}
+
+// composerFrameWidth is the terminal width View uses for the bottom frame
+// (composer join + status block). Matches View's boxW floor.
+func (m chatTUI) composerFrameWidth() int {
+	w := m.width
+	if w <= 0 {
+		w = 80
+	}
+	if w < 10 {
+		return 10
+	}
+	return w
+}
+
+// composerBoxWidth is the bordered input box width after reserving the mode
+// badge column. Floor is 1 so badgeCols+box never exceeds the frame width.
+func (m chatTUI) composerBoxWidth(badgeCols int) int {
+	return max(m.composerFrameWidth()-badgeCols, 1)
+}
+
+// composerContentWidth is the textarea SetWidth budget derived from the same
+// clamped box width View paints (historical -4 chrome inside the box).
+func (m chatTUI) composerContentWidth() int {
+	return max(m.composerBoxWidth(m.modeBadgeColumnWidth())-4, 1)
+}
+
+// joinModeBadgeLeftOfComposer places the mode badge beside the first content
+// row of a top+bottom bordered input box (index 1), so the chip shares a line
+// with the ❯ prompt. Top/bottom borders and wrapped continuation rows get a
+// blank left gutter of the same width.
+func joinModeBadgeLeftOfComposer(badgeWithGap, box string) string {
+	rightLines := strings.Split(box, "\n")
+	leftW := visibleWidth(badgeWithGap)
+	gutter := strings.Repeat(" ", leftW)
+	out := make([]string, len(rightLines))
+	// Bordered box is top border, ≥1 content rows, bottom border. Degenerate
+	// single-line renders still get the badge on row 0.
+	badgeRow := 0
+	if len(rightLines) >= 3 {
+		badgeRow = 1
+	}
+	for i, r := range rightLines {
+		if i == badgeRow {
+			out[i] = badgeWithGap + r
+			continue
+		}
+		out[i] = gutter + r
+	}
+	return strings.Join(out, "\n")
 }
 
 // The composer grows with its content up to this comfort cap. The effective
@@ -3442,14 +3537,16 @@ func (m chatTUI) inputHeightLimit() int {
 
 func (m *chatTUI) syncInputHeightLimit() {
 	limit := m.inputHeightLimit()
-	if m.input.MaxHeight == limit {
-		return
+	wantWidth := m.composerContentWidth()
+	if m.input.MaxHeight != limit {
+		m.followComposerCursor()
+		m.input.MaxHeight = limit
 	}
-	m.followComposerCursor()
-	m.input.MaxHeight = limit
+	// Always refresh width so mode-badge column changes (mode cycle, !shell)
+	// reflow the textarea in lockstep with View's badge layout.
 	// SetWidth recalculates DynamicHeight from the full soft-wrapped content,
 	// clamping the visible viewport to the new limit while preserving the text.
-	m.input.SetWidth(max(m.width-4, 1))
+	m.input.SetWidth(wantWidth)
 }
 
 func (m *chatTUI) growInputToFit() {

@@ -29,6 +29,9 @@ func renderHelp(width int, commands []command.Command, skills []skill.Skill, pro
 		writeHelpItems(&b, width, "MCP prompts", promptHelpItems(prompts), helpMaxDynamicItems)
 	}
 	b.WriteString(viewHint("type a command, or press Tab after / for completion"))
+	b.WriteString("\n")
+	// P1: point /help readers at the empty-input ? cheatsheet (key chord stays English).
+	b.WriteString(viewHint("press ? on empty input for keyboard shortcuts"))
 	return strings.TrimRight(b.String(), "\n")
 }
 
