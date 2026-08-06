@@ -395,6 +395,12 @@ Byte-for-byte Claude Code statusline JSON compatibility. A future adapter script
 
 **Dependency:** P2 reuses P1 overlay patterns + Esc rules. P3 reuses P1 palette shell. P2.1 does not block P2 Peek ship. P4 must not block P1 merge.
 
+**P1.5 note (2026-08-06):** a render/art polish phase now runs between P1 and P2 —
+see `docs/superpowers/specs/2026-08-06-tui-render-animation-design.md`. It pulls
+forward selected P4 performance items (incremental wrap, scroll repaint, panel
+single-pass) plus motion discipline and art polish. It does not block P2 and does
+not change P2/P3/P4 scope.
+
 ### P1 key table (minimum)
 
 | Key | Action | Notes |
@@ -520,3 +526,6 @@ These are intentionally not blocking design approval **after** the review locks 
 1. **P1 plan exists:** `docs/superpowers/plans/2026-08-06-tui-clarity-keyboard-p1.md` — implement via `subagent-driven-development` or `executing-plans` after plan acceptance.  
 2. P2 plan must open with runtime inventory; Attach only as P2.1.  
 3. Do not start P2/P3/P4 UI until the corresponding plan exists and is accepted.
+
+**P1.5 note:** `docs/superpowers/specs/2026-08-06-tui-render-animation-design.md`
+approved 2026-08-06; its implementation plan is the next plan to write (before P2).
