@@ -384,39 +384,36 @@ func TestStatuslineShowsEffortInPersistentFooter(t *testing.T) {
 	}
 }
 
-func TestStatuslineShowsCacheRatesInPersistentFooter(t *testing.T) {
+func TestStatuslineOmitsCacheRatesFromPersistentFooter(t *testing.T) {
 	i18n.DetectLanguage("en")
 
 	content := renderStatuslineViewWithCache(t)
-	lines := bottomStatusPlainLines(content)
-	if len(lines) != 3 {
-		t.Fatalf("status block lines = %d, want 3:\n%s", len(lines), strings.Join(lines, "\n"))
+	plain := ansi.Strip(content)
+	if !strings.Contains(plain, "MODEL deepseek-v4-flash") {
+		t.Fatalf("footer should still show model:\n%s", plain)
 	}
-	if !strings.Contains(lines[0], "MODEL deepseek-v4-flash") {
-		t.Fatalf("mode row should show model:\n%s", strings.Join(lines, "\n"))
+	if !strings.Contains(plain, "CTX") {
+		t.Fatalf("lean footer should show context after usage:\n%s", plain)
 	}
-	if !strings.Contains(lines[2], "CACHE turn hit 90.00% · avg 90.00%") {
-		t.Fatalf("telemetry row should show cache rates:\n%s", strings.Join(lines, "\n"))
+	if strings.Contains(plain, "CACHE") || strings.Contains(plain, "turn hit") {
+		t.Fatalf("lean footer must omit cache diagnostics:\n%s", plain)
 	}
 }
 
-func TestStatuslineShowsGitAndEffortInPersistentFooter(t *testing.T) {
+func TestStatuslineShowsEffortWithoutGitOnPersistentFooter(t *testing.T) {
 	i18n.DetectLanguage("en")
 
 	content := renderStatuslineViewWithGitAndEffort(t)
-	lines := bottomStatusPlainLines(content)
-	if len(lines) != 3 {
-		t.Fatalf("status block lines = %d, want 3:\n%s", len(lines), strings.Join(lines, "\n"))
+	plain := ansi.Strip(content)
+	if !strings.Contains(plain, "MODEL deepseek-v4-flash   EFFORT auto") {
+		t.Fatalf("session row should keep effort beside the model:\n%s", plain)
 	}
-	if !strings.Contains(lines[0], "MODEL deepseek-v4-flash   EFFORT auto") {
-		t.Fatalf("session row should keep effort beside the model:\n%s", strings.Join(lines, "\n"))
-	}
-	if !strings.Contains(lines[2], "Reasonix@codex/demo  +3 -1 ?2") {
-		t.Fatalf("telemetry row should start with git identity:\n%s", strings.Join(lines, "\n"))
+	if strings.Contains(plain, "Reasonix@") || strings.Contains(plain, "+3 -1") {
+		t.Fatalf("lean footer must omit git porcelain:\n%s", plain)
 	}
 }
 
-func TestStatuslineShowsWorkModeAndBalanceInPersistentFooter(t *testing.T) {
+func TestStatuslineShowsWorkModeOmitsBalanceFromPersistentFooter(t *testing.T) {
 	i18n.DetectLanguage("en")
 
 	ctrl := control.New(control.Options{})
@@ -425,15 +422,12 @@ func TestStatuslineShowsWorkModeAndBalanceInPersistentFooter(t *testing.T) {
 	m.runtimeProfile = "delivery"
 	m.balance = "¥12.34"
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
-	lines := bottomStatusPlainLines(next.(chatTUI).View().Content)
-	if len(lines) != 3 {
-		t.Fatalf("status block lines = %d, want 3:\n%s", len(lines), strings.Join(lines, "\n"))
+	plain := ansi.Strip(next.(chatTUI).View().Content)
+	if !strings.Contains(plain, "MODEL deepseek-v4-flash   WORK delivery") {
+		t.Fatalf("footer should show model and work mode:\n%s", plain)
 	}
-	if !strings.Contains(lines[0], "MODEL deepseek-v4-flash   WORK delivery") {
-		t.Fatalf("mode row should show model and work mode:\n%s", strings.Join(lines, "\n"))
-	}
-	if !strings.Contains(lines[2], "BAL ¥12.34") {
-		t.Fatalf("telemetry row should show balance:\n%s", strings.Join(lines, "\n"))
+	if strings.Contains(plain, "BAL") || strings.Contains(plain, "¥12.34") {
+		t.Fatalf("lean footer must omit balance:\n%s", plain)
 	}
 }
 

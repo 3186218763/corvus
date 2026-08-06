@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/agent/testutil"
 	"reasonix/internal/checkpoint"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
@@ -27,6 +28,7 @@ import (
 	"reasonix/internal/secrets"
 	"reasonix/internal/skill"
 	"reasonix/internal/testenv"
+	"reasonix/internal/tool"
 )
 
 type blockingTurnRunner struct{ started chan struct{} }
@@ -379,18 +381,33 @@ func TestStatusLineWrapAccounting(t *testing.T) {
 // specifically at the CJK 2-char-overflow boundary where an off-by-one would
 // hide the bottom row of the viewport.
 func TestStatusLineRenderedHeightMatchesBudget(t *testing.T) {
-	ctrl := control.New(control.Options{})
+	// Seed usage so the lean data band (CTX) appears; long CJK model forces wrap.
+	prov := testutil.NewMock("model", testutil.Turn{
+		Text: "ok",
+		Usage: &provider.Usage{
+			PromptTokens: 12_000, CompletionTokens: 200, TotalTokens: 12_200,
+		},
+	})
+	exec := agent.New(prov, tool.NewRegistry(), agent.NewSession(""), agent.Options{MaxSteps: 1, ContextWindow: 200_000}, event.Discard)
+	if err := exec.Run(context.Background(), "hello"); err != nil {
+		t.Fatalf("seed agent usage: %v", err)
+	}
+	ctrl := control.New(control.Options{Executor: exec})
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 46)
 
-	// Manually set a long git repo/branch so the status line contains CJK.
 	m.missing = ""
+	// Long CJK model name + effort/work still live on the interaction row and wrap.
+	m.label = "深度求索/" + strings.Repeat("长模型名", 6)
+	m.effortLevel = "auto"
+	m.runtimeProfile = "full"
+	// Git porcelain is off default chrome; ensure it does not inflate row count.
 	m.gitStatus = gitStatus{Repo: "我的项目名字", Branch: "我的分支"}
 
 	m0, _ := m.Update(tea.WindowSizeMsg{Width: 46, Height: 12})
 	m = m0.(chatTUI)
 
 	if m.statusLineCount <= 2 {
-		t.Fatalf("statusLineCount at width 46 with CJK = %d, want > 2", m.statusLineCount)
+		t.Fatalf("statusLineCount at width 46 with CJK model/context = %d, want > 2", m.statusLineCount)
 	}
 
 	// Verify that computeStatusLineCount matches the actual rendered line count.
@@ -1168,9 +1185,14 @@ func TestStatusCommandShowsRuntimeDetails(t *testing.T) {
 	m.effortLevel = "max"
 	m.runtimeProfile = "delivery"
 	m.balance = "$10.00"
+	m.gitStatus = gitStatus{Repo: "Reasonix", Branch: "feature/status-host"}
+	m.mouseCaptureOff = true
 	m.runSlashCommand("/status")
 	out := ansi.Strip(strings.Join(m.transcript, "\n"))
-	for _, want := range []string{"Session status", "provider/model", "delivery", "effort max", "$10.00"} {
+	for _, want := range []string{
+		"Session status", "provider/model", "delivery", "effort max",
+		"$10.00", "feature/status-host", "mode", "mouse",
+	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("/status output missing %q:\n%s", want, out)
 		}
