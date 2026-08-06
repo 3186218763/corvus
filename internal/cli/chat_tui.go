@@ -870,7 +870,8 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Any viewport scroll (wheel, PgUp/PgDn, edge auto-scroll, or tail-follow to
 	// newest output) shifts the whole window. Some terminals (Warp) mishandle
 	// the renderer's scroll/insert-line optimization and strand stale rows, so
-	// force a full clear+redraw whenever the offset actually moved.
+	// legacy repaint mode (REASONIX_TUI_SCROLL_REPAINT=1) force-clears on every
+	// offset move; the default is incremental repaint without ClearScreen.
 	if cm.viewport.YOffset() != prevYOff && !cm.nativeScrollback && !cm.sessionSwitch && cm.scrollRepaint {
 		return cm, tea.Batch(tea.ClearScreen, cmd)
 	}

@@ -2979,6 +2979,7 @@ func TestRegularForceGotoBottomScrollJumpNoClearScreenByDefault(t *testing.T) {
 func TestScrollRepaintEnvRestoresClearScreen(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	ch := make(chan event.Event, 1)
+	t.Setenv("REASONIX_TUI_SCROLL_REPAINT", "1")
 	adv := func(m chatTUI, msg tea.Msg) (chatTUI, tea.Cmd) {
 		n, cmd := m.Update(msg)
 		return n.(chatTUI), cmd
@@ -2993,11 +2994,13 @@ func TestScrollRepaintEnvRestoresClearScreen(t *testing.T) {
 		cur = next(cur, agentEventMsg(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "line"}))
 	}
 	cur = next(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
-	cur.scrollRepaint = true
 	cur.forceGotoBottom = true
 	cur.transcriptDirty = false
 	cur, cmd := adv(cur, tea.WindowSizeMsg{Width: 80, Height: 8})
 
+	if !cur.scrollRepaint {
+		t.Fatal("REASONIX_TUI_SCROLL_REPAINT=1 should enable legacy repaint")
+	}
 	if cmd == nil {
 		t.Fatal("legacy repaint mode must still request ClearScreen on scroll jumps")
 	}
@@ -3028,6 +3031,9 @@ func TestSessionSwitchSuppressesOneClearScreen(t *testing.T) {
 		t.Fatal("wheel-up should break the bottom pin")
 	}
 
+	// Legacy repaint mode + session switch: the ClearScreen workaround must be
+	// suppressed for exactly one Update, then resume once sessionSwitch clears.
+	cur.scrollRepaint = true
 	cur.sessionSwitch = true
 	cur.forceGotoBottom = true
 	cur.transcriptDirty = false
@@ -3046,8 +3052,8 @@ func TestSessionSwitchSuppressesOneClearScreen(t *testing.T) {
 	cur = next(cur, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	cur.forceGotoBottom = true
 	cur, cmd = adv(cur, tea.WindowSizeMsg{Width: 80, Height: 8})
-	if cmd != nil {
-		t.Fatal("later scroll jumps must not request ClearScreen by default")
+	if cmd == nil {
+		t.Fatal("legacy repaint mode should request ClearScreen once sessionSwitch is cleared")
 	}
 	if cur.sessionSwitch {
 		t.Fatal("sessionSwitch should remain false after the suppressed cycle")
