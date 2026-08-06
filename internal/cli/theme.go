@@ -54,20 +54,23 @@ type cliThemeStyle struct {
 }
 
 var (
+	// Hierarchy: muted is body-adjacent (values), subtle/faint are quieter chrome
+	// labels/dim text, border is low-chroma chrome for rules and tool-card edges.
+	// Accents stay style-driven; do not add new default theme names here.
 	cliDarkTheme = cliPalette{
 		name:         "dark",
 		style:        "graphite",
 		accent:       cliColor{"#d97757", 173},
-		muted:        cliColor{"#c0c4cc", 251},
+		muted:        cliColor{"#cbd0d8", 252},
 		faint:        cliColor{"#858b96", 245},
-		subtle:       cliColor{"#a4a9b3", 248},
+		subtle:       cliColor{"#969ba5", 247},
 		success:      cliColor{"#74b87a", 108},
 		warn:         cliColor{"#d9a441", 179},
 		err:          cliColor{"#e0696a", 167},
 		danger:       cliColor{"#e5484d", 167},
 		info:         cliColor{"#56b6c2", 80},
 		secondary:    cliColor{"#b18cff", 141},
-		border:       cliColor{"#343945", 237},
+		border:       cliColor{"#2a2f3b", 236},
 		selection:    cliColor{"#d97757", 173},
 		userBubbleBG: cliColor{"#222631", 235},
 		diffAddBG:    cliColor{"#14351d", 22},
@@ -79,16 +82,16 @@ var (
 		name:         "light",
 		style:        "sandstone",
 		accent:       cliColor{"#2f5fa8", 25},
-		muted:        cliColor{"#555049", 239},
+		muted:        cliColor{"#4a453e", 238},
 		faint:        cliColor{"#82796f", 243},
-		subtle:       cliColor{"#6f675f", 241},
+		subtle:       cliColor{"#7a7269", 243},
 		success:      cliColor{"#5d9b66", 65},
 		warn:         cliColor{"#b68120", 136},
 		err:          cliColor{"#b94b4d", 131},
 		danger:       cliColor{"#e5484d", 167},
 		info:         cliColor{"#2f5fa8", 25},
 		secondary:    cliColor{"#7d63c8", 104},
-		border:       cliColor{"#ded4c6", 252},
+		border:       cliColor{"#e6ddd0", 253},
 		selection:    cliColor{"#6f91d9", 68},
 		userBubbleBG: cliColor{"#f5f0e8", 255},
 		diffAddBG:    cliColor{"#e5f3e7", 254},

@@ -121,8 +121,8 @@ func TestTurnReceiptAdaptsContrastAcrossThemes(t *testing.T) {
 	for _, tt := range []struct {
 		mode, borderSGR, labelSGR, valueSGR string
 	}{
-		{mode: "dark", borderSGR: "\033[38;5;237m", labelSGR: "\033[38;5;248m", valueSGR: "\033[38;5;251m"},
-		{mode: "light", borderSGR: "\033[38;5;252m", labelSGR: "\033[38;5;241m", valueSGR: "\033[38;5;239m"},
+		{mode: "dark", borderSGR: "\033[38;5;236m", labelSGR: "\033[38;5;247m", valueSGR: "\033[38;5;252m"},
+		{mode: "light", borderSGR: "\033[38;5;253m", labelSGR: "\033[38;5;243m", valueSGR: "\033[38;5;238m"},
 	} {
 		t.Run(tt.mode, func(t *testing.T) {
 			configureCLITheme(tt.mode)
@@ -151,8 +151,8 @@ func TestStatusFooterSemanticPaletteAcrossThemes(t *testing.T) {
 	for _, tt := range []struct {
 		mode, labelSGR, valueSGR, infoSGR, secondarySGR string
 	}{
-		{mode: "dark", labelSGR: "\033[38;5;248m", valueSGR: "\033[38;5;251m", infoSGR: "\033[38;5;80m", secondarySGR: "\033[38;5;141m"},
-		{mode: "light", labelSGR: "\033[38;5;241m", valueSGR: "\033[38;5;239m", infoSGR: "\033[38;5;25m", secondarySGR: "\033[38;5;104m"},
+		{mode: "dark", labelSGR: "\033[38;5;247m", valueSGR: "\033[38;5;252m", infoSGR: "\033[38;5;80m", secondarySGR: "\033[38;5;141m"},
+		{mode: "light", labelSGR: "\033[38;5;243m", valueSGR: "\033[38;5;238m", infoSGR: "\033[38;5;25m", secondarySGR: "\033[38;5;104m"},
 	} {
 		t.Run(tt.mode, func(t *testing.T) {
 			configureCLITheme(tt.mode)
@@ -214,8 +214,8 @@ func TestStatusFooterGitAndDividerAdaptToTheme(t *testing.T) {
 	for _, tt := range []struct {
 		mode, gitSGR, borderSGR string
 	}{
-		{mode: "dark", gitSGR: "\033[38;5;179m", borderSGR: "\033[38;5;237m"},
-		{mode: "light", gitSGR: "\033[38;5;136m", borderSGR: "\033[38;5;252m"},
+		{mode: "dark", gitSGR: "\033[38;5;179m", borderSGR: "\033[38;5;236m"},
+		{mode: "light", gitSGR: "\033[38;5;136m", borderSGR: "\033[38;5;253m"},
 	} {
 		t.Run(tt.mode, func(t *testing.T) {
 			configureCLITheme(tt.mode)
@@ -239,12 +239,12 @@ func TestContextFooterColorsOnlyValuesByUrgency(t *testing.T) {
 	configureCLITheme("dark")
 
 	normal := strings.Join(renderContextStatusGroups(10, 100, .8), " ")
-	if !strings.Contains(normal, "\033[38;5;248mCTX") || !strings.Contains(normal, "\033[38;5;251m10 (10%)") {
+	if !strings.Contains(normal, "\033[38;5;247mCTX") || !strings.Contains(normal, "\033[38;5;252m10 (10%)") {
 		t.Fatalf("normal context should use subtle label and neutral value: %q", normal)
 	}
 
 	warning := strings.Join(renderContextStatusGroups(75, 100, .8), " ")
-	if !strings.Contains(warning, "\033[38;5;248mCOMPACT") || !strings.Contains(warning, "\033[38;5;179m5%") {
+	if !strings.Contains(warning, "\033[38;5;247mCOMPACT") || !strings.Contains(warning, "\033[38;5;179m5%") {
 		t.Fatalf("near-threshold context should warn only on values: %q", warning)
 	}
 
