@@ -64,7 +64,7 @@ func (m *chatTUI) setTranscriptBlock(index int, rendered string, source transcri
 	m.ensureTranscriptSources()
 	m.transcript[index] = rendered
 	m.transcriptSources[index] = source
-	m.liveDirtyIdx = append(m.liveDirtyIdx, index)
+	m.markLiveDirty(index)
 	m.transcriptDirty = true
 }
 
@@ -76,6 +76,21 @@ func (m *chatTUI) removeTranscriptBlock(index int) {
 	m.transcript = append(m.transcript[:index], m.transcript[index+1:]...)
 	m.transcriptSources = append(m.transcriptSources[:index], m.transcriptSources[index+1:]...)
 	m.removeWrappedBlock(index)
+	// Pending re-wrap indices move with the transcript: entries above the
+	// removed block shift down by one, the removed block's own entry (if any)
+	// is gone. Without this a later setLiveBlock would re-wrap the wrong block
+	// and the mutated one would keep its stale wrap.
+	kept := m.liveDirtyIdx[:0]
+	for _, idx := range m.liveDirtyIdx {
+		switch {
+		case idx == index:
+		case idx > index:
+			kept = append(kept, idx-1)
+		default:
+			kept = append(kept, idx)
+		}
+	}
+	m.liveDirtyIdx = kept
 }
 
 func (m *chatTUI) truncateTranscriptBlocks(length int) {
@@ -84,6 +99,13 @@ func (m *chatTUI) truncateTranscriptBlocks(length int) {
 	m.transcript = m.transcript[:length]
 	m.transcriptSources = m.transcriptSources[:length]
 	m.truncateWrappedBlocks(length)
+	kept := m.liveDirtyIdx[:0]
+	for _, idx := range m.liveDirtyIdx {
+		if idx < length {
+			kept = append(kept, idx)
+		}
+	}
+	m.liveDirtyIdx = kept
 }
 
 func (m *chatTUI) renderTranscriptSource(source transcriptSource, terminalWidth int) string {
@@ -425,8 +447,21 @@ func (m *chatTUI) setLiveBlock(idx int, rendered string) {
 		return
 	}
 	m.transcript[idx] = rendered
-	m.liveDirtyIdx = append(m.liveDirtyIdx, idx)
+	m.markLiveDirty(idx)
 	m.transcriptDirty = true
+}
+
+// markLiveDirty records idx for re-wrapping at the next Update pass. Repeated
+// sets of the same block within one pass collapse to a single entry, so a
+// streaming burst doesn't re-run rewrapBlock's O(nBlocks) prefix scan for the
+// same block.
+func (m *chatTUI) markLiveDirty(idx int) {
+	for _, d := range m.liveDirtyIdx {
+		if d == idx {
+			return
+		}
+	}
+	m.liveDirtyIdx = append(m.liveDirtyIdx, idx)
 }
 
 type clipboardCopyMsg struct {

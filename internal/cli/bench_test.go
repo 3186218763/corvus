@@ -52,3 +52,17 @@ func BenchmarkAppendBlock(b *testing.B) {
 		m.appendWrappedBlocks(from, 120)
 	}
 }
+
+// BenchmarkRewrapLastBlock measures the streaming hot path: one transcript
+// block rewritten in place (setLiveBlock) and re-wrapped every iteration,
+// exactly what a streamed answer/paragraph does per Update pass.
+func BenchmarkRewrapLastBlock(b *testing.B) {
+	m := newTestChatTUI()
+	m.appendTranscriptBlock(benchTranscriptContent(1), transcriptSource{kind: transcriptSourceFixed})
+	m.appendWrappedBlocks(0, 120)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		m.setLiveBlock(len(m.transcript)-1, benchTranscriptContent(1))
+		m.rewrapBlock(len(m.transcript)-1, 120)
+	}
+}

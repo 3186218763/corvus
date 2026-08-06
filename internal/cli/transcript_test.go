@@ -473,6 +473,26 @@ func TestWrappedCacheEqualsFullWrapAfterMutations(t *testing.T) {
 	}
 }
 
+// TestClearTranscriptDisplayResetsWrapCache proves a display clear drops the
+// whole wrap cache together with any pending re-wrap indices, so the next
+// append starts from a clean slate instead of re-wrapping stale blocks.
+func TestClearTranscriptDisplayResetsWrapCache(t *testing.T) {
+	m := newTestChatTUI()
+	m.appendTranscriptBlock("block a", transcriptSource{kind: transcriptSourceFixed})
+	m.appendTranscriptBlock("block b", transcriptSource{kind: transcriptSourceFixed})
+	m.appendWrappedBlocks(0, 80)
+	m.setLiveBlock(0, "block a'")
+	if len(m.wrappedLines) == 0 || len(m.blockLineCounts) == 0 || len(m.liveDirtyIdx) == 0 {
+		t.Fatalf("precondition: wrap cache should be populated and dirty, got wrappedLines=%d blockLineCounts=%d liveDirtyIdx=%v",
+			len(m.wrappedLines), len(m.blockLineCounts), m.liveDirtyIdx)
+	}
+	m.clearTranscriptDisplay()
+	if len(m.wrappedLines) != 0 || len(m.blockLineCounts) != 0 || len(m.liveDirtyIdx) != 0 {
+		t.Fatalf("clearTranscriptDisplay should reset the wrap cache, got wrappedLines=%d blockLineCounts=%d liveDirtyIdx=%v",
+			len(m.wrappedLines), len(m.blockLineCounts), m.liveDirtyIdx)
+	}
+}
+
 func TestWrapBlockEquivalence(t *testing.T) {
 	blocks := mixedBlocks()
 	for _, width := range []int{20, 40, 80} {

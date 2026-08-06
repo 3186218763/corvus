@@ -323,6 +323,72 @@ func TestTranscriptViewportSizing(t *testing.T) {
 	}
 }
 
+// TestUpdateKeepsWrapCacheInSyncAcrossRemoveAndSet reproduces the stale-cache
+// bug: a block mutated via setTranscriptBlock, then a block BEFORE it removed
+// in the same Update pass, then setLiveBlock on the new last block. The
+// pending re-wrap index must shift with the removal; otherwise the mutated
+// early block is never re-wrapped and the cache keeps its pre-mutation wrap.
+func TestUpdateKeepsWrapCacheInSyncAcrossRemoveAndSet(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+
+	blocks := []string{
+		"first block",
+		strings.Repeat("second block content ", 6),
+		"third block",
+		strings.Repeat("fourth block content ", 6),
+	}
+	for _, b := range blocks {
+		m.appendTranscriptBlock(b, transcriptSource{kind: transcriptSourceFixed})
+	}
+	// Pre-wrap the appended blocks exactly as a previous Update pass would
+	// have (the wrapper only wraps blocks appended during update()).
+	m.appendWrappedBlocks(len(m.blockLineCounts), m.viewport.Width())
+	if want := fullWrap(m.transcript, m.viewport.Width()); !reflect.DeepEqual(m.wrappedLines, want) {
+		t.Fatalf("precondition: cache should be fully wrapped:\n%q\nvs\n%q", m.wrappedLines, want)
+	}
+
+	// One pass worth of mutations, mirroring commitReasoning + commitPending:
+	// dirty an early block, remove a block before it, then dirty the new last
+	// block. The wrapper's drain must re-wrap BOTH mutated blocks.
+	m.setTranscriptBlock(2, strings.Repeat("mutated second block ", 8), transcriptSource{kind: transcriptSourceFixed})
+	m.removeTranscriptBlock(1)
+	m.setLiveBlock(3, strings.Repeat("mutated fourth block ", 8))
+	m0, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+
+	if want := fullWrap(m.transcript, m.viewport.Width()); !reflect.DeepEqual(m.wrappedLines, want) {
+		t.Fatalf("wrapped cache out of sync after remove+set pass:\n%q\nvs\n%q", m.wrappedLines, want)
+	}
+}
+
+// TestUpdateTranscriptDirtyOnlyRebuildsWrapCache proves the fallback for a
+// transcriptDirty flag with no tracked live index: the wrapper rebuilds the
+// whole wrap cache, so a direct (setter-bypassing) write still renders fresh.
+func TestUpdateTranscriptDirtyOnlyRebuildsWrapCache(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+
+	for _, b := range []string{"alpha", "beta", strings.Repeat("gamma content ", 8)} {
+		m.appendTranscriptBlock(b, transcriptSource{kind: transcriptSourceFixed})
+	}
+	m0, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+
+	m.transcript[2] = strings.Repeat("mutated gamma ", 10)
+	m.transcriptDirty = true
+	m0, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+
+	if want := fullWrap(m.transcript, m.viewport.Width()); !reflect.DeepEqual(m.wrappedLines, want) {
+		t.Fatalf("transcriptDirty-only rebuild mismatch:\n%q\nvs\n%q", m.wrappedLines, want)
+	}
+}
+
 // TestStatusLineWrapAccounting proves that computeStatusLineCount correctly
 // predicts the rendered row count of the status block (working + mode/state line
 // + data line) when wrapping is triggered on a narrow terminal, and that

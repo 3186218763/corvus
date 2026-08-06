@@ -2394,7 +2394,7 @@ func (m *chatTUI) toggleShellOutput() {
 				preview[i] = dim(clampPlain(lines[i], innerW))
 			}
 			preview[shellPreviewLines] = dim(fmt.Sprintf("… %d more lines (Ctrl+B)", total-shellPreviewLines))
-			m.transcript[lastIdx] = connectorBlock(preview)
+			m.setLiveBlock(lastIdx, connectorBlock(preview))
 		}
 	} else {
 		// Expand: show up to shellExpandMaxLines lines.
@@ -2410,9 +2410,8 @@ func (m *chatTUI) toggleShellOutput() {
 		if total > shellExpandMaxLines {
 			rendered = append(rendered, dim(fmt.Sprintf("… %d more lines", total-shellExpandMaxLines)))
 		}
-		m.transcript[lastIdx] = connectorBlock(rendered)
+		m.setLiveBlock(lastIdx, connectorBlock(rendered))
 	}
-	m.transcriptDirty = true
 	if m.nativeScrollback {
 		m.commitLine(m.transcript[lastIdx])
 	}
