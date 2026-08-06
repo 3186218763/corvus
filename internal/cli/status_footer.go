@@ -44,8 +44,8 @@ func footerMetric(label, value string) string {
 }
 
 // formatElapsedFixed renders elapsed seconds right-aligned to a stable 3-column
-// numeric width (>=1000 clamps to 999); locale fmt strings add the unit so the
-// display is a fixed 4 columns and never jitters.
+// numeric width (>=999 clamps to 999); locale fmt strings add the unit (e.g.
+// "s"/"秒") so the display width never jitters.
 func formatElapsedFixed(sec int) string {
 	if sec >= 999 {
 		sec = 999

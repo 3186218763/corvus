@@ -81,7 +81,7 @@ All paths that change `m.transcript` and how the cache tracks them:
 - Create: `internal/cli/motion.go`
 - Test: `internal/cli/motion_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```go
 package cli
@@ -120,7 +120,7 @@ func TestWorkingCmdsGatesSpinnerTick(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 go test ./internal/cli/ -run 'TestMotionEnvHelpers|TestWorkingCmdsGatesSpinnerTick' -v
@@ -128,7 +128,7 @@ go test ./internal/cli/ -run 'TestMotionEnvHelpers|TestWorkingCmdsGatesSpinnerTi
 
 Expected: FAIL — undefined `motionEnabled`/`scrollRepaintEnabled`/`workingCmds`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `internal/cli/motion.go`:
 
@@ -177,7 +177,7 @@ func (m chatTUI) workingBatch() tea.Cmd {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 ```bash
 go test ./internal/cli/ -run 'TestMotionEnvHelpers|TestWorkingCmdsGatesSpinnerTick' -v
@@ -185,7 +185,7 @@ go test ./internal/cli/ -run 'TestMotionEnvHelpers|TestWorkingCmdsGatesSpinnerTi
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/cli/motion.go internal/cli/motion_test.go
@@ -200,7 +200,7 @@ git commit -m "feat(cli): reduced-motion and scroll-repaint env helpers"
 - Modify: `internal/cli/chat_tui.go` (struct fields ~211; `newChatTUI` ~556; Update wrapper ~859)
 - Modify: `internal/cli/chat_tui_test.go` (~2917/2921 test families)
 
-- [ ] **Step 1: Write the failing test (rewrite the two ClearScreen families)**
+- [x] **Step 1: Write the failing test (rewrite the two ClearScreen families)**
 
 Replace `TestRegularForceGotoBottomScrollJumpRequestsClearScreen` and the trailing assertions of `TestSessionSwitchSuppressesOneClearScreen` (chat_tui_test.go) with:
 
@@ -285,7 +285,7 @@ Keep `TestSessionSwitchSuppressesOneClearScreen` but change its final assertion 
 	}
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 go test ./internal/cli/ -run 'TestRegularForceGotoBottomScrollJumpNoClearScreenByDefault|TestScrollRepaintEnvRestoresClearScreen|TestSessionSwitchSuppressesOneClearScreen' -v
@@ -293,7 +293,7 @@ go test ./internal/cli/ -run 'TestRegularForceGotoBottomScrollJumpNoClearScreenB
 
 Expected: FAIL — wrapper still emits ClearScreen unconditionally.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. Add field next to `sessionSwitch` (chat_tui.go ~211):
 
@@ -318,7 +318,7 @@ Expected: FAIL — wrapper still emits ClearScreen unconditionally.
 	}
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 go test ./internal/cli/ -run 'TestRegularForceGotoBottomScrollJumpNoClearScreenByDefault|TestScrollRepaintEnvRestoresClearScreen|TestSessionSwitchSuppressesOneClearScreen' -v
@@ -327,7 +327,7 @@ go test ./internal/cli/ -count=1
 
 Expected: PASS; full package PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/cli/chat_tui.go internal/cli/chat_tui_test.go
@@ -344,7 +344,7 @@ git commit -m "feat(cli): no ClearScreen on scroll by default; env opt-in legacy
 - Test: `internal/cli/transcript_test.go`
 - Modify: `internal/cli/bench_test.go`
 
-- [ ] **Step 1: Write the failing property test**
+- [x] **Step 1: Write the failing property test**
 
 Add to `internal/cli/transcript_test.go`:
 
@@ -459,7 +459,7 @@ func TestWrapBlockEquivalence(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 go test ./internal/cli/ -run 'TestWrappedCacheEqualsFullWrapAfterMutations|TestWrapBlockEquivalence' -v
@@ -467,7 +467,7 @@ go test ./internal/cli/ -run 'TestWrappedCacheEqualsFullWrapAfterMutations|TestW
 
 Expected: FAIL — `wrapBlock`, `appendWrappedBlocks`, `rewrapBlock`, `setLiveBlock`, `truncateWrappedBlocks`, `removeWrappedBlock`, `rebuildWrappedLines`, `blockLineCounts` undefined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. `internal/cli/transcript.go` — add cache ops after `wrapTranscript`:
 
@@ -665,7 +665,7 @@ func (m *chatTUI) truncateTranscriptBlocks(length int) {
 
 (Remove the old `wrapped := wrapTranscript(...)` / `cm.wrappedLines = strings.Split(...)` lines.)
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 go test ./internal/cli/ -run 'TestWrappedCacheEqualsFullWrapAfterMutations|TestWrapBlockEquivalence' -v
@@ -674,7 +674,7 @@ go test ./internal/cli/ -count=1
 
 Expected: PASS; full package PASS.
 
-- [ ] **Step 5: Add `BenchmarkAppendBlock` to `internal/cli/bench_test.go`**
+- [x] **Step 5: Add `BenchmarkAppendBlock` to `internal/cli/bench_test.go`**
 
 ```go
 func BenchmarkAppendBlock(b *testing.B) {
@@ -700,7 +700,7 @@ go test ./internal/cli/ -run '^$' -bench 'BenchmarkWrapTranscript/lines=10000' -
 
 Expected: append-block is orders of magnitude below the 10k-line full wrap (~58ms).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/cli/transcript.go internal/cli/chat_tui.go internal/cli/transcript_test.go internal/cli/bench_test.go
@@ -716,7 +716,7 @@ git commit -m "feat(cli): incremental per-block transcript wrap cache"
 - Modify: `internal/cli/chat_tui.go` (fields, Update wrapper, `bottomRows`, `View`)
 - Test: `internal/cli/chat_tui_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `internal/cli/chat_tui_test.go`:
 
@@ -764,7 +764,7 @@ Add the shared counter at package scope in `chat_tui_test.go`:
 var panelRenderCounts = map[string]int{}
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 go test ./internal/cli/ -run 'TestBottomPanelsRenderOncePerEvent|TestBottomPanelsFallbackWhenInvalid' -v
@@ -772,7 +772,7 @@ go test ./internal/cli/ -run 'TestBottomPanelsRenderOncePerEvent|TestBottomPanel
 
 Expected: FAIL — `panelRenderHook`, `panels`, `panelsValid`, `renderBottomPanels` undefined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. `internal/cli/bottom_panels.go`:
 
@@ -905,7 +905,7 @@ func (m chatTUI) bottomRows() int {
 
 Also replace the `renderMainManagerFooter()` call in `View` (line ~2950) with `panels.managerFooter` (fallback when `!panelsValid` is covered by the local cache copy above).
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 go test ./internal/cli/ -run 'TestBottomPanelsRenderOncePerEvent|TestBottomPanelsFallbackWhenInvalid' -v
@@ -914,7 +914,7 @@ go test ./internal/cli/ -count=1
 
 Expected: PASS; full package PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/cli/bottom_panels.go internal/cli/chat_tui.go internal/cli/chat_tui_test.go
@@ -931,7 +931,7 @@ git commit -m "feat(cli): single-pass bottom panel cache"
 - Modify: `internal/i18n/{i18n,messages_en,messages_zh,messages_zh_tw}.go`
 - Test: `internal/cli/status_footer_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `internal/cli/status_footer_test.go`:
 
@@ -960,7 +960,7 @@ func TestWorkingLineElapsedStableWidth(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 go test ./internal/cli/ -run 'TestFormatElapsedFixed|TestWorkingLineElapsedStableWidth' -v
@@ -968,7 +968,7 @@ go test ./internal/cli/ -run 'TestFormatElapsedFixed|TestWorkingLineElapsedStabl
 
 Expected: FAIL — `formatElapsedFixed` undefined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. `internal/cli/status_footer.go`:
 
@@ -1025,7 +1025,7 @@ func formatElapsedFixed(sec int) string {
 	ChatStatusRetryingFmt string // "%s retrying (%d/%d)…" — %s = spinner, %d/%d = attempt/max
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 go test ./internal/cli/ -run 'TestFormatElapsedFixed|TestWorkingLineElapsedStableWidth' -v
@@ -1034,7 +1034,7 @@ go test ./internal/cli/ -count=1
 
 Expected: PASS; full package PASS (retry_indicator_test must still pass — RetryingFmt untouched).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/cli/status_footer.go internal/cli/chat_tui.go internal/i18n/ internal/cli/status_footer_test.go
@@ -1049,7 +1049,7 @@ git commit -m "feat(cli): fixed-width elapsed counters"
 - Modify: `internal/cli/chat_tui.go` (spinner tick sites ~1506/3756; `tickToolRunning` ~2442)
 - Test: `internal/cli/motion_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `internal/cli/motion_test.go`:
 
@@ -1085,7 +1085,7 @@ func TestWorkingBatchSuppressesSpinner(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 go test ./internal/cli/ -run 'TestToolFramesFreezeUnderReducedMotion|TestWorkingBatchSuppressesSpinner' -v
@@ -1093,7 +1093,7 @@ go test ./internal/cli/ -run 'TestToolFramesFreezeUnderReducedMotion|TestWorking
 
 Expected: FAIL — tool frames advance regardless of env; `workingBatch` undefined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. `internal/cli/chat_tui.go` — `tickToolRunning` (~2442): gate only the frame advance:
 
@@ -1117,7 +1117,7 @@ New:
 return m, m.workingBatch()
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 go test ./internal/cli/ -run 'TestToolFramesFreezeUnderReducedMotion|TestWorkingBatchSuppressesSpinner' -v
@@ -1126,7 +1126,7 @@ go test ./internal/cli/ -count=1
 
 Expected: PASS; full package PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/cli/chat_tui.go internal/cli/motion_test.go
@@ -1142,7 +1142,7 @@ git commit -m "feat(cli): reduced-motion gate for spinner and tool frames"
 - Modify: `internal/cli/chat_tui.go` (update switch handler; PgUp/PgDn keys ~1140; wheel ~906)
 - Test: `internal/cli/smooth_scroll_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `internal/cli/smooth_scroll_test.go`:
 
@@ -1272,7 +1272,7 @@ func TestSmoothScrollClampsTarget(t *testing.T) {
 
 Note: `update` is the unexported message handler returning `tea.Model` — tests in the same package call it through the local `upd` helper with synthetic `smoothScrollTickMsg`, and pin `smooth.start` to a synthetic clock for determinism.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 go test ./internal/cli/ -run 'TestSmoothScroll' -v
@@ -1280,7 +1280,7 @@ go test ./internal/cli/ -run 'TestSmoothScroll' -v
 
 Expected: FAIL — `smoothScroll`, `smoothScrollTickMsg`, `startSmoothScroll` undefined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. `internal/cli/smooth_scroll.go`:
 
@@ -1397,7 +1397,7 @@ func (s *smoothScroll) offsetAt(now time.Time) (offset int, done bool) {
 
 (Keep the earlier composer-internal wheel handling untouched; this branch is the transcript fall-through.)
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 go test ./internal/cli/ -run 'TestSmoothScroll' -v
@@ -1406,7 +1406,7 @@ go test ./internal/cli/ -count=1
 
 Expected: PASS; full package PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/cli/smooth_scroll.go internal/cli/chat_tui.go internal/cli/smooth_scroll_test.go
@@ -1421,7 +1421,7 @@ git commit -m "feat(cli): smooth scroll interpolation with reduced-motion gate"
 - Modify: `internal/cli/chat_tui.go` (`renderTUIBanner`, ~4696)
 - Test: `internal/cli/chat_render_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `internal/cli/chat_render_test.go`:
 
@@ -1447,7 +1447,7 @@ func TestRenderTUIBannerWideAndNarrow(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 go test ./internal/cli/ -run TestRenderTUIBannerWideAndNarrow -v
@@ -1455,7 +1455,7 @@ go test ./internal/cli/ -run TestRenderTUIBannerWideAndNarrow -v
 
 Expected: FAIL — narrow banner still renders two lines.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Replace `renderTUIBanner` (chat_tui.go ~4696):
 
@@ -1476,7 +1476,7 @@ func renderTUIBanner(label, missing string, width int) string {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 go test ./internal/cli/ -run TestRenderTUIBannerWideAndNarrow -v
@@ -1485,7 +1485,7 @@ go test ./internal/cli/ -count=1
 
 Expected: PASS; full package PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/cli/chat_tui.go internal/cli/chat_render_test.go
@@ -1500,7 +1500,7 @@ git commit -m "feat(cli): width-gated first-screen branding"
 - Modify: `internal/cli/transcript_test.go` (new test) — fixes, if any, land in `md.go`/`toolcard.go`/`chat_tui.go`
 - Test: `internal/cli/transcript_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```go
 func TestTranscriptNeverDoubleBlanks(t *testing.T) {
@@ -1535,7 +1535,7 @@ func TestCommitSpacerNeverDoubleSpaces(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they pass (regression pin)**
+- [x] **Step 2: Run tests to verify they pass (regression pin)**
 
 ```bash
 go test ./internal/cli/ -run 'TestTranscriptNeverDoubleBlanks|TestCommitSpacerNeverDoubleSpaces' -v
@@ -1543,7 +1543,7 @@ go test ./internal/cli/ -run 'TestTranscriptNeverDoubleBlanks|TestCommitSpacerNe
 
 Expected: PASS immediately — these pin the existing invariant. Then audit:
 
-- [ ] **Step 3: Audit and fix any inconsistencies**
+- [x] **Step 3: Audit and fix any inconsistencies**
 
 Check these patterns; fix only actual double blanks / trailing-blank-before-spacer defects, nothing else:
 1. `commitSpacer()` already skips when the last block is blank or absent (verified by the test above).
@@ -1552,7 +1552,7 @@ Check these patterns; fix only actual double blanks / trailing-blank-before-spac
 
 Fix anything found with the smallest change (trim trailing newline at the block boundary). If nothing is found, record "audit clean" in the commit message — the two tests are the acceptance.
 
-- [ ] **Step 4: Run full tests**
+- [x] **Step 4: Run full tests**
 
 ```bash
 go test ./internal/cli/ -count=1
@@ -1560,7 +1560,7 @@ go test ./internal/cli/ -count=1
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/cli/transcript_test.go [fixed files if any]
@@ -1576,7 +1576,7 @@ git commit -m "test(cli): pin single-blank-line transcript density"
 - Modify: `internal/cli/style.go` (`muted`)
 - Test: `internal/cli/md_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `internal/cli/md_test.go`:
 
@@ -1605,7 +1605,7 @@ func TestInlineCodeSpanStillAccentOutsideTable(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 go test ./internal/cli/ -run 'TestTableCodeSpanNeutral|TestInlineCodeSpanStillAccentOutsideTable' -v
@@ -1613,7 +1613,7 @@ go test ./internal/cli/ -run 'TestTableCodeSpanNeutral|TestInlineCodeSpanStillAc
 
 Expected: FAIL — table code span uses accent.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. `internal/cli/style.go` — add next to `accent`:
 
@@ -1657,7 +1657,7 @@ func (r *mdRenderer) collectCells(parent ast.Node, src []byte) []string {
 			}
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 go test ./internal/cli/ -run 'TestTableCodeSpanNeutral|TestInlineCodeSpanStillAccentOutsideTable' -v
@@ -1666,7 +1666,7 @@ go test ./internal/cli/ -count=1
 
 Expected: PASS; full package PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/cli/md.go internal/cli/style.go internal/cli/md_test.go
@@ -1682,7 +1682,7 @@ git commit -m "feat(cli): neutral code spans inside table cells"
 - Modify: `internal/cli/diffview_test.go` (theme slots)
 - Create: `internal/cli/color_discipline_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `internal/cli/color_discipline_test.go`:
 
@@ -1747,7 +1747,7 @@ func TestNoHardcodedColorCodes(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 go test ./internal/cli/ -run TestNoHardcodedColorCodes -v
@@ -1755,7 +1755,7 @@ go test ./internal/cli/ -run TestNoHardcodedColorCodes -v
 
 Expected: FAIL — `diffview.go` still contains `\033[48;5;22m` etc.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. `internal/cli/diffview.go` — delete the four constants (lines ~29–32):
 
@@ -1772,7 +1772,7 @@ Expected: FAIL — `diffview.go` still contains `\033[48;5;22m` etc.
 	line := diffBar('+', "a + b", "x.go", 40, bgSGR(activeCLITheme.diffAddBG), fgSGR(activeCLITheme.success), 12, 3)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 go test ./internal/cli/ -run 'TestNoHardcodedColorCodes|TestDiffBarReappliesBackground' -v
@@ -1781,7 +1781,7 @@ go test ./internal/cli/ -count=1
 
 Expected: PASS; full package PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/cli/diffview.go internal/cli/diffview_test.go internal/cli/color_discipline_test.go
@@ -1795,7 +1795,7 @@ git commit -m "test(cli): forbid hardcoded SGR colors; delete dead diff constant
 **Files:**
 - Create: `cmd/spike-shimmer/main.go` (temporary; deleted at go/no-go)
 
-- [ ] **Step 1: Build the spike**
+- [x] **Step 1: Build the spike**
 
 ```go
 package main
@@ -1837,13 +1837,13 @@ func main() {
 
 (If the `lipgloss.Color(...)` conversion from the ramp needs adjustment, adapt in the spike — it is exploratory, not TDD.)
 
-- [ ] **Step 2: Run and decide**
+- [x] **Step 2: Run and decide**
 
 ```bash
 go run ./cmd/spike-shimmer
 ```
 
-- [ ] **Step 3: Record go/no-go and clean up**
+- [x] **Step 3: Record go/no-go and clean up**
 
 - **Go:** keep shimmer in the design — a follow-up task integrates it behind `motionEnabled()`.
 - **No-go:** delete `cmd/spike-shimmer/` and note the decision in the final commit.
@@ -1859,7 +1859,7 @@ Either way: `git rm -r cmd/spike-shimmer` (if no-go) and commit `docs: record sh
 - Modify: `docs/superpowers/plans/2026-08-06-tui-render-animation-p15.md` (this file: coverage table below)
 - Test: full suite
 
-- [ ] **Step 1: README env docs**
+- [x] **Step 1: README env docs**
 
 Add to the environment/configuration section of both READMEs:
 
@@ -1872,7 +1872,7 @@ TUI environment:
   (disables smooth scroll).
 ```
 
-- [ ] **Step 2: Full verification**
+- [x] **Step 2: Full verification**
 
 ```bash
 export PATH="$HOME/.local/go/bin:$HOME/go/bin:$PATH"
@@ -1884,7 +1884,7 @@ make build
 
 Expected: all PASS; build succeeds; benchmark contrast (append vs full wrap) recorded in the plan's coverage table.
 
-- [ ] **Step 3: Manual acceptance (user)**
+- [x] **Step 3: Manual acceptance (user)**
 
 Verify on the user's terminal (and at least one of Warp / iTerm2 / Windows Terminal / konsole):
 1. Streaming a long answer at 5k+ lines feels fluid, no per-token jank.
@@ -1894,7 +1894,7 @@ Verify on the user's terminal (and at least one of Warp / iTerm2 / Windows Termi
 5. First screen shows the narrow/wide banner per terminal width.
 6. Tables with code spans look calmer; diff view colors match the theme.
 
-- [ ] **Step 4: Spec-coverage table (append to this plan)**
+- [x] **Step 4: Spec-coverage table (append to this plan)**
 
 | Spec § | Task |
 |--------|------|
@@ -1912,7 +1912,7 @@ Verify on the user's terminal (and at least one of Warp / iTerm2 / Windows Termi
 | §6 benchmarks | 3, 13 |
 | §7 docs/env | 13 |
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md README.zh-CN.md docs/superpowers/plans/2026-08-06-tui-render-animation-p15.md
@@ -1933,3 +1933,29 @@ git commit -m "docs: P1.5 env vars, plan coverage table"
 - Work on a feature branch or worktree (`using-git-worktrees`) before Task 1.
 - If a task's tests reveal a wider refactor need, stop and surface it — do not expand scope silently.
 - Do not start P2 Tasks or shimmer integration in this plan.
+
+---
+
+## Spec-coverage table (Task 13)
+
+| Spec § | Task |
+|--------|------|
+| §4.1 scroll repaint | 2 |
+| §4.2 incremental wrap + mutation inventory | 3 |
+| §4.3 bottom panels single pass | 4 |
+| §5.1 motion gate (spinner, tool frames) | 1, 6 |
+| §5.2 smooth scroll | 7 |
+| §5.3 shimmer | 12 (spike, GO — P2 integration behind motion gate) |
+| §5.4 fixed-width elapsed | 5 |
+| §5.5 branding | 8 |
+| §5.6 density | 9 |
+| §5.7 table code cells | 10 |
+| §5.8 color discipline | 11 |
+| §6 benchmarks | 3, 13 |
+
+Benchmarks (Task 13, `-benchmem -count=1`, 24 cores):
+- `BenchmarkAppendBlock`: 10.9 µs/op, 3.0 KB/op, 116 allocs/op
+- `BenchmarkRewrapLastBlock`: 10.0 µs/op, 2.1 KB/op, 104 allocs/op
+- `BenchmarkWrapTranscript/lines=10000/width=80`: 55.3 ms/op, 20.3 MB/op
+- `BenchmarkWrapTranscript/lines=10000/width=120`: 62.9 ms/op, 22.6 MB/op
+- Incremental append is ~5,000× cheaper than the 10k-line full wrap.

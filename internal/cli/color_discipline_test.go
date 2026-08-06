@@ -15,13 +15,7 @@ import (
 // Deliberately does NOT match \033[K (erase), \033[3m (italic), \033[1m (bold),
 // \033[7m (reverse), or OSC sequences.
 var colorCSI = regexp.MustCompile(
-	`\x1b\[[34][0-7]m` +
-		`|\x1b\[9[0-7]m` +
-		`|\x1b\[10[0-7]m` +
-		`|\x1b\[38;5;[0-9]+m` +
-		`|\x1b\[48;5;[0-9]+m` +
-		`|\x1b\[38;2;[0-9]+;[0-9]+;[0-9]+m` +
-		`|\x1b\[48;2;[0-9]+;[0-9]+;[0-9]+m`,
+	`\x1b\[[0-9;]*(?:[34][0-7]|9[0-7]|10[0-7]|(?:38|48);(?:5;[0-9]+|2;[0-9]+;[0-9]+;[0-9]+))m`,
 )
 
 func TestNoHardcodedColorCodes(t *testing.T) {
