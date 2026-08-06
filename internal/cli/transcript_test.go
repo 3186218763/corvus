@@ -18,7 +18,7 @@ func TestAssistantMarkdownHasIdentityAndIndentedBody(t *testing.T) {
 	activeColorProfile = colorprofile.NoTTY
 	configureCLITheme("dark")
 
-	rendered := renderAssistantMarkdown("A concise answer that wraps across the available width.", 32)
+	rendered := renderAssistantMarkdown("A concise answer that wraps across the available width.", 32, true)
 	lines := strings.Split(ansi.Strip(rendered), "\n")
 	if len(lines) < 4 {
 		t.Fatalf("assistant block should contain a header, gap, and wrapped body:\n%s", rendered)
@@ -51,8 +51,8 @@ func TestReplaySectionsKeepAssistantIdentity(t *testing.T) {
 	if len(sections) != 2 {
 		t.Fatalf("replay sections = %d, want user and assistant", len(sections))
 	}
-	if plain := ansi.Strip(sections[1]); !strings.HasPrefix(plain, "  ◆ Corvus\n\n  Version 1.2.3") {
-		t.Fatalf("replayed assistant answer lost its identity: %q", plain)
+	if plain := ansi.Strip(sections[1]); !strings.HasPrefix(plain, "  ◆\n\n  Version 1.2.3") {
+		t.Fatalf("demoted replay should keep a bare diamond and drop the name: %q", plain)
 	}
 }
 
@@ -150,7 +150,7 @@ func TestSelectedTextRestoresMathWithoutReusingRawColumns(t *testing.T) {
 	contentWidth := transcriptContentWidth(m.width, m.nativeScrollback)
 	m.viewport.SetWidth(contentWidth)
 	source := transcriptSource{kind: transcriptSourceMarkdown, raw: `before $\alpha$ after`}
-	rendered := m.renderTranscriptSource(source, m.width)
+	rendered := m.renderTranscriptSource(source, m.width, currentTranscriptMarkers([]transcriptSource{source})[0])
 	m.transcript = []string{rendered}
 	m.transcriptSources = []transcriptSource{source}
 	m.wrappedLines = strings.Split(wrapTranscript(rendered, contentWidth), "\n")
@@ -210,7 +210,7 @@ func TestSelectedTextRestoresMathFromReplayBundle(t *testing.T) {
 			{LocalOnly: true, Content: `local $\beta$ recovery`},
 		},
 	}
-	rendered := m.renderTranscriptSource(source, m.width)
+	rendered := m.renderTranscriptSource(source, m.width, currentTranscriptMarkers([]transcriptSource{source})[0])
 	m.transcript = []string{rendered}
 	m.transcriptSources = []transcriptSource{source}
 	m.wrappedLines = strings.Split(wrapTranscript(rendered, contentWidth), "\n")
@@ -277,7 +277,7 @@ func TestSelectedTextPreservesProseAroundMath(t *testing.T) {
 	contentWidth := transcriptContentWidth(m.width, m.nativeScrollback)
 	m.viewport.SetWidth(contentWidth)
 	source := transcriptSource{kind: transcriptSourceMarkdown, raw: `before $\frac{1}{2}$ after`}
-	rendered := m.renderTranscriptSource(source, m.width)
+	rendered := m.renderTranscriptSource(source, m.width, currentTranscriptMarkers([]transcriptSource{source})[0])
 	m.transcript = []string{rendered}
 	m.transcriptSources = []transcriptSource{source}
 	m.wrappedLines = strings.Split(wrapTranscript(rendered, contentWidth), "\n")
@@ -315,7 +315,7 @@ func TestSelectedTextRestoresMathWrappedAcrossDisplayLinesOnce(t *testing.T) {
 	m.viewport.SetWidth(contentWidth)
 	const latex = `\alpha+\beta+\gamma+\delta+\epsilon+\zeta`
 	source := transcriptSource{kind: transcriptSourceMarkdown, raw: `$` + latex + `$`}
-	rendered := m.renderTranscriptSource(source, m.width)
+	rendered := m.renderTranscriptSource(source, m.width, currentTranscriptMarkers([]transcriptSource{source})[0])
 	m.transcript = []string{rendered}
 	m.transcriptSources = []transcriptSource{source}
 	m.wrappedLines = strings.Split(wrapTranscript(rendered, contentWidth), "\n")
@@ -540,5 +540,199 @@ func TestCommitSpacerNeverDoubleSpaces(t *testing.T) {
 	m.commitLine("b")
 	if strings.Contains(strings.Join(m.transcript, "\n"), "\n\n\n") {
 		t.Fatalf("spacer double-spaced:\n%q", m.transcript)
+	}
+}
+
+func TestAssistantMarkdownHistoryDropsName(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	named := renderAssistantMarkdown("Live answer", 48, true)
+	if plain := ansi.Strip(named); !strings.HasPrefix(plain, "  ◆ Corvus") {
+		t.Fatalf("named header should keep the name, got %q", plain)
+	}
+	history := renderAssistantMarkdown("History answer", 48, false)
+	plain := ansi.Strip(history)
+	if strings.HasPrefix(plain, "  ◆ Corvus") {
+		t.Fatalf("history header must not carry the name, got %q", plain)
+	}
+	if !strings.HasPrefix(plain, "  ◆") {
+		t.Fatalf("history header should keep the diamond, got %q", plain)
+	}
+	if !strings.Contains(history, fgSGR(activeCLITheme.faint)) {
+		t.Fatalf("history diamond should be faint-colored, got %q", history)
+	}
+}
+
+func TestUserBubbleFadedHistory(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	current := renderUserBubble("now", 80, false, true)
+	if !strings.Contains(current, fgSGR(activeCLITheme.accent)) {
+		t.Fatalf("current bubble should use accent SGR, got %q", current)
+	}
+	faded := renderUserBubble("then", 80, false, false)
+	if !strings.Contains(faded, fgSGR(activeCLITheme.userBubbleFaded)) {
+		t.Fatalf("history bubble should use userBubbleFaded SGR, got %q", faded)
+	}
+	if strings.Contains(faded, fgSGR(activeCLITheme.accent)) {
+		t.Fatalf("history bubble must not use full accent, got %q", faded)
+	}
+}
+
+func TestSecondExchangeDemotesFirst(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	m := newTestChatTUI()
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "first question"})
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "first answer"})
+	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+		t.Fatalf("first answer should be named, got %q", plain)
+	}
+	if !strings.Contains(m.transcript[0], fgSGR(activeCLITheme.accent)) {
+		t.Fatalf("first bubble should be current/accent, got %q", m.transcript[0])
+	}
+
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "second question"})
+	if !strings.Contains(m.transcript[0], fgSGR(activeCLITheme.userBubbleFaded)) {
+		t.Fatalf("first bubble should be faded after turn 2, got %q", m.transcript[0])
+	}
+	if strings.Contains(ansi.Strip(m.transcript[1]), "Corvus") {
+		t.Fatalf("first answer must lose the name after turn 2, got %q", m.transcript[1])
+	}
+
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "second answer"})
+	if plain := ansi.Strip(m.transcript[3]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+		t.Fatalf("second answer should be named, got %q", plain)
+	}
+}
+
+// TestNonLiveCommitsKeepMarkers covers the banner (/new, /cls) and tool-card
+// commitTranscriptSource call sites: neither may demote the live exchange.
+func TestNonLiveCommitsKeepMarkers(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	m := newTestChatTUI()
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q"})
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "a"})
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceBanner})
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceToolCard, raw: "bash", aux: `{"command":"ls"}`})
+	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+		t.Fatalf("banner/tool commits must not demote the live answer, got %q", plain)
+	}
+	if !strings.Contains(m.transcript[0], fgSGR(activeCLITheme.accent)) {
+		t.Fatalf("user bubble should stay current, got %q", m.transcript[0])
+	}
+}
+
+func TestUnsendRegainsAssistantName(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	m := newTestChatTUI()
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q1"})
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "a1"})
+	m.bubbleStartIdx = len(m.transcript)
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q2"})
+	if plain := ansi.Strip(m.transcript[1]); strings.Contains(plain, "Corvus") {
+		t.Fatalf("precondition: a1 should be demoted while q2 is pending, got %q", plain)
+	}
+	m.truncateTranscriptBlocks(m.bubbleStartIdx)
+	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+		t.Fatalf("after un-send the previous answer should regain its name, got %q", plain)
+	}
+}
+
+func TestRemoveLastAnswerRetagsPrevious(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	m := newTestChatTUI()
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q"})
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "a1"})
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "a2"})
+	if plain := ansi.Strip(m.transcript[2]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+		t.Fatalf("a2 should be named, got %q", plain)
+	}
+	m.removeTranscriptBlock(2)
+	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+		t.Fatalf("after removing a2, a1 should regain the name, got %q", plain)
+	}
+}
+
+func TestReflowPreservesMarkers(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	m := newTestChatTUI()
+	m.width = 80
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q"})
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "answer"})
+	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+		t.Fatalf("precondition: answer should be named, got %q", plain)
+	}
+	m.reflowTranscript(40)
+	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+		t.Fatalf("reflow must preserve the named marker, got %q", plain)
+	}
+
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q2"})
+	m.reflowTranscript(60)
+	if strings.Contains(ansi.Strip(m.transcript[1]), "Corvus") {
+		t.Fatalf("reflow must preserve demotion, got %q", m.transcript[1])
+	}
+	if !strings.Contains(m.transcript[2], fgSGR(activeCLITheme.accent)) {
+		t.Fatalf("reflow must preserve the user current marker, got %q", m.transcript[2])
+	}
+}
+
+func TestReplayBundleInternalLiveness(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	history := []provider.Message{
+		{Role: provider.RoleUser, Content: "old question"},
+		{Role: provider.RoleAssistant, Content: "old answer"},
+		{Role: provider.RoleUser, Content: "latest question"},
+		{Role: provider.RoleAssistant, Content: "latest answer"},
+	}
+
+	// Live bundle committed through the production path: last internal
+	// assistant named, last internal user full accent.
+	m := newTestChatTUI()
+	m.label = "model-x"
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceReplayBundle, history: history})
+	live := strings.Join(m.transcript, "\n")
+	if !strings.Contains(ansi.Strip(live), "◆ Corvus\n\n  latest answer") {
+		t.Fatalf("live bundle should name the last assistant body, got %q", live)
+	}
+	if strings.Contains(ansi.Strip(live), "Corvus\n\n  old answer") {
+		t.Fatalf("live bundle must not name earlier assistant bodies, got %q", live)
+	}
+	if !strings.Contains(live, fgSGR(activeCLITheme.accent)+"› latest question") {
+		t.Fatalf("live bundle should render the last user full accent, got %q", live)
+	}
+	if !strings.Contains(live, fgSGR(activeCLITheme.userBubbleFaded)) {
+		t.Fatalf("live bundle should fade earlier user bubbles, got %q", live)
+	}
+
+	// A new user message demotes the whole bundle.
+	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "new question"})
+	if plain := ansi.Strip(strings.Join(m.transcript, "\n")); strings.Contains(plain, "Corvus") {
+		t.Fatalf("bundle must carry no name after a new user message, got %q", plain)
+	}
+	if strings.Contains(strings.Join(m.transcript, "\n"), fgSGR(activeCLITheme.accent)+"› latest question") {
+		t.Fatalf("bundle internal user must fade after a new user message, got %q", strings.Join(m.transcript, "\n"))
 	}
 }

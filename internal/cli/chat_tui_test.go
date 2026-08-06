@@ -1408,7 +1408,7 @@ func TestUserBubbleEchoedImmediately(t *testing.T) {
 	// Stand in for startTurn's immediate echo (no controller in the unit harness).
 	m.bubbleStartIdx = len(m.transcript)
 	m.commitLine("")
-	m.commitLine(renderUserBubble("hello world", m.width, m.planMode))
+	m.commitLine(renderUserBubble("hello world", m.width, m.planMode, true))
 	m.bubblePending = true
 	m.state = tuiRunning
 
@@ -1438,7 +1438,7 @@ func TestUserBubbleIsLightweightTranscriptLine(t *testing.T) {
 	activeColorProfile = colorprofile.ANSI256
 	defer func() { activeColorProfile = prevColor }()
 
-	got := renderUserBubble("hello world", 80, false)
+	got := renderUserBubble("hello world", 80, false, true)
 	plain := ansi.Strip(got)
 	if !strings.Contains(plain, "› hello world") {
 		t.Fatalf("user bubble missing prompt text: %q", plain)
@@ -3436,7 +3436,7 @@ func TestUnsendRestoresFoldedPastePlaceholder(t *testing.T) {
 	m.ctrl = control.New(control.Options{})
 	m.bubbleStartIdx = len(m.transcript)
 	m.commitLine("")
-	m.commitLine(renderUserBubble("expanded JSON", m.width, m.planMode))
+	m.commitLine(renderUserBubble("expanded JSON", m.width, m.planMode, true))
 	m.pendingRestore = "[Pasted text #1 · 5 lines] 这是什么?"
 	m.bubblePending = true
 	m.state = tuiRunning

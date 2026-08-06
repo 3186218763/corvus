@@ -2554,7 +2554,7 @@ func (m *chatTUI) streamAnswer() {
 		m.answerIdx = len(m.transcript)
 		m.commitTranscriptSource(source)
 	} else {
-		block := m.renderTranscriptSource(source, m.width)
+		block := m.renderTranscriptSource(source, m.width, currentTranscriptMarkers(m.transcriptSources)[m.answerIdx])
 		m.setTranscriptBlock(m.answerIdx, block, source)
 		m.transcriptDirty = true
 	}
@@ -2575,7 +2575,7 @@ func (m *chatTUI) commitPending() {
 	if m.answerIdx < 0 {
 		m.commitTranscriptSource(source)
 	} else {
-		block := m.renderTranscriptSource(source, m.width)
+		block := m.renderTranscriptSource(source, m.width, currentTranscriptMarkers(m.transcriptSources)[m.answerIdx])
 		m.setTranscriptBlock(m.answerIdx, block, source)
 		m.transcriptDirty = true
 	}
@@ -4675,22 +4675,56 @@ func (m *chatTUI) runMCPPrompt(input string) tea.Cmd {
 // results remain quiet, while interrupted-turn reasoning and tool cards replay
 // from provider-excluded LocalOnly records so restart matches the live view.
 func replaySectionsFor(history []provider.Message, width int) []string {
-	return replaySectionsForWithAssistantRenderer(history, width, renderAssistantMarkdown)
+	return replaySectionsForWithAssistantRenderer(
+		history,
+		width,
+		renderAssistantMarkdown,
+		func(raw string, width int, current bool) string {
+			return renderUserBubble(raw, width, false, current)
+		},
+		false,
+		false,
+	)
 }
 
+// replaySectionsForWithAssistantRenderer renders replay history sections. When
+// nameLast/lastUserFull are set, the last assistant body and the last user
+// bubble of the section list carry the live markers (used when this bundle is
+// the bottom-most block); every other section renders demoted history.
 func replaySectionsForWithAssistantRenderer(
 	history []provider.Message,
 	width int,
-	renderAssistant func(string, int) string,
+	renderAssistant func(string, int, bool) string,
+	renderUser func(string, int, bool) string,
+	nameLast bool,
+	lastUserFull bool,
 ) []string {
+	lastUserSection := -1
+	lastAssistantBody := -1
+	for i, m := range history {
+		switch {
+		case m.LocalOnly:
+			if strings.TrimSpace(m.Content) != "" {
+				lastAssistantBody = i
+			}
+		case m.Role == provider.RoleUser:
+			if _, isSteer := agent.SteerText(m.Content); !isSteer {
+				lastUserSection = i
+			}
+		case m.Role == provider.RoleAssistant:
+			if strings.TrimSpace(m.Content) != "" {
+				lastAssistantBody = i
+			}
+		}
+	}
 	var out []string
-	for _, m := range history {
+	for i, m := range history {
 		if m.LocalOnly {
 			if reasoning := strings.TrimSpace(m.ReasoningContent); reasoning != "" {
 				out = append(out, dim("  ▎ "+i18n.M.ChatThinking)+"\n"+reasoningBlock(reasoning, width, 0)+"\n\n")
 			}
 			if body := strings.TrimSpace(m.Content); body != "" {
-				out = append(out, renderAssistant(body, width)+"\n\n")
+				out = append(out, renderAssistant(body, width, i == lastAssistantBody && nameLast)+"\n\n")
 			}
 			for _, call := range m.ToolCalls {
 				out = append(out, toolCard(call.Name, "", width)+"\n\n")
@@ -4708,14 +4742,14 @@ func replaySectionsForWithAssistantRenderer(
 				continue
 			}
 			content := control.StripComposePrefixes(m.Content)
-			out = append(out, renderUserBubble(content, width, false)+"\n\n")
+			out = append(out, renderUser(content, width, i == lastUserSection && lastUserFull)+"\n\n")
 		case provider.RoleAssistant:
 			if reasoning := strings.TrimSpace(m.ReasoningContent); reasoning != "" {
 				out = append(out, dim("  ▎ "+i18n.M.ChatThinking)+"\n"+reasoningBlock(reasoning, width, 0)+"\n\n")
 			}
 			body := strings.TrimSpace(m.Content)
 			if body != "" {
-				out = append(out, renderAssistant(body, width)+"\n\n")
+				out = append(out, renderAssistant(body, width, i == lastAssistantBody && nameLast)+"\n\n")
 			}
 			for _, call := range m.ToolCalls {
 				out = append(out, toolCard(call.Name, call.Arguments, width)+"\n\n")
@@ -4757,7 +4791,7 @@ func wrapForViewport(text string, width int, fg cliColor) string {
 // renderUserBubble renders the just-submitted prompt as a transcript line. Keep
 // it visually lighter than the real bottom composer so a fresh session does not
 // look like it has a second input box in the transcript.
-func renderUserBubble(line string, width int, planMode bool) string {
+func renderUserBubble(line string, width int, planMode bool, current bool) string {
 	line = displayLineForImageRefs(line)
 	prefix := "› "
 	if planMode {
@@ -4766,7 +4800,11 @@ func renderUserBubble(line string, width int, planMode bool) string {
 	if !colorOn() {
 		return "│ " + prefix + line
 	}
-	return "  " + accent(prefix+line)
+	color := activeCLITheme.accent
+	if !current {
+		color = activeCLITheme.userBubbleFaded
+	}
+	return "  " + themeFg(color, prefix+line)
 }
 
 var cliImageRefRe = regexp.MustCompile(`(?:^|\s)@\.corvus/attachments/clipboard-\d{8}-\d{6}\.\d+(?:-(?:\d{6}|[a-f0-9]{8}))?\.(?:png|jpg|jpeg|gif|webp)`)
