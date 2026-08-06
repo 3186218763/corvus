@@ -152,6 +152,8 @@ func (m chatTUI) handleQuickPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		if m.pendingModelSwitch != nil {
 			return m, m.pendingModelSwitch
 		}
+	case quickPickerCommand:
+		return m, m.runCommandPaletteItem(choice.ID)
 	}
 	return m, nil
 }

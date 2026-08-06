@@ -1406,6 +1406,15 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+y", "super+y", "meta+y":
 			m.toggleYoloMode()
 			return m, nil
+		case "ctrl+p":
+			// Idle-only command palette. Completion / quick pickers / approvals
+			// already claim Ctrl+P earlier for prev-item navigation (spec §8.2.1).
+			// Cheatsheet also claims keys while open, so we only reach here on
+			// the main shell with no higher modal.
+			if m.state == tuiIdle {
+				m.openCommandPalette()
+			}
+			return m, nil
 		case "ctrl+o":
 			m.toggleVerboseReasoning(m.state != tuiRunning)
 			return m, finalize(m, cmds)
