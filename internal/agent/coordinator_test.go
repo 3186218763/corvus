@@ -2,9 +2,9 @@ package agent
 
 import (
 	"context"
+	"corvus/internal/event"
 	"encoding/json"
 	"fmt"
-	"corvus/internal/event"
 	"strings"
 	"testing"
 

@@ -2,10 +2,10 @@ package agent
 
 import (
 	"context"
+	"corvus/internal/event"
 	"errors"
 	"os"
 	"path/filepath"
-	"corvus/internal/event"
 	"strings"
 	"testing"
 

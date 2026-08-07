@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/pflag"
 	"corvus/internal/agent"
 	"corvus/internal/provider"
+	"github.com/spf13/pflag"
 )
 
 func TestSplitAllowedToolRules(t *testing.T) {

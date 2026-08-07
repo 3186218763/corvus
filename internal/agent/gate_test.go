@@ -2,8 +2,8 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"corvus/internal/event"
+	"encoding/json"
 	"strings"
 	"testing"
 

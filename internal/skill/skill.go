@@ -134,7 +134,7 @@ func IsValidName(name string) bool { return config.IsValidSkillName(name) }
 // config.CorvusHomeDir(), or HomeDir/.corvus when HomeDir is explicitly set.
 type Options struct {
 	HomeDir          string
-	CorvusHomeDir  string
+	CorvusHomeDir    string
 	ProjectRoot      string
 	CustomPaths      []string
 	PluginPaths      map[string][]string // canonical custom root -> installed plugin package names
@@ -155,7 +155,7 @@ type Options struct {
 // Store resolves skills across the configured roots.
 type Store struct {
 	homeDir          string
-	corvusHomeDir  string
+	corvusHomeDir    string
 	projectRoot      string
 	customPaths      []string
 	pluginPaths      map[string][]string
@@ -213,7 +213,7 @@ func New(opts Options) *Store {
 	}
 	return &Store{
 		homeDir:          home,
-		corvusHomeDir:  corvusHome,
+		corvusHomeDir:    corvusHome,
 		projectRoot:      root,
 		customPaths:      custom,
 		pluginPaths:      pluginPaths,
