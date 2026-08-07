@@ -21,8 +21,8 @@ func trueColorTerminal() bool {
 }
 
 const (
-	ansiReset   = "\033[0m"
-	ansiBold    = "\033[1m"
+	ansiReset = "\033[0m"
+	ansiBold  = "\033[1m"
 	// ansiDim is the SGR dim modifier, re-applied after chroma resets on
 	// deleted diff lines so the whole content reads faded (Codex's DIM).
 	ansiDim     = "\033[2m"
