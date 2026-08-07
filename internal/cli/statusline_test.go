@@ -418,7 +418,7 @@ func TestStatuslineShowsEffortInPersistentFooter(t *testing.T) {
 	content := renderStatuslineViewWithEffort(t, "auto")
 	lines := strings.Split(ansi.Strip(content), "\n")
 	statusLine := lines[len(lines)-1]
-	if !strings.Contains(statusLine, "MODEL deepseek-v4-flash   EFFORT auto") {
+	if !strings.Contains(statusLine, "Model deepseek-v4-flash   Effort auto") {
 		t.Fatalf("session row should keep effort beside the model:\n%s", statusLine)
 	}
 }
@@ -428,7 +428,7 @@ func TestStatuslineOmitsCacheRatesFromPersistentFooter(t *testing.T) {
 
 	content := renderStatuslineViewWithCache(t)
 	plain := ansi.Strip(content)
-	if !strings.Contains(plain, "MODEL deepseek-v4-flash") {
+	if !strings.Contains(plain, "Model deepseek-v4-flash") {
 		t.Fatalf("footer should still show model:\n%s", plain)
 	}
 	if strings.Contains(plain, "CTX") {
@@ -444,7 +444,7 @@ func TestStatuslineShowsEffortWithoutGitOnPersistentFooter(t *testing.T) {
 
 	content := renderStatuslineViewWithGitAndEffort(t)
 	plain := ansi.Strip(content)
-	if !strings.Contains(plain, "MODEL deepseek-v4-flash   EFFORT auto") {
+	if !strings.Contains(plain, "Model deepseek-v4-flash   Effort auto") {
 		t.Fatalf("session row should keep effort beside the model:\n%s", plain)
 	}
 	if strings.Contains(plain, "Corvus@") || strings.Contains(plain, "+3 -1") {
@@ -462,7 +462,7 @@ func TestStatuslineShowsWorkModeOmitsBalanceFromPersistentFooter(t *testing.T) {
 	m.balance = "¥12.34"
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	plain := ansi.Strip(next.(chatTUI).View().Content)
-	if !strings.Contains(plain, "MODEL deepseek-v4-flash   WORK delivery") {
+	if !strings.Contains(plain, "Model deepseek-v4-flash   Work delivery") {
 		t.Fatalf("footer should show model and work mode:\n%s", plain)
 	}
 	if strings.Contains(plain, "BAL") || strings.Contains(plain, "¥12.34") {
@@ -486,7 +486,7 @@ func TestEffortTagExplicitValueUsesThemeInfo(t *testing.T) {
 			m := newTestChatTUI()
 			m.effortLevel = "max"
 			content := m.effortTag()
-			if !strings.Contains(ansi.Strip(content), "EFFORT max") {
+			if !strings.Contains(ansi.Strip(content), "Effort max") {
 				t.Fatalf("status data line should show explicit effort:\n%s", ansi.Strip(content))
 			}
 			if !strings.Contains(content, tt.infoSGR+"max") {

@@ -4134,7 +4134,7 @@ func (m *chatTUI) showStatusDetails() {
 		lines = append(lines, "  profile    "+tag)
 	}
 	if m.effortLevel != "" {
-		// The persistent footer uses an uppercase semantic label. The expanded
+		// The persistent footer uses a Title Case semantic label. The expanded
 		// diagnostic view keeps its sentence-like wording for readability.
 		lines = append(lines, "  effort     effort "+m.effortLevel)
 	}
