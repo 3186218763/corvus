@@ -241,19 +241,21 @@ func mixHex(a, b string, t float64) string {
 }
 
 // inputBoxTintFromBackground computes the composer fill from the probed
-// terminal background: dark shells lift 8% toward white, light shells sink 8%
-// toward black, then the result is blended 84% with the background to mimic a
-// translucent overlay (effective lift/sink is 6.72% = 0.84 × 0.08). The 256
-// colour fallback is the nearest xterm index via ansi.Convert256 — unlike the
-// curated palette slots, this value is computed because it tracks a live
-// background the designer cannot pin.
+// terminal background, keeping the background's hue: dark shells lift 32%
+// toward white (a deep purple shell gets a clearly lighter purple composer),
+// light shells sink 15% toward black for a recessed field. The 256 colour
+// fallback is the nearest xterm index via ansi.Convert256 — unlike the curated
+// palette slots, this value is computed because it tracks a live background
+// the designer cannot pin.
 func inputBoxTintFromBackground(rgb terminalRGB, dark bool) cliColor {
 	bg := fmt.Sprintf("#%02x%02x%02x", rgb.r, rgb.g, rgb.b)
 	ref := "#ffffff"
+	ratio := 0.32
 	if !dark {
 		ref = "#000000"
+		ratio = 0.15
 	}
-	final := mixHex(bg, mixHex(bg, ref, 0.08), 0.84)
+	final := mixHex(bg, ref, ratio)
 	xterm := 0
 	if r, g, b, ok := parseHexColor(final); ok {
 		xterm = int(ansi.Convert256(color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 0xff}))
@@ -479,11 +481,14 @@ func withThemeBorderFG(st lipgloss.Style, c cliColor) lipgloss.Style {
 }
 
 func modeTagStyle(background, foreground cliColor) lipgloss.Style {
-	st := lipgloss.NewStyle().Bold(true).Padding(0, 1)
 	if !colorOn() {
-		return st
+		return lipgloss.NewStyle()
 	}
-	return st.Background(themeLipColor(background)).Foreground(themeLipColor(foreground))
+	return lipgloss.NewStyle().
+		Bold(true).
+		Padding(0, 1).
+		Background(themeLipColor(background)).
+		Foreground(themeLipColor(foreground))
 }
 
 func init() {

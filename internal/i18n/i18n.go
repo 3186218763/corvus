@@ -66,7 +66,6 @@ type Messages struct {
 
 	// chat TUI status line / approval banner.
 	ChatThinking                           string // live reasoning marker label, e.g. "thinking…"
-	ChatThoughtForFmt                      string // collapsed reasoning summary, "%s" = fixed-width elapsed seconds
 	ChatStatusThinkingFmt                  string // "%s thinking… (%ss …)" — %s = spinner, %s = fixed-width elapsed
 	ChatToolWorkingFmt                     string // "%s working · %ss" — %s = frame, %s = fixed-width elapsed
 	ChatStatusRetryingFmt                  string // "%s retrying (%d/%d)…" — %s = spinner, %d/%d = attempt/max
@@ -155,30 +154,30 @@ type Messages struct {
 	AskSubmitHint      string // submit-tab keyboard hint
 
 	// Empty-input "?" keyboard cheatsheet overlay.
-	CheatsheetTitle              string // panel header
-	CheatsheetCloseHint          string // footer hint (Esc closes)
-	CheatsheetStatusLabel        string // status-row body while open
-	CheatsheetSectionNavigation  string
-	CheatsheetSectionModes       string
-	CheatsheetSectionTranscript  string
-	CheatsheetSectionDiscover    string
-	CheatsheetSectionSession     string
-	CheatsheetHintEnter          string
-	CheatsheetHintEsc            string
-	CheatsheetHintPageScroll     string
-	CheatsheetHintHomeEnd        string
-	CheatsheetHintShiftTab       string
-	CheatsheetHintCtrlY          string
-	CheatsheetHintCtrlB          string
-	CheatsheetHintCtrlO          string
-	CheatsheetHintQuestion       string
-	CheatsheetHintCtrlP          string
-	CheatsheetHintSlash          string
-	CheatsheetHintStatus         string
-	CheatsheetHintResume         string
-	CheatsheetHintNew            string
-	CheatsheetHintClear          string
-	CheatsheetHintHelp           string
+	CheatsheetTitle             string // panel header
+	CheatsheetCloseHint         string // footer hint (Esc closes)
+	CheatsheetStatusLabel       string // status-row body while open
+	CheatsheetSectionNavigation string
+	CheatsheetSectionModes      string
+	CheatsheetSectionTranscript string
+	CheatsheetSectionDiscover   string
+	CheatsheetSectionSession    string
+	CheatsheetHintEnter         string
+	CheatsheetHintEsc           string
+	CheatsheetHintPageScroll    string
+	CheatsheetHintHomeEnd       string
+	CheatsheetHintShiftTab      string
+	CheatsheetHintCtrlY         string
+	CheatsheetHintCtrlB         string
+	CheatsheetHintCtrlO         string
+	CheatsheetHintQuestion      string
+	CheatsheetHintCtrlP         string
+	CheatsheetHintSlash         string
+	CheatsheetHintStatus        string
+	CheatsheetHintResume        string
+	CheatsheetHintNew           string
+	CheatsheetHintClear         string
+	CheatsheetHintHelp          string
 
 	// output style listing (/output-style).
 	OutputStyleNone           string // no styles available

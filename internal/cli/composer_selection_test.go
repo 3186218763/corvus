@@ -18,12 +18,10 @@ import (
 func newComposerMouseTestTUI(t *testing.T, width, height int) chatTUI {
 	t.Helper()
 	// `width` is the historical terminal budget that produced SetWidth(width-4).
-	// Expand the real terminal by the mode-badge column so the textarea content
-	// width (and soft-wrap geometry) stays identical after the composer badge.
-	probe := newChatTUI(control.New(control.Options{}), "", make(chan event.Event, 1), width)
-	termWidth := width + probe.modeBadgeColumnWidth()
-	m := newChatTUI(control.New(control.Options{}), "", make(chan event.Event, 1), termWidth)
-	next, _ := m.Update(tea.WindowSizeMsg{Width: termWidth, Height: height})
+	// The mode badge no longer reserves composer columns, so the terminal width
+	// is the composer content budget directly.
+	m := newChatTUI(control.New(control.Options{}), "", make(chan event.Event, 1), width)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: height})
 	return next.(chatTUI)
 }
 
@@ -41,8 +39,8 @@ func overflowingComposerMouseTestTUI(t *testing.T) chatTUI {
 		lines[i] = "composer-line-" + strconv.Itoa(i)
 	}
 	m.input.SetValue(strings.Join(lines, "\n"))
-	// Keep the expanded terminal width from newComposerMouseTestTUI (includes
-	// mode-badge columns); do not snap back to the pre-badge budget of 50.
+	// Keep the terminal width from newComposerMouseTestTUI (the composer owns
+	// the full frame); do not snap back to the pre-badge budget of 50.
 	return updateComposerMouseTestTUI(t, m, tea.WindowSizeMsg{Width: m.width, Height: 18})
 }
 
@@ -579,19 +577,5 @@ func TestComposerFieldRespectsNoColor(t *testing.T) {
 	}
 	if got := composerFieldBackground(); got != "" {
 		t.Fatalf("NO_COLOR composerFieldBackground = %q, want empty", got)
-	}
-}
-
-func TestComposerFieldRendersBadgeOnFirstRowOnly(t *testing.T) {
-	view := "row0\nrow1\nrow2"
-	got := joinModeBadgeLeftOfComposer("AUTO ", view)
-	lines := strings.Split(got, "\n")
-	if !strings.HasPrefix(lines[0], "AUTO ") {
-		t.Fatalf("badge must sit on row 0, got %q", lines[0])
-	}
-	for i, ln := range lines[1:] {
-		if !strings.HasPrefix(ln, "     ") {
-			t.Fatalf("continuation row %d must carry the badge-width gutter, got %q", i+1, ln)
-		}
 	}
 }

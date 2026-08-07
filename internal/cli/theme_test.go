@@ -537,13 +537,10 @@ func TestUserBubbleFadedFollowsAccent(t *testing.T) {
 }
 
 func TestInputBoxTintPureFunctions(t *testing.T) {
-	if got, want := mixHex("#0a0c10", "#ffffff", 0.08), "#1e1f23"; got != want {
+	if got, want := mixHex("#0a0c10", "#ffffff", 0.32), "#585a5c"; got != want {
 		t.Fatalf("mixHex dark lift = %s, want %s", got, want)
 	}
-	if got, want := mixHex("#0a0c10", "#1e1f23", 0.84), "#1b1c20"; got != want {
-		t.Fatalf("mixHex 84%% blend = %s, want %s", got, want)
-	}
-	if got, want := mixHex("#f0f2f5", "#000000", 0.08), "#dddfe1"; got != want {
+	if got, want := mixHex("#f0f2f5", "#000000", 0.15), "#ccced0"; got != want {
 		t.Fatalf("mixHex light sink = %s, want %s", got, want)
 	}
 	if got, want := mixHex("#000000", "#ffffff", 0), "#000000"; got != want {
@@ -556,21 +553,26 @@ func TestInputBoxTintPureFunctions(t *testing.T) {
 		t.Fatalf("mixHex invalid hex = %q, want input returned as-is", got)
 	}
 
-	// Dark bg (10,12,16): lift toward white then 84% blend → #1b1c20.
-	if got := inputBoxTintFromBackground(terminalRGB{10, 12, 16}, true); got != (cliColor{hex: "#1b1c20", xterm: 234}) {
-		t.Fatalf("dark tint = %+v, want #1b1c20/234", got)
+	// Dark bg (10,12,16): lift 32% toward white → #585a5c.
+	if got := inputBoxTintFromBackground(terminalRGB{10, 12, 16}, true); got != (cliColor{hex: "#585a5c", xterm: 240}) {
+		t.Fatalf("dark tint = %+v, want #585a5c/240", got)
 	}
-	// Light bg (240,242,245): sink toward black → #e0e2e4.
-	if got := inputBoxTintFromBackground(terminalRGB{240, 242, 245}, false); got != (cliColor{hex: "#e0e2e4", xterm: 254}) {
-		t.Fatalf("light tint = %+v, want #e0e2e4/254", got)
+	// Light bg (240,242,245): sink 15% toward black → #ccced0.
+	if got := inputBoxTintFromBackground(terminalRGB{240, 242, 245}, false); got != (cliColor{hex: "#ccced0", xterm: 252}) {
+		t.Fatalf("light tint = %+v, want #ccced0/252", got)
 	}
-	// Extreme probe values stay within bounds: pure black lifted → #111111/233,
-	// pure white sunk → #eeeeee/255.
-	if got := inputBoxTintFromBackground(terminalRGB{0, 0, 0}, true); got != (cliColor{hex: "#111111", xterm: 233}) {
-		t.Fatalf("black dark tint = %+v, want #111111/233", got)
+	// Hue-preserving: a deep purple shell (48,10,36) yields a light purple
+	// composer, not a grey.
+	if got := inputBoxTintFromBackground(terminalRGB{48, 10, 36}, true); got != (cliColor{hex: "#72586a", xterm: 59}) {
+		t.Fatalf("purple dark tint = %+v, want #72586a/59", got)
 	}
-	if got := inputBoxTintFromBackground(terminalRGB{255, 255, 255}, false); got != (cliColor{hex: "#eeeeee", xterm: 255}) {
-		t.Fatalf("white light tint = %+v, want #eeeeee/255", got)
+	// Extreme probe values stay within bounds: pure black lifted → #525252/239,
+	// pure white sunk → #d9d9d9/253.
+	if got := inputBoxTintFromBackground(terminalRGB{0, 0, 0}, true); got != (cliColor{hex: "#525252", xterm: 239}) {
+		t.Fatalf("black dark tint = %+v, want #525252/239", got)
+	}
+	if got := inputBoxTintFromBackground(terminalRGB{255, 255, 255}, false); got != (cliColor{hex: "#d9d9d9", xterm: 253}) {
+		t.Fatalf("white light tint = %+v, want #d9d9d9/253", got)
 	}
 }
 

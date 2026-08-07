@@ -143,7 +143,8 @@ func TestComposerModeBadgeUsesModeTagText(t *testing.T) {
 	if !strings.Contains(plainView, "Plan") {
 		t.Fatalf("View missing Plan mode badge:\n%s", plainView)
 	}
-	// Badge must sit left of the prompt on the same composer content row.
+	// Badge must sit on its own row directly under the composer, not beside the
+	// prompt and not inside the interaction footer row.
 	shared := false
 	for _, line := range strings.Split(plainView, "\n") {
 		if strings.Contains(line, "Plan") && strings.Contains(line, "❯") {
@@ -151,25 +152,35 @@ func TestComposerModeBadgeUsesModeTagText(t *testing.T) {
 			break
 		}
 	}
-	if !shared {
-		t.Fatalf("Plan badge and composer prompt must share a line:\n%s", plainView)
+	if shared {
+		t.Fatalf("Plan badge must not share the composer prompt line:\n%s", plainView)
+	}
+	badgeRow := false
+	for _, line := range strings.Split(plainView, "\n") {
+		if strings.TrimSpace(line) == "Plan" {
+			badgeRow = true
+			break
+		}
+	}
+	if !badgeRow {
+		t.Fatalf("Plan badge should sit on its own row under the composer:\n%s", plainView)
 	}
 	if !strings.Contains(content, "\x1b[48;2;37;99;235m") {
 		t.Fatalf("Plan badge should use blue pill background, got:\n%q", content)
 	}
 
 	primary := strings.TrimSpace(ansi.Strip(m.primaryStatusLine(false, false)))
-	if strings.HasPrefix(primary, "Plan") {
-		t.Fatalf("footer primary must not start with mode pill: %q", primary)
+	if strings.Contains(primary, "Plan") {
+		t.Fatalf("footer primary must not contain the mode pill: %q", primary)
 	}
 	if !strings.Contains(primary, "ready") {
 		t.Fatalf("footer primary missing idle state: %q", primary)
 	}
 }
 
-func TestComposerBadgeJoinDoesNotExceedFrameWidth(t *testing.T) {
-	// Wide badge ("Don't Ask") + former min box width of 10 overflowed narrow
-	// terminals. Joined composer row must stay ≤ frame width.
+func TestComposerBadgeAndStatusFitWithinFrameWidth(t *testing.T) {
+	// The mode badge moved to the footer row; the composer owns the full frame.
+	// Composer and badge rows must never exceed the frame width.
 	ctrl := control.New(control.Options{})
 	ctrl.SetToolApprovalMode(control.ToolApprovalDontAsk)
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 20)
@@ -182,17 +193,9 @@ func TestComposerBadgeJoinDoesNotExceedFrameWidth(t *testing.T) {
 	if got := m.modeTagText(); got != "Don't Ask" {
 		t.Fatalf("modeTagText() = %q, want Don't Ask", got)
 	}
-	badgeCols := m.modeBadgeColumnWidth()
-	boxW := m.composerBoxWidth(badgeCols)
-	if boxW < 1 {
-		t.Fatalf("composerBoxWidth = %d, want >= 1", boxW)
-	}
-	if total := badgeCols + boxW; total > m.composerFrameWidth() {
-		t.Fatalf("badgeCols(%d)+box(%d)=%d exceeds frame %d", badgeCols, boxW, total, m.composerFrameWidth())
-	}
-	// Same budget for the SetWidth path.
-	if got, want := m.composerContentWidth(), boxW; got != want {
-		t.Fatalf("composerContentWidth = %d, want %d (aligned with box)", got, want)
+	// Same budget for the SetWidth path and the painter.
+	if got, want := m.composerContentWidth(), m.composerFrameWidth(); got != want {
+		t.Fatalf("composerContentWidth = %d, want %d (full frame)", got, want)
 	}
 	for _, line := range strings.Split(ansi.Strip(m.View().Content), "\n") {
 		if w := visibleWidth(line); w > m.composerFrameWidth() {
@@ -227,8 +230,8 @@ func TestShellPrefixBadgeIsShell(t *testing.T) {
 		t.Fatalf("Shell badge should use green pill background, got:\n%q", content)
 	}
 	primary := strings.TrimSpace(ansi.Strip(m.primaryStatusLine(true, false)))
-	if strings.HasPrefix(primary, "Shell") {
-		t.Fatalf("footer primary must not start with Shell pill: %q", primary)
+	if strings.Contains(primary, "Shell") {
+		t.Fatalf("footer primary must not contain the Shell pill: %q", primary)
 	}
 }
 
@@ -264,7 +267,7 @@ func TestIdleStatuslineIsCompact(t *testing.T) {
 
 	content := renderStatuslineView(t, false)
 	plainView := ansi.Strip(content)
-	// Mode chrome lives on the composer badge; footer keeps idle + cycle hints.
+	// Mode chrome lives on its own row under the composer; footer keeps idle + cycle hints.
 	if !strings.Contains(plainView, "Auto") {
 		t.Fatalf("idle view missing Auto mode badge:\n%s", plainView)
 	}

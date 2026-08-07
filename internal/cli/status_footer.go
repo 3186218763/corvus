@@ -64,10 +64,10 @@ func renderTurnReceipt(u *provider.Usage) string {
 }
 
 // primaryStatusLine renders the interaction half of the first footer row. Mode
-// chrome lives on the composer badge (renderModeBadge); this row only carries
-// contextual UI state and short action hints. The model/profile group is laid
-// out separately so it can stay right-anchored on wide terminals and move as
-// one unit on narrow terminals.
+// chrome lives on its own row under the composer (renderModeBadge); this row
+// only carries contextual UI state and short action hints. The model/profile
+// group is laid out separately so it can stay right-anchored on wide terminals
+// and move as one unit on narrow terminals.
 func (m chatTUI) primaryStatusLine(shellMode, cancelRequested bool) string {
 	var body string
 	switch {

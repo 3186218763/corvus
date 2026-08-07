@@ -299,9 +299,9 @@ func TestCompletionMenuPadsWithNonBreakingSpaces(t *testing.T) {
 }
 
 // TestTranscriptViewportSizing proves the viewport tracks the terminal size and
-// gets the rows left over after the pinned bottom region (input box + the one
-// footer row = 3 with an empty 2-line composer and no Git or telemetry), and is
-// fed the committed transcript.
+// gets the rows left over after the pinned bottom region (input box + the mode
+// badge row + the one footer row = 4 with an empty 2-line composer and no Git
+// or telemetry), and is fed the committed transcript.
 func TestTranscriptViewportSizing(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
@@ -309,14 +309,14 @@ func TestTranscriptViewportSizing(t *testing.T) {
 	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = m0.(chatTUI)
 
-	if got := m.bottomRows(); got != 3 {
-		t.Fatalf("bottomRows with an empty composer = %d, want 3 (input 2 + footer 1)", got)
+	if got := m.bottomRows(); got != 4 {
+		t.Fatalf("bottomRows with an empty composer = %d, want 4 (input 2 + badge 1 + footer 1)", got)
 	}
 	if m.viewport.Width() != 79 {
 		t.Errorf("viewport content width = %d, want 79 (terminal 80 - 1 scrollbar column)", m.viewport.Width())
 	}
-	if want := m.transcriptHeight(); m.viewport.Height() != want || want != 21 {
-		t.Errorf("viewport height = %d, transcriptHeight = %d, want 21 (24-3)", m.viewport.Height(), want)
+	if want := m.transcriptHeight(); m.viewport.Height() != want || want != 20 {
+		t.Errorf("viewport height = %d, transcriptHeight = %d, want 20 (24-4)", m.viewport.Height(), want)
 	}
 	if m.viewport.TotalLineCount() == 0 {
 		t.Errorf("viewport should hold the committed banner after the first resize")
@@ -719,7 +719,7 @@ func TestComposerPromptReservesWidthAndOffsetsCJKCursor(t *testing.T) {
 		t.Fatalf("composer first line = %q, want prompt before CJK input", firstLine)
 	}
 	if got, want := m.input.Width(), m.composerContentWidth()-composerPromptWidth; got != want {
-		t.Fatalf("textarea content width = %d, want %d after prompt gutter and mode badge", got, want)
+		t.Fatalf("textarea content width = %d, want %d after the prompt gutter", got, want)
 	}
 	cursor := m.input.Cursor()
 	if cursor == nil {
@@ -775,8 +775,8 @@ func TestMCPManagerHidesComposerBox(t *testing.T) {
 	if !strings.Contains(content, "Enter for details") {
 		t.Fatalf("MCP footer hint missing from view:\n%s", content)
 	}
-	// Mode chrome lives on the composer badge (hidden here); the interaction
-	// row only shows the MCP contextual state without a leading mode pill.
+	// Mode chrome lives on the footer row (hidden here); the interaction row
+	// still shows the MCP contextual state.
 	if primary := ansi.Strip(m.primaryStatusLine(false, false)); !strings.Contains(primary, "MCP") {
 		t.Fatalf("MCP status line missing from primary footer: %q\nview:\n%s", primary, content)
 	}
@@ -1329,8 +1329,8 @@ func TestInputOwnedOverlaysKeepComposerBox(t *testing.T) {
 				t.Fatalf("%s panel did not render", tt.name)
 			}
 			panelRows := strings.Count(panel, "\n") + 1
-			if got, want := m.bottomRows(), panelRows+m.input.Height()+m.statusLineCount; got != want {
-				t.Fatalf("bottomRows with %s = %d, want %d (panel + composer + footer row)", tt.name, got, want)
+			if got, want := m.bottomRows(), panelRows+m.input.Height()+m.statusLineCount+1; got != want {
+				t.Fatalf("bottomRows with %s = %d, want %d (panel + composer + badge + footer row)", tt.name, got, want)
 			}
 		})
 	}

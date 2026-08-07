@@ -19,7 +19,7 @@ var ChineseTraditional = Messages{
 	StepScaffold:    "生成 corvus.toml",
 	StepSetKey:      "設定 API key",
 
-	StepChatDesc:   "互動式會話",
+	StepChatDesc: "互動式會話",
 
 	ChatTip:             "對話上下文將跨輪保留。輸入 'exit' 或按 Ctrl-D 退出。",
 	TurnCancelled:       "已取消 — 回到提示符",
@@ -38,7 +38,6 @@ var ChineseTraditional = Messages{
 	ResumePickHint:      "↑/↓ 移動 · Enter 恢復 · Esc 取消",
 
 	ChatThinking:                           "思考中…",
-	ChatThoughtForFmt:                      "思考了 %s 秒",
 	ChatStatusThinkingFmt:                  "%s 思考中… (%s 秒 · Esc 取消)",
 	ChatToolWorkingFmt:                     "%s 執行中 · %s 秒",
 	ChatStatusRetryingFmt:                  "%s 正在重試 (%d/%d)… (Esc 取消)",
@@ -448,7 +447,6 @@ var ChineseTraditional = Messages{
 	AnthropicFetchModelsFailedFmt:  "取得 %s 模型失敗: %v",
 	AnthropicSelectModelsLabel:     "選擇要啟用的 %s 模型",
 
-
 	ErrorPrefix:               "錯誤：",
 	ReconfigureOnUnknownModel: "設定的模型已不可用 —— 重新執行引導設定。",
 	WriteConfigErr:            "寫入設定失敗：",
@@ -466,8 +464,6 @@ var ChineseTraditional = Messages{
 
 	SelectOneHint:  "(↑/↓ · Enter · q 取消)",
 	SelectManyHint: "(↑/↓ · Space · Enter · q)",
-
-
 
 	UsageBody: `corvus — 終端 coding agent
 
@@ -501,33 +497,33 @@ var ChineseTraditional = Messages{
   金鑰透過 api_key_env 注入（如 DEEPSEEK_API_KEY）：優先專案 .env，其次 Corvus 憑證儲存。
   首次啟動 TUI 可引導設定；也可參考 corvus.example.toml。
 `,
-	RenameUsage:                "用法：/rename <新名稱>  或  /rename <序號> <新名稱>",
-	RenameNoSession:            "當前沒有活躍會話可重新命名",
-	RenameDoneFmt:              "會話已重新命名為 %q",
-	DiffFoldEnabledFmt:         "diff 已摺疊至 %d 行（/diff-fold 展開）",
-	DiffFoldDisabled:           "diff 已展開 — 顯示全部行（/diff-fold 摺疊）",
-	SlashClearPrompt:           "清空當前上下文且不儲存？",
-	SlashClearDone:             "已清空當前上下文",
-	SlashClearFailed:           "清空當前上下文失敗",
-	SlashClsDone:               "已清除畫面（LLM 上下文保留）",
-	CmdClear:                   "丟棄當前上下文",
-	CmdRename:                  "重新命名會話",
-	CmdGoal:                    "設定或清除當前目標",
-	CmdDiffFold:                "切換 diff 摺疊/展開",
-	ListMemorySaved:            "儲存的記憶",
-	ListMemoryArchived:         "歸檔的記憶",
-	GoalEmpty:                  "目標：無 — 用 /goal <目標> 設定",
-	GoalCurrentFmt:             "目標：%s",
-	GoalSetFmt:                 "目標已設定 → %s",
-	GoalCleared:                "目標已清除",
-	ProviderErrAuthRejected:    "認證失敗 (HTTP 401)：服務端拒絕了你的 API key。可能是 key 錯誤或已過期，也可能是服務端出現瞬時鑑權/額度問題——已退避重試仍失敗。請檢查專案 .env 或憑證儲存中的 API key 後稍後再試。",
-	SelectMoreAboveFmt:         "  ↑ 上方還有 %d 個",
-	SelectMoreBelowFmt:         "  ↓ 下方還有 %d 個",
-	SelectSearchHint:           "/ 搜尋 · 輸入關鍵詞過濾 · Esc 取消搜尋",
-	CmdProvider:                "切換供應商",
-	ProviderListHeader:         "供應商（/provider <名稱> 切換）",
-	ProviderAlreadyOnFmt:       "已經在使用供應商 %s",
-	ProviderUnknownFmt:         "未知供應商 %q",
-	ProviderPickLabel:          "選擇 %s 的一個模型",
-	ProviderNoModelsFmt:        "供應商 %s 沒有已配置的模型",
+	RenameUsage:             "用法：/rename <新名稱>  或  /rename <序號> <新名稱>",
+	RenameNoSession:         "當前沒有活躍會話可重新命名",
+	RenameDoneFmt:           "會話已重新命名為 %q",
+	DiffFoldEnabledFmt:      "diff 已摺疊至 %d 行（/diff-fold 展開）",
+	DiffFoldDisabled:        "diff 已展開 — 顯示全部行（/diff-fold 摺疊）",
+	SlashClearPrompt:        "清空當前上下文且不儲存？",
+	SlashClearDone:          "已清空當前上下文",
+	SlashClearFailed:        "清空當前上下文失敗",
+	SlashClsDone:            "已清除畫面（LLM 上下文保留）",
+	CmdClear:                "丟棄當前上下文",
+	CmdRename:               "重新命名會話",
+	CmdGoal:                 "設定或清除當前目標",
+	CmdDiffFold:             "切換 diff 摺疊/展開",
+	ListMemorySaved:         "儲存的記憶",
+	ListMemoryArchived:      "歸檔的記憶",
+	GoalEmpty:               "目標：無 — 用 /goal <目標> 設定",
+	GoalCurrentFmt:          "目標：%s",
+	GoalSetFmt:              "目標已設定 → %s",
+	GoalCleared:             "目標已清除",
+	ProviderErrAuthRejected: "認證失敗 (HTTP 401)：服務端拒絕了你的 API key。可能是 key 錯誤或已過期，也可能是服務端出現瞬時鑑權/額度問題——已退避重試仍失敗。請檢查專案 .env 或憑證儲存中的 API key 後稍後再試。",
+	SelectMoreAboveFmt:      "  ↑ 上方還有 %d 個",
+	SelectMoreBelowFmt:      "  ↓ 下方還有 %d 個",
+	SelectSearchHint:        "/ 搜尋 · 輸入關鍵詞過濾 · Esc 取消搜尋",
+	CmdProvider:             "切換供應商",
+	ProviderListHeader:      "供應商（/provider <名稱> 切換）",
+	ProviderAlreadyOnFmt:    "已經在使用供應商 %s",
+	ProviderUnknownFmt:      "未知供應商 %q",
+	ProviderPickLabel:       "選擇 %s 的一個模型",
+	ProviderNoModelsFmt:     "供應商 %s 沒有已配置的模型",
 }

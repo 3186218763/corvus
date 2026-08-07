@@ -42,7 +42,6 @@ var Chinese = Messages{
 	ResumePickHint:  "↑/↓ 移动 · Enter 恢复 · Esc 取消",
 
 	ChatThinking:                           "思考中…",
-	ChatThoughtForFmt:                      "思考了 %s 秒",
 	ChatStatusThinkingFmt:                  "%s 思考中… (%s 秒 · Esc 取消)",
 	ChatToolWorkingFmt:                     "%s 运行中 · %s 秒",
 	ChatStatusRetryingFmt:                  "%s 正在重试 (%d/%d)… (Esc 取消)",

@@ -58,10 +58,10 @@ func TestCacheRateLabelKeepsTwoDecimals(t *testing.T) {
 	}
 }
 
-// TestIngestSeparatesReasoningFromAnswer proves the thinking marker plus its live
-// text appear as reasoning streams, collapse to a "thought for Ns" summary (the
-// streamed text removed) when the answer begins, and the answer commits as its
-// own distinct entry.
+// TestIngestSeparatesReasoningFromAnswer proves the thinking marker plus its
+// live text appear as reasoning streams, then vanish entirely (marker and
+// streamed text removed, no "thought for Ns" summary) when the answer begins,
+// and the answer commits as its own distinct entry.
 func TestIngestSeparatesReasoningFromAnswer(t *testing.T) {
 	m := newTestChatTUI()
 
@@ -73,12 +73,9 @@ func TestIngestSeparatesReasoningFromAnswer(t *testing.T) {
 		t.Fatalf("reasoning text should stream live below the marker, transcript=%v", m.transcript)
 	}
 
-	m.ingestEvent(event.Event{Kind: event.Text, Text: "Hello answer"}) // answer begins → block collapses
-	if len(m.transcript) != 2 || !strings.Contains(m.transcript[0], "thought for") {
-		t.Fatalf("block should collapse to a duration summary plus answer separator, transcript=%v", m.transcript)
-	}
-	if strings.TrimSpace(m.transcript[1]) != "" {
-		t.Fatalf("reasoning/answer separator = %q, want one blank block", m.transcript[1])
+	m.ingestEvent(event.Event{Kind: event.Text, Text: "Hello answer"}) // answer begins → block removed
+	if len(m.transcript) != 0 {
+		t.Fatalf("collapsed thinking should leave no summary or separator in the transcript, transcript=%v", m.transcript)
 	}
 	if strings.Contains(strings.Join(m.transcript, "\n"), "…reasoning…") {
 		t.Fatalf("collapsed reasoning text should be removed, transcript=%v", m.transcript)
@@ -91,10 +88,10 @@ func TestIngestSeparatesReasoningFromAnswer(t *testing.T) {
 	}
 
 	m.commitPending() // turn end
-	if len(m.transcript) != 3 || !strings.Contains(m.transcript[2], "Hello") {
+	if len(m.transcript) != 1 || !strings.Contains(m.transcript[0], "Hello") {
 		t.Fatalf("answer should commit as a separate entry, transcript=%v", m.transcript)
 	}
-	if plain := ansi.Strip(m.transcript[2]); !strings.HasPrefix(plain, "  ◆ Corvus\n\n  Hello answer") {
+	if plain := ansi.Strip(m.transcript[0]); !strings.HasPrefix(plain, "  ◆ Corvus\n\n  Hello answer") {
 		t.Fatalf("answer should have an explicit assistant identity and indented body, got %q", plain)
 	}
 }
@@ -145,9 +142,10 @@ func TestTurnReceiptMovesBelowComposer(t *testing.T) {
 	}
 }
 
-// TestVerboseReasoningInsertsTextUnderSummary proves /verbose mode keeps the full
-// thinking text, placed beneath the collapsed duration summary.
-func TestVerboseReasoningInsertsTextUnderSummary(t *testing.T) {
+// TestVerboseReasoningKeepsTextWithoutSummary proves /verbose mode keeps the
+// full thinking text when the thinking marker collapses, with no duration
+// summary line.
+func TestVerboseReasoningKeepsTextWithoutSummary(t *testing.T) {
 	m := newTestChatTUI()
 	m.showReasoning = true
 
@@ -155,17 +153,17 @@ func TestVerboseReasoningInsertsTextUnderSummary(t *testing.T) {
 	m.ingestEvent(event.Event{Kind: event.Reasoning, Text: "step two"})
 	m.ingestEvent(event.Event{Kind: event.Text, Text: "Answer"}) // closes the block
 
-	if len(m.transcript) != 3 {
-		t.Fatalf("verbose block should be summary + text + answer separator, transcript=%v", m.transcript)
+	if len(m.transcript) != 2 {
+		t.Fatalf("verbose block should be text + answer separator, transcript=%v", m.transcript)
 	}
-	if !strings.Contains(m.transcript[0], "thought for") {
-		t.Errorf("first line should be the duration summary, got %q", m.transcript[0])
+	if !strings.Contains(m.transcript[0], "step one") || !strings.Contains(m.transcript[0], "step two") {
+		t.Errorf("verbose text should remain after the thinking marker collapses, got %q", m.transcript[0])
 	}
-	if !strings.Contains(m.transcript[1], "step one") || !strings.Contains(m.transcript[1], "step two") {
-		t.Errorf("verbose text should appear under the summary, got %q", m.transcript[1])
+	if strings.Contains(m.transcript[0], "thought for") {
+		t.Errorf("no duration summary should remain, got %q", m.transcript[0])
 	}
-	if strings.TrimSpace(m.transcript[2]) != "" {
-		t.Errorf("verbose reasoning/answer separator = %q, want blank block", m.transcript[2])
+	if strings.TrimSpace(m.transcript[1]) != "" {
+		t.Errorf("verbose reasoning/answer separator = %q, want blank block", m.transcript[1])
 	}
 }
 

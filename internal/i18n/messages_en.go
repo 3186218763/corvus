@@ -41,7 +41,6 @@ var English = Messages{
 	ResumePickHint:  "↑/↓ move · Enter resume · Esc cancel",
 
 	ChatThinking:                           "thinking…",
-	ChatThoughtForFmt:                      "thought for %ss",
 	ChatStatusThinkingFmt:                  "%s thinking… (%ss · Esc cancels)",
 	ChatToolWorkingFmt:                     "%s working · %ss",
 	ChatStatusRetryingFmt:                  "%s retrying (%d/%d)… (Esc cancels)",

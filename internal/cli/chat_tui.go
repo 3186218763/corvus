@@ -1971,6 +1971,7 @@ func (m chatTUI) bottomRows() int {
 	// tests that don't call Update first.
 	if !m.hideComposer() {
 		rows += m.input.Height()
+		rows++ // the mode badge row pinned under the composer
 	}
 	if m.statusLineCount > 0 {
 		return rows + m.statusLineCount
@@ -2364,55 +2365,57 @@ func (m *chatTUI) tickToolRunning() {
 	m.setLiveBlock(m.toolStreamIdx, connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, frame, formatElapsedFixed(secs)))}))
 }
 
-// commitReasoning closes the live thinking block: the "▎ thinking…" marker is
-// rewritten to a dim "▎ thought for Ns" summary and the streamed text below it is
-// removed (collapsed) — kept only in verbose mode. The viewport re-wraps from
-// m.transcript, so the change is flagged via transcriptDirty.
-func (m *chatTUI) commitReasoning() {
+// commitReasoning closes the live thinking block: the "▎ thinking…" marker and
+// the streamed text below it are removed so no "thought for Ns" summary stays
+// in the transcript. Verbose mode keeps the full thinking text. It reports
+// whether any reasoning block remains visible (used to keep the answer spacing
+// clean when the whole block collapses).
+func (m *chatTUI) commitReasoning() bool {
 	if m.reasoningNative {
-		if strings.TrimSpace(m.reasoning.String()) != "" || !m.thinkStart.IsZero() {
-			secs := int(time.Since(m.thinkStart).Seconds())
+		kept := m.showReasoning && strings.TrimSpace(m.reasoning.String()) != ""
+		if kept {
 			m.commitSpacer()
-			m.commitLine(dim(fmt.Sprintf("  ▎ "+i18n.M.ChatThoughtForFmt, formatElapsedFixed(secs))))
-			if m.showReasoning && strings.TrimSpace(m.reasoning.String()) != "" {
-				m.commitLine(reasoningBlock(m.reasoning.String(), m.width, 0))
-			}
+			m.commitLine(reasoningBlock(m.reasoning.String(), m.width, 0))
 		}
 		m.reasoning.Reset()
 		m.reasoningView = m.reasoningView[:0]
 		m.reasoningNative = false
 		m.thinkStart = time.Time{}
-		return
+		return kept
 	}
 	if m.reasoningLineIdx < 0 {
-		return
+		return false
 	}
-	secs := int(time.Since(m.thinkStart).Seconds())
-	m.setTranscriptBlock(m.reasoningLineIdx, dim(fmt.Sprintf("  ▎ "+i18n.M.ChatThoughtForFmt, formatElapsedFixed(secs))), transcriptSource{kind: transcriptSourceFixed})
+	kept := false
 	if m.reasoningTextIdx >= 0 {
 		if m.showReasoning && strings.TrimSpace(m.reasoning.String()) != "" {
 			raw := m.reasoning.String()
 			m.setTranscriptBlock(m.reasoningTextIdx, reasoningBlock(raw, m.width, 0), transcriptSource{
 				kind: transcriptSourceReasoning, raw: raw,
 			})
+			kept = true
 		} else {
 			m.removeTranscriptBlock(m.reasoningTextIdx)
 		}
 	}
+	m.removeTranscriptBlock(m.reasoningLineIdx)
 	m.transcriptDirty = true
 	m.reasoning.Reset()
 	m.reasoningView = m.reasoningView[:0]
 	m.reasoningLineIdx = -1
 	m.reasoningTextIdx = -1
+	return kept
 }
 
 // commitReasoningBeforeAnswer closes a real reasoning block and leaves exactly
-// one blank transcript row before the assistant answer. Answers that start
-// without reasoning keep their existing compact placement.
+// one blank transcript row before the assistant answer — but only when a
+// reasoning block is still visible (verbose mode), because the collapsed
+// thinking marker is removed entirely. Answers that start without reasoning
+// keep their existing compact placement.
 func (m *chatTUI) commitReasoningBeforeAnswer() {
 	hadReasoning := m.reasoningNative || m.reasoningLineIdx >= 0
-	m.commitReasoning()
-	if hadReasoning {
+	kept := m.commitReasoning()
+	if hadReasoning && kept {
 		m.commitSpacer()
 	}
 }
@@ -2786,14 +2789,11 @@ func (m chatTUI) View() tea.View {
 	shellMode := strings.HasPrefix(strings.TrimSpace(m.input.Value()), "!")
 	cancelRequested := m.cancelRequested()
 	var box string
-	badgeCols := 0
 	if !hideComposer {
-		badge := m.renderModeBadge(shellMode)
-		const badgeGap = " "
-		badgeCols = visibleWidth(badge) + visibleWidth(badgeGap)
-		// Borderless field: the painter tints the whole box width, so the mode
-		// badge is the only chrome left of the ❯ prompt.
-		box = joinModeBadgeLeftOfComposer(badge+badgeGap, renderComposerField(m.renderComposerInput(), m.composerBoxWidth(badgeCols)))
+		// Borderless field: the painter tints the whole box width, so the input
+		// row carries no chrome. The mode badge lives on the footer row below
+		// (primaryStatusLine prepends it), keeping the bottom-left corner.
+		box = renderComposerField(m.renderComposerInput(), m.composerFrameWidth())
 	}
 
 	primaryStatus := m.primaryStatusLine(shellMode, cancelRequested)
@@ -2854,10 +2854,11 @@ func (m chatTUI) View() tea.View {
 		parts = append(parts, panels.manager)
 		rowsAboveBox += strings.Count(panels.manager, "\n") + 1
 	}
-	// Layout: the working spinner (when running), then the composer when visible,
-	// then the single persistent footer row. Wide terminals right-align the
-	// project/model/cache group; narrow terminals wrap between " · " groups.
-	// Padding to full width prevents stale cells.
+	// Layout: the working spinner (when running), the composer when visible,
+	// the mode badge row under it (bottom-left), then the single persistent
+	// footer row. Wide terminals right-align the project/model/cache group;
+	// narrow terminals wrap between " · " groups. Padding to full width
+	// prevents stale cells.
 	if working != "" {
 		parts = append(parts, workingStyle.Width(boxW).MaxWidth(boxW).Render(wrapStatusLine(working, boxW)))
 		rowsAboveBox++
@@ -2873,6 +2874,10 @@ func (m chatTUI) View() tea.View {
 			rowsAboveBox += strings.Count(qi, "\n") + 1
 		}
 		parts = append(parts, box)
+		// Mode badge (Auto/Plan/Shell) anchors the bottom-left corner directly
+		// under the input box.
+		parts = append(parts, "  "+m.renderModeBadge(shellMode))
+		rowsAboveBox++
 	}
 	// The cache-hit readout lives inside the single footer row; there is no
 	// separate receipt line under the composer.
@@ -2882,8 +2887,7 @@ func (m chatTUI) View() tea.View {
 		v := tea.NewView(strings.Join(parts, "\n"))
 		if !hideComposer {
 			if cur := m.composerCursor(); cur != nil {
-				// badge column; the borderless field has no padding chrome
-				cur.X += badgeCols
+				// The borderless field has no padding chrome.
 				cur.Y += rowsAboveBox
 				v.Cursor = cur
 			}
@@ -2910,11 +2914,10 @@ func (m chatTUI) View() tea.View {
 	}
 	// Anchor the real terminal cursor at the textarea's insertion point only when
 	// the composer is visible. input.Cursor() is relative to the textarea; offset
-	// by the viewport height + rows above, then by the mode-badge column (the
-	// borderless field adds no border/padding chrome).
+	// by the viewport height + rows above (the borderless field adds no
+	// border/padding chrome).
 	if !hideComposer {
 		if cur := m.composerCursor(); cur != nil {
-			cur.X += badgeCols
 			cur.Y += m.viewport.Height() + rowsAboveBox
 			v.Cursor = cur
 		}
@@ -3312,9 +3315,10 @@ func (m chatTUI) computeStatusLineCount(width int) int {
 	return lines
 }
 
-// renderModeBadge returns the styled composer-left mode chip. Shell prefix
-// uses a literal "Shell" tag; otherwise text comes from modeTagText() so
-// desktop vs classic shortcut layouts stay in parity.
+// renderModeBadge returns the styled mode chip pinned on its own row under the
+// composer, at the bottom-left. Shell prefix uses a literal "Shell" tag;
+// otherwise text comes from modeTagText() so desktop vs classic shortcut
+// layouts stay in parity.
 func (m chatTUI) renderModeBadge(shellMode bool) string {
 	if shellMode {
 		return modeTagStyle(statusShellColor, modeTagLight).Render("Shell")
@@ -3333,16 +3337,8 @@ func (m chatTUI) renderModeBadge(shellMode bool) string {
 	return modeTagStyle(bg, fg).Render(text)
 }
 
-// modeBadgeColumnWidth is the terminal columns reserved left of the input box
-// for the mode badge plus its trailing gap. Keeps SetWidth / View / cursor math
-// in lockstep as the mode label changes.
-func (m chatTUI) modeBadgeColumnWidth() int {
-	shellMode := strings.HasPrefix(strings.TrimSpace(m.input.Value()), "!")
-	return visibleWidth(m.renderModeBadge(shellMode)) + 1
-}
-
 // composerFrameWidth is the terminal width View uses for the bottom frame
-// (composer join + status block). Matches View's boxW floor.
+// (composer + status block). Matches View's boxW floor.
 func (m chatTUI) composerFrameWidth() int {
 	w := m.width
 	if w <= 0 {
@@ -3354,37 +3350,12 @@ func (m chatTUI) composerFrameWidth() int {
 	return w
 }
 
-// composerBoxWidth is the input box width after reserving the mode badge
-// column. The floor is 1: a badge wider than the frame leaves the composer an
-// editable sliver, even though the joined row may overrun the last column.
-func (m chatTUI) composerBoxWidth(badgeCols int) int {
-	return max(m.composerFrameWidth()-badgeCols, 1)
-}
-
 // composerContentWidth is the textarea SetWidth budget. The borderless field
 // adds no chrome of its own; only the two-column ❯ prompt is reserved by the
 // textarea, so the content budget is the full box width. The painter right-pads
-// each line to the same composerBoxWidth, keeping SetWidth and View in lockstep.
+// each line to the same width, keeping SetWidth and View in lockstep.
 func (m chatTUI) composerContentWidth() int {
-	return m.composerBoxWidth(m.modeBadgeColumnWidth())
-}
-
-// joinModeBadgeLeftOfComposer places the mode badge beside the first row of the
-// borderless composer field, so the chip shares a line with the ❯ prompt.
-// Wrapped continuation rows get a blank left gutter of the same width.
-func joinModeBadgeLeftOfComposer(badgeWithGap, box string) string {
-	rightLines := strings.Split(box, "\n")
-	leftW := visibleWidth(badgeWithGap)
-	gutter := strings.Repeat(" ", leftW)
-	out := make([]string, len(rightLines))
-	for i, r := range rightLines {
-		if i == 0 {
-			out[i] = badgeWithGap + r
-			continue
-		}
-		out[i] = gutter + r
-	}
-	return strings.Join(out, "\n")
+	return m.composerFrameWidth()
 }
 
 // The composer grows with its content up to this comfort cap. The effective
@@ -4586,6 +4557,8 @@ func replaySectionsForWithAssistantRenderer(
 	var out []string
 	for i, m := range history {
 		if m.LocalOnly {
+			// Interrupted-turn partial reasoning stays part of the recovery
+			// replay; completed-turn reasoning never renders in history.
 			if reasoning := strings.TrimSpace(m.ReasoningContent); reasoning != "" {
 				out = append(out, dim("  ▎ "+i18n.M.ChatThinking)+"\n"+reasoningBlock(reasoning, width, 0)+"\n\n")
 			}
@@ -4610,9 +4583,6 @@ func replaySectionsForWithAssistantRenderer(
 			content := control.StripComposePrefixes(m.Content)
 			out = append(out, renderUser(content, width, i == lastUserSection && lastUserFull)+"\n\n")
 		case provider.RoleAssistant:
-			if reasoning := strings.TrimSpace(m.ReasoningContent); reasoning != "" {
-				out = append(out, dim("  ▎ "+i18n.M.ChatThinking)+"\n"+reasoningBlock(reasoning, width, 0)+"\n\n")
-			}
 			body := strings.TrimSpace(m.Content)
 			if body != "" {
 				out = append(out, renderAssistant(body, width, i == lastAssistantBody && nameLast)+"\n\n")
@@ -4630,14 +4600,15 @@ func interruptedTurnDisplayNotice() string {
 }
 
 // renderTUIBanner is the title + tip + optional missing-key warning printed once
-// at the top of the session.
+// at the top of the session. Its symbols share the transcript's two-column
+// gutter so the banner ◆ lines up with the assistant ◆ and user › markers.
 func renderTUIBanner(label, missing string, width int) string {
 	var b strings.Builder
 	if width >= 60 {
-		b.WriteString(accent("◆") + " " + bold("corvus") + "  " + dim("· "+label) + "\n")
+		b.WriteString("  " + accent("◆") + " " + bold("corvus") + "  " + dim("· "+label) + "\n")
 		b.WriteString(dim("  "+i18n.M.ChatTip) + "\n")
 	} else {
-		line := accent("◆") + " " + bold("corvus") + " " + dim("· "+label)
+		line := "  " + accent("◆") + " " + bold("corvus") + " " + dim("· "+label)
 		b.WriteString(ansi.Truncate(line, width, "…"))
 	}
 	if missing != "" {
