@@ -50,7 +50,7 @@ func TestDiffBodyNoFoldWhenShort(t *testing.T) {
 func TestDiffBlockHeader(t *testing.T) {
 	d := event.FileDiff{Diff: "@@ -1 +1 @@\n-a\n+b\n", Added: 1, Removed: 1}
 	block := diffBlock("edit_file", `{"path":"pkg/x.go"}`, d, 80, 40)
-	if len(block) == 0 || !strings.Contains(block[0], "Update") || !strings.Contains(block[0], "pkg/x.go") {
+	if len(block) == 0 || !strings.Contains(block[0], "Edited") || !strings.Contains(block[0], "pkg/x.go") {
 		t.Fatalf("header should name verb + path, got %q", block[0])
 	}
 }
@@ -61,7 +61,7 @@ func TestDiffBlockNilWithoutDiff(t *testing.T) {
 	}
 }
 
-func TestDiffHeaderUsesCategoryAndArgColors(t *testing.T) {
+func TestToolHeadUsesCategoryAndArgColors(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
 	configureCLITheme("dark")
@@ -217,5 +217,60 @@ func TestHighlightBashPlainWithoutColor(t *testing.T) {
 func TestHighlightBashEmpty(t *testing.T) {
 	if got := highlightBash(""); got != "" {
 		t.Fatalf("empty command should stay empty, got %q", got)
+	}
+}
+
+func TestFileVerb(t *testing.T) {
+	cases := []struct {
+		d    event.FileDiff
+		want string
+	}{
+		{d: event.FileDiff{Added: 3}, want: "Added"},
+		{d: event.FileDiff{Removed: 2}, want: "Deleted"},
+		{d: event.FileDiff{Added: 1, Removed: 1}, want: "Edited"},
+		{d: event.FileDiff{}, want: "Edited"},
+	}
+	for _, c := range cases {
+		if got := fileVerb(c.d); got != c.want {
+			t.Fatalf("fileVerb(%+v) = %q, want %q", c.d, got, c.want)
+		}
+	}
+}
+
+func TestDiffBlockCodexHeader(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	d := event.FileDiff{Diff: "@@ -1 +1 @@\n-a\n+b\n", Added: 1, Removed: 1}
+	block := diffBlock("edit_file", `{"path":"pkg/x.go"}`, d, 80, 40)
+	h := block[0]
+	plain := ansi.Strip(h)
+	for _, want := range []string{"Edited", "pkg/x.go", "(+1", "-1)"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("header %q missing %q", h, want)
+		}
+	}
+	if !strings.Contains(h, fgSGR(activeCLITheme.success)) || !strings.Contains(h, fgSGR(activeCLITheme.err)) {
+		t.Fatalf("stat sides should carry green/red SGR, got %q", h)
+	}
+	if !strings.Contains(h, ansiBold) {
+		t.Fatalf("verb should be bold, got %q", h)
+	}
+}
+
+func TestDiffBlockCodexHeaderPureAdd(t *testing.T) {
+	d := event.FileDiff{Diff: "@@ -0,0 +1 @@\n+package main\n", Added: 1}
+	block := diffBlock("write_file", `{"path":"new.go"}`, d, 80, 40)
+	if !strings.Contains(block[0], "Added") || !strings.Contains(block[0], "(+1 -0)") {
+		t.Fatalf("pure add should read 'Added ... (+1 -0)', got %q", block[0])
+	}
+}
+
+func TestDiffBlockCodexHeaderPureDelete(t *testing.T) {
+	d := event.FileDiff{Diff: "@@ -1 +0,0 @@\n-old\n", Removed: 1}
+	block := diffBlock("delete_file", `{"path":"old.go"}`, d, 80, 40)
+	if !strings.Contains(block[0], "Deleted") || !strings.Contains(block[0], "(+0 -1)") {
+		t.Fatalf("pure delete should read 'Deleted ... (+0 -1)', got %q", block[0])
 	}
 }

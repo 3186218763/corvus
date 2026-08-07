@@ -42,16 +42,23 @@ func activeDiffChromaStyle() *chroma.Style {
 	return styles.Get("catppuccin-mocha")
 }
 
-// diffStat renders a change's "+A -B" tally, green/red, omitting a zero side.
-func diffStat(d event.FileDiff) string {
-	parts := make([]string, 0, 2)
-	if d.Added > 0 {
-		parts = append(parts, green("+"+strconv.Itoa(d.Added)))
+// fileVerb maps a change's shape to its Codex-style verb: pure additions
+// "Added", pure removals "Deleted", mixed edits "Edited".
+func fileVerb(d event.FileDiff) string {
+	switch {
+	case d.Added > 0 && d.Removed == 0:
+		return "Added"
+	case d.Removed > 0 && d.Added == 0:
+		return "Deleted"
+	default:
+		return "Edited"
 	}
-	if d.Removed > 0 {
-		parts = append(parts, red("-"+strconv.Itoa(d.Removed)))
-	}
-	return strings.Join(parts, " ")
+}
+
+// codexStat renders "(+N -M)" with green/red sides, always showing both like
+// Codex's line-count summary.
+func codexStat(d event.FileDiff) string {
+	return "(" + green("+"+strconv.Itoa(d.Added)) + " " + red("-"+strconv.Itoa(d.Removed)) + ")"
 }
 
 func diffPath(args string) string {
@@ -62,17 +69,18 @@ func diffPath(args string) string {
 	return p.Path
 }
 
-// diffBlock renders a writer call as a header line ("✎ name path  +A -B") plus
-// the highlighted, folded diff body. Returns nil when there's no textual diff.
+// diffBlock renders a file change as a Codex-style header ("● Added path (+3 -0)")
+// plus the highlighted, folded diff body. Returns nil when there's no textual diff.
 func diffBlock(name, args string, d event.FileDiff, width, maxLines int) []string {
 	if d.Diff == "" {
 		return nil
 	}
 	path := diffPath(args)
-	header := "  " + toolDot(name) + " " + toolHead(name, path, width)
-	if stat := diffStat(d); stat != "" {
-		header += "  " + stat
-	}
+	verb := fileVerb(d)
+	stat := codexStat(d)
+	avail := width - 6 - len([]rune(verb)) - len([]rune(stat))
+	displayPath := clampPlain(path, avail)
+	header := "  " + dim("●") + " " + bold(verb) + " " + themeFg(activeCLITheme.toolArg, displayPath) + "  " + stat
 	return append([]string{header}, diffBody(d, path, width, maxLines)...)
 }
 
