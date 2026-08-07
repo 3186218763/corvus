@@ -272,7 +272,7 @@ func TestIdleStatuslineIsCompact(t *testing.T) {
 
 	content := renderStatuslineView(t, false)
 	plainView := ansi.Strip(content)
-	// Mode chrome lives on its own row under the composer; footer keeps idle + cycle hints.
+	// Mode pill anchors the footer left edge; the footer keeps the idle state.
 	if !strings.Contains(plainView, "Auto") {
 		t.Fatalf("idle view missing Auto mode badge:\n%s", plainView)
 	}
@@ -283,13 +283,13 @@ func TestIdleStatuslineIsCompact(t *testing.T) {
 	if !strings.HasPrefix(strings.TrimSpace(footer), "Auto") {
 		t.Fatalf("footer row should start with the Auto badge (bottom-left anchor), got %q", footer)
 	}
-	if !strings.Contains(footer, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
-		t.Fatalf("idle status line missing plan-toggle hint:\n%s", footer)
-	}
 	for _, old := range []string{"Shift-Tab", "Ctrl-O", "Ctrl-D", "Enter sends", "Esc clears/exits state", "PgUp/PgDn"} {
 		if strings.Contains(footer, old) {
 			t.Fatalf("idle status line should not contain %q:\n%s", old, footer)
 		}
+	}
+	if strings.Contains(footer, "Shift+Tab") || strings.Contains(footer, "Ctrl+Y") {
+		t.Fatalf("idle status line should not carry shortcut hints:\n%s", footer)
 	}
 	if strings.Contains(footer, "[auto]") {
 		t.Fatalf("idle status line should use pill label, not bracketed tag:\n%s", footer)
@@ -310,7 +310,7 @@ func TestYoloStatuslineUsesDangerPill(t *testing.T) {
 	if !strings.Contains(plainView, "YOLO") {
 		t.Fatalf("YOLO view missing mode badge:\n%s", plainView)
 	}
-	if !strings.Contains(footer, "approvals skipped") || !strings.Contains(footer, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
+	if !strings.Contains(footer, "approvals skipped") {
 		t.Fatalf("YOLO status line missing warning text:\n%s", footer)
 	}
 	if !strings.HasPrefix(strings.TrimSpace(footer), "YOLO") {
@@ -335,8 +335,8 @@ func TestPlanStatuslineUsesBluePill(t *testing.T) {
 	if !strings.Contains(plainView, "Plan") {
 		t.Fatalf("plan view missing mode badge:\n%s", plainView)
 	}
-	if !strings.Contains(footer, "ready") || !strings.Contains(footer, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
-		t.Fatalf("plan status line missing idle/hint status:\n%s", footer)
+	if !strings.Contains(footer, "ready") {
+		t.Fatalf("plan status line missing idle status:\n%s", footer)
 	}
 	if !strings.HasPrefix(strings.TrimSpace(footer), "Plan") {
 		t.Fatalf("footer row should start with the Plan badge (bottom-left anchor), got %q", footer)
@@ -346,7 +346,7 @@ func TestPlanStatuslineUsesBluePill(t *testing.T) {
 	}
 }
 
-func TestStatuslineCycleHintFollowsLanguage(t *testing.T) {
+func TestStatuslineLocalizedIdleState(t *testing.T) {
 	i18n.DetectLanguage("zh")
 	t.Cleanup(func() { i18n.DetectLanguage("en") })
 
@@ -356,15 +356,15 @@ func TestStatuslineCycleHintFollowsLanguage(t *testing.T) {
 	if !strings.Contains(plainView, "Auto") {
 		t.Fatalf("localized view missing Auto mode badge:\n%s", plainView)
 	}
-	if !strings.Contains(plain, "就绪") || !strings.Contains(plain, "Shift+Tab 询问/自动/计划 · Ctrl+Y YOLO") {
-		t.Fatalf("localized plan-toggle hint missing:\n%s", plain)
+	if !strings.Contains(plain, "就绪") {
+		t.Fatalf("localized idle state missing:\n%s", plain)
 	}
-	if strings.Contains(plain, "ready") || strings.Contains(plain, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
+	if strings.Contains(plain, "ready") {
 		t.Fatalf("localized status line should not fall back to English:\n%s", plain)
 	}
 }
 
-func TestDesktopShortcutStatuslineUsesPlanToggleHint(t *testing.T) {
+func TestDesktopShortcutStatuslineShowsAskBadge(t *testing.T) {
 	i18n.DetectLanguage("en")
 
 	content := renderStatuslineViewWithShortcutLayout(t, "desktop")
@@ -372,9 +372,6 @@ func TestDesktopShortcutStatuslineUsesPlanToggleHint(t *testing.T) {
 	footer := footerInteractionPlain(content)
 	if !strings.Contains(plainView, "Ask") {
 		t.Fatalf("desktop shortcut view missing Ask mode badge:\n%s", plainView)
-	}
-	if !strings.Contains(footer, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
-		t.Fatalf("desktop shortcut status line missing unified plan-toggle hint:\n%s", footer)
 	}
 	if !strings.HasPrefix(strings.TrimSpace(footer), "Ask") {
 		t.Fatalf("footer row should start with the Ask badge (bottom-left anchor), got %q", footer)
@@ -624,7 +621,6 @@ func footerInteractionPlain(content string) string {
 			strings.Contains(line, "就绪") ||
 			strings.Contains(line, "就緒") ||
 			strings.Contains(line, "approvals skipped") ||
-			strings.Contains(line, "Shift+Tab") ||
 			strings.Contains(line, "tool approvals") {
 			return line
 		}

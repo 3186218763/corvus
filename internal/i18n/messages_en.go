@@ -47,8 +47,6 @@ var English = Messages{
 	ChatStatusCancellingFmt:                "%s stopping… (%ss · Ctrl+C exits)",
 	ChatStatusIdle:                         "ready",
 	ChatStatusYoloIdle:                     "tool approvals skipped",
-	ChatStatusCycleHint:                    "Shift+Tab ask/auto/plan · Ctrl+Y YOLO",
-	ChatStatusCycleHintCompact:             "Shift+Tab ask/auto/plan · Ctrl+Y YOLO",
 	ChatCacheHitLabel:                      "cached",
 	ChatStatusModelLabel:                   "MODEL",
 	ChatStatusEffortLabel:                  "EFFORT",

@@ -72,8 +72,6 @@ type Messages struct {
 	ChatStatusCancellingFmt                string // "%s stopping… (%ss · Ctrl+C exits)" — %s = spinner, %s = fixed-width elapsed
 	ChatStatusIdle                         string // shortcuts hint when idle
 	ChatStatusYoloIdle                     string // shortcuts hint when idle in YOLO/bypass mode
-	ChatStatusCycleHint                    string // plan-toggle shortcut hint shown when no modal prompt owns the status row
-	ChatStatusCycleHintCompact             string // readable shortcut hint used by the persistent footer
 	ChatCacheHitLabel                      string // cache-hit readout shown after each completed turn
 	ChatStatusModelLabel                   string
 	ChatStatusEffortLabel                  string

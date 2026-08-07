@@ -124,9 +124,8 @@ func TestStatusFooterSemanticPaletteAcrossThemes(t *testing.T) {
 				}
 			}
 			primary := m.primaryStatusLine(false, false)
-			if !strings.Contains(primary, tt.valueSGR+i18n.M.ChatStatusIdle) ||
-				!strings.Contains(primary, tt.labelSGR+i18n.M.ChatStatusCycleHintCompact) {
-				t.Fatalf("%s interaction hints should use readable semantic contrast: %q", tt.mode, primary)
+			if !strings.Contains(primary, tt.valueSGR+i18n.M.ChatStatusIdle) {
+				t.Fatalf("%s interaction state should use readable semantic contrast: %q", tt.mode, primary)
 			}
 		})
 	}
@@ -274,14 +273,14 @@ func TestStatusFooterNoColorKeepsSemanticLabels(t *testing.T) {
 	}
 }
 
-func TestStatusFooterUsesReadableLocalizedHintAndWrapsCleanly(t *testing.T) {
+func TestStatusFooterLocalizedGroupsWrapCleanly(t *testing.T) {
 	defer i18n.DetectLanguage("en")
 	for _, tt := range []struct {
-		lang, compact, session string
+		lang, session string
 	}{
-		{lang: "en", compact: "Shift+Tab ask/auto/plan · Ctrl+Y YOLO", session: "MODEL deepseek-v4-flash   EFFORT auto   WORK balanced"},
-		{lang: "zh", compact: "Shift+Tab 询问/自动/计划 · Ctrl+Y YOLO", session: "模型 deepseek-v4-flash   强度 auto   模式 均衡"},
-		{lang: "zh-TW", compact: "Shift+Tab 詢問/自動/計畫 · Ctrl+Y YOLO", session: "模型 deepseek-v4-flash   強度 auto   模式 均衡"},
+		{lang: "en", session: "MODEL deepseek-v4-flash   EFFORT auto   WORK balanced"},
+		{lang: "zh", session: "模型 deepseek-v4-flash   强度 auto   模式 均衡"},
+		{lang: "zh-TW", session: "模型 deepseek-v4-flash   強度 auto   模式 均衡"},
 	} {
 		t.Run(tt.lang, func(t *testing.T) {
 			i18n.DetectLanguage(tt.lang)
@@ -300,11 +299,8 @@ func TestStatusFooterUsesReadableLocalizedHintAndWrapsCleanly(t *testing.T) {
 			if len(lines) < 1 || len(lines) > 2 {
 				t.Fatalf("localized footer rows = %d, want 1–2 (no empty data band):\n%s", len(lines), block)
 			}
-			if !strings.Contains(block, tt.compact) || !strings.Contains(block, tt.session) {
-				t.Fatalf("localized footer did not keep readable shortcut and session groups:\n%s", block)
-			}
-			if strings.Contains(block, "⇧Tab") || strings.Contains(block, "^Y") {
-				t.Fatalf("localized footer fell back to symbolic shortcut notation:\n%s", block)
+			if !strings.Contains(block, tt.session) {
+				t.Fatalf("localized footer did not keep the session group:\n%s", block)
 			}
 			if strings.Contains(block, "─") {
 				t.Fatalf("localized footer should not paint a data-band divider without Git/telemetry:\n%s", block)
@@ -316,9 +312,6 @@ func TestStatusFooterUsesReadableLocalizedHintAndWrapsCleanly(t *testing.T) {
 			}
 
 			narrow := ansi.Strip(m.renderStatusBlock(primary, 24))
-			if strings.Contains(narrow, "Shift+Tab") || strings.Contains(narrow, "Ctrl+Y") {
-				t.Fatalf("shortcut help should yield when readable key names cannot fit:\n%s", narrow)
-			}
 			if !strings.Contains(narrow, ansi.Strip(footerValue(i18n.M.ChatStatusIdle))) {
 				t.Fatalf("narrow footer should preserve the idle state:\n%s", narrow)
 			}

@@ -48,8 +48,6 @@ var Chinese = Messages{
 	ChatStatusCancellingFmt:                "%s 正在停止… (%s 秒 · Ctrl+C 退出)",
 	ChatStatusIdle:                         "就绪",
 	ChatStatusYoloIdle:                     "已跳过工具批准",
-	ChatStatusCycleHint:                    "Shift+Tab 循环询问/自动/计划 · Ctrl+Y YOLO",
-	ChatStatusCycleHintCompact:             "Shift+Tab 询问/自动/计划 · Ctrl+Y YOLO",
 	ChatCacheHitLabel:                      "缓存命中",
 	ChatStatusModelLabel:                   "模型",
 	ChatStatusEffortLabel:                  "强度",

@@ -390,21 +390,20 @@ func TestUpdateTranscriptDirtyOnlyRebuildsWrapCache(t *testing.T) {
 }
 
 // TestStatusLineWrapAccounting proves that computeStatusLineCount correctly
-// predicts the rendered row count of the status block (working + mode/state line
-// + data line) when wrapping is triggered on a narrow terminal, and that
-// bottomRows reserves the right height so the viewport fills the screen without
-// overlap.
+// predicts the rendered row count of the status block (working line + footer)
+// when wrapping is triggered on a narrow terminal, and that bottomRows
+// reserves the right height so the viewport fills the screen without overlap.
 func TestStatusLineWrapAccounting(t *testing.T) {
 	ctrl := control.New(control.Options{})
-	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 30)
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 24)
 
-	// Narrow terminal: mode+state line and data line will both wrap.
-	m0, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 12})
+	// Narrow terminal: interaction state and project path split across rows.
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 24, Height: 12})
 	m = m0.(chatTUI)
 
-	// At width 30 the status block should be detectably wrapped.
-	if m.statusLineCount <= 2 {
-		t.Fatalf("statusLineCount on a narrow terminal (30 cols) = %d, want > 2 (wrapping should be detected)", m.statusLineCount)
+	// At width 24 the footer should be detectably wrapped.
+	if m.statusLineCount <= 1 {
+		t.Fatalf("statusLineCount on a narrow terminal (24 cols) = %d, want > 1 (wrapping should be detected)", m.statusLineCount)
 	}
 
 	// Verify the height budget covers the full screen.
@@ -472,8 +471,8 @@ func TestStatusLineRenderedHeightMatchesBudget(t *testing.T) {
 	m0, _ := m.Update(tea.WindowSizeMsg{Width: 46, Height: 12})
 	m = m0.(chatTUI)
 
-	if m.statusLineCount <= 2 {
-		t.Fatalf("statusLineCount at width 46 with CJK model/context = %d, want > 2", m.statusLineCount)
+	if m.statusLineCount <= 1 {
+		t.Fatalf("statusLineCount at width 46 with CJK model/context = %d, want > 1 (wrapping should be detected)", m.statusLineCount)
 	}
 
 	// Verify that computeStatusLineCount matches the actual rendered line count.

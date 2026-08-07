@@ -63,11 +63,11 @@ func renderTurnReceipt(u *provider.Usage) string {
 	return footerMetric(i18n.M.ChatCacheHitLabel, footerValue(shortTokens(u.CacheHitTokens)))
 }
 
-// primaryStatusLine renders the interaction half of the first footer row. Mode
-// chrome lives on its own row under the composer (renderModeBadge); this row
-// only carries contextual UI state and short action hints. The model/profile
-// group is laid out separately so it can stay right-anchored on wide terminals
-// and move as one unit on narrow terminals.
+// primaryStatusLine renders the interaction half of the first footer row. The
+// mode pill anchors the same row's left edge (statusPrimaryWithBadge); this
+// half only carries contextual UI state. The model/profile group is laid out
+// separately so it can stay right-anchored on wide terminals and move as one
+// unit on narrow terminals.
 func (m chatTUI) primaryStatusLine(shellMode, cancelRequested bool) string {
 	var body string
 	switch {
@@ -100,9 +100,9 @@ func (m chatTUI) primaryStatusLine(shellMode, cancelRequested bool) string {
 	case shellMode:
 		body = i18n.M.ShellModeHint
 	case m.ctrl != nil && m.ctrl.AutoApproveTools():
-		body = footerValue(i18n.M.ChatStatusYoloIdle) + " · " + footerHint(i18n.M.ChatStatusCycleHintCompact)
+		body = footerValue(i18n.M.ChatStatusYoloIdle)
 	default:
-		body = footerValue(i18n.M.ChatStatusIdle) + " · " + footerHint(i18n.M.ChatStatusCycleHintCompact)
+		body = footerValue(i18n.M.ChatStatusIdle)
 	}
 	status := statusFooterIndent + body
 	if mt := m.mouseTag(); mt != "" {
@@ -223,20 +223,6 @@ func (m chatTUI) statusTelemetryGroups() []string {
 		}
 	}
 	return data
-}
-
-// hideStatusHintWhenKeyNamesCannotFit keeps the readable Shift+Tab/Ctrl+Y
-// spelling on normal terminals without hard-wrapping a single shortcut on an
-// extremely narrow terminal. In that case the idle state remains visible and
-// the optional shortcut help yields space to the composer.
-func hideStatusHintWhenKeyNamesCannotFit(primary string, width int) string {
-	hint := i18n.M.ChatStatusCycleHintCompact
-	for _, group := range strings.Split(hint, " · ") {
-		if visibleWidth(statusFooterIndent+group) > width {
-			return strings.Replace(primary, " · "+footerHint(hint), "", 1)
-		}
-	}
-	return primary
 }
 
 func layoutStatusSides(left, right string, width int) string {
@@ -362,7 +348,6 @@ func (m chatTUI) renderStatusBlock(primary string, width int) string {
 	if width <= 0 {
 		width = 1
 	}
-	primary = hideStatusHintWhenKeyNamesCannotFit(primary, width)
 	return layoutSingleStatusLine(primary, m.statusRightGroup(width), width)
 }
 
