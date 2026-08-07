@@ -34,12 +34,12 @@ var (
 
 // Resolve on each render so runtime theme switches and theme-sweep preview
 // frames cannot retain syntax colours from the previous light/dark mode.
+// catppuccin matches Codex's adaptive default (mocha dark / latte light).
 func activeDiffChromaStyle() *chroma.Style {
-	mode := chroma.Dark
 	if activeCLITheme.name == "light" {
-		mode = chroma.Light
+		return styles.Get("catppuccin-latte")
 	}
-	return styles.GetForMode("github-dark", mode)
+	return styles.Get("catppuccin-mocha")
 }
 
 // diffStat renders a change's "+A -B" tally, green/red, omitting a zero side.

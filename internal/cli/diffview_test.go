@@ -110,8 +110,8 @@ func TestActiveDiffChromaStyleFollowsCLITheme(t *testing.T) {
 		theme cliPalette
 		want  string
 	}{
-		{name: "dark", theme: cliDarkTheme, want: "github-dark"},
-		{name: "light", theme: cliLightTheme, want: "github"},
+		{name: "dark", theme: cliDarkTheme, want: "catppuccin-mocha"},
+		{name: "light", theme: cliLightTheme, want: "catppuccin-latte"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
