@@ -177,8 +177,23 @@ func toolCard(name, args string, width int) string {
 
 // renderToolCardExpanded renders the tool card followed by its output (capped
 // at shellExpandMaxLines) under the ⎿ connector. Used by Ctrl+B expansion,
-// which anchors to the card block itself.
+// which anchors to the card block itself. Empty output renders as the bare
+// card.
 func renderToolCardExpanded(name, args, output string, width int) string {
+	card := toolCard(name, args, width)
+	if block := renderToolOutputBlock(output, width); block != "" {
+		return card + "\n" + block
+	}
+	return card
+}
+
+// renderToolOutputBlock renders a tool's output under the ⎿ connector, capped
+// at shellExpandMaxLines with a "… N more lines" tail. Returns "" when the
+// output is empty so callers can render a bare card.
+func renderToolOutputBlock(output string, width int) string {
+	if strings.TrimSpace(output) == "" {
+		return ""
+	}
 	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
 	show := min(len(lines), shellExpandMaxLines)
 	rendered := make([]string, show)
@@ -188,11 +203,7 @@ func renderToolCardExpanded(name, args, output string, width int) string {
 	if len(lines) > shellExpandMaxLines {
 		rendered = append(rendered, dim(fmt.Sprintf("… %d more lines", len(lines)-shellExpandMaxLines)))
 	}
-	card := toolCard(name, args, width)
-	if block := connectorBlock(rendered); block != "" {
-		return card + "\n" + block
-	}
-	return card
+	return connectorBlock(rendered)
 }
 
 // toolHead builds "Verb(arg)" with the verb bold and category-coloured and the

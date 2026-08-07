@@ -192,9 +192,6 @@ type chatTUI struct {
 	// toolCardIdx maps a dispatched tool id to its card block index, so
 	// completion can re-anchor Ctrl+B expansion to the card.
 	toolCardIdx map[string]int
-	// toolLineCountByID keeps a switched-away tool's last line count so a late
-	// ToolResult can still render "⎿ N lines" (shellOutputs only tracks "shell-" ids).
-	toolLineCountByID map[string]int
 	// toolStreamStart / toolStreamFrame drive the "⎿ working · Ns" line shown
 	// under a dispatched tool that hasn't produced output yet, so a slow tool
 	// reads as making progress rather than frozen.
@@ -611,7 +608,6 @@ func newChatTUI(ctrl control.SessionAPI, missing string, eventCh chan event.Even
 		shellExpanded:        make(map[string]bool),
 		shellTranscriptIdx:   make(map[string]int),
 		toolCardIdx:          make(map[string]int),
-		toolLineCountByID:    make(map[string]int),
 		eventCh:              eventCh,
 		history:              history,
 		host:                 ctrl.Host(),
@@ -996,15 +992,6 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.Button == tea.MouseLeft && msg.Y < m.viewport.Height() {
-			// Check if the clicked line is a shell-output hint.
-			lineIdx := m.viewport.YOffset() + msg.Y
-			if lineIdx >= 0 && lineIdx < len(m.wrappedLines) {
-				clicked := m.wrappedLines[lineIdx]
-				if strings.Contains(clicked, "more lines") && strings.Contains(clicked, "Ctrl+B") {
-					m.toggleShellOutput()
-					return m, finalize(m, cmds)
-				}
-			}
 			at := m.transcriptCaret(msg.X, msg.Y)
 			m.sel = selection{active: true, anchor: at, head: at}
 			m.autoScroll = 0
@@ -1888,7 +1875,6 @@ func (m *chatTUI) clearTranscriptDisplay() {
 	m.shellExpanded = make(map[string]bool)
 	m.shellTranscriptIdx = make(map[string]int)
 	m.toolCardIdx = make(map[string]int)
-	m.toolLineCountByID = make(map[string]int)
 	m.toolStreamID = ""
 	m.toolStreamIdx = -1
 	m.toolTail = nil
@@ -2175,17 +2161,8 @@ func (m *chatTUI) streamToolOutput(id, chunk string) {
 		//       if the anchor was re-anchored to the card (block already
 		//       removed), open a fresh streaming canvas instead.
 		if existingIdx, ok := m.shellTranscriptIdx[id]; ok && existingIdx >= 0 && existingIdx < len(m.transcript) && m.transcriptSources[existingIdx].kind == transcriptSourceFixed {
-			// Stash the switched-away id's live count before resetting it;
-			// its late ToolResult reads it back via toolLineCountByID.
-			if m.toolStreamID != "" && m.toolStreamID != id {
-				n := m.toolLineCount
-				if m.toolPartial != "" {
-					n++
-				}
-				if n > 0 {
-					m.toolLineCountByID[m.toolStreamID] = n
-				}
-			}
+			// Late progress for an earlier tool whose live block is still in
+			// place: reuse that slot as the streaming canvas.
 			m.toolStreamID = id
 			m.toolStreamIdx = existingIdx
 			m.toolTail = m.toolTail[:0]
@@ -2259,6 +2236,13 @@ func (m *chatTUI) collapseToolOutput(id string) {
 		if id == "" || m.toolStreamID != id {
 			return
 		}
+		// Termux has no viewport to rewrite: print the finished output to the
+		// native scrollback (capped), then clear the stream state.
+		if full, ok := m.shellOutputs[id]; ok {
+			if block := renderToolOutputBlock(full, m.width); block != "" {
+				m.commitLine(block)
+			}
+		}
 		m.toolStreamIdx = -1
 		m.toolStreamID = ""
 		m.toolTail = m.toolTail[:0]
@@ -2267,25 +2251,24 @@ func (m *chatTUI) collapseToolOutput(id string) {
 		return
 	}
 	idx := -1
-	if m.toolStreamIdx >= 0 && id != "" && m.toolStreamID == id {
+	active := m.toolStreamIdx >= 0 && id != "" && m.toolStreamID == id
+	if active {
 		idx = m.toolStreamIdx
 	} else if i, ok := m.shellTranscriptIdx[id]; ok && i >= 0 && i < len(m.transcript) && m.transcriptSources[i].kind == transcriptSourceFixed {
 		idx = i
 	}
-	m.toolStreamIdx = -1
-	m.toolStreamID = ""
-	m.toolTail = m.toolTail[:0]
-	m.toolPartial = ""
-	m.toolLineCount = 0
 	if idx < 0 || idx >= len(m.transcript) {
 		return
 	}
-	// Remove the finished live block; every later recorded index shifts down.
+	// Remove the finished live block; removeTranscriptBlock shifts every later
+	// recorded index (including the active stream's) down by one.
 	m.removeTranscriptBlock(idx)
-	for tid, i := range m.shellTranscriptIdx {
-		if i > idx {
-			m.shellTranscriptIdx[tid] = i - 1
-		}
+	if active {
+		m.toolStreamIdx = -1
+		m.toolStreamID = ""
+		m.toolTail = m.toolTail[:0]
+		m.toolPartial = ""
+		m.toolLineCount = 0
 	}
 	// Re-anchor Ctrl+B expansion on the tool's card block.
 	if cardIdx, ok := m.toolCardIdx[id]; ok && cardIdx >= 0 && cardIdx < len(m.transcript) {
@@ -2337,9 +2320,11 @@ func (m *chatTUI) beginToolRunning(id string) {
 	m.toolTail = m.toolTail[:0]
 	m.toolPartial = ""
 	m.toolLineCount = 0
-	// Clear accumulated output for this tool ID so a re-run (e.g. repeated
-	// !pwd with the same "shell-pwd" id) doesn't append to old output.
+	// Clear accumulated output and expansion state for this tool ID so a re-run
+	// (e.g. repeated !pwd with the same "shell-pwd" id) doesn't append to old
+	// output or inherit the previous run's expansion.
 	delete(m.shellOutputs, id)
+	delete(m.shellExpanded, id)
 	m.toolStreamStart = time.Now()
 	m.toolStreamFrame = 0
 	if m.nativeScrollback {
@@ -3777,6 +3762,10 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 				}
 				break
 			}
+			// A re-run of the same tool id must not render the fresh card with
+			// the previous run's output or expansion state.
+			delete(m.shellOutputs, e.Tool.ID)
+			delete(m.shellExpanded, e.Tool.ID)
 			m.commitTranscriptSource(transcriptSource{
 				kind: transcriptSourceToolCard, raw: e.Tool.Name, aux: e.Tool.Args, shellID: e.Tool.ID,
 			})

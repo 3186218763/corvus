@@ -152,6 +152,29 @@ func (m *chatTUI) removeTranscriptBlock(index int) {
 		}
 	}
 	m.liveDirtyIdx = kept
+	// Recorded tool anchors follow the transcript: entries at the removed block
+	// are dropped, entries below it shift down by one.
+	for id, i := range m.shellTranscriptIdx {
+		switch {
+		case i == index:
+			delete(m.shellTranscriptIdx, id)
+		case i > index:
+			m.shellTranscriptIdx[id] = i - 1
+		}
+	}
+	for id, i := range m.toolCardIdx {
+		switch {
+		case i == index:
+			delete(m.toolCardIdx, id)
+		case i > index:
+			m.toolCardIdx[id] = i - 1
+		}
+	}
+	if m.toolStreamIdx > index {
+		m.toolStreamIdx--
+	} else if m.toolStreamIdx == index {
+		m.toolStreamIdx = -1
+	}
 	m.resyncMarkers(oldMarkers)
 }
 
@@ -169,6 +192,20 @@ func (m *chatTUI) truncateTranscriptBlocks(length int) {
 		}
 	}
 	m.liveDirtyIdx = kept
+	// Tool anchors into the dropped tail are no longer valid.
+	for id, i := range m.shellTranscriptIdx {
+		if i >= length {
+			delete(m.shellTranscriptIdx, id)
+		}
+	}
+	for id, i := range m.toolCardIdx {
+		if i >= length {
+			delete(m.toolCardIdx, id)
+		}
+	}
+	if m.toolStreamIdx >= length {
+		m.toolStreamIdx = -1
+	}
 	m.resyncMarkers(oldMarkers)
 }
 

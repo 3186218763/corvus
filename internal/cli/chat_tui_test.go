@@ -862,7 +862,6 @@ func TestClsClearsTranscriptDisplayState(t *testing.T) {
 	m.shellOutputs["shell-old"] = strings.Repeat("old shell output\n", shellPreviewLines+1)
 	m.shellExpanded["shell-old"] = false
 	m.shellTranscriptIdx["shell-old"] = 2
-	m.toolLineCountByID["shell-old"] = 3
 	m.toolStreamID = "shell-old"
 	m.toolStreamIdx = 2
 	m.toolTail = []string{"old shell output"}
@@ -880,9 +879,9 @@ func TestClsClearsTranscriptDisplayState(t *testing.T) {
 		t.Fatalf("/cls should reset shell display state: idx=%v outputs=%v expanded=%v",
 			m.shellTranscriptIdx, m.shellOutputs, m.shellExpanded)
 	}
-	if len(m.toolLineCountByID) != 0 || m.toolStreamID != "" || m.toolStreamIdx != -1 || len(m.toolTail) != 0 || m.toolPartial != "" || m.toolLineCount != 0 {
-		t.Fatalf("/cls should reset live tool display state: counts=%v id=%q idx=%d tail=%v partial=%q lines=%d",
-			m.toolLineCountByID, m.toolStreamID, m.toolStreamIdx, m.toolTail, m.toolPartial, m.toolLineCount)
+	if m.toolStreamID != "" || m.toolStreamIdx != -1 || len(m.toolTail) != 0 || m.toolPartial != "" || m.toolLineCount != 0 {
+		t.Fatalf("/cls should reset live tool display state: id=%q idx=%d tail=%v partial=%q lines=%d",
+			m.toolStreamID, m.toolStreamIdx, m.toolTail, m.toolPartial, m.toolLineCount)
 	}
 
 	before := strings.Join(m.transcript, "\n")

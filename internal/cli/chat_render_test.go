@@ -42,7 +42,6 @@ func newTestChatTUI() chatTUI {
 		shellOutputs:         shellOut,
 		shellExpanded:        shellExp,
 		shellTranscriptIdx:   shellIdx,
-		toolLineCountByID:    map[string]int{},
 		toolCardIdx:          map[string]int{},
 	}
 }
@@ -509,5 +508,117 @@ func TestRenderTUIBannerWideAndNarrow(t *testing.T) {
 	}
 	if got := strings.Count(renderTUIBanner("model-x", "", 60), "\n"); got < 1 {
 		t.Fatalf("width 60 must be wide (tip line present), got %d lines", got)
+	}
+}
+
+// TestLateResultDoesNotClobberActiveStream is the regression test for a
+// ToolResult arriving for an earlier tool while another tool is still
+// streaming: the late result removes only its own stale block and must not
+// reset the active stream's state (which would freeze its working line and
+// orphan its live block).
+func TestLateResultDoesNotClobberActiveStream(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-a", Name: "bash", Args: `{"command":"slow"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-a", Output: "a1\n"}})
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-b", Name: "bash", Args: `{"command":"faster"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-b", Output: "b1\n"}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-a", Name: "bash", Output: "a1\n"}})
+
+	if m.toolStreamID != "shell-b" || m.toolStreamIdx < 0 {
+		t.Fatalf("late result clobbered the active stream: id=%q idx=%d", m.toolStreamID, m.toolStreamIdx)
+	}
+	joined := strings.Join(m.transcript, "\n")
+	if !strings.Contains(joined, "b1") {
+		t.Fatalf("active tool's live output must survive the late result:\n%s", joined)
+	}
+	if strings.Contains(joined, "a1") {
+		t.Fatalf("late tool's stale block must be removed:\n%s", joined)
+	}
+
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-b", Name: "bash", Output: "b1\n"}})
+	if m.toolStreamID != "" || m.toolStreamIdx != -1 {
+		t.Fatalf("active stream should close on its own result, id=%q idx=%d", m.toolStreamID, m.toolStreamIdx)
+	}
+	if got := len(m.transcript); got != 2 {
+		t.Fatalf("only the two cards should remain, got %d blocks:\n%s", got, strings.Join(m.transcript, "\n"))
+	}
+}
+
+// TestToolCardAnchorsFollowRemovedBlocks proves Ctrl+B anchors stay correct
+// when back-to-back results remove live blocks: every tool's shellTranscriptIdx
+// ends on its own card, and Ctrl+B expands the most recent card.
+func TestToolCardAnchorsFollowRemovedBlocks(t *testing.T) {
+	m := newTestChatTUI()
+	for _, tc := range []struct{ id, cmd string }{
+		{"shell-a", `{"command":"a"}`},
+		{"shell-b", `{"command":"b"}`},
+		{"shell-c", `{"command":"c"}`},
+	} {
+		m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: tc.id, Name: "bash", Args: tc.cmd}})
+		m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: tc.id, Output: tc.id + "-out\n"}})
+	}
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-a", Name: "bash", Output: "a-out\n"}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-b", Name: "bash", Output: "b-out\n"}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-c", Name: "bash", Output: "c-out\n"}})
+
+	if got := len(m.transcript); got != 3 {
+		t.Fatalf("expected exactly the three cards, got %d blocks:\n%s", got, strings.Join(m.transcript, "\n"))
+	}
+	for id, want := range map[string]int{"shell-a": 0, "shell-b": 1, "shell-c": 2} {
+		if got := m.shellTranscriptIdx[id]; got != want {
+			t.Fatalf("Ctrl+B anchor for %s = %d, want %d", id, got, want)
+		}
+	}
+	m.toggleShellOutput()
+	if !m.shellExpanded["shell-c"] {
+		t.Fatalf("Ctrl+B should expand the most recent card, expanded=%v", m.shellExpanded)
+	}
+	if got := m.transcript[2]; !strings.Contains(got, "c-out") || !strings.Contains(got, "⎿") {
+		t.Fatalf("most recent card should carry its output when expanded, got %q", got)
+	}
+}
+
+// TestSameIDRerunDoesNotInheritExpansion is the regression test for re-running
+// a command with a stable tool id (e.g. !pwd): the fresh card must render
+// collapsed and must not show the previous run's output.
+func TestSameIDRerunDoesNotInheritExpansion(t *testing.T) {
+	m := newTestChatTUI()
+	const id = "shell-pwd"
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: id, Name: "bash", Args: `{"command":"pwd"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: id, Output: "/one\n"}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: id, Name: "bash", Output: "/one\n"}})
+	m.toggleShellOutput()
+	if got := m.transcript[0]; !strings.Contains(got, "/one") {
+		t.Fatalf("expanded card should show the output, got %q", got)
+	}
+
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: id, Name: "bash", Args: `{"command":"pwd"}`}})
+	if m.shellExpanded[id] {
+		t.Fatalf("re-dispatch must clear the previous run's expanded state")
+	}
+	if got := m.transcript[1]; strings.Contains(got, "/one") || strings.Contains(got, "⎿") {
+		t.Fatalf("fresh card must render collapsed without stale output, got %q", got)
+	}
+}
+
+// TestNativeScrollbackPrintsFinishedOutput proves Termux keeps tool output
+// visible: the finished shell output is committed to the transcript (which is
+// printed to the native scrollback) at result time, with no line-count summary.
+func TestNativeScrollbackPrintsFinishedOutput(t *testing.T) {
+	m := newTestChatTUI()
+	m.nativeScrollback = true
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-pwd", Name: "bash", Args: `{"command":"pwd"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-pwd", Output: "/home/user\n"}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-pwd", Name: "bash", Output: "/home/user\n"}})
+
+	joined := strings.Join(m.transcript, "\n")
+	if !strings.Contains(joined, "/home/user") {
+		t.Fatalf("native scrollback should show the finished output:\n%s", joined)
+	}
+	if strings.Contains(joined, "lines") {
+		t.Fatalf("no line-count summary in native mode:\n%s", joined)
+	}
+	if m.toolStreamID != "" || m.toolStreamIdx != -1 {
+		t.Fatalf("stream state should reset after the result, id=%q idx=%d", m.toolStreamID, m.toolStreamIdx)
 	}
 }
