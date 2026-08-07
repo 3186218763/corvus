@@ -622,3 +622,89 @@ func TestNativeScrollbackPrintsFinishedOutput(t *testing.T) {
 		t.Fatalf("stream state should reset after the result, id=%q idx=%d", m.toolStreamID, m.toolStreamIdx)
 	}
 }
+
+// TestNativeScrollbackLateResultStillPrints proves a native-mode result that
+// arrives while another tool is streaming prints that tool's output exactly
+// once, without touching the active stream's state.
+func TestNativeScrollbackLateResultStillPrints(t *testing.T) {
+	m := newTestChatTUI()
+	m.nativeScrollback = true
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-a", Name: "bash", Args: `{"command":"a"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-a", Output: "a-out\n"}})
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-b", Name: "bash", Args: `{"command":"b"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-b", Output: "b-out\n"}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-a", Name: "bash", Output: "a-out\n"}})
+
+	if m.toolStreamID != "shell-b" {
+		t.Fatalf("late result must not touch the active stream, id=%q", m.toolStreamID)
+	}
+	joined := strings.Join(m.transcript, "\n")
+	if !strings.Contains(joined, "a-out") {
+		t.Fatalf("late tool's output should still print in native mode:\n%s", joined)
+	}
+
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-a", Name: "bash", Output: "a-out\n"}})
+	if got := strings.Count(strings.Join(m.transcript, "\n"), "a-out"); got != 1 {
+		t.Fatalf("tool output must print at most once, got %d copies", got)
+	}
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-b", Name: "bash", Output: "b-out\n"}})
+	if got := strings.Join(m.transcript, "\n"); !strings.Contains(got, "b-out") {
+		t.Fatalf("active tool's output should print on its result:\n%s", got)
+	}
+	if m.toolStreamID != "" || m.toolStreamIdx != -1 {
+		t.Fatalf("stream state should reset after the active result, id=%q idx=%d", m.toolStreamID, m.toolStreamIdx)
+	}
+}
+
+// TestAnswerStreamSurvivesToolBlockRemoval is the regression test for a tool
+// result that removes its live block while the assistant answer is streaming
+// below it: the answer block index must shift so later chunks keep landing in
+// the same block instead of being dropped.
+func TestAnswerStreamSurvivesToolBlockRemoval(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-a", Name: "bash", Args: `{"command":"a"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-a", Output: "tool-out\n"}})
+	m.ingestEvent(event.Event{Kind: event.Text, Text: "First para.\n\nSecond "})
+	if m.answerIdx != 2 {
+		t.Fatalf("answer block should open below the tool's live block, idx=%d", m.answerIdx)
+	}
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-a", Name: "bash", Output: "tool-out\n"}})
+	if m.answerIdx != 1 {
+		t.Fatalf("answerIdx should shift down when the tool block is removed, got %d", m.answerIdx)
+	}
+	m.ingestEvent(event.Event{Kind: event.Text, Text: "complete.\n\n"})
+	joined := strings.Join(m.transcript, "\n")
+	if !strings.Contains(joined, "Second complete.") {
+		t.Fatalf("streamed answer must keep appending after the tool block removal:\n%s", joined)
+	}
+}
+
+// TestReasoningStreamSurvivesToolBlockRemoval is the regression test for a tool
+// result that removes its live block while reasoning is streaming below it:
+// the marker/text indices must shift so the live reasoning block keeps
+// updating and collapses cleanly on the message boundary.
+func TestReasoningStreamSurvivesToolBlockRemoval(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-a", Name: "bash", Args: `{"command":"a"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-a", Output: "tool-out\n"}})
+	m.ingestEvent(event.Event{Kind: event.Reasoning, Text: "think "})
+	if m.reasoningTextIdx != 4 || m.reasoningLineIdx != 3 {
+		t.Fatalf("reasoning blocks should sit below the tool's live block, line=%d text=%d", m.reasoningLineIdx, m.reasoningTextIdx)
+	}
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-a", Name: "bash", Output: "tool-out\n"}})
+	if m.reasoningTextIdx != 3 || m.reasoningLineIdx != 2 {
+		t.Fatalf("reasoning indices should shift down, line=%d text=%d", m.reasoningLineIdx, m.reasoningTextIdx)
+	}
+	m.ingestEvent(event.Event{Kind: event.Reasoning, Text: "more"})
+	joined := strings.Join(m.transcript, "\n")
+	if !strings.Contains(joined, "think more") {
+		t.Fatalf("live reasoning block must keep updating after the removal:\n%s", joined)
+	}
+	m.ingestEvent(event.Event{Kind: event.Message})
+	if m.reasoningTextIdx != -1 || m.reasoningLineIdx != -1 {
+		t.Fatalf("reasoning should close on the message boundary, line=%d text=%d", m.reasoningLineIdx, m.reasoningTextIdx)
+	}
+	if got := strings.Join(m.transcript, "\n"); strings.Contains(got, "think more") {
+		t.Fatalf("reasoning text block should collapse after the message:\n%s", got)
+	}
+}

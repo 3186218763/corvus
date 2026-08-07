@@ -1875,6 +1875,11 @@ func (m *chatTUI) clearTranscriptDisplay() {
 	m.shellExpanded = make(map[string]bool)
 	m.shellTranscriptIdx = make(map[string]int)
 	m.toolCardIdx = make(map[string]int)
+	m.answerIdx = -1
+	m.answerFlushed = 0
+	m.reasoningLineIdx = -1
+	m.reasoningTextIdx = -1
+	m.reasoningView = m.reasoningView[:0]
 	m.toolStreamID = ""
 	m.toolStreamIdx = -1
 	m.toolTail = nil
@@ -2135,10 +2140,6 @@ func reasoningBlock(raw string, width, maxLines int) string {
 // the live block scrolls within this window so a chatty build doesn't flood.
 const toolStreamTailLines = 8
 
-// shellPreviewLines is how many lines of shell output to show by default after
-// the command finishes. Ctrl+B toggles the full output.
-const shellPreviewLines = 10
-
 // shellExpandMaxLines caps how many lines Ctrl+B shows in expanded mode, so a
 // very large output (e.g. thousands of lines) doesn't hang the TUI or push the
 // input box off-screen.
@@ -2233,21 +2234,26 @@ func (m *chatTUI) pushToolLine(line string) {
 // Ctrl+B anchor moves to the card block. No-op when id isn't streaming.
 func (m *chatTUI) collapseToolOutput(id string) {
 	if m.nativeScrollback {
-		if id == "" || m.toolStreamID != id {
+		if id == "" {
 			return
 		}
 		// Termux has no viewport to rewrite: print the finished output to the
-		// native scrollback (capped), then clear the stream state.
+		// native scrollback (capped). Each id prints at most once — the entry is
+		// dropped after printing, and a late result prints without touching the
+		// active stream's state.
 		if full, ok := m.shellOutputs[id]; ok {
+			delete(m.shellOutputs, id)
 			if block := renderToolOutputBlock(full, m.width); block != "" {
 				m.commitLine(block)
 			}
 		}
-		m.toolStreamIdx = -1
-		m.toolStreamID = ""
-		m.toolTail = m.toolTail[:0]
-		m.toolPartial = ""
-		m.toolLineCount = 0
+		if m.toolStreamID == id {
+			m.toolStreamIdx = -1
+			m.toolStreamID = ""
+			m.toolTail = m.toolTail[:0]
+			m.toolPartial = ""
+			m.toolLineCount = 0
+		}
 		return
 	}
 	idx := -1

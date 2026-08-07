@@ -175,6 +175,21 @@ func (m *chatTUI) removeTranscriptBlock(index int) {
 	} else if m.toolStreamIdx == index {
 		m.toolStreamIdx = -1
 	}
+	if m.answerIdx > index {
+		m.answerIdx--
+	} else if m.answerIdx == index {
+		m.answerIdx = -1
+	}
+	if m.reasoningTextIdx > index {
+		m.reasoningTextIdx--
+	} else if m.reasoningTextIdx == index {
+		m.reasoningTextIdx = -1
+	}
+	if m.reasoningLineIdx > index {
+		m.reasoningLineIdx--
+	} else if m.reasoningLineIdx == index {
+		m.reasoningLineIdx = -1
+	}
 	m.resyncMarkers(oldMarkers)
 }
 
@@ -205,6 +220,15 @@ func (m *chatTUI) truncateTranscriptBlocks(length int) {
 	}
 	if m.toolStreamIdx >= length {
 		m.toolStreamIdx = -1
+	}
+	if m.answerIdx >= length {
+		m.answerIdx = -1
+	}
+	if m.reasoningTextIdx >= length {
+		m.reasoningTextIdx = -1
+	}
+	if m.reasoningLineIdx >= length {
+		m.reasoningLineIdx = -1
 	}
 	m.resyncMarkers(oldMarkers)
 }

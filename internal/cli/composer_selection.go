@@ -563,7 +563,7 @@ func renderComposerField(view string, width int) string {
 		out.WriteString(bg)
 		out.WriteString(rearmFieldBackground(line, bg))
 		if w := visibleWidth(ansi.Strip(line)); w < width {
-			out.WriteString(bg + strings.Repeat(" ", width-w))
+			out.WriteString(ansiReset + bg + strings.Repeat(" ", width-w))
 		}
 	}
 	return out.String()

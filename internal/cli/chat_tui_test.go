@@ -859,9 +859,13 @@ func TestClsClearsTranscriptDisplayState(t *testing.T) {
 	*m.pendingCommit = append(*m.pendingCommit, "stale pending")
 	m.transcript = []string{"banner", "shell card", "old shell output"}
 	m.wrappedLines = []string{"banner", "shell card", "old shell output"}
-	m.shellOutputs["shell-old"] = strings.Repeat("old shell output\n", shellPreviewLines+1)
+	m.shellOutputs["shell-old"] = strings.Repeat("old shell output\n", 11)
 	m.shellExpanded["shell-old"] = false
 	m.shellTranscriptIdx["shell-old"] = 2
+	m.answerIdx = 3
+	m.answerFlushed = 10
+	m.reasoningLineIdx = 1
+	m.reasoningTextIdx = 4
 	m.toolStreamID = "shell-old"
 	m.toolStreamIdx = 2
 	m.toolTail = []string{"old shell output"}
@@ -882,6 +886,10 @@ func TestClsClearsTranscriptDisplayState(t *testing.T) {
 	if m.toolStreamID != "" || m.toolStreamIdx != -1 || len(m.toolTail) != 0 || m.toolPartial != "" || m.toolLineCount != 0 {
 		t.Fatalf("/cls should reset live tool display state: id=%q idx=%d tail=%v partial=%q lines=%d",
 			m.toolStreamID, m.toolStreamIdx, m.toolTail, m.toolPartial, m.toolLineCount)
+	}
+	if m.answerIdx != -1 || m.answerFlushed != 0 || m.reasoningLineIdx != -1 || m.reasoningTextIdx != -1 {
+		t.Fatalf("/cls should reset streaming answer/reasoning indices: answerIdx=%d flushed=%d reasonLine=%d reasonText=%d",
+			m.answerIdx, m.answerFlushed, m.reasoningLineIdx, m.reasoningTextIdx)
 	}
 
 	before := strings.Join(m.transcript, "\n")
