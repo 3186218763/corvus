@@ -259,9 +259,18 @@ func TestComposerTintAndCursorFollowTheme(t *testing.T) {
 	for _, theme := range cliThemeStyles {
 		t.Run(theme.name, func(t *testing.T) {
 			configureCLITheme(theme.name)
-			wantTint := activeCLITheme.inputBoxBG
-			if wantTint.hex == "" {
-				t.Fatalf("%s inputBoxBG must be populated", theme.name)
+			wantTint := cliColor{"#eceff4", 255}
+			if theme.mode == "dark" {
+				wantTint = cliColor{"#1c2028", 234}
+			}
+			if got := activeCLITheme.inputBoxBG; !reflect.DeepEqual(got, wantTint) {
+				t.Fatalf("%s inputBoxBG = %v, want %v", theme.name, got, wantTint)
+			}
+			if got := inputBoxStyle.GetBorderTop(); got {
+				t.Fatalf("inputBoxStyle must not keep a top border (painter owns the tint), got %v", got)
+			}
+			if got := inputBoxStyle.GetBorderBottom(); got {
+				t.Fatalf("inputBoxStyle must not keep a bottom border (painter owns the tint), got %v", got)
 			}
 			if got := inputBoxStyle.GetBackground(); !reflect.DeepEqual(got, lipgloss.Color("")) {
 				t.Fatalf("inputBoxStyle must not carry a lipgloss background (painter owns the tint), got %v", got)
@@ -277,8 +286,17 @@ func TestComposerTintAndCursorFollowTheme(t *testing.T) {
 
 	activeColorProfile = colorprofile.NoTTY
 	configureCLITheme("dark")
-	if got := activeCLITheme.inputBoxBG; got.hex == "" {
-		t.Fatalf("dark theme must keep a tint slot even under NO_COLOR")
+	if got := activeCLITheme.inputBoxBG; !reflect.DeepEqual(got, cliColor{"#1c2028", 234}) {
+		t.Fatalf("dark theme must keep its tint slot even under NO_COLOR, got %v", got)
+	}
+	if got := inputBoxStyle.GetPaddingLeft(); got != 1 {
+		t.Fatalf("NO_COLOR inputBoxStyle padding-left = %d, want 1", got)
+	}
+	if got := inputBoxStyle.GetBorderTop(); got {
+		t.Fatalf("NO_COLOR inputBoxStyle must stay borderless, got top border %v", got)
+	}
+	if got := inputBoxStyle.GetBorderBottom(); got {
+		t.Fatalf("NO_COLOR inputBoxStyle must stay borderless, got bottom border %v", got)
 	}
 }
 
