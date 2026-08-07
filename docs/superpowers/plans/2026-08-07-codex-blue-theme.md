@@ -21,6 +21,7 @@
 - **D5 · md 测试**：`TestRenderConstructs` 的 fenced 用例断言裸文本 `"func main()"`，token 着色后 `func` 被 SGR 打断，必须 `ansi.Strip` 后再断言。
 - **D6 · 文案**：sandstone 描述去掉 `default ` 前缀（默认职责已移交 codex-light）。
 - light subtle `#555d6b` xterm 240 与 light toolArg 240 在 256 色下同档（spec 已如此 pin；truecolor 区分，沿用现有 faint==subtle=243 的先例，不改）。
+- **D7 · 实施期订正（Task 1 实测）**：`CORVUS_THEME_STYLE` 只覆盖 style 不覆盖 mode，env 用例第二段必须用 `configureCLIThemeWithStyle("light", "graphite")` 才能得到 light/codex-light；dark muted 252→253、light subtle 243→240 影响三个 footer 测试的 valueSGR/labelSGR pin（`TestStatusFooterSemanticPaletteAcrossThemes`、`TestTurnReceiptAdaptsContrastAcrossThemes`、`TestContextFooterColorsOnlyValuesByUrgency`），Task 1 一并更新。
 
 ## 全局约束
 
@@ -873,4 +874,3 @@ Expected: 默认主题为 Codex 蓝；输入框为相对背景的提亮透明框
 - 确认 `git log --oneline -5` 显示本计划 4 个 commit（T1–T4）。
 - 向用户汇报完成情况，并按 superpowers 流程（`finishing-a-development-branch`）决定是否需要 push/PR。
 *** End Patch
-
