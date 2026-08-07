@@ -1998,7 +1998,7 @@ func (m chatTUI) bottomRows() int {
 // Whenever a new slash-command overlay or approval-style prompt is added, update
 // this function and the modal layout tests together. Otherwise the panel may
 // reserve rows for a composer that cannot receive input, leaving a confusing
-// blank/bordered area at the bottom of the TUI.
+// blank area at the bottom of the TUI.
 func (m chatTUI) hideComposer() bool {
 	if m.mcp != nil || m.clearConfirm != nil || m.mcpImport != nil || m.skillPick != nil || m.resumePick != nil || m.quickPick != nil || m.copyPick != nil || m.rewind != nil || m.pendingApproval != nil {
 		return true
@@ -2726,7 +2726,8 @@ func freshApprovalAllowsSession(toolName string) bool {
 
 var (
 	// Input box: only top + bottom borders, no sides. The concrete colors are
-	// refreshed from the active CLI theme during startup.
+	// refreshed from the active CLI theme during startup. Kept as a regression
+	// guard for the borderless contract; the field painter owns the tint.
 	inputBoxStyle    lipgloss.Style
 	todoPanelStyle   lipgloss.Style
 	statusBlockStyle lipgloss.Style
@@ -3363,15 +3364,18 @@ func (m chatTUI) composerFrameWidth() int {
 }
 
 // composerBoxWidth is the input box width after reserving the mode badge
-// column. Floor is 1 so badgeCols+box never exceeds the frame width.
+// column. The floor is 1: a badge wider than the frame leaves the composer an
+// editable sliver, even though the joined row may overrun the last column.
 func (m chatTUI) composerBoxWidth(badgeCols int) int {
 	return max(m.composerFrameWidth()-badgeCols, 1)
 }
 
-// composerContentWidth is the textarea SetWidth budget derived from the same
-// clamped box width View paints (historical -4 chrome inside the box).
+// composerContentWidth is the textarea SetWidth budget. The borderless field
+// adds no chrome of its own; only the two-column ❯ prompt is reserved by the
+// textarea, so the content budget is the full box width. The painter right-pads
+// each line to the same composerBoxWidth, keeping SetWidth and View in lockstep.
 func (m chatTUI) composerContentWidth() int {
-	return max(m.composerBoxWidth(m.modeBadgeColumnWidth())-4, 1)
+	return m.composerBoxWidth(m.modeBadgeColumnWidth())
 }
 
 // joinModeBadgeLeftOfComposer places the mode badge beside the first row of the
@@ -3397,10 +3401,7 @@ func joinModeBadgeLeftOfComposer(badgeWithGap, box string) string {
 // textarea scrolls internally and keeps the caret visible.
 const maxInputRows = 8
 
-const (
-	composerBorderRows = 0
-	minTranscriptRows  = 3
-)
+const minTranscriptRows = 3
 const foldedPasteMinChars = 1000
 const foldedPasteMinLines = 5
 
@@ -3425,19 +3426,20 @@ func (m chatTUI) inputHeightLimit() int {
 	}
 
 	limit := maxInputRows
-	// Match the bounded-composer convention used by other coding TUIs: borders
-	// are part of the half-screen budget, not extra rows added afterward.
-	halfScreen := max(1, m.height/2-composerBorderRows)
+	// Match the bounded-composer convention used by other coding TUIs: the
+	// borderless field is part of the half-screen budget, not extra rows added
+	// afterward.
+	halfScreen := max(1, m.height/2)
 	limit = min(limit, halfScreen)
 
 	// bottomRows includes the current composer. Remove it to get the fixed
-	// panels/status budget, then reserve the input borders and a readable slice
-	// of transcript. On extremely short terminals one editable row still wins.
+	// panels/status budget, then reserve a readable slice of transcript. On
+	// extremely short terminals one editable row still wins.
 	fixedBottomRows := m.bottomRows()
 	if !m.hideComposer() {
-		fixedBottomRows -= m.input.Height() + composerBorderRows
+		fixedBottomRows -= m.input.Height()
 	}
-	available := max(1, m.height-fixedBottomRows-composerBorderRows-minTranscriptRows)
+	available := max(1, m.height-fixedBottomRows-minTranscriptRows)
 	return max(1, min(limit, available))
 }
 

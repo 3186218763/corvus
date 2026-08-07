@@ -289,9 +289,6 @@ func TestComposerTintAndCursorFollowTheme(t *testing.T) {
 	if got := activeCLITheme.inputBoxBG; !reflect.DeepEqual(got, cliColor{"#1c2028", 234}) {
 		t.Fatalf("dark theme must keep its tint slot even under NO_COLOR, got %v", got)
 	}
-	if got := inputBoxStyle.GetPaddingLeft(); got != 1 {
-		t.Fatalf("NO_COLOR inputBoxStyle padding-left = %d, want 1", got)
-	}
 	if got := inputBoxStyle.GetBorderTop(); got {
 		t.Fatalf("NO_COLOR inputBoxStyle must stay borderless, got top border %v", got)
 	}

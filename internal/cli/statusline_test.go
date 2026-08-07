@@ -190,8 +190,8 @@ func TestComposerBadgeJoinDoesNotExceedFrameWidth(t *testing.T) {
 	if total := badgeCols + boxW; total > m.composerFrameWidth() {
 		t.Fatalf("badgeCols(%d)+box(%d)=%d exceeds frame %d", badgeCols, boxW, total, m.composerFrameWidth())
 	}
-	// Same floor for SetWidth path.
-	if got, want := m.composerContentWidth(), max(boxW-4, 1); got != want {
+	// Same budget for the SetWidth path.
+	if got, want := m.composerContentWidth(), boxW; got != want {
 		t.Fatalf("composerContentWidth = %d, want %d (aligned with box)", got, want)
 	}
 	for _, line := range strings.Split(ansi.Strip(m.View().Content), "\n") {
