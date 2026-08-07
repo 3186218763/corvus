@@ -1374,23 +1374,26 @@ func TestIngestEventRoutesByKind(t *testing.T) {
 		}
 	}
 
-	// Usage does not commit a scrollback line; it feeds the cache-hit readout.
+	// Usage does not commit a scrollback line; the receipt derives from the
+	// controller's session cache (nil ctrl in these tests → empty receipt).
 	for _, tc := range []struct {
 		name string
 		ev   event.Event
-		want string
 	}{
-		{"usage", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200, CacheHitTokens: 900, CacheMissTokens: 100}}, "cached 900"},
-		{"usage-zero-hit", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200}}, "cached 0"},
+		{"usage", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200, CacheHitTokens: 900, CacheMissTokens: 100}}},
+		{"usage-zero-hit", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200}}},
 	} {
 		m := newTestChatTUI()
 		m.ingestEvent(tc.ev)
 		if got := *m.pendingCommit; len(got) != 0 {
 			t.Errorf("%s: usage must not commit a scrollback line, got %v", tc.name, got)
 		}
-		if !strings.Contains(ansi.Strip(m.turnReceipt), tc.want) {
-			t.Errorf("%s: turn receipt %q missing %q", tc.name, m.turnReceipt, tc.want)
+		if m.turnReceipt != "" {
+			t.Errorf("%s: receipt must be empty without session cache data, got %q", tc.name, m.turnReceipt)
 		}
+	}
+	if got := renderCacheHitRate(900, 100); got != "cached 90.00%" {
+		t.Errorf("renderCacheHitRate(900,100) = %q, want cached 90.00%%", got)
 	}
 
 	// A successful tool result is silent — it only feeds the model.

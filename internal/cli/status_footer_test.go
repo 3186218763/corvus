@@ -18,19 +18,15 @@ import (
 	"corvus/internal/tool"
 )
 
-func TestTurnReceiptShowsOnlyCacheHit(t *testing.T) {
+func TestCacheHitRateShowsOnlyRate(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	defer i18n.DetectLanguage("en")
 	activeColorProfile = colorprofile.NoTTY
 	configureCLITheme("dark")
 	i18n.DetectLanguage("zh")
 
-	u := &provider.Usage{
-		PromptTokens: 13_625, CompletionTokens: 392, TotalTokens: 14_017,
-		CacheHitTokens: 13_184, CacheMissTokens: 441, ReasoningTokens: 24,
-	}
-	got := renderTurnReceipt(u)
-	for _, want := range []string{"缓存命中", "13.2K"} {
+	got := renderCacheHitRate(900, 100)
+	for _, want := range []string{"缓存命中", "90.00%"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("turn receipt %q missing %q", got, want)
 		}
@@ -45,28 +41,28 @@ func TestTurnReceiptShowsOnlyCacheHit(t *testing.T) {
 	}
 }
 
-func TestTurnReceiptShowsZeroWhenNoHits(t *testing.T) {
+func TestCacheHitRateShowsZeroPercent(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	defer i18n.DetectLanguage("en")
 	activeColorProfile = colorprofile.NoTTY
 	configureCLITheme("dark")
 	i18n.DetectLanguage("en")
 
-	got := renderTurnReceipt(&provider.Usage{PromptTokens: 100, CompletionTokens: 20, TotalTokens: 120})
-	for _, want := range []string{"cached", "0"} {
+	got := renderCacheHitRate(0, 100)
+	for _, want := range []string{"cached", "0.00%"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("zero-hit receipt %q missing %q", got, want)
 		}
 	}
 }
 
-func TestTurnReceiptIgnoresNilUsage(t *testing.T) {
-	if got := renderTurnReceipt(nil); got != "" {
-		t.Fatalf("nil usage receipt = %q, want empty", got)
+func TestCacheHitRateEmptyWithoutCacheTokens(t *testing.T) {
+	if got := renderCacheHitRate(0, 0); got != "" {
+		t.Fatalf("cache hit rate with no cache tokens = %q, want empty", got)
 	}
 }
 
-func TestTurnReceiptAdaptsContrastAcrossThemes(t *testing.T) {
+func TestCacheHitRateAdaptsContrastAcrossThemes(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	defer i18n.DetectLanguage("en")
 	activeColorProfile = colorprofile.ANSI256
@@ -80,10 +76,8 @@ func TestTurnReceiptAdaptsContrastAcrossThemes(t *testing.T) {
 	} {
 		t.Run(tt.mode, func(t *testing.T) {
 			configureCLITheme(tt.mode)
-			receipt := renderTurnReceipt(&provider.Usage{
-				PromptTokens: 900, CompletionTokens: 100, TotalTokens: 1_000, CacheHitTokens: 900,
-			})
-			for _, want := range []string{tt.labelSGR + "cached", tt.valueSGR + "900"} {
+			receipt := renderCacheHitRate(900, 100)
+			for _, want := range []string{tt.labelSGR + "cached", tt.valueSGR + "90.00%"} {
 				if !strings.Contains(receipt, want) {
 					t.Fatalf("%s receipt %q missing semantic style %q", tt.mode, receipt, want)
 				}
@@ -184,7 +178,7 @@ func TestSingleStatusLineWrapsAtGroupBoundaries(t *testing.T) {
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{WorkspaceRoot: "/home/user/project"})
 	m.label = "deepseek-v4-flash"
-	m.turnReceipt = renderTurnReceipt(&provider.Usage{TotalTokens: 1050, CacheHitTokens: 900})
+	m.turnReceipt = renderCacheHitRate(900, 100)
 
 	primary := m.primaryStatusLine(false, false)
 	got := m.renderStatusBlock(primary, 30)
@@ -605,7 +599,7 @@ func TestStatusFooterSingleLineOmitsBalanceGitCacheContext(t *testing.T) {
 	m.runtimeProfile = "full"
 	m.balance = "¥12.34"
 	m.gitStatus = gitStatus{Repo: "Corvus", Branch: "main", Added: 1}
-	m.turnReceipt = renderTurnReceipt(&provider.Usage{TotalTokens: 1050, CacheHitTokens: 900})
+	m.turnReceipt = renderCacheHitRate(900, 100)
 
 	plain := ansi.Strip(m.renderStatusBlock(m.primaryStatusLine(false, false), 140))
 	for _, banned := range []string{
@@ -617,7 +611,7 @@ func TestStatusFooterSingleLineOmitsBalanceGitCacheContext(t *testing.T) {
 			t.Fatalf("single-line footer must omit %q:\n%s", banned, plain)
 		}
 	}
-	for _, want := range []string{"/home/user/project", "Model deepseek-v4-flash", "Work balanced", "cached 900"} {
+	for _, want := range []string{"/home/user/project", "Model deepseek-v4-flash", "Work balanced", "cached 90.00%"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("single-line footer missing %q:\n%s", want, plain)
 		}
@@ -681,5 +675,14 @@ func TestWorkingLineElapsedStableWidth(t *testing.T) {
 	// The time segment keeps a stable 4-column width ("  3s" vs " 12s").
 	if !strings.Contains(line3, "  3s") || !strings.Contains(line12, " 12s") {
 		t.Fatalf("elapsed width must be fixed: %q vs %q", line3, line12)
+	}
+}
+
+func TestRenderCacheHitRateFormatsSessionRate(t *testing.T) {
+	if got := renderCacheHitRate(900, 100); got != "cached 90.00%" {
+		t.Fatalf("renderCacheHitRate(900,100) = %q, want cached 90.00%%", got)
+	}
+	if got := renderCacheHitRate(0, 0); got != "" {
+		t.Fatalf("renderCacheHitRate(0,0) = %q, want empty", got)
 	}
 }

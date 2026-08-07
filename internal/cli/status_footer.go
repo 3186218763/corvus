@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"corvus/internal/i18n"
-	"corvus/internal/provider"
 )
 
 const (
@@ -53,14 +52,14 @@ func formatElapsedFixed(sec int) string {
 	return fmt.Sprintf("%3d", sec)
 }
 
-// renderTurnReceipt renders the completed turn's cache-hit readout. Only the
-// cache-hit segment survives: totals, in/out/reasoning/cost and cache-prefix
-// warnings are intentionally dropped for a quiet footer.
-func renderTurnReceipt(u *provider.Usage) string {
-	if u == nil {
+// renderCacheHitRate renders the current conversation's prompt-cache hit rate
+// (Σhit / Σ(hit+miss) across the whole session), e.g. "cached 87.50%". Hidden
+// until the provider reports any cache tokens (denominator 0).
+func renderCacheHitRate(hit, miss int) string {
+	if hit+miss <= 0 {
 		return ""
 	}
-	return footerMetric(i18n.M.ChatCacheHitLabel, footerValue(shortTokens(u.CacheHitTokens)))
+	return footerMetric(i18n.M.ChatCacheHitLabel, footerValue(cacheRateLabel("%s", hit, hit+miss)))
 }
 
 // primaryStatusLine renders the interaction half of the first footer row. The

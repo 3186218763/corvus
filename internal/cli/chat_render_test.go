@@ -120,17 +120,18 @@ func TestTurnReceiptMovesBelowComposer(t *testing.T) {
 	m.ingestEvent(event.Event{Kind: event.Usage, Usage: &provider.Usage{
 		PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12,
 	}})
+	m.turnReceipt = renderCacheHitRate(900, 100)
 
 	for _, block := range m.transcript {
 		if strings.Contains(ansi.Strip(block), "cached") {
 			t.Fatalf("receipt must not stay in the transcript scrollback, got %q", block)
 		}
 	}
-	if !strings.Contains(ansi.Strip(m.turnReceipt), "cached") {
+	if !strings.Contains(ansi.Strip(m.turnReceipt), "cached 90.00%") {
 		t.Fatalf("turn receipt not captured, got %q", m.turnReceipt)
 	}
 	view := m.View().Content
-	if !strings.Contains(ansi.Strip(view), "cached") {
+	if !strings.Contains(ansi.Strip(view), "cached 90.00%") {
 		t.Fatalf("View should render the receipt below the composer:\n%s", ansi.Strip(view))
 	}
 	// The receipt sits after the composer box: it must appear after "❯" input

@@ -217,8 +217,8 @@ type chatTUI struct {
 	wrappedLines      []string // transcript wrapped to viewport width (rendered each frame)
 	blockLineCounts   []int    // wrapped line count per transcript block
 	liveDirtyIdx      []int    // blocks mutated this Update, re-wrapped by the wrapper
-	// turnReceipt holds the latest completed turn's token/cost line, rendered
-	// under the composer instead of staying in the transcript scrollback.
+	// turnReceipt holds the latest completed turn's session cache-hit rate
+	// readout ("cached 87.50%"), rendered in the footer row below the composer.
 	turnReceipt string
 	viewport    viewport.Model
 	sel         selection
@@ -3779,7 +3779,11 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 			m.turnTokens += e.Usage.CompletionTokens
 		}
 		m.finalizeStreamed()
-		m.turnReceipt = renderTurnReceipt(e.Usage)
+		m.turnReceipt = ""
+		if m.ctrl != nil {
+			hit, miss := m.ctrl.SessionCache()
+			m.turnReceipt = renderCacheHitRate(hit, miss)
+		}
 
 	case event.Notice:
 		glyph := "·"
