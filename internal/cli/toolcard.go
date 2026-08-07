@@ -171,8 +171,36 @@ func argList(v any) string {
 }
 
 // toolCard renders the dispatch line: "  ⏺ Verb(arg)", arg clamped to width.
+// bash commands are syntax-highlighted via bashToolCard instead.
 func toolCard(name, args string, width int) string {
+	if name == "bash" {
+		return bashToolCard(name, args, width)
+	}
 	return "  " + toolDot(name) + " " + toolHead(name, toolArg(name, args), width)
+}
+
+// bashToolCard renders "  ● Bash <command>" with the command chroma-highlighted
+// (catppuccin + flag tint). Multi-line commands continue under the ⎿ connector;
+// every line is clamped to the terminal width.
+func bashToolCard(name, args string, width int) string {
+	cmd := strings.TrimSpace(toolArg(name, args))
+	dot := toolDot(name)
+	label := toolDisplayName(name)
+	if cmd == "" {
+		return "  " + dot + " " + bold(label)
+	}
+	lines := strings.Split(cmd, "\n")
+	headW := width - 5 - len([]rune(label)) // 2 indent + ● + space + label + space
+	first := highlightBash(clampPlain(lines[0], headW))
+	rest := make([]string, 0, len(lines)-1)
+	for _, ln := range lines[1:] {
+		rest = append(rest, highlightBash(clampPlain(ln, width-len([]rune(connector)))))
+	}
+	head := "  " + dot + " " + bold(label) + " " + first
+	if len(rest) == 0 {
+		return head
+	}
+	return head + "\n" + connectorBlock(rest)
 }
 
 // renderToolCardExpanded renders the tool card followed by its output (capped
