@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alecthomas/chroma/v2"
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
@@ -145,5 +146,45 @@ func TestHighlightCodeUpdatesOnThemeSwitch(t *testing.T) {
 		if plain := ansi.Strip(got); plain != code {
 			t.Fatalf("%s theme changed code text: got %q, want %q", name, plain, code)
 		}
+	}
+}
+
+func TestTokeniseBashFlags(t *testing.T) {
+	tokens := tokeniseBash(`git add . && git commit -m "fix" --no-verify`)
+	var flags []string
+	for _, tk := range tokens {
+		if tk.Type == chroma.NameAttribute {
+			flags = append(flags, tk.Value)
+		}
+	}
+	found := false
+	for _, f := range flags {
+		if f == "--no-verify" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected --no-verify re-tagged as NameAttribute, flags=%v tokens=%+v", flags, tokens)
+	}
+}
+
+func TestTokeniseBashSkipsFlagsInsideStrings(t *testing.T) {
+	for _, tk := range tokeniseBash(`echo "--keep" '--also'`) {
+		if tk.Type == chroma.NameAttribute {
+			t.Fatalf("flag inside a quoted string must stay plain: %+v", tk)
+		}
+	}
+}
+
+func TestTokeniseBashLeavesOperatorTokens(t *testing.T) {
+	tokens := tokeniseBash(`a && b || c`)
+	ops := 0
+	for _, tk := range tokens {
+		if tk.Type == chroma.Operator {
+			ops++
+		}
+	}
+	if ops != 2 {
+		t.Fatalf("expected 2 operator tokens (&&, ||), got %d: %+v", ops, tokens)
 	}
 }

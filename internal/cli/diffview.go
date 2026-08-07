@@ -267,3 +267,37 @@ func highlightCode(path, code string) string {
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
+
+// bashFlagRE matches "-x" / "--flag" style arguments, which the chroma bash
+// lexer leaves as plain Text; Codex's shell grammar colours them as
+// variable.parameter, so we re-tag them as NameAttribute for the style to tint.
+var bashFlagRE = regexp.MustCompile(`-{1,2}[A-Za-z0-9][A-Za-z0-9_-]*`)
+
+// tokeniseBash runs the chroma bash lexer and re-tags "-x"/"--flag" arguments
+// (outside quoted strings) as NameAttribute. Returns a single Text token for
+// lexer errors so callers always get a renderable stream.
+func tokeniseBash(cmd string) []chroma.Token {
+	it, err := lexers.Get("bash").Tokenise(nil, cmd)
+	if err != nil {
+		return []chroma.Token{{Type: chroma.Text, Value: cmd}}
+	}
+	var out []chroma.Token
+	for _, t := range it.Tokens() {
+		if t.Type != chroma.Text {
+			out = append(out, t)
+			continue
+		}
+		last := 0
+		for _, loc := range bashFlagRE.FindAllStringIndex(t.Value, -1) {
+			if loc[0] > last {
+				out = append(out, chroma.Token{Type: chroma.Text, Value: t.Value[last:loc[0]]})
+			}
+			out = append(out, chroma.Token{Type: chroma.NameAttribute, Value: t.Value[loc[0]:loc[1]]})
+			last = loc[1]
+		}
+		if last < len(t.Value) {
+			out = append(out, chroma.Token{Type: chroma.Text, Value: t.Value[last:]})
+		}
+	}
+	return out
+}
