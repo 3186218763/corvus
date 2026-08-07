@@ -1362,14 +1362,14 @@ func TestIngestEventRoutesByKind(t *testing.T) {
 		}
 	}
 
-	// Usage does not commit a scrollback line; it feeds the bottom turn receipt.
+	// Usage does not commit a scrollback line; it feeds the cache-hit readout.
 	for _, tc := range []struct {
 		name string
 		ev   event.Event
 		want string
 	}{
-		{"usage", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200, CacheHitTokens: 900, CacheMissTokens: 100}}, "TURN  1.2K tok"},
-		{"usage-diagnostics", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200}, CacheDiagnostics: &event.CacheDiagnostics{PrefixChanged: true, PrefixChangeReasons: []string{"tools"}}}, "cache prefix changed: tools"},
+		{"usage", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200, CacheHitTokens: 900, CacheMissTokens: 100}}, "cached 900"},
+		{"usage-zero-hit", event.Event{Kind: event.Usage, Usage: &provider.Usage{PromptTokens: 1000, CompletionTokens: 200, TotalTokens: 1200}}, "cached 0"},
 	} {
 		m := newTestChatTUI()
 		m.ingestEvent(tc.ev)

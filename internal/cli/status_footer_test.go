@@ -18,7 +18,7 @@ import (
 	"corvus/internal/tool"
 )
 
-func TestTurnReceiptKeepsCompletePerTurnBreakdown(t *testing.T) {
+func TestTurnReceiptShowsOnlyCacheHit(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	defer i18n.DetectLanguage("en")
 	activeColorProfile = colorprofile.NoTTY
@@ -26,21 +26,18 @@ func TestTurnReceiptKeepsCompletePerTurnBreakdown(t *testing.T) {
 	i18n.DetectLanguage("zh")
 
 	u := &provider.Usage{
-		PromptTokens:     13_625,
-		CompletionTokens: 392,
-		TotalTokens:      14_017,
-		CacheHitTokens:   13_184,
-		CacheMissTokens:  441,
-		ReasoningTokens:  24,
+		PromptTokens: 13_625, CompletionTokens: 392, TotalTokens: 14_017,
+		CacheHitTokens: 13_184, CacheMissTokens: 441, ReasoningTokens: 24,
 	}
-	p := &provider.Pricing{CacheHit: .1, Input: 1, Output: 2}
-	got := renderTurnReceipt(u, p, nil)
-	for _, want := range []string{
-		"本轮", "14.0K tok", "in 13.6K", "cached 13.2K", "new 441",
-		"out 392", "reasoning 24", "¥0.0025",
-	} {
+	got := renderTurnReceipt(u)
+	for _, want := range []string{"缓存命中", "13.2K"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("turn receipt %q missing %q", got, want)
+		}
+	}
+	for _, banned := range []string{"tok", "in ", "out ", "reasoning", "¥", "estimated", "prefix"} {
+		if strings.Contains(got, banned) {
+			t.Fatalf("turn receipt %q must not contain %q", got, banned)
 		}
 	}
 	if strings.Contains(got, "\033[") {
@@ -48,50 +45,24 @@ func TestTurnReceiptKeepsCompletePerTurnBreakdown(t *testing.T) {
 	}
 }
 
-func TestTurnReceiptFallsBackToDerivedFreshTokensAndWrapsCleanly(t *testing.T) {
-	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
-	defer i18n.DetectLanguage("en")
-	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
-	i18n.DetectLanguage("en")
-
-	got := renderTurnReceipt(&provider.Usage{
-		PromptTokens: 1_200, CompletionTokens: 80, TotalTokens: 1_280, CacheHitTokens: 900,
-	}, nil, &event.CacheDiagnostics{PrefixChanged: true, PrefixChangeReasons: []string{"tools"}})
-	plain := ansi.Strip(got)
-	for _, want := range []string{"TURN", "cached 900", "new 300", "cache prefix changed: tools"} {
-		if !strings.Contains(plain, want) {
-			t.Fatalf("turn receipt %q missing %q", plain, want)
-		}
-	}
-	for i, line := range strings.Split(wrapTranscript(got, 32), "\n") {
-		if width := visibleWidth(line); width > 32 {
-			t.Fatalf("wrapped turn receipt row %d width = %d, want <= 32: %q", i, width, line)
-		}
-	}
-}
-
-func TestTurnReceiptIgnoresEmptyUsage(t *testing.T) {
-	if got := renderTurnReceipt(nil, nil, nil); got != "" {
-		t.Fatalf("nil usage receipt = %q, want empty", got)
-	}
-	if got := renderTurnReceipt(&provider.Usage{}, nil, nil); got != "" {
-		t.Fatalf("empty usage receipt = %q, want empty", got)
-	}
-}
-
-func TestTurnReceiptMarksEstimatedUsage(t *testing.T) {
+func TestTurnReceiptShowsZeroWhenNoHits(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	defer i18n.DetectLanguage("en")
 	activeColorProfile = colorprofile.NoTTY
 	configureCLITheme("dark")
 	i18n.DetectLanguage("en")
 
-	got := renderTurnReceipt(&provider.Usage{TotalTokens: 1_024, Estimated: true}, nil, nil)
-	for _, want := range []string{"≈1.0K tok", "estimated"} {
+	got := renderTurnReceipt(&provider.Usage{PromptTokens: 100, CompletionTokens: 20, TotalTokens: 120})
+	for _, want := range []string{"cached", "0"} {
 		if !strings.Contains(got, want) {
-			t.Fatalf("estimated turn receipt %q missing %q", got, want)
+			t.Fatalf("zero-hit receipt %q missing %q", got, want)
 		}
+	}
+}
+
+func TestTurnReceiptIgnoresNilUsage(t *testing.T) {
+	if got := renderTurnReceipt(nil); got != "" {
+		t.Fatalf("nil usage receipt = %q, want empty", got)
 	}
 }
 
@@ -110,15 +81,12 @@ func TestTurnReceiptAdaptsContrastAcrossThemes(t *testing.T) {
 		t.Run(tt.mode, func(t *testing.T) {
 			configureCLITheme(tt.mode)
 			receipt := renderTurnReceipt(&provider.Usage{
-				PromptTokens: 900, CompletionTokens: 100, TotalTokens: 1_000,
-			}, nil, nil)
-			for _, want := range []string{tt.labelSGR + "TURN", tt.valueSGR + "1.0K tok"} {
+				PromptTokens: 900, CompletionTokens: 100, TotalTokens: 1_000, CacheHitTokens: 900,
+			})
+			for _, want := range []string{tt.labelSGR + "cached", tt.valueSGR + "900"} {
 				if !strings.Contains(receipt, want) {
 					t.Fatalf("%s receipt %q missing semantic style %q", tt.mode, receipt, want)
 				}
-			}
-			if strings.Contains(receipt, "─") {
-				t.Fatalf("%s receipt should have no rule separator: %q", tt.mode, ansi.Strip(receipt))
 			}
 		})
 	}

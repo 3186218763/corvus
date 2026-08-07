@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"corvus/internal/event"
 	"corvus/internal/i18n"
 	"corvus/internal/provider"
 )
@@ -53,57 +52,14 @@ func formatElapsedFixed(sec int) string {
 	return fmt.Sprintf("%3d", sec)
 }
 
-// renderTurnReceipt attaches the completed turn's token and cost breakdown to
-// the assistant response. Unlike the persistent footer, this is historical
-// message metadata: it stays in transcript scrollback and deliberately uses a
-// quieter palette than runtime/session state.
-func renderTurnReceipt(u *provider.Usage, p *provider.Pricing, d *event.CacheDiagnostics) string {
-	if u == nil || u.TotalTokens == 0 {
+// renderTurnReceipt renders the completed turn's cache-hit readout. Only the
+// cache-hit segment survives: totals, in/out/reasoning/cost and cache-prefix
+// warnings are intentionally dropped for a quiet footer.
+func renderTurnReceipt(u *provider.Usage) string {
+	if u == nil {
 		return ""
 	}
-
-	total := shortTokens(u.TotalTokens) + " tok"
-	if u.Estimated {
-		total = "≈" + total
-	}
-	groups := []string{total}
-	if u.PromptTokens > 0 {
-		cached := u.CacheHitTokens
-		fresh := u.CacheMissTokens
-		if fresh == 0 {
-			fresh = max(u.PromptTokens-cached, 0)
-		}
-		groups = append(groups,
-			"in "+shortTokens(u.PromptTokens),
-			"cached "+shortTokens(cached),
-			"new "+shortTokens(fresh),
-		)
-	}
-	groups = append(groups, "out "+shortTokens(u.CompletionTokens))
-	if u.ReasoningTokens > 0 {
-		groups = append(groups, "reasoning "+shortTokens(u.ReasoningTokens))
-	}
-	if p != nil {
-		groups = append(groups, fmt.Sprintf("%s%.4f", p.Symbol(), p.Cost(u)))
-	}
-	if u.Estimated {
-		groups = append(groups, "estimated")
-	}
-
-	separator := footerHint(" · ")
-	styled := make([]string, 0, len(groups))
-	for _, group := range groups {
-		styled = append(styled, footerValue(group))
-	}
-	receipt := statusFooterIndent + footerLabel(i18n.M.ChatTurnReceiptLabel) + "  " + strings.Join(styled, separator)
-	if d != nil && d.PrefixChanged {
-		reasons := strings.Join(d.PrefixChangeReasons, "+")
-		if reasons == "" {
-			reasons = "unknown"
-		}
-		receipt += separator + themeFg(activeCLITheme.warn, "cache prefix changed: "+reasons)
-	}
-	return receipt
+	return footerMetric(i18n.M.ChatCacheHitLabel, footerValue(shortTokens(u.CacheHitTokens)))
 }
 
 // primaryStatusLine renders the interaction half of the first footer row. Mode

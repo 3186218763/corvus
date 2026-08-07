@@ -125,21 +125,21 @@ func TestTurnReceiptMovesBelowComposer(t *testing.T) {
 	}})
 
 	for _, block := range m.transcript {
-		if strings.Contains(ansi.Strip(block), "TURN") {
+		if strings.Contains(ansi.Strip(block), "cached") {
 			t.Fatalf("receipt must not stay in the transcript scrollback, got %q", block)
 		}
 	}
-	if !strings.Contains(ansi.Strip(m.turnReceipt), "TURN") {
+	if !strings.Contains(ansi.Strip(m.turnReceipt), "cached") {
 		t.Fatalf("turn receipt not captured, got %q", m.turnReceipt)
 	}
 	view := m.View().Content
-	if !strings.Contains(ansi.Strip(view), "TURN") {
+	if !strings.Contains(ansi.Strip(view), "cached") {
 		t.Fatalf("View should render the receipt below the composer:\n%s", ansi.Strip(view))
 	}
 	// The receipt sits after the composer box: it must appear after "❯" input
 	// prompt marker in the rendered output.
 	boxIdx := strings.LastIndex(view, "❯")
-	receiptIdx := strings.Index(view, "TURN")
+	receiptIdx := strings.Index(view, "cached")
 	if boxIdx < 0 || receiptIdx < 0 || receiptIdx < boxIdx {
 		t.Fatalf("receipt should render below the composer (box at %d, receipt at %d)", boxIdx, receiptIdx)
 	}

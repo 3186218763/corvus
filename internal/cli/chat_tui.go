@@ -3947,10 +3947,8 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		if e.Usage != nil {
 			m.turnTokens += e.Usage.CompletionTokens
 		}
-		if line := renderTurnReceipt(e.Usage, e.Pricing, e.CacheDiagnostics); line != "" {
-			m.finalizeStreamed()
-			m.turnReceipt = line
-		}
+		m.finalizeStreamed()
+		m.turnReceipt = renderTurnReceipt(e.Usage)
 
 	case event.Notice:
 		glyph := "·"
