@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -330,12 +331,15 @@ func renderAssistantMarkdown(raw string, contentWidth int, named bool) string {
 		rendered = raw
 	}
 	body := strings.TrimRight(rendered, "\n")
+	if blankTranscriptBody(body) {
+		// Blank/whitespace-only assistant content (e.g. a turn that ended with
+		// a stray newline or invisible format characters) must not paint a
+		// bare orphan diamond.
+		return ""
+	}
 	header := indent + dim("◆")
 	if named {
 		header = indent + accent("◆") + " " + bold("Corvus")
-	}
-	if body == "" {
-		return header
 	}
 	return header + "\n\n" + indentTranscriptBlock(body, indent)
 }
@@ -355,14 +359,26 @@ func renderAssistantMarkdownCopy(raw string, contentWidth int, prefix string, na
 		rendered = raw
 	}
 	body := strings.TrimRight(rendered, "\n")
+	if blankTranscriptBody(body) {
+		return ""
+	}
 	header := indent + dim("◆")
 	if named {
 		header = indent + accent("◆") + " " + bold("Corvus")
 	}
-	if body == "" {
-		return header
-	}
 	return header + "\n\n" + indentTranscriptBlock(body, indent)
+}
+
+// blankTranscriptBody reports whether a rendered assistant body has no visible
+// cells: whitespace plus zero-width format characters (ZERO WIDTH SPACE/BOM
+// and friends) count as blank so a stray ◆ never appears for invisible input.
+func blankTranscriptBody(body string) bool {
+	for _, r := range ansi.Strip(body) {
+		if !unicode.IsSpace(r) && !unicode.Is(unicode.Cf, r) {
+			return false
+		}
+	}
+	return true
 }
 
 func indentTranscriptBlock(block, indent string) string {

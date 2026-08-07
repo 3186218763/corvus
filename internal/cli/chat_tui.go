@@ -1971,7 +1971,6 @@ func (m chatTUI) bottomRows() int {
 	// tests that don't call Update first.
 	if !m.hideComposer() {
 		rows += m.input.Height()
-		rows++ // the mode badge row pinned under the composer
 	}
 	if m.statusLineCount > 0 {
 		return rows + m.statusLineCount
@@ -2456,9 +2455,10 @@ func (m *chatTUI) streamAnswer() {
 // commitReasoning then commitPending puts the answer on its own line, restoring
 // the thinking→answer break the renderer strips.
 func (m *chatTUI) commitPending() {
-	if m.pending.Len() == 0 {
+	if strings.TrimSpace(m.pending.String()) == "" {
 		m.answerIdx = -1
 		m.answerFlushed = 0
+		m.pending.Reset()
 		return
 	}
 	raw := m.pending.String()
@@ -2792,11 +2792,11 @@ func (m chatTUI) View() tea.View {
 	if !hideComposer {
 		// Borderless field: the painter tints the whole box width, so the input
 		// row carries no chrome. The mode badge lives on the footer row below
-		// (primaryStatusLine prepends it), keeping the bottom-left corner.
+		// (statusPrimaryWithBadge prepends it), keeping the bottom-left corner.
 		box = renderComposerField(m.renderComposerInput(), m.composerFrameWidth())
 	}
 
-	primaryStatus := m.primaryStatusLine(shellMode, cancelRequested)
+	primaryStatus := m.statusPrimaryWithBadge(shellMode, cancelRequested)
 	// The spinning "thinking…" indicator is its own line ABOVE the input box (shown
 	// only while a turn runs); the status/data rows stay below. This mirrors Claude
 	// Code: live progress over the composer, shortcuts + stats under it.
@@ -2855,10 +2855,10 @@ func (m chatTUI) View() tea.View {
 		rowsAboveBox += strings.Count(panels.manager, "\n") + 1
 	}
 	// Layout: the working spinner (when running), the composer when visible,
-	// the mode badge row under it (bottom-left), then the single persistent
-	// footer row. Wide terminals right-align the project/model/cache group;
-	// narrow terminals wrap between " · " groups. Padding to full width
-	// prevents stale cells.
+	// then the single persistent footer row (whose left edge carries the mode
+	// badge). Wide terminals right-align the project/model/cache group; narrow
+	// terminals wrap between " · " groups. Padding to full width prevents
+	// stale cells.
 	if working != "" {
 		parts = append(parts, workingStyle.Width(boxW).MaxWidth(boxW).Render(wrapStatusLine(working, boxW)))
 		rowsAboveBox++
@@ -2874,10 +2874,6 @@ func (m chatTUI) View() tea.View {
 			rowsAboveBox += strings.Count(qi, "\n") + 1
 		}
 		parts = append(parts, box)
-		// Mode badge (Auto/Plan/Shell) anchors the bottom-left corner directly
-		// under the input box.
-		parts = append(parts, "  "+m.renderModeBadge(shellMode))
-		rowsAboveBox++
 	}
 	// The cache-hit readout lives inside the single footer row; there is no
 	// separate receipt line under the composer.
@@ -3303,7 +3299,7 @@ func (m chatTUI) computeStatusLineCount(width int) int {
 	shellMode := strings.HasPrefix(strings.TrimSpace(m.input.Value()), "!")
 	cancelRequested := m.cancelRequested()
 
-	primaryStatus := m.primaryStatusLine(shellMode, cancelRequested)
+	primaryStatus := m.statusPrimaryWithBadge(shellMode, cancelRequested)
 	statusBlock := m.renderStatusBlock(primaryStatus, width)
 	working := m.runningWorkingLine(cancelRequested, false)
 
@@ -3315,10 +3311,22 @@ func (m chatTUI) computeStatusLineCount(width int) int {
 	return lines
 }
 
-// renderModeBadge returns the styled mode chip pinned on its own row under the
-// composer, at the bottom-left. Shell prefix uses a literal "Shell" tag;
-// otherwise text comes from modeTagText() so desktop vs classic shortcut
-// layouts stay in parity.
+// statusPrimaryWithBadge prepends the mode pill (Auto/Plan/Shell) to the
+// footer's interaction status when the composer is visible, anchoring the chip
+// at the bottom-left under the input box without adding a row of its own.
+// View() and computeStatusLineCount share it so the wrapped footer height
+// matches what actually renders.
+func (m chatTUI) statusPrimaryWithBadge(shellMode, cancelRequested bool) string {
+	primary := m.primaryStatusLine(shellMode, cancelRequested)
+	if m.hideComposer() {
+		return primary
+	}
+	return m.renderModeBadge(shellMode) + primary
+}
+
+// renderModeBadge returns the styled mode chip that anchors the footer row's
+// bottom-left. Shell prefix uses a literal "Shell" tag; otherwise text comes
+// from modeTagText() so desktop vs classic shortcut layouts stay in parity.
 func (m chatTUI) renderModeBadge(shellMode bool) string {
 	if shellMode {
 		return modeTagStyle(statusShellColor, modeTagLight).Render("Shell")

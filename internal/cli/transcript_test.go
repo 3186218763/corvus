@@ -767,3 +767,21 @@ func TestCopyTranscriptDropsNameOnHistoryAnswers(t *testing.T) {
 		t.Fatalf("last answer should copy with the name, got:\n%s", plain)
 	}
 }
+
+func TestAssistantMarkdownBlankContentRendersNothing(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.NoTTY
+	configureCLITheme("dark")
+
+	for _, raw := range []string{"", "\n", "\n\n", "  ", "\t", "\r\n", "\u200b", "\ufeff"} {
+		if got := renderAssistantMarkdown(raw, 60, false); got != "" {
+			t.Fatalf("blank raw %q should render no block, got %q", raw, ansi.Strip(got))
+		}
+		if got := renderAssistantMarkdown(raw, 60, true); got != "" {
+			t.Fatalf("blank raw %q (named) should render no block, got %q", raw, ansi.Strip(got))
+		}
+		if got := renderAssistantMarkdownCopy(raw, 60, "0", false); got != "" {
+			t.Fatalf("copy blank raw %q should render no block, got %q", raw, ansi.Strip(got))
+		}
+	}
+}

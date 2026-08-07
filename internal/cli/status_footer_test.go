@@ -580,7 +580,7 @@ func TestStatusFooterHeightCountUsesRenderedLayout(t *testing.T) {
 	m.gitStatus = gitStatus{Repo: "VeryLongWorkspaceName", Branch: strings.Repeat("branch/", 8)}
 	m.balance = "¥12.34"
 
-	primary := m.primaryStatusLine(false, false)
+	primary := m.statusPrimaryWithBadge(false, false)
 	want := strings.Count(m.renderStatusBlock(primary, m.width), "\n") + 1
 	if got := m.computeStatusLineCount(m.width); got != want {
 		t.Fatalf("computed status rows = %d, rendered rows = %d", got, want)

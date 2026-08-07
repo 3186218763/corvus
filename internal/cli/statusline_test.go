@@ -143,8 +143,7 @@ func TestComposerModeBadgeUsesModeTagText(t *testing.T) {
 	if !strings.Contains(plainView, "Plan") {
 		t.Fatalf("View missing Plan mode badge:\n%s", plainView)
 	}
-	// Badge must sit on its own row directly under the composer, not beside the
-	// prompt and not inside the interaction footer row.
+	// The badge must never sit beside the prompt inside the composer.
 	shared := false
 	for _, line := range strings.Split(plainView, "\n") {
 		if strings.Contains(line, "Plan") && strings.Contains(line, "❯") {
@@ -154,16 +153,6 @@ func TestComposerModeBadgeUsesModeTagText(t *testing.T) {
 	}
 	if shared {
 		t.Fatalf("Plan badge must not share the composer prompt line:\n%s", plainView)
-	}
-	badgeRow := false
-	for _, line := range strings.Split(plainView, "\n") {
-		if strings.TrimSpace(line) == "Plan" {
-			badgeRow = true
-			break
-		}
-	}
-	if !badgeRow {
-		t.Fatalf("Plan badge should sit on its own row under the composer:\n%s", plainView)
 	}
 	if !strings.Contains(content, "\x1b[48;2;37;99;235m") {
 		t.Fatalf("Plan badge should use blue pill background, got:\n%q", content)
@@ -175,6 +164,22 @@ func TestComposerModeBadgeUsesModeTagText(t *testing.T) {
 	}
 	if !strings.Contains(primary, "ready") {
 		t.Fatalf("footer primary missing idle state: %q", primary)
+	}
+	// The badge anchors the bottom-left of the footer row under the composer,
+	// never a dangling row of its own between the box and the status line.
+	footer := footerInteractionPlain(content)
+	if !strings.HasPrefix(strings.TrimSpace(footer), "Plan") {
+		t.Fatalf("footer row should start with the Plan badge, got %q", footer)
+	}
+	standalone := false
+	for _, line := range strings.Split(plainView, "\n") {
+		if strings.TrimSpace(line) == "Plan" {
+			standalone = true
+			break
+		}
+	}
+	if standalone {
+		t.Fatalf("Plan badge must not sit on its own row under the composer:\n%s", plainView)
 	}
 }
 
@@ -275,8 +280,8 @@ func TestIdleStatuslineIsCompact(t *testing.T) {
 	if !strings.Contains(footer, "ready") {
 		t.Fatalf("idle status line missing ready state:\n%s", footer)
 	}
-	if strings.HasPrefix(strings.TrimSpace(footer), "Auto") {
-		t.Fatalf("footer primary must not start with mode pill: %q", footer)
+	if !strings.HasPrefix(strings.TrimSpace(footer), "Auto") {
+		t.Fatalf("footer row should start with the Auto badge (bottom-left anchor), got %q", footer)
 	}
 	if !strings.Contains(footer, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
 		t.Fatalf("idle status line missing plan-toggle hint:\n%s", footer)
@@ -308,8 +313,8 @@ func TestYoloStatuslineUsesDangerPill(t *testing.T) {
 	if !strings.Contains(footer, "approvals skipped") || !strings.Contains(footer, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
 		t.Fatalf("YOLO status line missing warning text:\n%s", footer)
 	}
-	if strings.HasPrefix(strings.TrimSpace(footer), "YOLO") {
-		t.Fatalf("footer primary must not start with YOLO pill: %q", footer)
+	if !strings.HasPrefix(strings.TrimSpace(footer), "YOLO") {
+		t.Fatalf("footer row should start with the YOLO badge (bottom-left anchor), got %q", footer)
 	}
 	if strings.Contains(footer, "[YOLO]") {
 		t.Fatalf("YOLO status line should use a pill label, not bracketed tag:\n%s", footer)
@@ -333,8 +338,8 @@ func TestPlanStatuslineUsesBluePill(t *testing.T) {
 	if !strings.Contains(footer, "ready") || !strings.Contains(footer, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
 		t.Fatalf("plan status line missing idle/hint status:\n%s", footer)
 	}
-	if strings.HasPrefix(strings.TrimSpace(footer), "Plan") {
-		t.Fatalf("footer primary must not start with Plan pill: %q", footer)
+	if !strings.HasPrefix(strings.TrimSpace(footer), "Plan") {
+		t.Fatalf("footer row should start with the Plan badge (bottom-left anchor), got %q", footer)
 	}
 	if !strings.Contains(content, "\x1b[48;2;37;99;235m") {
 		t.Fatalf("Plan badge should use blue pill background, got:\n%q", content)
@@ -371,8 +376,42 @@ func TestDesktopShortcutStatuslineUsesPlanToggleHint(t *testing.T) {
 	if !strings.Contains(footer, "Shift+Tab ask/auto/plan · Ctrl+Y YOLO") {
 		t.Fatalf("desktop shortcut status line missing unified plan-toggle hint:\n%s", footer)
 	}
-	if strings.HasPrefix(strings.TrimSpace(footer), "Ask") {
-		t.Fatalf("footer primary must not start with Ask pill: %q", footer)
+	if !strings.HasPrefix(strings.TrimSpace(footer), "Ask") {
+		t.Fatalf("footer row should start with the Ask badge (bottom-left anchor), got %q", footer)
+	}
+}
+
+// TestComposerCursorAlignsWithInputRow proves the real terminal cursor lands on
+// the composer's first visible row: the mode badge lives in the footer below,
+// so nothing between the viewport and the input box inflates the Y offset.
+func TestComposerCursorAlignsWithInputRow(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.TrueColor
+	i18n.DetectLanguage("en")
+
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(chatTUI)
+
+	v := m.View()
+	if v.Cursor == nil {
+		t.Fatal("composer visible, expected a view cursor")
+	}
+	lines := strings.Split(ansi.Strip(v.Content), "\n")
+	if v.Cursor.Y >= len(lines) {
+		t.Fatalf("cursor Y %d out of view (has %d lines): %+v", v.Cursor.Y, len(lines), v.Cursor)
+	}
+	if row := lines[v.Cursor.Y]; !strings.Contains(row, "❯") {
+		t.Fatalf("cursor row %d should be the composer prompt row, got %q (cursor %+v)", v.Cursor.Y, row, v.Cursor)
+	}
+	// The row below the composer is the footer carrying the mode badge; a
+	// dangling chip on its own row would read as an input-box protrusion.
+	if v.Cursor.Y+1 < len(lines) {
+		below := strings.TrimSpace(lines[v.Cursor.Y+1])
+		if below != "" && !strings.Contains(below, "ready") && !strings.Contains(below, "就绪") {
+			t.Fatalf("row below composer = %q, want footer (badge + ready state) or blank composer padding", below)
+		}
 	}
 }
 
