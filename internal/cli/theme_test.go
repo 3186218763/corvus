@@ -250,7 +250,7 @@ func TestApplyTextareaThemeHonorsCursorShape(t *testing.T) {
 	}
 }
 
-func TestComposerBorderAndCursorTrackThemeAccent(t *testing.T) {
+func TestComposerTintAndCursorFollowTheme(t *testing.T) {
 	t.Setenv("CORVUS_THEME", "")
 	t.Setenv("CORVUS_THEME_STYLE", "")
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
@@ -259,14 +259,14 @@ func TestComposerBorderAndCursorTrackThemeAccent(t *testing.T) {
 	for _, theme := range cliThemeStyles {
 		t.Run(theme.name, func(t *testing.T) {
 			configureCLITheme(theme.name)
+			wantTint := activeCLITheme.inputBoxBG
+			if wantTint.hex == "" {
+				t.Fatalf("%s inputBoxBG must be populated", theme.name)
+			}
+			if got := inputBoxStyle.GetBackground(); !reflect.DeepEqual(got, lipgloss.Color("")) {
+				t.Fatalf("inputBoxStyle must not carry a lipgloss background (painter owns the tint), got %v", got)
+			}
 			want := themeLipColor(activeCLITheme.accent)
-			if got := inputBoxStyle.GetBorderTopForeground(); !reflect.DeepEqual(got, want) {
-				t.Fatalf("composer top border color = %v, want theme accent %v", got, want)
-			}
-			if got := inputBoxStyle.GetBorderBottomForeground(); !reflect.DeepEqual(got, want) {
-				t.Fatalf("composer bottom border color = %v, want theme accent %v", got, want)
-			}
-
 			ti := textarea.New()
 			applyTextareaTheme(&ti)
 			if got := ti.Styles().Cursor.Color; !reflect.DeepEqual(got, want) {
@@ -277,12 +277,8 @@ func TestComposerBorderAndCursorTrackThemeAccent(t *testing.T) {
 
 	activeColorProfile = colorprofile.NoTTY
 	configureCLITheme("dark")
-	empty := lipgloss.NewStyle().GetBorderTopForeground()
-	if got := inputBoxStyle.GetBorderTopForeground(); !reflect.DeepEqual(got, empty) {
-		t.Fatalf("NO_COLOR composer top border color = %v, want no color", got)
-	}
-	if got := inputBoxStyle.GetBorderBottomForeground(); !reflect.DeepEqual(got, empty) {
-		t.Fatalf("NO_COLOR composer bottom border color = %v, want no color", got)
+	if got := activeCLITheme.inputBoxBG; got.hex == "" {
+		t.Fatalf("dark theme must keep a tint slot even under NO_COLOR")
 	}
 }
 

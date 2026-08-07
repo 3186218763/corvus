@@ -38,6 +38,7 @@ type cliPalette struct {
 	info            cliColor
 	secondary       cliColor
 	border          cliColor
+	inputBoxBG      cliColor
 	selection       cliColor
 	userBubbleBG    cliColor
 	diffAddBG       cliColor
@@ -73,6 +74,7 @@ var (
 		info:         cliColor{"#56b6c2", 80},
 		secondary:    cliColor{"#b18cff", 141},
 		border:       cliColor{"#2a2f3b", 236},
+		inputBoxBG:   cliColor{"#1c2028", 234},
 		selection:    cliColor{"#d97757", 173},
 		userBubbleBG: cliColor{"#222631", 235},
 		diffAddBG:    cliColor{"#14351d", 22},
@@ -98,6 +100,7 @@ var (
 		info:         cliColor{"#2f5fa8", 25},
 		secondary:    cliColor{"#7d63c8", 104},
 		border:       cliColor{"#e6ddd0", 253},
+		inputBoxBG:   cliColor{"#eceff4", 255},
 		selection:    cliColor{"#6f91d9", 68},
 		userBubbleBG: cliColor{"#f5f0e8", 255},
 		diffAddBG:    cliColor{"#e5f3e7", 254},
@@ -431,9 +434,7 @@ func init() {
 }
 
 func refreshCLIStyles() {
-	inputBoxStyle = withThemeBorderFG(lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder(), true, false, true, false), activeCLITheme.accent).
-		PaddingLeft(1)
+	inputBoxStyle = lipgloss.NewStyle().PaddingLeft(1)
 	todoPanelStyle = withThemeBorderFG(lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder(), true, false, false, false), activeCLITheme.border).
 		PaddingLeft(1)
