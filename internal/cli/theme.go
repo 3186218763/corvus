@@ -83,8 +83,8 @@ var (
 		inputBoxBG:   cliColor{"#1c2534", 235},
 		selection:    cliColor{"#4a9bff", 75},
 		userBubbleBG: cliColor{"#222631", 235},
-		diffAddBG:    cliColor{"#14351d", 22},
-		diffDelBG:    cliColor{"#3a1619", 52},
+		diffAddBG:    cliColor{"#213A2B", 22},
+		diffDelBG:    cliColor{"#4A221D", 52},
 		toolRead:     cliColor{"#5eb0ff", 75},
 		toolProc:     cliColor{"#c792ea", 176},
 		// userBubbleFaded is derived per accent style by applyCLIThemeStyle;
@@ -113,8 +113,8 @@ var (
 		inputBoxBG:   cliColor{"#eceff4", 255},
 		selection:    cliColor{"#3b6fd4", 62},
 		userBubbleBG: cliColor{"#eef1f6", 255},
-		diffAddBG:    cliColor{"#e5f3e7", 254},
-		diffDelBG:    cliColor{"#fae8e8", 255},
+		diffAddBG:    cliColor{"#dafbe1", 194},
+		diffDelBG:    cliColor{"#ffebe9", 224},
 		toolRead:     cliColor{"#2f6fd4", 26},
 		toolProc:     cliColor{"#8a6bb8", 97},
 		// userBubbleFaded is derived per accent style by applyCLIThemeStyle;
