@@ -155,7 +155,7 @@ var English = Messages{
 	OutputStyleHeader:         "output styles:",
 	OutputStyleHint:           "set agent.output_style in corvus.toml to apply one (takes effect next session)",
 	ThemeHeader:               "themes:",
-	ThemeHint:                 "switch with /theme <auto|light|dark|style>",
+	ThemeHint:                 "switch with /theme <auto|light|dark|style>; the input box tint follows the terminal background detected at startup",
 	ThemeChangedFmt:           "theme switched to %s / %s",
 	ThemeUnknownFmt:           "unknown theme %q",
 	LanguageHeader:            "languages:",

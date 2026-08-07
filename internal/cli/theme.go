@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"log/slog"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"corvus/internal/config"
 	"corvus/internal/i18n"
@@ -217,7 +219,46 @@ func buildCLITheme(mode, style string) cliPalette {
 	if !ok || st.mode != base.name {
 		st = defaultCLIThemeStyle(base.name)
 	}
-	return applyCLIThemeStyle(base, st)
+	theme := applyCLIThemeStyle(base, st)
+	if rgb, ok := activeBackgroundProbe(); ok {
+		theme.inputBoxBG = inputBoxTintFromBackground(rgb, base.name == "dark")
+	}
+	return theme
+}
+
+// mixHex blends two hex colours by t in [0,1] (t is the weight of b) and
+// returns the rounded result as "#rrggbb". Pure and testable.
+func mixHex(a, b string, t float64) string {
+	ar, ag, ab, okA := parseHexColor(a)
+	br, bg, bb, okB := parseHexColor(b)
+	if !okA || !okB {
+		return a
+	}
+	mix := func(x, y int) int {
+		return int(math.Round(float64(x)*(1-t) + float64(y)*t))
+	}
+	return fmt.Sprintf("#%02x%02x%02x", mix(ar, br), mix(ag, bg), mix(ab, bb))
+}
+
+// inputBoxTintFromBackground computes the composer fill from the probed
+// terminal background: dark shells lift 8% toward white, light shells sink 8%
+// toward black, then the result is blended 84% with the background to mimic a
+// translucent overlay (effective lift/sink is 6.72% = 0.84 × 0.08). The 256
+// colour fallback is the nearest xterm index via ansi.Convert256 — unlike the
+// curated palette slots, this value is computed because it tracks a live
+// background the designer cannot pin.
+func inputBoxTintFromBackground(rgb terminalRGB, dark bool) cliColor {
+	bg := fmt.Sprintf("#%02x%02x%02x", rgb.r, rgb.g, rgb.b)
+	ref := "#ffffff"
+	if !dark {
+		ref = "#000000"
+	}
+	final := mixHex(bg, mixHex(bg, ref, 0.08), 0.84)
+	xterm := 0
+	if r, g, b, ok := parseHexColor(final); ok {
+		xterm = int(ansi.Convert256(color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 0xff}))
+	}
+	return cliColor{hex: final, xterm: xterm}
 }
 
 // userBubbleFadedXTerm is the hand-picked 256-color fallback for the faded
