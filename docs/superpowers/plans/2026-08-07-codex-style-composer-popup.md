@@ -26,7 +26,7 @@
 In `internal/cli/status_footer_test.go` replace every hardcoded old label:
 
 - Line ~115-119 table `want` list: `tt.labelSGR + "MODEL"` → `tt.labelSGR + "Model"`, `tt.labelSGR + "EFFORT"` → `tt.labelSGR + "Effort"`, `tt.labelSGR + "WORK"` → `tt.labelSGR + "Work"`.
-- Line ~218: `footerSecondary("~/project") + " · " + footerInfo("MODEL m")` → `footerInfo("Model m")`.
+- Line ~218: keep the two-segment fixture; change only the label: `footerSecondary("~/project") + " · " + footerInfo("MODEL m")` → `footerSecondary("~/project") + " · " + footerInfo("Model m")`.
 - Line ~226: `strings.HasSuffix(ansi.Strip(got), "MODEL m")` → `"Model m"`.
 - Line ~266: `[]string{"MODEL deepseek-v4-flash", "EFFORT auto", "WORK balanced"}` → `[]string{"Model deepseek-v4-flash", "Effort auto", "Work balanced"}`.
 - Line ~281: `session: "MODEL deepseek-v4-flash   EFFORT auto   WORK balanced"` → `"Model deepseek-v4-flash   Effort auto   Work balanced"` (English row only; zh / zh-TW rows unchanged).
