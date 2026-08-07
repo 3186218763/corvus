@@ -156,7 +156,7 @@ var Chinese = Messages{
 	OutputStyleHeader:         "输出风格：",
 	OutputStyleHint:           "在 corvus.toml 设置 agent.output_style 即可启用（下次会话生效）",
 	ThemeHeader:               "主题：",
-	ThemeHint:                 "使用 /theme <auto|light|dark|style> 切换；启动时探测到终端背景时，输入框底色会随背景自动调整",
+	ThemeHint:                 "使用 /theme <auto|light|dark|style> 切换；启动探测到终端背景时，输入框底色随之自动调整",
 	ThemeChangedFmt:           "已切换主题为 %s / %s",
 	ThemeUnknownFmt:           "未知主题 %q",
 	LanguageHeader:            "语言：",
