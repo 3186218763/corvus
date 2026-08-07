@@ -324,7 +324,7 @@ func renderAssistantMarkdown(raw string, contentWidth int, named bool) string {
 	if contentWidth <= visibleWidth(indent) {
 		indent = ""
 	}
-	bodyWidth := max(contentWidth-visibleWidth(indent), 1)
+	bodyWidth := assistantBodyWidth(contentWidth, indent, named)
 	renderer := newMarkdownRenderer(bodyWidth)
 	rendered := renderer.Render(raw)
 	if rendered == "" {
@@ -337,11 +337,7 @@ func renderAssistantMarkdown(raw string, contentWidth int, named bool) string {
 		// bare orphan diamond.
 		return ""
 	}
-	header := indent + dim("◆")
-	if named {
-		header = indent + accent("◆") + " " + bold("Corvus")
-	}
-	return header + "\n\n" + indentTranscriptBlock(body, indent)
+	return assistantBlock(body, indent, named)
 }
 
 // renderAssistantMarkdownCopy mirrors renderAssistantMarkdown's visible output
@@ -352,7 +348,7 @@ func renderAssistantMarkdownCopy(raw string, contentWidth int, prefix string, na
 	if contentWidth <= visibleWidth(indent) {
 		indent = ""
 	}
-	bodyWidth := max(contentWidth-visibleWidth(indent), 1)
+	bodyWidth := assistantBodyWidth(contentWidth, indent, named)
 	renderer := newMarkdownRenderer(bodyWidth)
 	rendered := renderer.RenderCopy(raw, prefix)
 	if rendered == "" {
@@ -362,11 +358,39 @@ func renderAssistantMarkdownCopy(raw string, contentWidth int, prefix string, na
 	if blankTranscriptBody(body) {
 		return ""
 	}
-	header := indent + dim("◆")
+	return assistantBlock(body, indent, named)
+}
+
+// assistantBodyWidth reserves the marker column so the joined first row
+// ("◆ [Corvus ]content") never exceeds contentWidth; continuation rows are
+// narrower by the same amount, which reads as a hanging-indent gutter.
+func assistantBodyWidth(contentWidth int, indent string, named bool) int {
+	marker := indent + "◆ "
 	if named {
-		header = indent + accent("◆") + " " + bold("Corvus")
+		marker = indent + "◆ Corvus "
 	}
-	return header + "\n\n" + indentTranscriptBlock(body, indent)
+	return max(contentWidth-visibleWidth(marker), 1)
+}
+
+// assistantBlock joins the ◆ identity marker with the first body line so the
+// marker never floats on its own row; continuation lines keep the two-cell
+// gutter. Leading blank rows are skipped so an answer starting with a newline
+// still opens with the marker on the first visible line.
+func assistantBlock(body, indent string, named bool) string {
+	lines := strings.Split(body, "\n")
+	first := 0
+	for first < len(lines) && strings.TrimSpace(lines[first]) == "" {
+		first++
+	}
+	prefix := indent + dim("◆") + " "
+	if named {
+		prefix = indent + accent("◆") + " " + bold("Corvus") + " "
+	}
+	out := prefix + lines[first]
+	if first+1 < len(lines) {
+		out += "\n" + indentTranscriptBlock(strings.Join(lines[first+1:], "\n"), indent)
+	}
+	return out
 }
 
 // blankTranscriptBody reports whether a rendered assistant body has no visible

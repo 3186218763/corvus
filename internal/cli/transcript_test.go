@@ -20,21 +20,21 @@ func TestAssistantMarkdownHasIdentityAndIndentedBody(t *testing.T) {
 
 	rendered := renderAssistantMarkdown("A concise answer that wraps across the available width.", 32, true)
 	lines := strings.Split(ansi.Strip(rendered), "\n")
-	if len(lines) < 4 {
-		t.Fatalf("assistant block should contain a header, gap, and wrapped body:\n%s", rendered)
+	if len(lines) < 2 {
+		t.Fatalf("assistant block should open with the marker on the first body row:\n%s", rendered)
 	}
-	if lines[0] != "  ◆ Corvus" {
-		t.Fatalf("assistant header = %q, want %q", lines[0], "  ◆ Corvus")
+	if !strings.HasPrefix(lines[0], "  ◆ Corvus ") {
+		t.Fatalf("assistant first row should carry marker + name + content, got %q", lines[0])
 	}
-	if lines[1] != "" {
-		t.Fatalf("assistant header/body separator = %q, want blank row", lines[1])
+	if !strings.Contains(lines[0], "A concise answer") {
+		t.Fatalf("assistant first row should join the body content, got %q", lines[0])
 	}
-	for i, line := range lines[2:] {
+	for i, line := range lines[1:] {
 		if line != "" && !strings.HasPrefix(line, assistantTranscriptIndent) {
-			t.Fatalf("assistant body row %d lacks the two-cell gutter: %q", i+2, line)
+			t.Fatalf("assistant body row %d lacks the two-cell gutter: %q", i+1, line)
 		}
 		if width := visibleWidth(line); width > 32 {
-			t.Fatalf("assistant row %d width = %d, want <= 32: %q", i+2, width, line)
+			t.Fatalf("assistant row %d width = %d, want <= 32: %q", i+1, width, line)
 		}
 	}
 }
@@ -51,8 +51,8 @@ func TestReplaySectionsKeepAssistantIdentity(t *testing.T) {
 	if len(sections) != 2 {
 		t.Fatalf("replay sections = %d, want user and assistant", len(sections))
 	}
-	if plain := ansi.Strip(sections[1]); !strings.HasPrefix(plain, "  ◆\n\n  Version 1.2.3") {
-		t.Fatalf("demoted replay should keep a bare diamond and drop the name: %q", plain)
+	if plain := ansi.Strip(sections[1]); !strings.HasPrefix(plain, "  ◆ Version 1.2.3") {
+		t.Fatalf("demoted replay should keep a bare diamond on the first body row: %q", plain)
 	}
 }
 
@@ -714,10 +714,10 @@ func TestReplayBundleInternalLiveness(t *testing.T) {
 	m.label = "model-x"
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceReplayBundle, history: history})
 	live := strings.Join(m.transcript, "\n")
-	if !strings.Contains(ansi.Strip(live), "◆ Corvus\n\n  latest answer") {
+	if !strings.Contains(ansi.Strip(live), "◆ Corvus latest answer") {
 		t.Fatalf("live bundle should name the last assistant body, got %q", live)
 	}
-	if strings.Contains(ansi.Strip(live), "Corvus\n\n  old answer") {
+	if strings.Contains(ansi.Strip(live), "Corvus old answer") {
 		t.Fatalf("live bundle must not name earlier assistant bodies, got %q", live)
 	}
 	if !strings.Contains(live, fgSGR(activeCLITheme.accent)+"› latest question") {
@@ -760,10 +760,10 @@ func TestCopyTranscriptDropsNameOnHistoryAnswers(t *testing.T) {
 	if n := strings.Count(plain, "Corvus"); n != 1 {
 		t.Fatalf("copy should name exactly the last answer, got %d occurrences:\n%s", n, plain)
 	}
-	if !strings.Contains(plain, "  ◆\n\n  a1") {
+	if !strings.Contains(plain, "  ◆ a1") {
 		t.Fatalf("first answer should copy as a bare demoted diamond, got:\n%s", plain)
 	}
-	if !strings.Contains(plain, "  ◆ Corvus\n\n  a2") {
+	if !strings.Contains(plain, "  ◆ Corvus a2") {
 		t.Fatalf("last answer should copy with the name, got:\n%s", plain)
 	}
 }

@@ -4395,7 +4395,7 @@ func TestReplayBundleTrailingUserDemotesInternalAssistant(t *testing.T) {
 	if strings.Contains(plain, "Corvus") {
 		t.Fatalf("bundle ending in a user must not name the internal assistant, got %q", plain)
 	}
-	if !strings.Contains(plain, "  ◆\n\n  a1") {
+	if !strings.Contains(plain, "  ◆ a1") {
 		t.Fatalf("internal assistant should render a bare diamond, got %q", plain)
 	}
 	if !strings.Contains(m.transcript[0], fgSGR(activeCLITheme.accent)+"› q2") {
