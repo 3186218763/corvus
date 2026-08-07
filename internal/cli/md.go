@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -316,10 +317,63 @@ func (r *mdRenderer) renderFenced(buf *strings.Builder, n ast.Node, src []byte, 
 		l := n.Lines().At(i)
 		line := strings.TrimRight(string(l.Value(src)), "\n")
 		buf.WriteString(prefix)
-		buf.WriteString(accent(line))
+		buf.WriteString(highlightCodeLine(line))
 		buf.WriteString("\n")
 	}
 	buf.WriteString("\n")
+}
+
+// codeHighlightRe tokenizes one fenced-code line for highlightCodeLine. The
+// alternatives are tried left-to-right at the earliest position, so a string
+// literal containing "//" or a keyword is consumed whole before the comment or
+// keyword rules can see inside it. Capturing-group order is load-bearing:
+// 1-2 comment, 3-5 string, 6 number, 7 keyword.
+var codeHighlightRe = regexp.MustCompile(strings.Join([]string{
+	`(//.*$)`,             // 1: // comment to end of line
+	`(^[ \t]*#.*$)`,       // 2: hash comment at line start
+	`("(?:\\.|[^"\\])*")`, // 3: double-quoted string
+	`('(?:\\.|[^'\\])*')`, // 4: single-quoted string
+	"(`[^`]*`)",           // 5: backtick string
+	`(\b\d[\w.]*\b)`,      // 6: number literal (int, float, 0x hex)
+	`(\b(?:func|return|if|else|for|range|go|defer|select|switch|case|default|break|continue|package|import|var|const|type|struct|interface|map|chan|nil|true|false|new|make|len|cap|append|string|int|error|bool|byte|rune)\b)`, // 7: keyword
+}, "|"))
+
+// highlightCodeLine applies light token colouring to a single fenced-code line:
+// comments, strings, numbers and keywords get their theme colours and every
+// other segment renders in the muted body colour. Segments are consumed
+// left-to-right so an earlier token (e.g. a string) shields its content from
+// later rules (e.g. "//" inside a string).
+func highlightCodeLine(line string) string {
+	if line == "" {
+		return ""
+	}
+	var b strings.Builder
+	pos := 0
+	for pos < len(line) {
+		loc := codeHighlightRe.FindStringSubmatchIndex(line[pos:])
+		if loc == nil {
+			b.WriteString(muted(line[pos:]))
+			break
+		}
+		if loc[0] > 0 {
+			b.WriteString(muted(line[pos : pos+loc[0]]))
+		}
+		tok := line[pos+loc[0] : pos+loc[1]]
+		var c cliColor
+		switch {
+		case loc[2] >= 0 || loc[4] >= 0: // comment
+			c = activeCLITheme.codeComment
+		case loc[6] >= 0 || loc[8] >= 0 || loc[10] >= 0: // string
+			c = activeCLITheme.codeString
+		case loc[12] >= 0: // number
+			c = activeCLITheme.codeNumber
+		default: // keyword
+			c = activeCLITheme.codeKeyword
+		}
+		b.WriteString(themeFg(c, tok))
+		pos += loc[1]
+	}
+	return b.String()
 }
 
 func (r *mdRenderer) renderBlockquote(buf *strings.Builder, n *ast.Blockquote, src []byte, indent int) {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // TestRenderEmpty covers the contract that empty / whitespace-only input
@@ -30,6 +31,7 @@ func TestRenderConstructs(t *testing.T) {
 		in       string
 		contains []string
 		notRaw   []string // substrings that must NOT appear (raw markdown leaking through)
+		strip    bool     // assert on ANSI-stripped output (token styling splits plain text)
 	}{
 		{
 			name:     "heading",
@@ -72,6 +74,7 @@ func TestRenderConstructs(t *testing.T) {
 			name:     "fenced code",
 			in:       "```go\nfunc main() {}\n```\n",
 			contains: []string{"func main()"},
+			strip:    true,
 		},
 		{
 			name:     "thematic break",
@@ -88,6 +91,9 @@ func TestRenderConstructs(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			out := r.Render(tc.in)
+			if tc.strip {
+				out = ansi.Strip(out)
+			}
 			for _, want := range tc.contains {
 				if !strings.Contains(out, want) {
 					t.Errorf("Render(%q) missing %q\n--- output ---\n%s", tc.in, want, out)
@@ -97,6 +103,61 @@ func TestRenderConstructs(t *testing.T) {
 				if strings.Contains(out, leak) {
 					t.Errorf("Render(%q) leaked raw markdown %q", tc.in, leak)
 				}
+			}
+		})
+	}
+}
+
+func TestHighlightCodeLine(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "keyword and plain text",
+			in:   "func main() {}",
+			want: "\x1b[38;5;176mfunc\x1b[0m\x1b[38;5;253m main() {}\x1b[0m",
+		},
+		{
+			name: "number before comment",
+			in:   "x := 1 // note",
+			want: "\x1b[38;5;253mx := \x1b[0m\x1b[38;5;179m1\x1b[0m\x1b[38;5;253m \x1b[0m\x1b[38;5;66m// note\x1b[0m",
+		},
+		{
+			name: "double-quoted string shields comment chars",
+			in:   `s := "hi"`,
+			want: "\x1b[38;5;253ms := \x1b[0m\x1b[38;5;149m\"hi\"\x1b[0m",
+		},
+		{
+			name: "hash comment at line start",
+			in:   "# todo",
+			want: "\x1b[38;5;66m# todo\x1b[0m",
+		},
+		{
+			name: "keywords and literals",
+			in:   "return err == nil",
+			want: "\x1b[38;5;176mreturn\x1b[0m\x1b[38;5;253m err == \x1b[0m\x1b[38;5;176mnil\x1b[0m",
+		},
+		{
+			name: "hex number",
+			in:   "total := count + 0x1F",
+			want: "\x1b[38;5;253mtotal := count + \x1b[0m\x1b[38;5;179m0x1F\x1b[0m",
+		},
+		{
+			name: "empty line",
+			in:   "",
+			want: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := highlightCodeLine(tc.in); got != tc.want {
+				t.Fatalf("highlightCodeLine(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}
