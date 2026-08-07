@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -8,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	rw "github.com/mattn/go-runewidth"
 	"github.com/rivo/uniseg"
 )
@@ -520,4 +522,50 @@ func (m chatTUI) renderDetachedComposerInput() string {
 		display.CursorDown()
 	}
 	return display.View()
+}
+
+// sgrResetRe matches the reset codes the textarea/prompt styling emits
+// ("\x1b[0m" and "\x1b[m"). Color-setting SGRs are deliberately not matched so
+// selection backgrounds survive painting.
+var sgrResetRe = regexp.MustCompile(`\x1b\[0?m`)
+
+// composerFieldBackground returns the SGR that arms the composer field's
+// translucent tint, or "" when color is off.
+func composerFieldBackground() string {
+	if !colorOn() {
+		return ""
+	}
+	return bgSGR(activeCLITheme.inputBoxBG)
+}
+
+// rearmFieldBackground re-issues the field background after every reset code
+// inside a rendered line so no textarea SGR leaves a hollow cell.
+func rearmFieldBackground(s, bg string) string {
+	return sgrResetRe.ReplaceAllStringFunc(s, func(m string) string {
+		return m + bg
+	})
+}
+
+// renderComposerField paints the textarea view as a borderless field: every
+// line opens with the field background, re-arms it after each reset, and
+// right-pads with background-armed spaces to the full box width so the tint
+// reads as one continuous block. Pass-through when color is off.
+func renderComposerField(view string, width int) string {
+	bg := composerFieldBackground()
+	if bg == "" || width <= 0 {
+		return view
+	}
+	var out strings.Builder
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
+		if i > 0 {
+			out.WriteByte('\n')
+		}
+		out.WriteString(bg)
+		out.WriteString(rearmFieldBackground(line, bg))
+		if w := visibleWidth(ansi.Strip(line)); w < width {
+			out.WriteString(bg + strings.Repeat(" ", width-w))
+		}
+	}
+	return out.String()
 }

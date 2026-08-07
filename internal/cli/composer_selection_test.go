@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
 
 	"corvus/internal/control"
@@ -524,5 +525,59 @@ func TestFailedImagePastePreservesComposerSelection(t *testing.T) {
 	}
 	if got := m.selectedComposerText(); got != "keep" {
 		t.Fatalf("failed image paste should preserve selection, got %q", got)
+	}
+}
+
+func TestComposerFieldPaintsContinuousBackground(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+	bg := composerFieldBackground()
+	if bg == "" {
+		t.Fatal("composerFieldBackground should be non-empty with color on")
+	}
+	view := "\x1b[2m❯ \x1b[0mhello\x1b[m"
+	got := renderComposerField(view, 12)
+	if !strings.HasPrefix(got, bg) {
+		t.Fatalf("painted field must open with the background SGR: %q", got)
+	}
+	if !strings.Contains(got, "\x1b[0m"+bg) {
+		t.Fatalf("field must re-arm the background after \\x1b[0m: %q", got)
+	}
+	if !strings.Contains(got, "\x1b[m"+bg) {
+		t.Fatalf("field must re-arm the background after \\x1b[m: %q", got)
+	}
+	if !strings.Contains(got, bg+"   ") {
+		t.Fatalf("right padding must be background-armed: %q", got)
+	}
+	if w := visibleWidth(ansi.Strip(got)); w != 12 {
+		t.Fatalf("painted field visible width = %d, want 12: %q", w, got)
+	}
+}
+
+func TestComposerFieldPreservesSelectionStyle(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+	view := "abc\x1b[7mdef\x1b[0mghi"
+	got := renderComposerField(view, 9)
+	if !strings.Contains(got, "\x1b[7m") {
+		t.Fatalf("selection reverse SGR must survive painting: %q", got)
+	}
+	if !strings.Contains(got, "\x1b[0m"+composerFieldBackground()) {
+		t.Fatalf("background must re-arm after the selection reset: %q", got)
+	}
+}
+
+func TestComposerFieldRespectsNoColor(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.NoTTY
+	configureCLITheme("dark")
+	view := "hello"
+	if got := renderComposerField(view, 10); got != view {
+		t.Fatalf("NO_COLOR field must pass through unchanged, got %q", got)
+	}
+	if got := composerFieldBackground(); got != "" {
+		t.Fatalf("NO_COLOR composerFieldBackground = %q, want empty", got)
 	}
 }
