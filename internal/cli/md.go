@@ -348,17 +348,13 @@ func highlightCodeLine(line string) string {
 		return ""
 	}
 	var b strings.Builder
+	b.Grow(len(line))
 	pos := 0
-	for pos < len(line) {
-		loc := codeHighlightRe.FindStringSubmatchIndex(line[pos:])
-		if loc == nil {
-			b.WriteString(muted(line[pos:]))
-			break
+	for _, loc := range codeHighlightRe.FindAllStringSubmatchIndex(line, -1) {
+		if loc[0] > pos {
+			b.WriteString(muted(line[pos:loc[0]]))
 		}
-		if loc[0] > 0 {
-			b.WriteString(muted(line[pos : pos+loc[0]]))
-		}
-		tok := line[pos+loc[0] : pos+loc[1]]
+		tok := line[loc[0]:loc[1]]
 		var c cliColor
 		switch {
 		case loc[2] >= 0 || loc[4] >= 0: // comment
@@ -371,7 +367,10 @@ func highlightCodeLine(line string) string {
 			c = activeCLITheme.codeKeyword
 		}
 		b.WriteString(themeFg(c, tok))
-		pos += loc[1]
+		pos = loc[1]
+	}
+	if pos < len(line) {
+		b.WriteString(muted(line[pos:]))
 	}
 	return b.String()
 }

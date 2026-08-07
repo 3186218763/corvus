@@ -130,8 +130,23 @@ func TestHighlightCodeLine(t *testing.T) {
 		},
 		{
 			name: "double-quoted string shields comment chars",
-			in:   `s := "hi"`,
-			want: "\x1b[38;5;253ms := \x1b[0m\x1b[38;5;149m\"hi\"\x1b[0m",
+			in:   `s := "// note"`,
+			want: "\x1b[38;5;253ms := \x1b[0m\x1b[38;5;149m\"// note\"\x1b[0m",
+		},
+		{
+			name: "single-quoted string",
+			in:   "r := 'a'",
+			want: "\x1b[38;5;253mr := \x1b[0m\x1b[38;5;149m'a'\x1b[0m",
+		},
+		{
+			name: "backtick string shields keyword",
+			in:   "x := `func`",
+			want: "\x1b[38;5;253mx := \x1b[0m\x1b[38;5;149m`func`\x1b[0m",
+		},
+		{
+			name: "CJK stays intact",
+			in:   "fmt.Println(\"你好 世界\")",
+			want: "\x1b[38;5;253mfmt.Println(\x1b[0m\x1b[38;5;149m\"你好 世界\"\x1b[0m\x1b[38;5;253m)\x1b[0m",
 		},
 		{
 			name: "hash comment at line start",
