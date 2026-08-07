@@ -166,6 +166,14 @@ func TestSlashArgItems(t *testing.T) {
 	if !has(items, "auto") || !has(items, "light") || !has(items, "graphite") || !has(items, "glacier") {
 		t.Errorf("/theme should offer modes and styles; got %v", labelsOf(items))
 	}
+	if !has(items, "codex") || !has(items, "codex-light") {
+		t.Errorf("/theme should offer codex and codex-light; got %v", labelsOf(items))
+	}
+	for _, it := range items {
+		if it.Label == "sandstone" && strings.Contains(it.Hint, "default") {
+			t.Errorf("/theme sandstone hint should not mention default; got %q", it.Hint)
+		}
+	}
 	// a non-structured command yields nothing
 	if items, _ := SlashArgItems("/help ", data); len(items) != 0 {
 		t.Errorf("/help should have no arg items; got %v", labelsOf(items))
