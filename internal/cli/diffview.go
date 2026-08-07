@@ -301,3 +301,46 @@ func tokeniseBash(cmd string) []chroma.Token {
 	}
 	return out
 }
+
+// activeBashChromaStyle is the catppuccin theme plus a NameAttribute override
+// that tints "-x"/"--flag" arguments (Codex's variable.parameter yellow).
+func activeBashChromaStyle() *chroma.Style {
+	flag := "#f9e2af" // catppuccin-mocha yellow
+	if activeCLITheme.name == "light" {
+		flag = "#df8e1d" // catppuccin-latte yellow
+	}
+	s, err := activeDiffChromaStyle().Builder().
+		AddEntry(chroma.NameAttribute, chroma.StyleEntry{Colour: chroma.MustParseColour(flag)}).
+		Build()
+	if err != nil {
+		return activeDiffChromaStyle()
+	}
+	return s
+}
+
+// highlightBash returns cmd with chroma bash foreground colours (catppuccin,
+// flags tinted). It emits no background, mirroring highlightCode, and passes
+// plain text through when the terminal has no colour.
+func highlightBash(cmd string) string {
+	if cmd == "" || !colorOn() {
+		return cmd
+	}
+	var b strings.Builder
+	if diffChromaFmt.Format(&b, activeBashChromaStyle(), tokenIterator(tokeniseBash(cmd))) != nil {
+		return cmd
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// tokenIterator adapts a token slice to chroma's iterator protocol.
+func tokenIterator(tokens []chroma.Token) chroma.Iterator {
+	i := 0
+	return func() chroma.Token {
+		if i >= len(tokens) {
+			return chroma.EOF
+		}
+		t := tokens[i]
+		i++
+		return t
+	}
+}

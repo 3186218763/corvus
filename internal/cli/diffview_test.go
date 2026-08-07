@@ -188,3 +188,34 @@ func TestTokeniseBashLeavesOperatorTokens(t *testing.T) {
 		t.Fatalf("expected 2 operator tokens (&&, ||), got %d: %+v", ops, tokens)
 	}
 }
+
+func TestHighlightBashPreservesTextAndAddsColor(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	cmd := `git add . && git commit -m "fix" --no-verify`
+	got := highlightBash(cmd)
+	if plain := ansi.Strip(got); plain != cmd {
+		t.Fatalf("highlight changed command text: got %q, want %q", plain, cmd)
+	}
+	if !strings.Contains(got, "\033[") {
+		t.Fatalf("expected SGR colours, got %q", got)
+	}
+}
+
+func TestHighlightBashPlainWithoutColor(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ASCII
+
+	cmd := `echo hi && echo there`
+	if got := highlightBash(cmd); got != cmd {
+		t.Fatalf("no-colour terminal should pass text through, got %q", got)
+	}
+}
+
+func TestHighlightBashEmpty(t *testing.T) {
+	if got := highlightBash(""); got != "" {
+		t.Fatalf("empty command should stay empty, got %q", got)
+	}
+}
