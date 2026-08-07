@@ -439,8 +439,8 @@ func TestEffortTagExplicitValueUsesThemeInfo(t *testing.T) {
 	for _, tt := range []struct {
 		mode, infoSGR string
 	}{
-		{mode: "dark", infoSGR: "\033[1;38;5;80m"},
-		{mode: "light", infoSGR: "\033[1;38;5;25m"},
+		{mode: "dark", infoSGR: "\033[1;38;5;75m"},
+		{mode: "light", infoSGR: "\033[1;38;5;26m"},
 	} {
 		t.Run(tt.mode, func(t *testing.T) {
 			configureCLITheme(tt.mode)

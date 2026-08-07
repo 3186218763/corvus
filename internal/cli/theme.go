@@ -47,6 +47,10 @@ type cliPalette struct {
 	toolProc        cliColor
 	userBubbleFaded cliColor
 	toolArg         cliColor
+	codeKeyword     cliColor
+	codeString      cliColor
+	codeNumber      cliColor
+	codeComment     cliColor
 }
 
 type cliThemeStyle struct {
@@ -63,61 +67,71 @@ var (
 	cliDarkTheme = cliPalette{
 		name:         "dark",
 		style:        "graphite",
-		accent:       cliColor{"#d97757", 173},
-		muted:        cliColor{"#cbd0d8", 252},
-		faint:        cliColor{"#858b96", 245},
-		subtle:       cliColor{"#969ba5", 247},
-		success:      cliColor{"#74b87a", 108},
-		warn:         cliColor{"#d9a441", 179},
-		err:          cliColor{"#e0696a", 167},
+		accent:       cliColor{"#4a9bff", 75},
+		muted:        cliColor{"#d6dde8", 253},
+		faint:        cliColor{"#8a93a3", 245},
+		subtle:       cliColor{"#a4adbc", 247},
+		success:      cliColor{"#6fce8a", 78},
+		warn:         cliColor{"#e2b93b", 179},
+		err:          cliColor{"#f0706e", 203},
 		danger:       cliColor{"#e5484d", 167},
-		info:         cliColor{"#56b6c2", 80},
+		info:         cliColor{"#5eb0ff", 75},
 		secondary:    cliColor{"#b18cff", 141},
-		border:       cliColor{"#2a2f3b", 236},
-		inputBoxBG:   cliColor{"#1c2028", 234},
-		selection:    cliColor{"#d97757", 173},
+		border:       cliColor{"#273343", 237},
+		inputBoxBG:   cliColor{"#1c2534", 235},
+		selection:    cliColor{"#4a9bff", 75},
 		userBubbleBG: cliColor{"#222631", 235},
 		diffAddBG:    cliColor{"#14351d", 22},
 		diffDelBG:    cliColor{"#3a1619", 52},
-		toolRead:     cliColor{"#56b6c2", 80},
-		toolProc:     cliColor{"#c678dd", 176},
+		toolRead:     cliColor{"#5eb0ff", 75},
+		toolProc:     cliColor{"#c792ea", 176},
 		// userBubbleFaded is derived per accent style by applyCLIThemeStyle;
 		// this literal only documents the graphite value.
 		userBubbleFaded: cliColor{"#a87c6e", 95},
-		toolArg:         cliColor{"#a5b0bd", 145},
+		toolArg:         cliColor{"#b6c2d4", 146},
+		codeKeyword:     cliColor{"#c792ea", 176},
+		codeString:      cliColor{"#9ece6a", 149},
+		codeNumber:      cliColor{"#e0af68", 179},
+		codeComment:     cliColor{"#6a7485", 66},
 	}
 	cliLightTheme = cliPalette{
 		name:         "light",
 		style:        "sandstone",
-		accent:       cliColor{"#2f5fa8", 25},
-		muted:        cliColor{"#4a453e", 238},
-		faint:        cliColor{"#82796f", 243},
-		subtle:       cliColor{"#7a7269", 243},
-		success:      cliColor{"#5d9b66", 65},
-		warn:         cliColor{"#b68120", 136},
-		err:          cliColor{"#b94b4d", 131},
+		accent:       cliColor{"#3b6fd4", 62},
+		muted:        cliColor{"#3d4552", 238},
+		faint:        cliColor{"#6a7280", 243},
+		subtle:       cliColor{"#555d6b", 240},
+		success:      cliColor{"#4d8f57", 65},
+		warn:         cliColor{"#a97c1a", 136},
+		err:          cliColor{"#c94f4d", 131},
 		danger:       cliColor{"#e5484d", 167},
-		info:         cliColor{"#2f5fa8", 25},
+		info:         cliColor{"#2f6fd4", 26},
 		secondary:    cliColor{"#7d63c8", 104},
-		border:       cliColor{"#e6ddd0", 253},
+		border:       cliColor{"#d9dde4", 253},
 		inputBoxBG:   cliColor{"#eceff4", 255},
-		selection:    cliColor{"#6f91d9", 68},
-		userBubbleBG: cliColor{"#f5f0e8", 255},
+		selection:    cliColor{"#3b6fd4", 62},
+		userBubbleBG: cliColor{"#eef1f6", 255},
 		diffAddBG:    cliColor{"#e5f3e7", 254},
 		diffDelBG:    cliColor{"#fae8e8", 255},
-		toolRead:     cliColor{"#6f91d9", 68},
+		toolRead:     cliColor{"#2f6fd4", 26},
 		toolProc:     cliColor{"#8a6bb8", 97},
 		// userBubbleFaded is derived per accent style by applyCLIThemeStyle;
 		// this literal only documents the sandstone value.
 		userBubbleFaded: cliColor{"#9e7263", 95},
 		toolArg:         cliColor{"#5a6470", 240},
+		codeKeyword:     cliColor{"#7d63c8", 104},
+		codeString:      cliColor{"#4d8f57", 65},
+		codeNumber:      cliColor{"#b68120", 136},
+		codeComment:     cliColor{"#6a7280", 243},
 	}
 	cliThemeStyles = []cliThemeStyle{
+		{name: "codex", mode: "dark", accent: cliColor{"#4a9bff", 75}, description: "codex blue accent"},
 		{name: "graphite", mode: "dark", accent: cliColor{"#d97757", 173}, description: "warm clay accent"},
 		{name: "ember", mode: "dark", accent: cliColor{"#f06d38", 209}, description: "hot orange accent"},
 		{name: "aurora", mode: "dark", accent: cliColor{"#34c3a6", 79}, description: "cool teal accent"},
 		{name: "midnight", mode: "dark", accent: cliColor{"#b18cff", 141}, description: "quiet violet accent"},
-		{name: "sandstone", mode: "light", accent: cliColor{"#c2613f", 173}, description: "default warm light accent"},
+		{name: "codex-light", mode: "light", accent: cliColor{"#3b6fd4", 62}, description: "codex blue light accent"},
+		{name: "sandstone", mode: "light", accent: cliColor{"#c2613f", 173}, description: "warm light accent"},
 		{name: "porcelain", mode: "light", accent: cliColor{"#7d63c8", 104}, description: "soft violet light accent"},
 		{name: "linen", mode: "light", accent: cliColor{"#bd5d4d", 167}, description: "muted coral light accent"},
 		{name: "glacier", mode: "light", accent: cliColor{"#357fa8", 74}, description: "cool blue light accent"},
@@ -209,14 +223,16 @@ func buildCLITheme(mode, style string) cliPalette {
 // userBubbleFadedXTerm is the hand-picked 256-color fallback for the faded
 // user-bubble tint per accent style (repo convention: hand-chosen fallbacks).
 var userBubbleFadedXTerm = map[string]int{
-	"graphite":  95,
-	"ember":     131,
-	"aurora":    72,
-	"midnight":  140,
-	"sandstone": 95,
-	"porcelain": 103,
-	"linen":     131,
-	"glacier":   67,
+	"graphite":    95,
+	"ember":       131,
+	"aurora":      72,
+	"midnight":    140,
+	"codex":       67,
+	"sandstone":   95,
+	"porcelain":   103,
+	"linen":       131,
+	"glacier":     67,
+	"codex-light": 67,
 }
 
 // fadedUserBubbleColor derives the history user-bubble tint from the accent:
@@ -259,7 +275,7 @@ func cliThemeStyleByName(name string) (cliThemeStyle, bool) {
 func defaultCLIThemeStyle(mode string) cliThemeStyle {
 	if mode == "light" {
 		for _, st := range cliThemeStyles {
-			if st.name == "sandstone" {
+			if st.name == "codex-light" {
 				return st
 			}
 		}
