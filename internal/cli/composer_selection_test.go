@@ -581,3 +581,17 @@ func TestComposerFieldRespectsNoColor(t *testing.T) {
 		t.Fatalf("NO_COLOR composerFieldBackground = %q, want empty", got)
 	}
 }
+
+func TestComposerFieldRendersBadgeOnFirstRowOnly(t *testing.T) {
+	view := "row0\nrow1\nrow2"
+	got := joinModeBadgeLeftOfComposer("AUTO ", view)
+	lines := strings.Split(got, "\n")
+	if !strings.HasPrefix(lines[0], "AUTO ") {
+		t.Fatalf("badge must sit on row 0, got %q", lines[0])
+	}
+	for i, ln := range lines[1:] {
+		if !strings.HasPrefix(ln, "     ") {
+			t.Fatalf("continuation row %d must carry the badge-width gutter, got %q", i+1, ln)
+		}
+	}
+}

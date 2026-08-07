@@ -1971,15 +1971,15 @@ func (m chatTUI) bottomRows() int {
 	}
 	// Remove the hardcoded working-line increment — it is counted inside
 	// statusLineCount via computeStatusLineCount, which also accounts for
-	// wrapping. The fallback to 2 (unwrapped) covers the initial frame and
+	// wrapping. The fallback to 1 (unwrapped) covers the initial frame and
 	// tests that don't call Update first.
 	if !m.hideComposer() {
-		rows += m.input.Height() + 2
+		rows += m.input.Height()
 	}
 	if m.statusLineCount > 0 {
 		return rows + m.statusLineCount
 	}
-	return rows + 2 // fallback for tests that don't set statusLineCount
+	return rows + 1 // fallback for tests that don't set statusLineCount
 }
 
 // hideComposer is the single ownership gate for the bottom composer.
@@ -2907,16 +2907,9 @@ func (m chatTUI) View() tea.View {
 		badge := m.renderModeBadge(shellMode)
 		const badgeGap = " "
 		badgeCols = visibleWidth(badge) + visibleWidth(badgeGap)
-		// Floor at 1 (not 10): badgeCols + max(boxW-badgeCols, 10) can exceed the
-		// terminal when the badge is wide on a narrow screen. Keep joined width
-		// ≤ boxW in lockstep with composerContentWidth / SetWidth.
-		style := inputBoxStyle.Width(m.composerBoxWidth(badgeCols))
-		if shellMode {
-			style = withThemeBorderFG(style, statusShellColor)
-		}
-		// Mode badge sits left of the first content row (beside ❯), not the top
-		// border. Other rows keep a blank gutter so the box stays aligned.
-		box = joinModeBadgeLeftOfComposer(badge+badgeGap, style.Render(m.renderComposerInput()))
+		// Borderless field: the painter tints the whole box width, so the mode
+		// badge is the only chrome left of the ❯ prompt.
+		box = joinModeBadgeLeftOfComposer(badge+badgeGap, renderComposerField(m.renderComposerInput(), m.composerBoxWidth(badgeCols)))
 	}
 
 	primaryStatus := m.primaryStatusLine(shellMode, cancelRequested)
@@ -3011,9 +3004,9 @@ func (m chatTUI) View() tea.View {
 		v := tea.NewView(strings.Join(parts, "\n"))
 		if !hideComposer {
 			if cur := m.composerCursor(); cur != nil {
-				// badge column + input box PaddingLeft
-				cur.X += badgeCols + 1
-				cur.Y += rowsAboveBox + 1
+				// badge column; the borderless field has no padding chrome
+				cur.X += badgeCols
+				cur.Y += rowsAboveBox
 				v.Cursor = cur
 			}
 		}
@@ -3039,12 +3032,12 @@ func (m chatTUI) View() tea.View {
 	}
 	// Anchor the real terminal cursor at the textarea's insertion point only when
 	// the composer is visible. input.Cursor() is relative to the textarea; offset
-	// by the viewport height + rows above + the box's top border row, then by the
-	// mode-badge column and the box's PaddingLeft.
+	// by the viewport height + rows above, then by the mode-badge column (the
+	// borderless field adds no border/padding chrome).
 	if !hideComposer {
 		if cur := m.composerCursor(); cur != nil {
-			cur.X += badgeCols + 1
-			cur.Y += m.viewport.Height() + rowsAboveBox + 1
+			cur.X += badgeCols
+			cur.Y += m.viewport.Height() + rowsAboveBox
 			v.Cursor = cur
 		}
 	}
@@ -3498,8 +3491,8 @@ func (m chatTUI) composerFrameWidth() int {
 	return w
 }
 
-// composerBoxWidth is the bordered input box width after reserving the mode
-// badge column. Floor is 1 so badgeCols+box never exceeds the frame width.
+// composerBoxWidth is the input box width after reserving the mode badge
+// column. Floor is 1 so badgeCols+box never exceeds the frame width.
 func (m chatTUI) composerBoxWidth(badgeCols int) int {
 	return max(m.composerFrameWidth()-badgeCols, 1)
 }
@@ -3510,23 +3503,16 @@ func (m chatTUI) composerContentWidth() int {
 	return max(m.composerBoxWidth(m.modeBadgeColumnWidth())-4, 1)
 }
 
-// joinModeBadgeLeftOfComposer places the mode badge beside the first content
-// row of a top+bottom bordered input box (index 1), so the chip shares a line
-// with the ❯ prompt. Top/bottom borders and wrapped continuation rows get a
-// blank left gutter of the same width.
+// joinModeBadgeLeftOfComposer places the mode badge beside the first row of the
+// borderless composer field, so the chip shares a line with the ❯ prompt.
+// Wrapped continuation rows get a blank left gutter of the same width.
 func joinModeBadgeLeftOfComposer(badgeWithGap, box string) string {
 	rightLines := strings.Split(box, "\n")
 	leftW := visibleWidth(badgeWithGap)
 	gutter := strings.Repeat(" ", leftW)
 	out := make([]string, len(rightLines))
-	// Bordered box is top border, ≥1 content rows, bottom border. Degenerate
-	// single-line renders still get the badge on row 0.
-	badgeRow := 0
-	if len(rightLines) >= 3 {
-		badgeRow = 1
-	}
 	for i, r := range rightLines {
-		if i == badgeRow {
+		if i == 0 {
 			out[i] = badgeWithGap + r
 			continue
 		}
@@ -3541,7 +3527,7 @@ func joinModeBadgeLeftOfComposer(badgeWithGap, box string) string {
 const maxInputRows = 8
 
 const (
-	composerBorderRows = 2
+	composerBorderRows = 0
 	minTranscriptRows  = 3
 )
 const foldedPasteMinChars = 1000
