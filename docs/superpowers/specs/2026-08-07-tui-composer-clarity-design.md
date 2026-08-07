@@ -40,7 +40,7 @@ Corvus's bottom chrome currently reads busier than the peer coding TUIs:
 - OSC-11 probe–driven dynamic blending of the composer fill (static per-theme slot; probe still used only for auto light/dark).
 - Changing any transcript colors or history card styling.
 - Reconfigurable footer fields (kept simple: fixed composition below).
-- `Ctrl+B` output expansion in native-scrollback (Termux) mode (no stable anchor there; card-only after completion).
+- `Ctrl+B` output expansion in native-scrollback (Termux) mode (no viewport to rewrite; the finished output is printed to scrollback on `ToolResult` instead).
 
 ---
 
@@ -63,7 +63,7 @@ Corvus's bottom chrome currently reads busier than the peer coding TUIs:
 
 **Width and height math:**
 - `composerBorderRows` 2 → 0; `inputHeightLimit` (`chat_tui.go:3573,3581,3583`), `bottomRows` (`chat_tui.go:1965-1988`), and `computeStatusLineCount` follow.
-- `composerContentWidth` keeps its `-4` budget (the border rows were vertical only; `-4` = padding 1 + prompt 2 + 1 slack — the painter pads to full width so the slack is invisible). Keep the `input.Width() == composerContentWidth()-composerPromptWidth` invariant (`chat_tui_test.go:715`).
+- `composerContentWidth` equals `composerBoxWidth`: the borderless field adds no chrome of its own, the textarea reserves only the 2-column prompt, and the painter right-pads each line to the same box width — so text wraps at the field edge and the caret can reach it (the old `-4` left a tinted dead zone). Keep the `input.Width() == composerContentWidth()-composerPromptWidth` invariant (`chat_tui_test.go:715`).
 - `joinModeBadgeLeftOfComposer` (`chat_tui.go:3517`): badge always on row 0 (no border-row offset; the current `len>=3 → row 1` rule goes away).
 - Cursor offsets: remove the top-border `+1` in both `View()` cursor paths (`chat_tui.go:3016` and `chat_tui.go:3046`); X-side `badgeCols + 1` (padding) unchanged; `composerOrigin()` (`composer_selection.go:357-368`) follows automatically.
 - `computeStatusLineCount` `ctrl == nil` branch (`chat_tui.go:3436`) returns 1 (mirrors the new single-line status block; +1 for the working line while running).
@@ -91,7 +91,7 @@ Corvus's bottom chrome currently reads busier than the peer coding TUIs:
 - The transient `⎿ working · Ns` live line stays (progress feedback, not a summary).
 - Failure cards (`⊘ err`) unchanged.
 - `streamToolOutput`'s unknown-id empty `commitLine("")` (`chat_tui.go:2198-2202`) is removed.
-- Native scrollback (Termux): `ToolResult` commits no summary (output is not streamed there today; card-only after completion). `Ctrl+B` expansion is not supported in native mode (no anchor; avoids re-printing the card).
+- Native scrollback (Termux): `ToolResult` prints the finished output to the native scrollback (capped at `shellExpandMaxLines`, no `N lines` summary), exactly once per tool id. `Ctrl+B` expansion is not supported in native mode (no viewport to rewrite).
 
 ---
 

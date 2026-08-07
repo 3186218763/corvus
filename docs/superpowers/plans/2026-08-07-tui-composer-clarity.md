@@ -22,8 +22,8 @@
 - `internal/cli/status_footer.go` — cache-only `renderTurnReceipt`, single-line `renderStatusBlock`, `layoutSingleStatusLine`, `statusRightGroup`, `projectPath`/`abbrevHome`.
 - `internal/cli/toolcard.go` — `renderToolCardExpanded`.
 - `internal/cli/transcript.go` — `transcriptSource.shellID` field + expanded card render in `renderTranscriptSource`.
-- `internal/i18n/i18n.go`, `messages_en.go`, `messages_zh.go`, `messages_zh_tw.go` — `ChatCacheHitLabel`.
-- Tests: `theme_test.go`, `composer_selection_test.go`, `chat_tui_test.go`, `chat_render_test.go`, `status_footer_test.go`, `transcript_test.go`.
+- `internal/i18n/*` — untouched (`ChatCacheHitLabel` already existed; only the unused `ChatTurnReceiptLabel` is dropped).
+- Tests: `theme_test.go`, `composer_selection_test.go`, `chat_tui_test.go`, `chat_render_test.go`, `status_footer_test.go`, `statusline_test.go`, `consecutive_tool_markers_test.go`, `transcript_test.go`.
 
 ---
 
@@ -929,7 +929,7 @@ git commit -m "feat(cli): single-line footer with project path and cache hit"
 
 **Files:**
 - Modify: `internal/cli/chat_tui.go`, `internal/cli/transcript.go`, `internal/cli/toolcard.go`
-- Test: `internal/cli/chat_render_test.go`, `internal/cli/transcript_test.go`
+- Test: `internal/cli/chat_render_test.go`, `internal/cli/consecutive_tool_markers_test.go`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1339,7 +1339,7 @@ Expected: PASS. Also run `go build ./...` — Expected: exit 0.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add internal/cli/chat_tui.go internal/cli/transcript.go internal/cli/toolcard.go internal/cli/chat_render_test.go internal/cli/transcript_test.go
+git add internal/cli/chat_tui.go internal/cli/transcript.go internal/cli/toolcard.go internal/cli/chat_render_test.go internal/cli/consecutive_tool_markers_test.go
 git commit -m "feat(cli): compact tool calls with card-anchored Ctrl+B expansion"
 ```
 
