@@ -189,6 +189,9 @@ type chatTUI struct {
 	// shellTranscriptIdx maps a shell tool ID to the transcript index of its
 	// collapsed output block, so Ctrl+B can rewrite it in place.
 	shellTranscriptIdx map[string]int
+	// toolCardIdx maps a dispatched tool id to its card block index, so
+	// completion can re-anchor Ctrl+B expansion to the card.
+	toolCardIdx map[string]int
 	// toolLineCountByID keeps a switched-away tool's last line count so a late
 	// ToolResult can still render "⎿ N lines" (shellOutputs only tracks "shell-" ids).
 	toolLineCountByID map[string]int
@@ -607,6 +610,7 @@ func newChatTUI(ctrl control.SessionAPI, missing string, eventCh chan event.Even
 		shellOutputs:         make(map[string]string),
 		shellExpanded:        make(map[string]bool),
 		shellTranscriptIdx:   make(map[string]int),
+		toolCardIdx:          make(map[string]int),
 		toolLineCountByID:    make(map[string]int),
 		eventCh:              eventCh,
 		history:              history,
@@ -1883,6 +1887,7 @@ func (m *chatTUI) clearTranscriptDisplay() {
 	m.shellOutputs = make(map[string]string)
 	m.shellExpanded = make(map[string]bool)
 	m.shellTranscriptIdx = make(map[string]int)
+	m.toolCardIdx = make(map[string]int)
 	m.toolLineCountByID = make(map[string]int)
 	m.toolStreamID = ""
 	m.toolStreamIdx = -1
@@ -2162,14 +2167,14 @@ func (m *chatTUI) streamToolOutput(id, chunk string) {
 	}
 	if m.toolStreamID != id {
 		// Switching to a different id means either:
-		//   (a) the previous tool finished and a new one is starting — collapse
-		//       the current id's live block, then append a fresh slot at the
-		//       end of the transcript.
+		//   (a) the previous tool finished and a new one is starting — open a
+		//       fresh slot; the previous tool's own result removes its block.
 		//   (b) late ToolProgress for an earlier (already dispatched and
-		//       possibly collapsed) tool — reuse the slot beginToolRunning
-		//       already wrote for that id, so the live block stays directly
-		//       under the earlier tool's card rather than stacking at the end.
-		if existingIdx, ok := m.shellTranscriptIdx[id]; ok && existingIdx >= 0 && existingIdx < len(m.transcript) {
+		//       possibly collapsed) tool — reuse the live slot beginToolRunning
+		//       already wrote for that id when it still points at a live block;
+		//       if the anchor was re-anchored to the card (block already
+		//       removed), open a fresh streaming canvas instead.
+		if existingIdx, ok := m.shellTranscriptIdx[id]; ok && existingIdx >= 0 && existingIdx < len(m.transcript) && m.transcriptSources[existingIdx].kind == transcriptSourceFixed {
 			// Stash the switched-away id's live count before resetting it;
 			// its late ToolResult reads it back via toolLineCountByID.
 			if m.toolStreamID != "" && m.toolStreamID != id {
@@ -2187,8 +2192,11 @@ func (m *chatTUI) streamToolOutput(id, chunk string) {
 			m.toolPartial = ""
 			m.toolLineCount = 0
 		} else {
-			// Unknown id: collapse the active stream (its live count is intact).
-			m.collapseToolOutput(m.toolStreamID, "")
+			// No live slot for this id (unknown id, or the previous block was
+			// already removed): open a fresh streaming canvas at the end. The
+			// currently-streaming tool's block is left for ITS OWN result to
+			// remove, and this fresh block is removed when this id's result
+			// lands (the card-anchored Ctrl+B entry stays on the card).
 			m.toolStreamID = id
 			m.toolTail = m.toolTail[:0]
 			m.toolPartial = ""
@@ -2197,6 +2205,7 @@ func (m *chatTUI) streamToolOutput(id, chunk string) {
 				m.toolStreamIdx = -1
 			} else {
 				m.toolStreamIdx = len(m.transcript)
+				m.shellTranscriptIdx[id] = m.toolStreamIdx
 				m.commitLine("")
 			}
 		}
@@ -2242,43 +2251,13 @@ func (m *chatTUI) pushToolLine(line string) {
 	}
 }
 
-// collapseToolOutput replaces a finished tool's live block with a dim
-// "⎿ N lines" summary, so the scrollback keeps a marker of the run without the
-// full output (which the model already received). For shell commands ("shell-"
-// prefix), it shows the first shellPreviewLines with a Ctrl+B hint instead.
-// No-op when id isn't streaming. resultOutput (the ToolResult's final output)
-// is the last-resort line-count source when the live state was already reset.
-func (m *chatTUI) collapseToolOutput(id, resultOutput string) {
+// collapseToolOutput finalises a finished tool's live block: the block is
+// removed so only the ● Verb(arg) card remains (compact scrollback), and the
+// Ctrl+B anchor moves to the card block. No-op when id isn't streaming.
+func (m *chatTUI) collapseToolOutput(id string) {
 	if m.nativeScrollback {
 		if id == "" || m.toolStreamID != id {
 			return
-		}
-		n := m.toolLineCount
-		if m.toolPartial != "" {
-			n++
-		}
-		if n > 0 {
-			if full, ok := m.shellOutputs[id]; ok {
-				lines := strings.Split(strings.TrimRight(full, "\n"), "\n")
-				total := len(lines)
-				if total > shellPreviewLines {
-					preview := make([]string, shellPreviewLines+1)
-					for i := 0; i < shellPreviewLines; i++ {
-						preview[i] = dim(clampPlain(lines[i], m.width-len([]rune(connector))))
-					}
-					preview[shellPreviewLines] = dim(fmt.Sprintf("… %d more lines (Ctrl+B)", total-shellPreviewLines))
-					m.commitLine(connectorBlock(preview))
-				} else {
-					rendered := make([]string, total)
-					for i, ln := range lines {
-						rendered[i] = dim(clampPlain(ln, m.width-len([]rune(connector))))
-					}
-					m.commitLine(connectorBlock(rendered))
-				}
-				m.shellTranscriptIdx[id] = len(m.transcript) - 1
-			} else {
-				m.commitLine(connectorBlock([]string{dim(fmt.Sprintf("%d lines", n))}))
-			}
 		}
 		m.toolStreamIdx = -1
 		m.toolStreamID = ""
@@ -2287,94 +2266,39 @@ func (m *chatTUI) collapseToolOutput(id, resultOutput string) {
 		m.toolLineCount = 0
 		return
 	}
-	if m.toolStreamIdx < 0 || id == "" || m.toolStreamID != id {
-		// Slot no longer active (another tool took over, or this id never
-		// streamed). If beginToolRunning recorded a transcript index, collapse
-		// in place so a late ToolResult doesn't leave raw streamed text behind.
-		if idx, ok := m.shellTranscriptIdx[id]; ok && idx >= 0 && idx < len(m.transcript) {
-			m.collapseShellSlot(id, idx, resultOutput)
-		}
-		return
+	idx := -1
+	if m.toolStreamIdx >= 0 && id != "" && m.toolStreamID == id {
+		idx = m.toolStreamIdx
+	} else if i, ok := m.shellTranscriptIdx[id]; ok && i >= 0 && i < len(m.transcript) && m.transcriptSources[i].kind == transcriptSourceFixed {
+		idx = i
 	}
-	m.collapseShellSlot(id, m.toolStreamIdx, resultOutput)
 	m.toolStreamIdx = -1
 	m.toolStreamID = ""
 	m.toolTail = m.toolTail[:0]
 	m.toolPartial = ""
 	m.toolLineCount = 0
-}
-
-// collapseShellSlot finalises a tool's live block at idx. Used both by the
-// active-tool path (idx == toolStreamIdx, streaming state intact) and the
-// late-result path (idx recorded in shellTranscriptIdx at dispatch). Line-count
-// sources, in order: live streaming state, shellOutputs ("shell-" ids only),
-// the per-id count stashed by streamToolOutput, then the ToolResult's output.
-func (m *chatTUI) collapseShellSlot(id string, idx int, resultOutput string) {
-	m.transcriptDirty = true
-	n := -1
-	if id == m.toolStreamID {
-		// Prefer the larger of the live count and resultOutput: resultOutput
-		// is the authoritative end-state, the live state may lag behind it.
-		n = m.toolLineCount
-		if m.toolPartial != "" {
-			n++
-		}
-		if resultOutput != "" {
-			fromResult := len(strings.Split(strings.TrimRight(resultOutput, "\n"), "\n"))
-			if fromResult > n {
-				n = fromResult
-			}
-		}
-	}
-	if n < 0 {
-		if full, ok := m.shellOutputs[id]; ok {
-			n = len(strings.Split(strings.TrimRight(full, "\n"), "\n"))
-		} else if c, ok := m.toolLineCountByID[id]; ok {
-			n = c
-		} else if resultOutput != "" {
-			n = len(strings.Split(strings.TrimRight(resultOutput, "\n"), "\n"))
-		}
-	}
-	if n < 0 {
-		// Nothing applies (e.g. a late result for a non-"shell-" id that never
-		// streamed): treat as zero rather than fabricate a "-1 lines" count.
-		n = 0
-	}
-	if n == 0 {
-		// Tool finished with no output: clear the "working…" placeholder but
-		// keep the slot (shellTranscriptIdx still points here for late progress).
-		m.setLiveBlock(idx, "")
+	if idx < 0 || idx >= len(m.transcript) {
 		return
 	}
-	if full, ok := m.shellOutputs[id]; ok {
-		// Shell command: show first N lines + hint.
-		lines := strings.Split(strings.TrimRight(full, "\n"), "\n")
-		total := len(lines)
-		if total > shellPreviewLines {
-			preview := make([]string, shellPreviewLines+1)
-			for i := 0; i < shellPreviewLines; i++ {
-				preview[i] = dim(clampPlain(lines[i], m.width-len([]rune(connector))))
-			}
-			preview[shellPreviewLines] = dim(fmt.Sprintf("… %d more lines (Ctrl+B)", total-shellPreviewLines))
-			m.setLiveBlock(idx, connectorBlock(preview))
-		} else {
-			rendered := make([]string, total)
-			for i, ln := range lines {
-				rendered[i] = dim(clampPlain(ln, m.width-len([]rune(connector))))
-			}
-			m.setLiveBlock(idx, connectorBlock(rendered))
+	// Remove the finished live block; every later recorded index shifts down.
+	m.removeTranscriptBlock(idx)
+	for tid, i := range m.shellTranscriptIdx {
+		if i > idx {
+			m.shellTranscriptIdx[tid] = i - 1
 		}
-	} else {
-		m.setLiveBlock(idx, connectorBlock([]string{dim(fmt.Sprintf("%d lines", n))}))
 	}
-	m.shellTranscriptIdx[id] = idx
+	// Re-anchor Ctrl+B expansion on the tool's card block.
+	if cardIdx, ok := m.toolCardIdx[id]; ok && cardIdx >= 0 && cardIdx < len(m.transcript) {
+		m.shellTranscriptIdx[id] = cardIdx
+		m.shellExpanded[id] = false
+	}
 }
 
 // toggleShellOutput expands or collapses the output of the most recent shell
-// command. When expanded, up to shellExpandMaxLines lines are shown; when
-// collapsed, only the first shellPreviewLines are shown. Called on Ctrl+B.
+// command. Expansion is anchored to the tool card block: collapsed shows only
+// the card; expanded renders the card plus its output under the ⎿ connector.
+// Called on Ctrl+B.
 func (m *chatTUI) toggleShellOutput() {
-	// Find the most recent shell output that has a transcript entry.
 	var lastID string
 	lastIdx := -1
 	for id, idx := range m.shellTranscriptIdx {
@@ -2383,50 +2307,18 @@ func (m *chatTUI) toggleShellOutput() {
 			lastIdx = idx
 		}
 	}
-	if lastID == "" {
+	if lastID == "" || lastIdx < 0 || lastIdx >= len(m.transcriptSources) {
 		return
 	}
-	full, ok := m.shellOutputs[lastID]
-	if !ok {
+	src := m.transcriptSources[lastIdx]
+	if src.kind != transcriptSourceToolCard || src.shellID != lastID {
+		return // still-streaming live block or a stale entry
+	}
+	if strings.TrimSpace(m.shellOutputs[lastID]) == "" {
 		return
 	}
-	lines := strings.Split(strings.TrimRight(full, "\n"), "\n")
-	total := len(lines)
-	innerW := m.width - len([]rune(connector))
-	if innerW < 10 {
-		innerW = 80
-	}
-
-	if m.shellExpanded[lastID] {
-		// Collapse back to preview.
-		m.shellExpanded[lastID] = false
-		if total > shellPreviewLines {
-			preview := make([]string, shellPreviewLines+1)
-			for i := 0; i < shellPreviewLines; i++ {
-				preview[i] = dim(clampPlain(lines[i], innerW))
-			}
-			preview[shellPreviewLines] = dim(fmt.Sprintf("… %d more lines (Ctrl+B)", total-shellPreviewLines))
-			m.setLiveBlock(lastIdx, connectorBlock(preview))
-		}
-	} else {
-		// Expand: show up to shellExpandMaxLines lines.
-		m.shellExpanded[lastID] = true
-		show := total
-		if show > shellExpandMaxLines {
-			show = shellExpandMaxLines
-		}
-		rendered := make([]string, show)
-		for i := 0; i < show; i++ {
-			rendered[i] = dim(clampPlain(lines[i], innerW))
-		}
-		if total > shellExpandMaxLines {
-			rendered = append(rendered, dim(fmt.Sprintf("… %d more lines", total-shellExpandMaxLines)))
-		}
-		m.setLiveBlock(lastIdx, connectorBlock(rendered))
-	}
-	if m.nativeScrollback {
-		m.commitLine(m.transcript[lastIdx])
-	}
+	m.shellExpanded[lastID] = !m.shellExpanded[lastID]
+	m.setLiveBlock(lastIdx, m.renderTranscriptSource(src, m.width, markerNone))
 }
 
 // toolWorkingFrames is the braille spinner cycled once per second on the
@@ -3877,7 +3769,6 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		case planApprovalTool:
 			// No longer a tool, but guard anyway: the plan is the assistant's reply.
 		default:
-			m.commitSpacer()
 			if block := diffBlock(e.Tool.Name, e.Tool.Args, e.Tool.FileDiff, m.width, m.diffMaxLines); block != nil {
 				for _, ln := range block {
 					m.commitLine(ln)
@@ -3885,8 +3776,9 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 				break
 			}
 			m.commitTranscriptSource(transcriptSource{
-				kind: transcriptSourceToolCard, raw: e.Tool.Name, aux: e.Tool.Args,
+				kind: transcriptSourceToolCard, raw: e.Tool.Name, aux: e.Tool.Args, shellID: e.Tool.ID,
 			})
+			m.toolCardIdx[e.Tool.ID] = len(m.transcript) - 1
 			m.beginToolRunning(e.Tool.ID)
 		}
 
@@ -3895,11 +3787,9 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 
 	case event.ToolResult:
 		// A successful result is silent (it only feeds the model); a blocked/failed
-		// call surfaces a red "⏺ Verb ⊘ <reason>" card. A live-output block (bash)
-		// collapses to a one-line "⎿ N lines" summary first. Pass the final
-		// output so collapseToolOutput has a last-resort source for the line
-		// count when the live state was already reset by a back-to-back tool.
-		m.collapseToolOutput(e.Tool.ID, e.Tool.Output)
+		// call surfaces a red "⏺ Verb ⊘ <reason>" card. The live output block is
+		// removed entirely so only the card line remains (compact scrollback).
+		m.collapseToolOutput(e.Tool.ID)
 		if e.Tool.Name == "todo_write" && e.Tool.Err == "" {
 			m.todoArgs = e.Tool.Args
 		}
@@ -4019,7 +3909,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 // finalizeStreamed freezes any in-progress reasoning + answer into scrollback so
 // a following event line lands after them, preserving chronological order.
 func (m *chatTUI) finalizeStreamed() {
-	m.collapseToolOutput(m.toolStreamID, "")
+	m.collapseToolOutput(m.toolStreamID)
 	m.commitReasoning()
 	m.commitPending()
 }

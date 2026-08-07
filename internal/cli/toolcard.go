@@ -4,6 +4,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -172,6 +173,26 @@ func argList(v any) string {
 // toolCard renders the dispatch line: "  ⏺ Verb(arg)", arg clamped to width.
 func toolCard(name, args string, width int) string {
 	return "  " + toolDot(name) + " " + toolHead(name, toolArg(name, args), width)
+}
+
+// renderToolCardExpanded renders the tool card followed by its output (capped
+// at shellExpandMaxLines) under the ⎿ connector. Used by Ctrl+B expansion,
+// which anchors to the card block itself.
+func renderToolCardExpanded(name, args, output string, width int) string {
+	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+	show := min(len(lines), shellExpandMaxLines)
+	rendered := make([]string, show)
+	for i := 0; i < show; i++ {
+		rendered[i] = dim(clampPlain(lines[i], width-len([]rune(connector))))
+	}
+	if len(lines) > shellExpandMaxLines {
+		rendered = append(rendered, dim(fmt.Sprintf("… %d more lines", len(lines)-shellExpandMaxLines)))
+	}
+	card := toolCard(name, args, width)
+	if block := connectorBlock(rendered); block != "" {
+		return card + "\n" + block
+	}
+	return card
 }
 
 // toolHead builds "Verb(arg)" with the verb bold and category-coloured and the

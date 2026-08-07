@@ -36,6 +36,7 @@ type transcriptSource struct {
 	kind     transcriptSourceKind
 	raw      string
 	aux      string
+	shellID  string // tool id for expandable tool cards (Ctrl+B)
 	planMode bool
 	maxLines int
 	history  []provider.Message
@@ -189,6 +190,9 @@ func (m *chatTUI) renderTranscriptSource(source transcriptSource, terminalWidth 
 	case transcriptSourceReasoning:
 		return reasoningBlock(source.raw, terminalWidth, source.maxLines)
 	case transcriptSourceToolCard:
+		if source.shellID != "" && m.shellExpanded[source.shellID] {
+			return renderToolCardExpanded(source.raw, source.aux, m.shellOutputs[source.shellID], terminalWidth)
+		}
 		return toolCard(source.raw, source.aux, terminalWidth)
 	case transcriptSourceBanner:
 		return strings.TrimRight(renderTUIBanner(m.label, source.raw, contentWidth), "\n")
