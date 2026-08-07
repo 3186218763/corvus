@@ -40,8 +40,8 @@ func TestParallelBashCallsStayCompact(t *testing.T) {
 		t.Fatalf("only the three cards should remain, got %d blocks:\n%s", len(transcript), joined)
 	}
 	for i, id := range ids {
-		if !strings.Contains(transcript[i], "Bash(ls)") {
-			t.Fatalf("card %d should be Bash(ls) in dispatch order, got %q\n%s", i, transcript[i], joined)
+		if !strings.Contains(transcript[i], "Bash ls") {
+			t.Fatalf("card %d should be Bash ls in dispatch order, got %q\n%s", i, transcript[i], joined)
 		}
 		if idx, ok := m.shellTranscriptIdx[id]; !ok || idx != i {
 			t.Fatalf("%s must keep a Ctrl+B anchor on its card (index %d), got ok=%v idx=%d", id, i, ok, idx)
