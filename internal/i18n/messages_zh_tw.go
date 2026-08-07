@@ -150,7 +150,7 @@ var ChineseTraditional = Messages{
 	OutputStyleHeader:         "輸出風格：",
 	OutputStyleHint:           "在 corvus.toml 設定 agent.output_style 即可啟用（下次會話生效）",
 	ThemeHeader:               "主題：",
-	ThemeHint:                 "使用 /theme <auto|light|dark|style> 切換",
+	ThemeHint:                 "使用 /theme <auto|light|dark|style> 切換；啟動探測到終端背景時，輸入框底色隨之自動調整",
 	ThemeChangedFmt:           "已切換主題為 %s / %s",
 	ThemeUnknownFmt:           "未知主題 %q",
 	LanguageHeader:            "語言：",

@@ -535,3 +535,72 @@ func TestUserBubbleFadedFollowsAccent(t *testing.T) {
 		t.Fatalf("dark toolArg xterm = %d, want 146", got)
 	}
 }
+
+func TestInputBoxTintPureFunctions(t *testing.T) {
+	if got, want := mixHex("#0a0c10", "#ffffff", 0.08), "#1e1f23"; got != want {
+		t.Fatalf("mixHex dark lift = %s, want %s", got, want)
+	}
+	if got, want := mixHex("#0a0c10", "#1e1f23", 0.84), "#1b1c20"; got != want {
+		t.Fatalf("mixHex 84%% blend = %s, want %s", got, want)
+	}
+	if got, want := mixHex("#f0f2f5", "#000000", 0.08), "#dddfe1"; got != want {
+		t.Fatalf("mixHex light sink = %s, want %s", got, want)
+	}
+	if got, want := mixHex("#000000", "#ffffff", 0), "#000000"; got != want {
+		t.Fatalf("mixHex t=0 = %s, want %s", got, want)
+	}
+	if got, want := mixHex("#000000", "#ffffff", 1), "#ffffff"; got != want {
+		t.Fatalf("mixHex t=1 = %s, want %s", got, want)
+	}
+	if got := mixHex("bad", "#ffffff", 0.08); got != "bad" {
+		t.Fatalf("mixHex invalid hex = %q, want input returned as-is", got)
+	}
+
+	// Dark bg (10,12,16): lift toward white then 84% blend → #1b1c20.
+	if got := inputBoxTintFromBackground(terminalRGB{10, 12, 16}, true); got != (cliColor{hex: "#1b1c20", xterm: 234}) {
+		t.Fatalf("dark tint = %+v, want #1b1c20/234", got)
+	}
+	// Light bg (240,242,245): sink toward black → #e0e2e4.
+	if got := inputBoxTintFromBackground(terminalRGB{240, 242, 245}, false); got != (cliColor{hex: "#e0e2e4", xterm: 254}) {
+		t.Fatalf("light tint = %+v, want #e0e2e4/254", got)
+	}
+	// Extreme probe values stay within bounds: pure black lifted → #111111/233,
+	// pure white sunk → #eeeeee/255.
+	if got := inputBoxTintFromBackground(terminalRGB{0, 0, 0}, true); got != (cliColor{hex: "#111111", xterm: 233}) {
+		t.Fatalf("black dark tint = %+v, want #111111/233", got)
+	}
+	if got := inputBoxTintFromBackground(terminalRGB{255, 255, 255}, false); got != (cliColor{hex: "#eeeeee", xterm: 255}) {
+		t.Fatalf("white light tint = %+v, want #eeeeee/255", got)
+	}
+}
+
+func TestBuildCLIThemeTintUnderProbe(t *testing.T) {
+	t.Setenv("CORVUS_THEME", "")
+	t.Setenv("CORVUS_THEME_STYLE", "")
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+
+	defer func(prev func() (terminalRGB, bool)) { terminalProbe = prev }(terminalProbe)
+	terminalProbe = func() (terminalRGB, bool) { return terminalRGB{10, 12, 16}, true }
+
+	withTerminalProbe(func() {
+		got := resolveCLITheme("dark")
+		want := inputBoxTintFromBackground(terminalRGB{10, 12, 16}, true)
+		if !reflect.DeepEqual(got.inputBoxBG, want) {
+			t.Fatalf("probed dark inputBoxBG = %v, want tint %v", got.inputBoxBG, want)
+		}
+		gotLight := resolveCLITheme("light")
+		wantLight := inputBoxTintFromBackground(terminalRGB{10, 12, 16}, false)
+		if !reflect.DeepEqual(gotLight.inputBoxBG, wantLight) {
+			t.Fatalf("probed light inputBoxBG = %v, want tint %v", gotLight.inputBoxBG, wantLight)
+		}
+	})
+
+	// Outside the probe the curated fallback colors stay.
+	if got := resolveCLITheme("dark").inputBoxBG; !reflect.DeepEqual(got, cliColor{"#1c2534", 235}) {
+		t.Fatalf("fallback dark inputBoxBG = %v, want #1c2534/235", got)
+	}
+	if got := resolveCLITheme("light").inputBoxBG; !reflect.DeepEqual(got, cliColor{"#eceff4", 255}) {
+		t.Fatalf("fallback light inputBoxBG = %v, want #eceff4/255", got)
+	}
+}
