@@ -21,6 +21,9 @@
 - **D5 · md 测试**：`TestRenderConstructs` 的 fenced 用例断言裸文本 `"func main()"`，token 着色后 `func` 被 SGR 打断，必须 `ansi.Strip` 后再断言。
 - **D6 · 文案**：sandstone 描述去掉 `default ` 前缀（默认职责已移交 codex-light）。
 - light subtle `#555d6b` xterm 240 与 light toolArg 240 在 256 色下同档（spec 已如此 pin；truecolor 区分，沿用现有 faint==subtle=243 的先例，不改）。
+- **D9 · 实施期订正（Task 2 质量审查）**：中文/繁中 ThemeHint 措辞按审查建议调整为「启动探测到终端背景时，输入框底色随之自动调整」（原「启动时探测到终端背景时…会随背景自动调整」两个「时」连用）；测试补 mixHex t=0/t=1 恒等、非法 hex 回退、probe 极值 0,0,0→`#111111`/233 与 255,255,255→`#eeeeee`/255 断言。
+- **D10 · 实施期订正（Task 4 质量审查）**：`highlightCodeLine` 由逐段 `FindStringSubmatchIndex(line[pos:])` 改为单遍 `FindAllStringSubmatchIndex(line, -1)`——`^` 恢复真行首锚定（原实现对行中 `#` 的匹配与注释语义不一致），并加 `b.Grow(len(line))`；测试补单引号/反引号字符串、字符串屏蔽 `//`、CJK 用例与 `CORVUS_THEME` 环境守卫。精确 SGR 期望值按计划保留（token→色映射是 spec 契约）。
+- **D8 · 实施期订正（Task 2 实测）**：计划行 387 的 `#dddfe2` 是计划自身的算术错误（245×0.92=225.4 → 舍入 225 = `0xe1`），正确期望为 `#dddfe1`；实现与测试均用 `#dddfe1`。
 - **D7 · 实施期订正（Task 1 实测）**：`CORVUS_THEME_STYLE` 只覆盖 style 不覆盖 mode，env 用例第二段必须用 `configureCLIThemeWithStyle("light", "graphite")` 才能得到 light/codex-light；dark muted 252→253、light subtle 243→240 影响三个 footer 测试的 valueSGR/labelSGR pin（`TestStatusFooterSemanticPaletteAcrossThemes`、`TestTurnReceiptAdaptsContrastAcrossThemes`、`TestContextFooterColorsOnlyValuesByUrgency`），Task 1 一并更新。
 
 ## 全局约束
@@ -59,7 +62,7 @@
 - Modify: `internal/cli/style.go`（ansiCodexAccent）
 - Test: `internal/cli/theme_test.go`、`internal/cli/statusline_test.go`、`internal/cli/status_footer_test.go`
 
-- [ ] **Step 1: 更新/新增失败测试**
+- [x] **Step 1: 更新/新增失败测试**
 
 `internal/cli/theme_test.go` — `TestConfigureCLIThemeSwitchesModeAndDefaultStyle` 改为：
 
@@ -188,7 +191,7 @@ func TestConfigureCLIThemeHonorsCodexEnvNames(t *testing.T) {
 	} {
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```bash
 go test ./internal/cli/ -run 'TestConfigureCLIThemeSwitchesModeAndDefaultStyle|TestComposerTintAndCursorFollowTheme|TestUserBubbleFadedFollowsAccent|TestConfigureCLIThemeHonorsCodexEnvNames|TestEffortTagExplicitValueUsesThemeInfo|TestStatusFooterSemanticPaletteAcrossThemes'
@@ -196,7 +199,7 @@ go test ./internal/cli/ -run 'TestConfigureCLIThemeSwitchesModeAndDefaultStyle|T
 
 Expected: FAIL（`ansiCodexAccent` 未定义 / 默认样式仍是 graphite|sandstone / pin 值不匹配）。
 
-- [ ] **Step 3: 实现 theme.go + style.go**
+- [x] **Step 3: 实现 theme.go + style.go**
 
 `internal/cli/style.go` — const 块追加（`ansiAccent` 保留）：
 
@@ -344,7 +347,7 @@ func defaultCLIThemeStyle(mode string) cliThemeStyle {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 ```bash
 go test ./internal/cli/ -run 'TestConfigureCLIThemeSwitchesModeAndDefaultStyle|TestComposerTintAndCursorFollowTheme|TestUserBubbleFadedFollowsAccent|TestConfigureCLIThemeHonorsCodexEnvNames|TestEffortTagExplicitValueUsesThemeInfo|TestStatusFooterSemanticPaletteAcrossThemes|TestThemeHierarchyBodyBrighterThanChromeBorder|TestToolArgPairwiseDistinct'
@@ -352,7 +355,7 @@ go test ./internal/cli/ -run 'TestConfigureCLIThemeSwitchesModeAndDefaultStyle|T
 
 Expected: PASS（`TestThemeHierarchyBodyBrighterThanChromeBorder` 必须过——D1 保证 chroma 28 ≤ 30）。
 
-- [ ] **Step 5: gofmt + 全量 + 提交**
+- [x] **Step 5: gofmt + 全量 + 提交**
 
 ```bash
 $(go env GOROOT)/bin/gofmt -w internal/cli/theme.go internal/cli/style.go internal/cli/theme_test.go internal/cli/statusline_test.go internal/cli/status_footer_test.go
@@ -372,7 +375,7 @@ Expected: 全量仅剩 `TestRenderMCPManagerDetailCompactsConfigPath` 一个已�
 - Modify: `internal/i18n/messages_en.go` / `messages_zh.go` / `messages_zh_tw.go`（`ThemeHint`）
 - Test: `internal/cli/theme_test.go`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `internal/cli/theme_test.go` 末尾追加（预期值已用真实实现核对过）：
 
@@ -384,7 +387,7 @@ func TestInputBoxTintPureFunctions(t *testing.T) {
 	if got, want := mixHex("#0a0c10", "#1e1f23", 0.84), "#1b1c20"; got != want {
 		t.Fatalf("mixHex 84%% blend = %s, want %s", got, want)
 	}
-	if got, want := mixHex("#f0f2f5", "#000000", 0.08), "#dddfe2"; got != want {
+	if got, want := mixHex("#f0f2f5", "#000000", 0.08), "#dddfe1"; got != want {
 		t.Fatalf("mixHex light sink = %s, want %s", got, want)
 	}
 
@@ -444,7 +447,7 @@ func TestBuildCLIThemeTintUnderProbe(t *testing.T) {
 	ThemeHint: "使用 /theme <auto|light|dark|style> 切換；啟動時探測到終端背景時，輸入框底色會隨背景自動調整",
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```bash
 go test ./internal/cli/ -run 'TestInputBoxTintPureFunctions|TestBuildCLIThemeTintUnderProbe'
@@ -452,7 +455,7 @@ go test ./internal/cli/ -run 'TestInputBoxTintPureFunctions|TestBuildCLIThemeTin
 
 Expected: FAIL（`mixHex`/`inputBoxTintFromBackground` 未定义）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `internal/cli/theme.go` — imports 追加 `"math"` 和 `"github.com/charmbracelet/x/ansi"`（现有 import 块内，保持 gofmt 分组顺序）。
 
@@ -515,7 +518,7 @@ func inputBoxTintFromBackground(rgb terminalRGB, dark bool) cliColor {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 ```bash
 go test ./internal/cli/ -run 'TestInputBoxTintPureFunctions|TestBuildCLIThemeTintUnderProbe|TestRuntimeAutoThemeDoesNotProbeStdin|TestAutoThemeFallsBackToColorFGBG'
@@ -523,7 +526,7 @@ go test ./internal/cli/ -run 'TestInputBoxTintPureFunctions|TestBuildCLIThemeTin
 
 Expected: PASS（`TestRuntimeAutoThemeDoesNotProbeStdin` 守护不回归：运行时 `/theme auto` 不触发 probe）。
 
-- [ ] **Step 5: gofmt + 全量 + 提交**
+- [x] **Step 5: gofmt + 全量 + 提交**
 
 ```bash
 $(go env GOROOT)/bin/gofmt -w internal/cli/theme.go internal/cli/theme_test.go internal/i18n/messages_en.go internal/i18n/messages_zh.go internal/i18n/messages_zh_tw.go
@@ -541,7 +544,7 @@ git commit -m "feat: tint composer background from the probed terminal backgroun
 - Modify: `internal/cli/chooser.go`（自由文本模式）
 - Test: `internal/cli/chat_tui_test.go`
 
-- [ ] **Step 1: 更新失败测试**
+- [x] **Step 1: 更新失败测试**
 
 `internal/cli/chat_tui_test.go` — `TestTranscriptViewportSizing`：
 
@@ -586,7 +589,7 @@ git commit -m "feat: tint composer background from the probed terminal backgroun
 	}
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```bash
 go test ./internal/cli/ -run 'TestTranscriptViewportSizing|TestPasteMsgFoldsBeforeTextareaConsumesNewlines|TestManualNewlineGrowsComposerWithoutHidingFirstLine|TestEmptyComposerShowsOnlyPrompt'
@@ -594,7 +597,7 @@ go test ./internal/cli/ -run 'TestTranscriptViewportSizing|TestPasteMsgFoldsBefo
 
 Expected: FAIL（bottomRows=2/viewport=22、Height=1 等断言）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `internal/cli/chat_tui.go` — `configureChatTextarea`（D3：`MinHeight` 托底 + 显式 `SetHeight(2)`）：
 
@@ -614,7 +617,7 @@ Expected: FAIL（bottomRows=2/viewport=22、Height=1 等断言）。
 		m.refreshInputPlaceholder()
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 ```bash
 go test ./internal/cli/ -run 'TestTranscriptViewportSizing|TestPasteMsgFoldsBeforeTextareaConsumesNewlines|TestManualNewlineGrowsComposerWithoutHidingFirstLine|TestManualNewlineCanExceedVisibleComposerRows|TestComposerHeightReflowsWhenTerminalShrinksAndGrows|TestEmptyComposerShowsOnlyPrompt|TestSoftWrappedInputGrowsComposerAndShrinksTranscript|TestStatusLineRenderedHeightMatchesBudget|TestComposerBadgeJoinDoesNotExceedFrameWidth|TestInputOwnedOverlaysKeepComposerBox'
@@ -622,7 +625,7 @@ go test ./internal/cli/ -run 'TestTranscriptViewportSizing|TestPasteMsgFoldsBefo
 
 Expected: PASS（短终端用例：MinHeight=2 ≤ MaxHeight clamp 无异常）。
 
-- [ ] **Step 5: gofmt + 全量 + 提交**
+- [x] **Step 5: gofmt + 全量 + 提交**
 
 ```bash
 $(go env GOROOT)/bin/gofmt -w internal/cli/chat_tui.go internal/cli/chooser.go internal/cli/chat_tui_test.go
@@ -639,7 +642,7 @@ git commit -m "feat: give the composer a two-row minimum height"
 - Modify: `internal/cli/md.go`（imports、`highlightCodeLine`、`renderFenced`）
 - Test: `internal/cli/md_test.go`
 
-- [ ] **Step 1: 更新/新增失败测试**
+- [x] **Step 1: 更新/新增失败测试**
 
 `internal/cli/md_test.go` — `TestRenderConstructs` 的用例结构加 `strip bool` 字段（D5），fenced 用例置 `strip: true`，循环内 strip 后再断言：
 
@@ -731,7 +734,7 @@ func TestHighlightCodeLine(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```bash
 go test ./internal/cli/ -run 'TestRenderConstructs|TestHighlightCodeLine'
@@ -739,7 +742,7 @@ go test ./internal/cli/ -run 'TestRenderConstructs|TestHighlightCodeLine'
 
 Expected: FAIL（`highlightCodeLine` 未定义；fenced 用例裸文本断言失败）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `internal/cli/md.go` — imports 追加 `"regexp"`。
 
@@ -816,7 +819,7 @@ func highlightCodeLine(line string) string {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 ```bash
 go test ./internal/cli/ -run 'TestRenderConstructs|TestHighlightCodeLine|TestTableCodeSpanNeutral|TestRenderEmpty|TestRenderCopy'
@@ -824,7 +827,7 @@ go test ./internal/cli/ -run 'TestRenderConstructs|TestHighlightCodeLine|TestTab
 
 Expected: PASS（`TestTableCodeSpanNeutral`/inline code 用例确认未受影响）。
 
-- [ ] **Step 5: gofmt + 全量 + 提交**
+- [x] **Step 5: gofmt + 全量 + 提交**
 
 ```bash
 $(go env GOROOT)/bin/gofmt -w internal/cli/md.go internal/cli/md_test.go
@@ -840,7 +843,7 @@ git commit -m "feat: token-highlight fenced code blocks"
 **Files:**
 - 无代码改动预期；若回归发现 pin 遗漏，回到对应 Task 修复并补 commit。
 
-- [ ] **Step 1: 全量验证**
+- [x] **Step 1: 全量验证**
 
 ```bash
 $(go env GOROOT)/bin/gofmt -l internal/
@@ -850,7 +853,7 @@ go test ./internal/cli/ ./internal/i18n/...
 
 Expected: `gofmt -l` 无输出；build 通过；测试仅剩两个已知失败（`TestRenderMCPManagerDetailCompactsConfigPath`、`TestLoadCCSwitchLegacyConfigPrefersCorvusFlag`）。
 
-- [ ] **Step 2: spec 覆盖自查**
+- [x] **Step 2: spec 覆盖自查**
 
 逐条核对 spec §1–§6 是否全部落地：
 - §1 两个新样式 + 默认指向 codex/codex-light ✓（T1）
@@ -861,7 +864,7 @@ Expected: `gofmt -l` 无输出；build 通过；测试仅剩两个已知失败�
 - §6 自动联动元素（无需改动）——确认本计划未改 `gitstatus.go` badge、未改 `composer_selection.go` 渲染链路 ✓
 - 测试矩阵全部条目已覆盖（`theme_test.go`、`md_test.go`、`statusline_test.go`、`status_footer_test.go`、`chat_tui_test.go`、`toolcard_test.go` 复跑、`color_discipline_test.go` 复跑）✓
 
-- [ ] **Step 3: 手工冒烟（可选，需真终端）**
+- [ ] **Step 3: 手工冒烟（可选，需真终端）**（未执行：需真实 TTY，留待用户验证）
 
 ```bash
 go run .  # 或 go build -o /tmp/corvus . && /tmp/corvus
@@ -869,7 +872,7 @@ go run .  # 或 go build -o /tmp/corvus . && /tmp/corvus
 
 Expected: 默认主题为 Codex 蓝；输入框为相对背景的提亮透明框（2 行）；fenced 代码块有 token 颜色；`/theme graphite` 仍可切回暖橘。
 
-- [ ] **Step 4: 收尾**
+- [x] **Step 4: 收尾**
 
 - 确认 `git log --oneline -5` 显示本计划 4 个 commit（T1–T4）。
 - 向用户汇报完成情况，并按 superpowers 流程（`finishing-a-development-branch`）决定是否需要 push/PR。
