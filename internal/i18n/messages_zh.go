@@ -51,7 +51,6 @@ var Chinese = Messages{
 	ChatStatusYoloIdle:                     "已跳过工具批准",
 	ChatStatusCycleHint:                    "Shift+Tab 循环询问/自动/计划 · Ctrl+Y YOLO",
 	ChatStatusCycleHintCompact:             "Shift+Tab 询问/自动/计划 · Ctrl+Y YOLO",
-	ChatTurnReceiptLabel:                   "本轮",
 	ChatCacheHitLabel:                      "缓存命中",
 	ChatStatusModelLabel:                   "模型",
 	ChatStatusEffortLabel:                  "强度",

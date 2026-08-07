@@ -75,7 +75,6 @@ type Messages struct {
 	ChatStatusYoloIdle                     string // shortcuts hint when idle in YOLO/bypass mode
 	ChatStatusCycleHint                    string // plan-toggle shortcut hint shown when no modal prompt owns the status row
 	ChatStatusCycleHintCompact             string // readable shortcut hint used by the persistent footer
-	ChatTurnReceiptLabel                   string // compact per-turn usage receipt attached to the completed assistant response
 	ChatCacheHitLabel                      string // cache-hit readout shown after each completed turn
 	ChatStatusModelLabel                   string
 	ChatStatusEffortLabel                  string

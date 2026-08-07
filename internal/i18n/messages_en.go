@@ -50,7 +50,6 @@ var English = Messages{
 	ChatStatusYoloIdle:                     "tool approvals skipped",
 	ChatStatusCycleHint:                    "Shift+Tab ask/auto/plan · Ctrl+Y YOLO",
 	ChatStatusCycleHintCompact:             "Shift+Tab ask/auto/plan · Ctrl+Y YOLO",
-	ChatTurnReceiptLabel:                   "TURN",
 	ChatCacheHitLabel:                      "cached",
 	ChatStatusModelLabel:                   "MODEL",
 	ChatStatusEffortLabel:                  "EFFORT",
