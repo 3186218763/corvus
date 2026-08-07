@@ -64,7 +64,7 @@ New order:
 ```
 
 - Panel render functions are unchanged; only the join order moves.
-- `rowsAboveBox` counts only the thinking line, managerFooter, and queue indicator — **not** the panels. The composer cursor anchor uses the reduced `rowsAboveBox` in both native-scrollback and alt-screen paths.
+- `rowsAboveBox` counts only the thinking line and the queue indicator — **not** the panels and **not** the managerFooter (which rides the bottom rail below the composer). The composer cursor anchor uses the reduced `rowsAboveBox` in both native-scrollback and alt-screen paths.
 - `bottomRows()` is unchanged: panels still count toward the pinned bottom region, so `transcriptHeight()` shrinks by the popup height exactly as today — the status row can never be pushed off-screen.
 - When the composer is hidden (`hideComposer()` modal states), the panels simply render in the below-composer slot, i.e. just above the status block; no special-casing needed.
 
@@ -72,7 +72,7 @@ New order:
 
 New field on `chatTUI`, e.g. `composerRaisedRows int` (0 = not raised).
 
-- **Raise:** whenever a bottom panel is rendered with nonzero height **while the composer is visible** (completion menu, chooser, cheatsheet, todo, rewind, etc.), record that panel height into `composerRaisedRows`. Hidden-composer modal states (approval, non-typing chooser, etc.) never set it.
+- **Raise:** whenever a bottom panel is rendered **while the composer is visible** (completion menu, chooser, cheatsheet, todo, rewind, etc.), record that panel height into `composerRaisedRows` — monotonically, i.e. only when the panel is taller than the current hold, so a persistent panel (e.g. the todo list) never drops the hold when a transient popup above it closes. Hidden-composer modal states (approval, non-typing chooser, etc.) never set it.
 - **Hold:** when the panel closes (Esc, selection, etc.), keep `composerRaisedRows`; `bottomRows()` adds the held rows and `View()` renders that many blank rows between the composer and the status block, so the input stays at its raised position with empty space beneath.
 - **Drop:** the only clearing condition is the user submitting a message (turn starts / agent begins executing). Clear `composerRaisedRows`; the input returns to the bottom. It stays down after the turn until the next popup raises it again.
 - Hidden-composer modal states neither set nor clear the flag.

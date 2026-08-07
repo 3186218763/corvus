@@ -351,7 +351,7 @@ func (m chatTUI) selectedComposerText() string {
 
 // composerOrigin returns the terminal cell occupied by textarea content (after
 // the mode badge and prompt gutter). Deriving it from the two cursor positions
-// keeps hit-testing aligned with every optional panel above the box.
+// keeps hit-testing aligned with every optional panel below the box.
 func (m chatTUI) composerOrigin() (x, y int, ok bool) {
 	if m.hideComposer() {
 		return 0, 0, false

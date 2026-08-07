@@ -100,7 +100,7 @@ type chatTUI struct {
 	balance string
 
 	// todoArgs is the latest todo_write call's raw args; it drives the task list
-	// pinned just above the input (see renderTodoPanel). "" when there's no list.
+	// pinned just below the input (see renderTodoPanel). "" when there's no list.
 	// Persists across turns until the work completes or a new session starts.
 	todoArgs string
 
@@ -386,6 +386,10 @@ type chatTUI struct {
 
 	// completion is the live autocomplete menu (slash commands; @-refs later).
 	completion completion
+	// composerRaisedRows holds the total row count of the visible bottom
+	// panels so the composer stays raised (Codex-style) after a popup closes,
+	// until the next submission drops it back to the bottom.
+	composerRaisedRows int
 	// fileSearchCache memoizes fileref.Search by query so the bounded walk runs
 	// once per @token fragment, not on every keystroke that re-renders the menu.
 	fileSearchCache map[string][]string
@@ -841,6 +845,14 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Render the bottom region once per event; bottomRows()/View() read it.
 	cm.panels = cm.renderBottomPanels()
 	cm.panelsValid = true
+	// Codex-style raise: while the composer is visible, any bottom panel lifts
+	// the input; the height is held after the panel closes until submission.
+	// Monotonic: the composer only rises, never drops, while a popup lifecycle
+	// is open. Once raised past a persistent panel (e.g. the todo list), the
+	// hold survives the popup closing and resets on the next submission.
+	if !cm.hideComposer() && cm.panels.rows > cm.composerRaisedRows {
+		cm.composerRaisedRows = cm.panels.rows
+	}
 
 	contentW := transcriptContentWidth(cm.width, cm.nativeScrollback)
 	cm.viewport.SetWidth(contentW)
@@ -1486,6 +1498,10 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.rememberSubmittedInput(line)
+			// The raised composer drops back to the bottom the moment the user
+			// submits anything (memory notes, shell commands, slash commands,
+			// or a normal turn).
+			m.composerRaisedRows = 0
 
 			// "# <note>" quick-adds a memory line locally, no model turn. The
 			// space keeps "#7" / "#issue" prompts from being swallowed.
@@ -1964,6 +1980,13 @@ func (m chatTUI) bottomRows() int {
 		rows = m.panels.rows
 	} else {
 		rows = m.renderBottomPanels().rows
+	}
+	// Hold the raised-composer space after a popup closes until the next
+	// submission drops the composer back to the bottom (Codex-style). A
+	// persistent panel (e.g. the todo list) may coexist with the popup, so the
+	// hold covers the difference, not only the all-panels-closed case.
+	if !m.hideComposer() && m.composerRaisedRows > rows {
+		rows = m.composerRaisedRows
 	}
 	// Remove the hardcoded working-line increment — it is counted inside
 	// statusLineCount via computeStatusLineCount, which also accounts for
@@ -2809,65 +2832,14 @@ func (m chatTUI) View() tea.View {
 		panels = m.renderBottomPanels()
 	}
 	var parts []string
-	rowsAboveBox := 0 // terminal rows occupied by panels/working line before the composer
-	if panels.todo != "" {
-		parts = append(parts, panels.todo)
-		rowsAboveBox += strings.Count(panels.todo, "\n") + 1
-	}
-	if panels.banner != "" {
-		parts = append(parts, panels.banner)
-		rowsAboveBox += strings.Count(panels.banner, "\n") + 1
-	}
-	if panels.chooser != "" {
-		parts = append(parts, panels.chooser)
-		rowsAboveBox += strings.Count(panels.chooser, "\n") + 1
-	}
-	if panels.rewind != "" {
-		parts = append(parts, panels.rewind)
-		rowsAboveBox += strings.Count(panels.rewind, "\n") + 1
-	}
-	if panels.mcpImport != "" {
-		parts = append(parts, panels.mcpImport)
-		rowsAboveBox += strings.Count(panels.mcpImport, "\n") + 1
-	}
-	if panels.resumePick != "" {
-		parts = append(parts, panels.resumePick)
-		rowsAboveBox += strings.Count(panels.resumePick, "\n") + 1
-	}
-	if panels.quickPick != "" {
-		parts = append(parts, panels.quickPick)
-		rowsAboveBox += strings.Count(panels.quickPick, "\n") + 1
-	}
-	if panels.copyPick != "" {
-		parts = append(parts, panels.copyPick)
-		rowsAboveBox += strings.Count(panels.copyPick, "\n") + 1
-	}
-	if panels.cheatsheet != "" {
-		parts = append(parts, panels.cheatsheet)
-		rowsAboveBox += strings.Count(panels.cheatsheet, "\n") + 1
-	}
-	if panels.completion != "" {
-		parts = append(parts, panels.completion)
-		rowsAboveBox += strings.Count(panels.completion, "\n") + 1
-	}
-	if m.nativeScrollback && panels.manager != "" {
-		parts = append(parts, panels.manager)
-		rowsAboveBox += strings.Count(panels.manager, "\n") + 1
-	}
-	// Layout: the working spinner (when running), the composer when visible,
-	// then the single persistent footer row (whose left edge carries the mode
-	// badge). Wide terminals right-align the project/model/cache group; narrow
-	// terminals wrap between " · " groups. Padding to full width prevents
-	// stale cells.
+	rowsAboveBox := 0 // terminal rows before the composer (working line, queue indicator)
+	// The working spinner (when running) and the queue indicator render ABOVE
+	// the composer; popups render BELOW it (Codex-style: typing "/" raises the
+	// input and the menu expands downward).
 	if working != "" {
 		parts = append(parts, workingStyle.Width(boxW).MaxWidth(boxW).Render(wrapStatusLine(working, boxW)))
 		rowsAboveBox++
 	}
-	if footer := panels.managerFooter; footer != "" {
-		parts = append(parts, footer)
-		rowsAboveBox += strings.Count(footer, "\n") + 1
-	}
-	statusBlock := m.renderStatusBlock(primaryStatus, boxW)
 	if !hideComposer {
 		if qi := m.renderQueueIndicator(); qi != "" {
 			parts = append(parts, qi)
@@ -2875,8 +2847,33 @@ func (m chatTUI) View() tea.View {
 		}
 		parts = append(parts, box)
 	}
-	// The cache-hit readout lives inside the single footer row; there is no
-	// separate receipt line under the composer.
+	// Popups expand below the composer. While open they raise the input; after
+	// dismissal the raised space is held (composerRaisedRows) until the next
+	// submission drops it back to the bottom.
+	var panelParts []string
+	for _, s := range []string{panels.todo, panels.banner, panels.chooser, panels.rewind, panels.mcpImport, panels.resumePick, panels.quickPick, panels.copyPick, panels.cheatsheet, panels.completion} {
+		if s != "" {
+			panelParts = append(panelParts, s)
+		}
+	}
+	if m.nativeScrollback && panels.manager != "" {
+		panelParts = append(panelParts, panels.manager)
+	}
+	if len(panelParts) > 0 {
+		parts = append(parts, panelParts...)
+	}
+	// Persistent panels (e.g. the todo list) can coexist with a transient
+	// popup; hold the difference so closing the popup never moves the input.
+	if !hideComposer && m.composerRaisedRows > panels.rows {
+		held := m.composerRaisedRows - panels.rows
+		parts = append(parts, strings.Repeat("\n", held-1))
+	}
+	// The manager footer rides the bottom rail with the popups so the manager
+	// card and its hint stay adjacent.
+	if footer := panels.managerFooter; footer != "" {
+		parts = append(parts, footer)
+	}
+	statusBlock := m.renderStatusBlock(primaryStatus, boxW)
 	parts = append(parts, statusBlockStyle.Width(boxW).MaxWidth(boxW).Render(statusBlock))
 
 	if m.nativeScrollback {
@@ -3084,7 +3081,7 @@ func shortTokens(n int) string {
 	}
 }
 
-// renderApprovalBanner is the slim notice shown above the input while a tool
+// renderApprovalBanner is the slim notice shown below the input while a tool
 // call (or a plan) awaits the user's decision.
 func (m chatTUI) renderApprovalBanner() string {
 	w := m.width
@@ -3195,7 +3192,7 @@ type todoPanelTodo struct {
 	Level      int    `json:"level"`
 }
 
-// renderTodoPanel renders the task list pinned above the input from the latest
+// renderTodoPanel renders the task list pinned below the input from the latest
 // todo_write call (m.todoArgs): a "Tasks done/total" header, completed items
 // dimmed/checked, the in-progress one highlighted (its activeForm if given),
 // pending ones muted. It returns "" when there's no list or every item is done,

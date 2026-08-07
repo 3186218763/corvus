@@ -4405,3 +4405,131 @@ func TestReplayBundleTrailingUserDemotesInternalAssistant(t *testing.T) {
 		t.Fatalf("trailing user bubble should stay full accent, got %q", m.transcript[0])
 	}
 }
+
+func completionTestTUI() chatTUI {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m.width = 80
+	m.completion.active = true
+	m.completion.kind = compSlash
+	m.completion.items = []compItem{{label: "/help", hint: "show help"}}
+	return m
+}
+
+func promptRow(view string) int {
+	for i, ln := range strings.Split(view, "\n") {
+		if strings.Contains(ln, "❯") {
+			return i
+		}
+	}
+	return -1
+}
+
+func TestCompletionMenuRendersBelowComposer(t *testing.T) {
+	m := completionTestTUI()
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+
+	if m.composerRaisedRows == 0 {
+		t.Fatalf("open completion should raise the composer, got composerRaisedRows=0")
+	}
+	view := ansi.Strip(m.View().Content)
+	boxIdx := strings.LastIndex(view, "❯")
+	menuIdx := strings.Index(view, "/help")
+	if boxIdx < 0 || menuIdx < 0 || menuIdx < boxIdx {
+		t.Fatalf("completion menu should render below the composer (box at %d, menu at %d):\n%s", boxIdx, menuIdx, view)
+	}
+}
+
+func TestComposerStaysRaisedAfterMenuCloses(t *testing.T) {
+	m := completionTestTUI()
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+	raised := m.composerRaisedRows
+	if raised == 0 {
+		t.Fatalf("open completion should raise the composer")
+	}
+	openRow := promptRow(ansi.Strip(m.View().Content))
+
+	// Cancel the menu (Esc). The raised position must be held.
+	m0, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = m0.(chatTUI)
+
+	if m.composerRaisedRows != raised {
+		t.Fatalf("composerRaisedRows = %d after cancel, want held %d", m.composerRaisedRows, raised)
+	}
+	if got := promptRow(ansi.Strip(m.View().Content)); got != openRow {
+		t.Fatalf("input row = %d after cancel, want held at %d:\n%s", got, openRow, m.View().Content)
+	}
+	held := strings.TrimRight(ansi.Strip(m.View().Content), "\n")
+	if rows := strings.Count(held, "\n") + 1; rows > 24 {
+		t.Fatalf("held view is %d rows tall, must fit 24-row terminal:\n%s", rows, held)
+	}
+}
+
+func TestViewRendersEveryCachedPanel(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m.width = 80
+	m.nativeScrollback = true
+	marker := func(name string) string { return "PANEL:" + name }
+	m.panels = bottomPanels{
+		todo: marker("todo"), banner: marker("banner"), chooser: marker("chooser"),
+		rewind: marker("rewind"), mcpImport: marker("mcpImport"), resumePick: marker("resumePick"),
+		quickPick: marker("quickPick"), copyPick: marker("copyPick"), cheatsheet: marker("cheatsheet"),
+		completion: marker("completion"), manager: marker("manager"), managerFooter: marker("managerFooter"),
+		rows: 12,
+	}
+	m.panelsValid = true
+	view := m.View().Content
+	for _, name := range []string{"todo", "banner", "chooser", "rewind", "mcpImport", "resumePick", "quickPick", "copyPick", "cheatsheet", "completion", "manager", "managerFooter"} {
+		if !strings.Contains(view, "PANEL:"+name) {
+			t.Fatalf("View must render cached panel %q:\n%s", name, view)
+		}
+	}
+}
+
+func TestComposerDropsToBottomOnSubmit(t *testing.T) {
+	r := &blockingTurnRunner{started: make(chan struct{})}
+	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: t.TempDir(), Label: "test"})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 8), 80)
+	m.composerRaisedRows = 4
+	m.input.SetValue("hello")
+
+	m0, _ := m.update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = m0.(chatTUI)
+
+	if m.composerRaisedRows != 0 {
+		t.Fatalf("composerRaisedRows = %d after submit, want 0", m.composerRaisedRows)
+	}
+}
+
+func TestComposerHoldsRaiseWithPersistentTodoPanel(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m.width = 80
+	m.todoArgs = `{"todos":[{"content":"Phase A","status":"in_progress","level":0}]}`
+	m.completion.active = true
+	m.completion.kind = compSlash
+	m.completion.items = []compItem{{label: "/help", hint: "show help"}}
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = m0.(chatTUI)
+	if m.composerRaisedRows == 0 {
+		t.Fatalf("completion over a persistent todo panel should raise the composer")
+	}
+	if !strings.Contains(m.View().Content, "Phase A") {
+		t.Fatalf("todo panel should be visible:\n%s", m.View().Content)
+	}
+	openRow := promptRow(ansi.Strip(m.View().Content))
+
+	// Cancel the menu; the todo panel stays, but the input must not jump.
+	m0, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = m0.(chatTUI)
+
+	if got := promptRow(ansi.Strip(m.View().Content)); got != openRow {
+		t.Fatalf("input row = %d after cancel with persistent todo panel, want held at %d:\n%s", got, openRow, m.View().Content)
+	}
+	if !strings.Contains(m.View().Content, "Phase A") {
+		t.Fatalf("todo panel should remain visible after cancel:\n%s", m.View().Content)
+	}
+}

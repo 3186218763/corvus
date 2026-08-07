@@ -14,7 +14,7 @@ import (
 // chooser is the in-chat multiple-choice prompt the `ask` tool raises — the CLI's
 // question card. It holds the questions, the per-question selections, and the
 // cursor; chatTUI routes keystrokes to it while it's active
-// (m.chooser != nil) and renders it pinned above the input. One AskRequest can
+// (m.chooser != nil) and renders it pinned below the input. One AskRequest can
 // carry several questions, shown as tabs (←/→) plus a final Submit tab.
 type chooser struct {
 	id        string

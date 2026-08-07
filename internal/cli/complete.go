@@ -605,12 +605,12 @@ func padCompletionLine(s string, w int) string {
 	return s + strings.Repeat(completionPadCell, pad)
 }
 
-// renderCompletion draws the menu above the input box: matching items, windowed
-// around the selection, the current row highlighted, hints dimmed. Every line is
-// padded to m.width with non-clearable blank cells so bubbletea's delta renderer
-// has no ordinary trailing-space run to collapse into EL/ECH erase sequences.
-// That avoids ghost cells on terminals (mintty) with unreliable erases after
-// wide CJK glyphs.
+// renderCompletion draws the menu below the input box: matching items, windowed
+// around the selection, the current row highlighted, hints dimmed. Every line
+// is padded to m.width with non-clearable blank cells so bubbletea's delta
+// renderer has no ordinary trailing-space run to collapse into EL/ECH erase
+// sequences. That avoids ghost cells on terminals (mintty) with unreliable
+// erases after wide CJK glyphs.
 func (m chatTUI) renderCompletion() string {
 	if !m.completion.active || len(m.completion.items) == 0 {
 		return ""
