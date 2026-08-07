@@ -23,6 +23,9 @@ func trueColorTerminal() bool {
 const (
 	ansiReset   = "\033[0m"
 	ansiBold    = "\033[1m"
+	// ansiDim is the SGR dim modifier, re-applied after chroma resets on
+	// deleted diff lines so the whole content reads faded (Codex's DIM).
+	ansiDim     = "\033[2m"
 	ansiReverse = "\033[7m"
 	// ansiAccent is the dark graphite accent as a literal escape, for tests that
 	// pin the concrete sequence instead of the active theme.

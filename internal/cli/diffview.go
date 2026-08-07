@@ -155,7 +155,11 @@ func diffBar(sign byte, code, path string, width int, bg, signFg string, lineNo,
 	if !colorOn() {
 		return "  " + gutter + " " + string(sign) + " " + code
 	}
-	hl := reapplyBG(highlightCode(path, code), bg)
+	hl := highlightCode(path, code)
+	if sign == '-' {
+		hl = ansiDim + strings.ReplaceAll(hl, ansiReset, ansiReset+ansiDim)
+	}
+	hl = reapplyBG(hl, bg)
 	pad := barW - 2 - visibleWidth(code)
 	if pad < 0 {
 		pad = 0

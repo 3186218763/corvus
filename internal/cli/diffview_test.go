@@ -274,3 +274,29 @@ func TestDiffBlockCodexHeaderPureDelete(t *testing.T) {
 		t.Fatalf("pure delete should read 'Deleted ... (+0 -1)', got %q", block[0])
 	}
 }
+
+func TestDiffBarDimsDeleteContent(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	line := diffBar('-', "const x = 1", "x.go", 40, bgSGR(activeCLITheme.diffDelBG), fgSGR(activeCLITheme.err), 1, 2)
+	if !strings.Contains(line, ansiDim) {
+		t.Fatalf("delete row should dim its content, got %q", line)
+	}
+	// The dim must survive chroma resets inside the highlighted code.
+	if strings.Count(line, ansiDim) < 2 {
+		t.Fatalf("dim not re-armed after chroma resets, got %q", line)
+	}
+}
+
+func TestDiffBarAddNotDimmed(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	line := diffBar('+', "func main() {}", "x.go", 40, bgSGR(activeCLITheme.diffAddBG), fgSGR(activeCLITheme.success), 1, 2)
+	if strings.Contains(line, ansiDim) {
+		t.Fatalf("add row should not be dimmed, got %q", line)
+	}
+}
