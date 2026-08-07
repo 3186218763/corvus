@@ -185,7 +185,7 @@ const (
 // UIConfig controls terminal presentation and TUI-only preferences.
 type UIConfig struct {
 	Theme          string   `toml:"theme"`           // auto|dark|light; empty resolves to auto
-	ThemeStyle     string   `toml:"theme_style"`     // graphite|aurora|slate|carbon|nocturne|amber and legacy aliases
+	ThemeStyle     string   `toml:"theme_style"`     // codex|codex-light|graphite|ember|aurora|midnight|sandstone|porcelain|linen|glacier plus legacy aliases
 	ShortcutLayout string   `toml:"shortcut_layout"` // classic|desktop; accepted for compatibility
 	Currency       string   `toml:"currency"`        // auto|CNY|USD pricing preference
 	ProviderAccess []string `toml:"provider_access"` // providers visible in the TUI setup flow
@@ -253,7 +253,7 @@ func (c *Config) UICursorShape() string {
 
 func normalizeThemeStyle(style string) string {
 	switch strings.ToLower(strings.TrimSpace(style)) {
-	case "graphite", "aurora", "slate", "carbon", "nocturne", "amber", "ember", "midnight", "sandstone", "porcelain", "linen", "glacier":
+	case "codex", "codex-light", "graphite", "aurora", "slate", "carbon", "nocturne", "amber", "ember", "midnight", "sandstone", "porcelain", "linen", "glacier":
 		return strings.ToLower(strings.TrimSpace(style))
 	default:
 		return ""

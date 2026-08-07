@@ -75,8 +75,8 @@ func TestTurnReceiptAdaptsContrastAcrossThemes(t *testing.T) {
 	for _, tt := range []struct {
 		mode, labelSGR, valueSGR string
 	}{
-		{mode: "dark", labelSGR: "\033[38;5;247m", valueSGR: "\033[38;5;252m"},
-		{mode: "light", labelSGR: "\033[38;5;243m", valueSGR: "\033[38;5;238m"},
+		{mode: "dark", labelSGR: "\033[38;5;247m", valueSGR: "\033[38;5;253m"},
+		{mode: "light", labelSGR: "\033[38;5;240m", valueSGR: "\033[38;5;238m"},
 	} {
 		t.Run(tt.mode, func(t *testing.T) {
 			configureCLITheme(tt.mode)
@@ -101,8 +101,8 @@ func TestStatusFooterSemanticPaletteAcrossThemes(t *testing.T) {
 	for _, tt := range []struct {
 		mode, labelSGR, valueSGR, infoSGR, secondarySGR string
 	}{
-		{mode: "dark", labelSGR: "\033[38;5;247m", valueSGR: "\033[38;5;252m", infoSGR: "\033[38;5;80m", secondarySGR: "\033[38;5;141m"},
-		{mode: "light", labelSGR: "\033[38;5;243m", valueSGR: "\033[38;5;238m", infoSGR: "\033[38;5;25m", secondarySGR: "\033[38;5;104m"},
+		{mode: "dark", labelSGR: "\033[38;5;247m", valueSGR: "\033[38;5;253m", infoSGR: "\033[38;5;75m", secondarySGR: "\033[38;5;141m"},
+		{mode: "light", labelSGR: "\033[38;5;240m", valueSGR: "\033[38;5;238m", infoSGR: "\033[38;5;26m", secondarySGR: "\033[38;5;104m"},
 	} {
 		t.Run(tt.mode, func(t *testing.T) {
 			configureCLITheme(tt.mode)
@@ -235,7 +235,7 @@ func TestContextFooterColorsOnlyValuesByUrgency(t *testing.T) {
 	configureCLITheme("dark")
 
 	normal := strings.Join(renderContextStatusGroups(10, 100, .8), " ")
-	if !strings.Contains(normal, "\033[38;5;247mCTX") || !strings.Contains(normal, "\033[38;5;252m10 (10%)") {
+	if !strings.Contains(normal, "\033[38;5;247mCTX") || !strings.Contains(normal, "\033[38;5;253m10 (10%)") {
 		t.Fatalf("normal context should use subtle label and neutral value: %q", normal)
 	}
 

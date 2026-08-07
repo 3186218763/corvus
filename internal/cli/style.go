@@ -27,6 +27,9 @@ const (
 	// ansiAccent is the dark graphite accent as a literal escape, for tests that
 	// pin the concrete sequence instead of the active theme.
 	ansiAccent = "\033[38;5;173m"
+	// ansiCodexAccent is the dark codex accent as a literal escape, for tests
+	// that pin the concrete sequence instead of the active theme.
+	ansiCodexAccent = "\033[38;5;75m"
 )
 
 func sgr(code, s string) string {

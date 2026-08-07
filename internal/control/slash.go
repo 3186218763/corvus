@@ -185,11 +185,13 @@ func themeArgItems(prior []string) []SlashItem {
 		mode string
 		desc string
 	}{
+		{"codex", "dark", "codex blue accent"},
 		{"graphite", "dark", "warm clay accent"},
 		{"ember", "dark", "hot orange accent"},
 		{"aurora", "dark", "cool teal accent"},
 		{"midnight", "dark", "quiet violet accent"},
-		{"sandstone", "light", "default warm light accent"},
+		{"codex-light", "light", "codex blue light accent"},
+		{"sandstone", "light", "warm light accent"},
 		{"porcelain", "light", "soft violet light accent"},
 		{"linen", "light", "muted coral light accent"},
 		{"glacier", "light", "cool blue accent"},

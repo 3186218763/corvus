@@ -21,19 +21,19 @@ func TestConfigureCLIThemeSwitchesModeAndDefaultStyle(t *testing.T) {
 	activeColorProfile = colorprofile.ANSI256
 
 	configureCLITheme("light")
-	if activeCLITheme.name != "light" || activeCLITheme.style != "sandstone" {
-		t.Fatalf("light theme = %s/%s, want light/sandstone", activeCLITheme.name, activeCLITheme.style)
+	if activeCLITheme.name != "light" || activeCLITheme.style != "codex-light" {
+		t.Fatalf("light theme = %s/%s, want light/codex-light", activeCLITheme.name, activeCLITheme.style)
 	}
-	if got := accent("x"); !strings.HasPrefix(got, "\033[38;5;173m") {
-		t.Fatalf("light default accent = %q, want sandstone xterm 173", got)
+	if got := accent("x"); !strings.HasPrefix(got, "\033[38;5;62m") {
+		t.Fatalf("light default accent = %q, want codex-light xterm 62", got)
 	}
 
 	configureCLITheme("dark")
-	if activeCLITheme.name != "dark" || activeCLITheme.style != "graphite" {
-		t.Fatalf("dark theme = %s/%s, want dark/graphite", activeCLITheme.name, activeCLITheme.style)
+	if activeCLITheme.name != "dark" || activeCLITheme.style != "codex" {
+		t.Fatalf("dark theme = %s/%s, want dark/codex", activeCLITheme.name, activeCLITheme.style)
 	}
-	if got := accent("x"); !strings.HasPrefix(got, ansiAccent) {
-		t.Fatalf("dark accent = %q, want %q", got, ansiAccent)
+	if got := accent("x"); !strings.HasPrefix(got, ansiCodexAccent) {
+		t.Fatalf("dark accent = %q, want %q", got, ansiCodexAccent)
 	}
 }
 
@@ -66,6 +66,25 @@ func TestConfigureCLIThemeHonorsEnvOverride(t *testing.T) {
 	configureCLIThemeWithStyle("light", "glacier")
 	if activeCLITheme.name != "dark" || activeCLITheme.style != "ember" {
 		t.Fatalf("CORVUS_THEME override resolved %s/%s, want dark/ember", activeCLITheme.name, activeCLITheme.style)
+	}
+}
+
+func TestConfigureCLIThemeHonorsCodexEnvNames(t *testing.T) {
+	t.Setenv("CORVUS_THEME", "codex")
+	t.Setenv("CORVUS_THEME_STYLE", "")
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+
+	configureCLIThemeWithStyle("light", "glacier")
+	if activeCLITheme.name != "dark" || activeCLITheme.style != "codex" {
+		t.Fatalf("CORVUS_THEME=codex resolved %s/%s, want dark/codex", activeCLITheme.name, activeCLITheme.style)
+	}
+
+	t.Setenv("CORVUS_THEME", "")
+	t.Setenv("CORVUS_THEME_STYLE", "codex-light")
+	configureCLIThemeWithStyle("light", "graphite")
+	if activeCLITheme.name != "light" || activeCLITheme.style != "codex-light" {
+		t.Fatalf("CORVUS_THEME_STYLE=codex-light resolved %s/%s, want light/codex-light", activeCLITheme.name, activeCLITheme.style)
 	}
 }
 
@@ -261,7 +280,7 @@ func TestComposerTintAndCursorFollowTheme(t *testing.T) {
 			configureCLITheme(theme.name)
 			wantTint := cliColor{"#eceff4", 255}
 			if theme.mode == "dark" {
-				wantTint = cliColor{"#1c2028", 234}
+				wantTint = cliColor{"#1c2534", 235}
 			}
 			if got := activeCLITheme.inputBoxBG; !reflect.DeepEqual(got, wantTint) {
 				t.Fatalf("%s inputBoxBG = %v, want %v", theme.name, got, wantTint)
@@ -286,7 +305,7 @@ func TestComposerTintAndCursorFollowTheme(t *testing.T) {
 
 	activeColorProfile = colorprofile.NoTTY
 	configureCLITheme("dark")
-	if got := activeCLITheme.inputBoxBG; !reflect.DeepEqual(got, cliColor{"#1c2028", 234}) {
+	if got := activeCLITheme.inputBoxBG; !reflect.DeepEqual(got, cliColor{"#1c2534", 235}) {
 		t.Fatalf("dark theme must keep its tint slot even under NO_COLOR, got %v", got)
 	}
 	if got := inputBoxStyle.GetBorderTop(); got {
@@ -465,6 +484,22 @@ func TestUserBubbleFadedFollowsAccent(t *testing.T) {
 		t.Fatalf("midnight faded xterm = %d, want 140", got)
 	}
 
+	configureCLIThemeWithStyle("dark", "codex")
+	if got, want := activeCLITheme.userBubbleFaded.hex, "#688cb9"; got != want {
+		t.Fatalf("codex faded hex = %s, want %s", got, want)
+	}
+	if got, want := activeCLITheme.userBubbleFaded.xterm, 67; got != want {
+		t.Fatalf("codex faded xterm = %d, want 67", got)
+	}
+
+	configureCLIThemeWithStyle("light", "codex-light")
+	if got, want := activeCLITheme.userBubbleFaded.hex, "#6178a6"; got != want {
+		t.Fatalf("codex-light faded hex = %s, want %s", got, want)
+	}
+	if got, want := activeCLITheme.userBubbleFaded.xterm, 67; got != want {
+		t.Fatalf("codex-light faded xterm = %d, want 67", got)
+	}
+
 	configureCLIThemeWithStyle("light", "sandstone")
 	if got, want := activeCLITheme.userBubbleFaded.hex, "#9e7263"; got != want {
 		t.Fatalf("sandstone faded hex = %s, want %s", got, want)
@@ -493,10 +528,10 @@ func TestUserBubbleFadedFollowsAccent(t *testing.T) {
 		t.Fatalf("light toolArg xterm = %d, want 240", got)
 	}
 	configureCLIThemeWithStyle("dark", "graphite")
-	if got, want := activeCLITheme.toolArg.hex, "#a5b0bd"; got != want {
+	if got, want := activeCLITheme.toolArg.hex, "#b6c2d4"; got != want {
 		t.Fatalf("dark toolArg = %s, want %s", got, want)
 	}
-	if got, want := activeCLITheme.toolArg.xterm, 145; got != want {
-		t.Fatalf("dark toolArg xterm = %d, want 145", got)
+	if got, want := activeCLITheme.toolArg.xterm, 146; got != want {
+		t.Fatalf("dark toolArg xterm = %d, want 146", got)
 	}
 }
