@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -224,23 +225,6 @@ func (m chatTUI) statusTelemetryGroups() []string {
 	return data
 }
 
-// renderStatusBlock owns the complete persistent footer layout. The optional
-// data band is separated from interaction state when telemetry exists; narrow
-// screens add deliberate left-aligned rows only between semantic groups.
-func (m chatTUI) renderStatusBlock(primary string, width int) string {
-	if width <= 0 {
-		width = 1
-	}
-	primary = hideStatusHintWhenKeyNamesCannotFit(primary, width)
-	modelWork := m.statusModelWorkGroup(max(width-visibleWidth(statusFooterIndent), 1))
-	first := layoutStatusSides(primary, modelWork, width)
-	second := m.layoutDataBand(width)
-	if second == "" {
-		return first
-	}
-	return first + "\n" + statusFooterDivider(width) + "\n" + second
-}
-
 // hideStatusHintWhenKeyNamesCannotFit keeps the readable Shift+Tab/Ctrl+Y
 // spelling on normal terminals without hard-wrapping a single shortcut on an
 // extremely narrow terminal. In that case the idle state remains visible and
@@ -253,15 +237,6 @@ func hideStatusHintWhenKeyNamesCannotFit(primary string, width int) string {
 		}
 	}
 	return primary
-}
-
-func statusFooterDivider(width int) string {
-	width = max(width, 1)
-	if width <= visibleWidth(statusFooterIndent) {
-		return themeFg(activeCLITheme.border, strings.Repeat("─", width))
-	}
-	ruleWidth := width - visibleWidth(statusFooterIndent)
-	return statusFooterIndent + themeFg(activeCLITheme.border, strings.Repeat("─", ruleWidth))
 }
 
 func layoutStatusSides(left, right string, width int) string {
@@ -315,6 +290,80 @@ func rightAlignStatusGroup(group string, width int) string {
 		return strings.Repeat(" ", width-visibleWidth(group)) + group
 	}
 	return wrapStatusLine(group, width)
+}
+
+// abbrevHome shortens a path under the user's home directory to "~".
+func abbrevHome(p string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" || p == "" {
+		return p
+	}
+	if p == home {
+		return "~"
+	}
+	if strings.HasPrefix(p, home+string(os.PathSeparator)) {
+		return "~" + p[len(home):]
+	}
+	return p
+}
+
+// projectPath returns the workspace root of the current session, falling back
+// to the process cwd when no controller (or no configured root) exists.
+func (m chatTUI) projectPath() string {
+	root := ""
+	if m.ctrl != nil {
+		root = m.ctrl.WorkspaceRoot()
+	}
+	if root == "" {
+		root, _ = os.Getwd()
+	}
+	return abbrevHome(root)
+}
+
+// statusRightGroup renders the right half of the single footer row: project
+// path · model · cache hit. A configured custom statusline replaces all of it
+// (existing contract: it owns the data fields).
+func (m chatTUI) statusRightGroup(width int) string {
+	if m.statuslineCmd != "" && m.statuslineOut != "" {
+		return footerHint(ansi.Strip(m.statuslineOut))
+	}
+	var groups []string
+	if path := m.projectPath(); path != "" {
+		groups = append(groups, footerSecondary(compactMiddle(path, max(width/3, 12))))
+	}
+	if model := m.statusModelWorkGroup(max(width-visibleWidth(strings.Join(groups, " · "))-1, 1)); model != "" {
+		groups = append(groups, model)
+	}
+	if m.turnReceipt != "" {
+		groups = append(groups, m.turnReceipt)
+	}
+	return strings.Join(groups, " · ")
+}
+
+// layoutSingleStatusLine lays out the one footer row: left status text, right
+// data group. When both fit they sit on one row (right group right-aligned);
+// otherwise the combined line wraps at " · " group boundaries.
+func layoutSingleStatusLine(left, right string, width int) string {
+	switch {
+	case right == "":
+		return wrapStatusGroups(left, width)
+	case left == "":
+		return wrapStatusGroups(right, width)
+	}
+	full := left + " · " + right
+	if visibleWidth(full) <= width {
+		return left + strings.Repeat(" ", width-visibleWidth(left)-visibleWidth(right)) + right
+	}
+	return wrapStatusGroups(full, width)
+}
+
+// renderStatusBlock owns the single persistent footer row under the composer.
+func (m chatTUI) renderStatusBlock(primary string, width int) string {
+	if width <= 0 {
+		width = 1
+	}
+	primary = hideStatusHintWhenKeyNamesCannotFit(primary, width)
+	return layoutSingleStatusLine(primary, m.statusRightGroup(width), width)
 }
 
 // layoutDataBand packs the lean default telemetry groups (or custom statusline

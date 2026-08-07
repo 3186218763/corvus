@@ -392,8 +392,8 @@ func TestStatuslineOmitsCacheRatesFromPersistentFooter(t *testing.T) {
 	if !strings.Contains(plain, "MODEL deepseek-v4-flash") {
 		t.Fatalf("footer should still show model:\n%s", plain)
 	}
-	if !strings.Contains(plain, "CTX") {
-		t.Fatalf("lean footer should show context after usage:\n%s", plain)
+	if strings.Contains(plain, "CTX") {
+		t.Fatalf("single-line footer must not show the context band:\n%s", plain)
 	}
 	if strings.Contains(plain, "CACHE") || strings.Contains(plain, "turn hit") {
 		t.Fatalf("lean footer must omit cache diagnostics:\n%s", plain)

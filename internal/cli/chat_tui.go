@@ -614,7 +614,7 @@ func newChatTUI(ctrl control.SessionAPI, missing string, eventCh chan event.Even
 		commands:             ctrl.Commands(),
 		skills:               ctrl.SlashSkills(),
 		viewport:             viewport.New(viewport.WithWidth(termW)),
-		statusLineCount:      3,
+		statusLineCount:      1,
 	}
 }
 
@@ -2971,11 +2971,9 @@ func (m chatTUI) View() tea.View {
 		rowsAboveBox += strings.Count(panels.manager, "\n") + 1
 	}
 	// Layout: the working spinner (when running), then the composer when visible,
-	// then the persistent status block. Wide terminals keep two information rows
-	// separated by a quiet rule: interaction + model/profile, then flexible Git
-	// + fixed telemetry. Narrow
-	// terminals break only between those semantic groups. Padding to full width
-	// prevents stale cells.
+	// then the single persistent footer row. Wide terminals right-align the
+	// project/model/cache group; narrow terminals wrap between " · " groups.
+	// Padding to full width prevents stale cells.
 	if working != "" {
 		parts = append(parts, workingStyle.Width(boxW).MaxWidth(boxW).Render(wrapStatusLine(working, boxW)))
 		rowsAboveBox++
@@ -2992,12 +2990,8 @@ func (m chatTUI) View() tea.View {
 		}
 		parts = append(parts, box)
 	}
-	// The latest turn's token/cost receipt pins under the composer (Claude
-	// Code-style stats line), wrapped to width so narrow terminals never push
-	// the status block off-screen.
-	if m.turnReceipt != "" {
-		parts = append(parts, statusBlockStyle.Width(boxW).MaxWidth(boxW).Render(wrapStatusLine(m.turnReceipt, boxW)))
-	}
+	// The cache-hit readout lives inside the single footer row; there is no
+	// separate receipt line under the composer.
 	parts = append(parts, statusBlockStyle.Width(boxW).MaxWidth(boxW).Render(statusBlock))
 
 	if m.nativeScrollback {
@@ -3415,35 +3409,20 @@ func wrapStatusLine(s string, width int) string {
 	return ansi.Hardwrap(s, width, true)
 }
 
-// computeStatusLineCount returns the number of terminal rows the status block
-// (working line + first status line + optional data band) will occupy after
-// wrapping to `width`. It mirrors the construction in View() so the reserved
-// height matches the rendered height exactly — the load-bearing invariant for
-// bottomRows().
-// Use the same width (m.width) that View() passes to wrapStatusLine.
+// computeStatusLineCount predicts the terminal rows the bottom status region
+// occupies: the working (spinner) line while a turn runs, plus the single
+// footer row (wrapped at " · " group boundaries). Mirrors View().
 func (m chatTUI) computeStatusLineCount(width int) int {
-	if m.ctrl == nil {
-		return 3 // two information rows plus their divider
-	}
 	shellMode := strings.HasPrefix(strings.TrimSpace(m.input.Value()), "!")
 	cancelRequested := m.cancelRequested()
 
-	// Replicate the interaction row from View(). Mode chrome is on the composer
-	// badge and must not be fake-injected into the status primary width.
 	primaryStatus := m.primaryStatusLine(shellMode, cancelRequested)
 	statusBlock := m.renderStatusBlock(primaryStatus, width)
-
-	// Replicate the working (spinner) line from View(), shown only while a turn runs.
 	working := m.runningWorkingLine(cancelRequested, false)
 
-	// Count wrapped rows for every piece that View() renders as wrapped.
 	var lines int
 	if m.state == tuiRunning {
-		// working (spinner) line — wraps independently of the status block below.
 		lines += strings.Count(wrapStatusLine(working, width), "\n") + 1
-	}
-	if m.turnReceipt != "" {
-		lines += strings.Count(wrapStatusLine(m.turnReceipt, width), "\n") + 1
 	}
 	lines += strings.Count(statusBlock, "\n") + 1
 	return lines
