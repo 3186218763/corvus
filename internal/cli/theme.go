@@ -80,7 +80,7 @@ var (
 		info:         cliColor{"#5eb0ff", 75},
 		secondary:    cliColor{"#b18cff", 141},
 		border:       cliColor{"#273343", 237},
-		inputBoxBG:   cliColor{"#1c2534", 235},
+		inputBoxBG:   cliColor{"#2a3140", 236},
 		selection:    cliColor{"#4a9bff", 75},
 		userBubbleBG: cliColor{"#222631", 235},
 		diffAddBG:    cliColor{"#213A2B", 22},
@@ -240,20 +240,26 @@ func mixHex(a, b string, t float64) string {
 	return fmt.Sprintf("#%02x%02x%02x", mix(ar, br), mix(ag, bg), mix(ab, bb))
 }
 
+// Relative compositor lift/sink against the probed terminal background.
+// Kept soft so the field reads translucent rather than a hard grey panel.
+const (
+	inputBoxDarkLift  = 0.16 // toward white on dark shells
+	inputBoxLightSink = 0.10 // toward black on light shells
+)
+
 // inputBoxTintFromBackground computes the composer fill from the probed
-// terminal background, keeping the background's hue: dark shells lift 32%
-// toward white (a deep purple shell gets a clearly lighter purple composer),
-// light shells sink 15% toward black for a recessed field. The 256 colour
-// fallback is the nearest xterm index via ansi.Convert256 — unlike the curated
-// palette slots, this value is computed because it tracks a live background
-// the designer cannot pin.
+// terminal background, keeping the background's hue: dark shells lift
+// inputBoxDarkLift toward white; light shells sink inputBoxLightSink toward
+// black for a recessed field. The 256 colour fallback is the nearest xterm
+// index via ansi.Convert256 — unlike the curated palette slots, this value
+// is computed because it tracks a live background the designer cannot pin.
 func inputBoxTintFromBackground(rgb terminalRGB, dark bool) cliColor {
 	bg := fmt.Sprintf("#%02x%02x%02x", rgb.r, rgb.g, rgb.b)
 	ref := "#ffffff"
-	ratio := 0.32
+	ratio := inputBoxDarkLift
 	if !dark {
 		ref = "#000000"
-		ratio = 0.15
+		ratio = inputBoxLightSink
 	}
 	final := mixHex(bg, ref, ratio)
 	xterm := 0
