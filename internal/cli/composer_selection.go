@@ -548,7 +548,9 @@ func rearmFieldBackground(s, bg string) string {
 // renderComposerField paints the textarea view as a borderless field: every
 // line opens with the field background, re-arms it after each reset, and
 // right-pads with background-armed spaces to the full box width so the tint
-// reads as one continuous block. Pass-through when color is off.
+// reads as one continuous block. Each line ends with a full SGR reset so the
+// background cannot leak into the row below (slash completion, panels, status).
+// Pass-through when color is off.
 func renderComposerField(view string, width int) string {
 	bg := composerFieldBackground()
 	if bg == "" || width <= 0 {
@@ -565,6 +567,7 @@ func renderComposerField(view string, width int) string {
 		if w := visibleWidth(ansi.Strip(line)); w < width {
 			out.WriteString(ansiReset + bg + strings.Repeat(" ", width-w))
 		}
+		out.WriteString(ansiReset)
 	}
 	return out.String()
 }
