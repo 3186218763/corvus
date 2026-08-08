@@ -2,7 +2,6 @@ package cli
 
 import (
 	"testing"
-	"time"
 )
 
 func TestMotionEnvHelpers(t *testing.T) {
@@ -45,21 +44,17 @@ func TestWorkingCmdsGatesSpinnerTick(t *testing.T) {
 }
 
 func TestToolFramesFreezeUnderReducedMotion(t *testing.T) {
+	// Tool working walls are ambient-only now; tickToolRunning is a no-op and
+	// must not mutate the transcript under any motion setting.
 	m := newTestChatTUI()
-	m.transcript = append(m.transcript, "")
-	m.toolStreamIdx = 0
-	m.toolStreamStart = time.Now() // pin elapsed so freeze assertions only track the frame
+	m.transcript = append(m.transcript, "card")
+	before := m.transcript[0]
 	t.Setenv("CORVUS_REDUCE_MOTION", "1")
 	m.tickToolRunning()
-	frozen := m.transcript[0]
-	m.tickToolRunning()
-	if m.transcript[0] != frozen {
-		t.Fatal("tool working line must not advance frames under reduced motion")
-	}
 	t.Setenv("CORVUS_REDUCE_MOTION", "0")
 	m.tickToolRunning()
-	if m.transcript[0] == frozen {
-		t.Fatal("tool working line should advance frames when motion is on")
+	if m.transcript[0] != before {
+		t.Fatalf("tickToolRunning must not paint transcript, got %q", m.transcript[0])
 	}
 }
 

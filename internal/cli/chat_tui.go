@@ -191,8 +191,12 @@ type chatTUI struct {
 	// shellNativeFlushed records ids whose finished preview was already
 	// printed into native scrollback (no in-place rewrite there).
 	shellNativeFlushed map[string]bool
+	// shellLiveIdx maps a tool id to its in-flight stream block index (fixed
+	// canvas under the card). Separate from toolCardIdx so Ctrl+B anchors
+	// stay on cards while live streams can still be removed on result.
+	shellLiveIdx map[string]int
 	// shellTranscriptIdx maps a shell tool ID to the transcript index of its
-	// collapsed output block, so Ctrl+B can rewrite it in place.
+	// card (Ctrl+B). Prefer toolCardIdx; this is kept for compatibility.
 	shellTranscriptIdx map[string]int
 	// toolCardIdx maps a dispatched tool id to its card block index, so
 	// completion can re-anchor Ctrl+B expansion to the card.
@@ -201,6 +205,9 @@ type chatTUI struct {
 	// Consecutive read-category tools append leaves and re-render that block.
 	exploreIdx    int
 	exploreLeaves []exploreLeaf
+	// hadWorkActivity is true when this turn committed any tool card
+	// (explore/ran/edited/mcp/…). Gates the dim ─ turn separator.
+	hadWorkActivity bool
 	// toolStreamStart / toolStreamFrame drive the "└ working · Ns" line shown
 	// under a dispatched tool that hasn't produced output yet, so a slow tool
 	// reads as making progress rather than frozen.
@@ -629,6 +636,7 @@ func newChatTUI(ctrl control.SessionAPI, missing string, eventCh chan event.Even
 		shellExpanded:        make(map[string]bool),
 		shellMeta:            make(map[string]shellRunMeta),
 		shellNativeFlushed:   make(map[string]bool),
+		shellLiveIdx:         make(map[string]int),
 		shellTranscriptIdx:   make(map[string]int),
 		toolCardIdx:          make(map[string]int),
 		eventCh:              eventCh,
@@ -1930,6 +1938,7 @@ func (m *chatTUI) clearTranscriptDisplay() {
 	m.shellExpanded = make(map[string]bool)
 	m.shellMeta = make(map[string]shellRunMeta)
 	m.shellNativeFlushed = make(map[string]bool)
+	m.shellLiveIdx = make(map[string]int)
 	m.shellTranscriptIdx = make(map[string]int)
 	m.toolCardIdx = make(map[string]int)
 	m.answerIdx = -1
@@ -1961,6 +1970,7 @@ func (m *chatTUI) appendExploreTool(id, name, args string) {
 	open := m.exploreIdx >= 0 && m.exploreIdx < len(m.transcript) && len(m.exploreLeaves) > 0
 	if !open {
 		m.exploreLeaves = []exploreLeaf{leaf}
+		m.ensureBlank()
 		m.commitTranscriptSource(transcriptSource{
 			kind:    transcriptSourceToolCard,
 			raw:     "explored",
@@ -1968,12 +1978,14 @@ func (m *chatTUI) appendExploreTool(id, name, args string) {
 			shellID: id,
 		})
 		m.exploreIdx = len(m.transcript) - 1
+		m.hadWorkActivity = true
 		if id != "" {
 			m.toolCardIdx[id] = m.exploreIdx
 		}
 		return
 	}
 	m.exploreLeaves = append(m.exploreLeaves, leaf)
+	m.hadWorkActivity = true
 	if id != "" {
 		m.toolCardIdx[id] = m.exploreIdx
 	}
@@ -2420,40 +2432,31 @@ func (m *chatTUI) streamToolOutput(id, chunk string) {
 	if id == "" {
 		return
 	}
-	if m.toolStreamID != id {
-		// Switching to a different id means either:
-		//   (a) the previous tool finished and a new one is starting — open a
-		//       fresh slot; the previous tool's own result removes its block.
-		//   (b) late ToolProgress for an earlier (already dispatched and
-		//       possibly collapsed) tool — reuse the live slot beginToolRunning
-		//       already wrote for that id when it still points at a live block;
-		//       if the anchor was re-anchored to the card (block already
-		//       removed), open a fresh streaming canvas instead.
-		if existingIdx, ok := m.shellTranscriptIdx[id]; ok && existingIdx >= 0 && existingIdx < len(m.transcript) && m.transcriptSources[existingIdx].kind == transcriptSourceFixed {
-			// Late progress for an earlier tool whose live block is still in
-			// place: reuse that slot as the streaming canvas.
+	// Ensure a live canvas for this id (no pre-painted working wall).
+	needOpen := m.toolStreamID != id || (!m.nativeScrollback && m.toolStreamIdx < 0)
+	if needOpen {
+		if liveIdx, ok := m.shellLiveIdx[id]; ok && liveIdx >= 0 && liveIdx < len(m.transcript) && m.transcriptSources[liveIdx].kind == transcriptSourceFixed {
+			// Reuse this id's still-open live stream slot (late progress).
 			m.toolStreamID = id
-			m.toolStreamIdx = existingIdx
+			m.toolStreamIdx = liveIdx
 			m.toolTail = m.toolTail[:0]
 			m.toolPartial = ""
 			m.toolLineCount = 0
+			needOpen = false
+		}
+	}
+	if needOpen {
+		m.toolStreamID = id
+		m.toolTail = m.toolTail[:0]
+		m.toolPartial = ""
+		m.toolLineCount = 0
+		if m.nativeScrollback {
+			m.toolStreamIdx = -1
+			delete(m.shellLiveIdx, id)
 		} else {
-			// No live slot for this id (unknown id, or the previous block was
-			// already removed): open a fresh streaming canvas at the end. The
-			// currently-streaming tool's block is left for ITS OWN result to
-			// remove, and this fresh block is removed when this id's result
-			// lands (the card-anchored Ctrl+B entry stays on the card).
-			m.toolStreamID = id
-			m.toolTail = m.toolTail[:0]
-			m.toolPartial = ""
-			m.toolLineCount = 0
-			if m.nativeScrollback {
-				m.toolStreamIdx = -1
-			} else {
-				m.toolStreamIdx = len(m.transcript)
-				m.shellTranscriptIdx[id] = m.toolStreamIdx
-				m.commitLine("")
-			}
+			m.toolStreamIdx = len(m.transcript)
+			m.commitLine("") // placeholder; setLiveBlock fills it
+			m.shellLiveIdx[id] = m.toolStreamIdx
 		}
 	}
 	// Accumulate full output for shell commands so Ctrl+B can expand it.
@@ -2476,7 +2479,7 @@ func (m *chatTUI) streamToolOutput(id, chunk string) {
 	if m.toolPartial != "" {
 		vis = append(append([]string{}, m.toolTail...), m.toolPartial)
 	}
-	if m.nativeScrollback {
+	if m.nativeScrollback || m.toolStreamIdx < 0 {
 		return
 	}
 	lines := make([]string, len(vis))
@@ -2531,20 +2534,21 @@ func (m *chatTUI) collapseToolOutput(id string) {
 			m.toolPartial = ""
 			m.toolLineCount = 0
 		}
+		delete(m.shellLiveIdx, id)
 		return
 	}
+	// Remove this id's live stream canvas if still present.
 	idx := -1
-	active := m.toolStreamIdx >= 0 && m.toolStreamID == id
-	if active {
+	if m.toolStreamID == id && m.toolStreamIdx >= 0 {
 		idx = m.toolStreamIdx
-	} else if i, ok := m.shellTranscriptIdx[id]; ok && i >= 0 && i < len(m.transcript) && m.transcriptSources[i].kind == transcriptSourceFixed {
-		idx = i
+	} else if liveIdx, ok := m.shellLiveIdx[id]; ok {
+		idx = liveIdx
 	}
-	if idx >= 0 && idx < len(m.transcript) {
-		// Remove the finished live block; removeTranscriptBlock shifts later indexes.
+	if idx >= 0 && idx < len(m.transcript) && m.transcriptSources[idx].kind == transcriptSourceFixed {
 		m.removeTranscriptBlock(idx)
 	}
-	if active {
+	delete(m.shellLiveIdx, id)
+	if m.toolStreamID == id {
 		m.toolStreamIdx = -1
 		m.toolStreamID = ""
 		m.toolTail = m.toolTail[:0]
@@ -2566,25 +2570,32 @@ func (m *chatTUI) collapseToolOutput(id string) {
 // Collapsed = ≤5-line preview + outcome; expanded = full output + outcome.
 // Called on Ctrl+B.
 func (m *chatTUI) toggleShellOutput() {
+	// Prefer toolCardIdx (stable card anchors) over shellTranscriptIdx, which
+	// may lag after stream collapse / blank gap rows.
 	var lastID string
 	lastIdx := -1
-	for id, idx := range m.shellTranscriptIdx {
-		if idx >= 0 && idx < len(m.transcript) && idx > lastIdx {
+	for id, idx := range m.toolCardIdx {
+		if idx < 0 || idx >= len(m.transcriptSources) {
+			continue
+		}
+		if strings.TrimSpace(m.shellOutputs[id]) == "" {
+			continue
+		}
+		src := m.transcriptSources[idx]
+		if src.kind != transcriptSourceToolCard || src.shellID != id {
+			continue
+		}
+		if idx > lastIdx {
 			lastID = id
 			lastIdx = idx
 		}
 	}
-	if lastID == "" || lastIdx < 0 || lastIdx >= len(m.transcriptSources) {
+	if lastID == "" || lastIdx < 0 {
 		return
 	}
 	src := m.transcriptSources[lastIdx]
-	if src.kind != transcriptSourceToolCard || src.shellID != lastID {
-		return // still-streaming live block or a stale entry
-	}
-	if strings.TrimSpace(m.shellOutputs[lastID]) == "" {
-		return
-	}
 	m.shellExpanded[lastID] = !m.shellExpanded[lastID]
+	m.shellTranscriptIdx[lastID] = lastIdx
 	m.setLiveBlock(lastIdx, m.renderTranscriptSource(src, m.width, markerNone))
 }
 
@@ -2592,10 +2603,10 @@ func (m *chatTUI) toggleShellOutput() {
 // "⎿ working · Ns" line of a tool that hasn't streamed output yet.
 var toolWorkingFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-// beginToolRunning opens an empty live block under a just-dispatched tool card,
-// keyed by the call id. tickToolRunning fills it with a "working · Ns" line each
-// second; if the tool later streams output, streamToolOutput reuses the same
-// block; collapseToolOutput closes it on the result.
+// beginToolRunning arms streaming state for a just-dispatched tool without
+// painting a transcript "working…" wall (Codex keeps progress ambient above
+// the composer). streamToolOutput opens a live block on the first real chunk;
+// collapseToolOutput closes it on the result.
 func (m *chatTUI) beginToolRunning(id string) {
 	if id == "" {
 		return
@@ -2611,38 +2622,17 @@ func (m *chatTUI) beginToolRunning(id string) {
 	delete(m.shellExpanded, id)
 	delete(m.shellMeta, id)
 	delete(m.shellNativeFlushed, id)
+	delete(m.shellLiveIdx, id)
 	m.toolStreamStart = time.Now()
 	m.toolStreamFrame = 0
-	if m.nativeScrollback {
-		m.toolStreamIdx = -1
-		return
-	}
-	m.toolStreamIdx = len(m.transcript)
-	m.commitLine(connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, toolWorkingFrames[0], formatElapsedFixed(0)))}))
-	// Remember the transcript slot for this id so a late ToolProgress for a
-	// previously dispatched (and possibly already collapsed) tool can reuse
-	// it instead of appending a fresh slot at the end of the transcript. For
-	// back-to-back tool calls this keeps each tool's live block directly
-	// under its own card.
-	m.shellTranscriptIdx[id] = m.toolStreamIdx
+	m.toolStreamIdx = -1 // no transcript wall until real output streams
+	// Ctrl+B still anchors to the card (set at dispatch); do not pre-create a
+	// live stream slot that would paint "working…" into history.
 }
 
-// tickToolRunning re-renders the working line of a tool that's dispatched but
-// hasn't produced output yet. A no-op once output streams in or no tool runs.
-func (m *chatTUI) tickToolRunning() {
-	if m.nativeScrollback {
-		return
-	}
-	if m.toolStreamIdx < 0 || m.toolLineCount != 0 || m.toolPartial != "" {
-		return
-	}
-	if motionEnabled() {
-		m.toolStreamFrame++
-	}
-	frame := toolWorkingFrames[m.toolStreamFrame%len(toolWorkingFrames)]
-	secs := int(time.Since(m.toolStreamStart).Seconds())
-	m.setLiveBlock(m.toolStreamIdx, connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, frame, formatElapsedFixed(secs)))}))
-}
+// tickToolRunning is intentionally a no-op: tool progress is ambient
+// (runningWorkingLine above the composer), not a transcript wall.
+func (m *chatTUI) tickToolRunning() {}
 
 // pruneOlderReasoningBlocks removes committed reasoning transcript blocks so
 // the history only shows the latest thinking. keep is the index to retain
@@ -4079,6 +4069,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 				// re-render at the live transcript width so narrow / non-fullscreen
 				// viewports never lipgloss-wrap mid-background.
 				m.flushExploreCard()
+				m.ensureBlank()
 				m.commitTranscriptSource(transcriptSource{
 					kind:     transcriptSourceDiff,
 					raw:      e.Tool.Name,
@@ -4086,6 +4077,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 					maxLines: m.diffMaxLines,
 					fileDiff: e.Tool.FileDiff,
 				})
+				m.hadWorkActivity = true
 				break
 			}
 			// A re-run of the same tool id must not render the fresh card with
@@ -4094,16 +4086,19 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 			delete(m.shellExpanded, e.Tool.ID)
 			delete(m.shellMeta, e.Tool.ID)
 			delete(m.shellNativeFlushed, e.Tool.ID)
+			delete(m.shellLiveIdx, e.Tool.ID)
 			if isExploreCoalesceTool(e.Tool.Name) {
 				m.appendExploreTool(e.Tool.ID, e.Tool.Name, e.Tool.Args)
 				m.beginToolRunning(e.Tool.ID)
 				break
 			}
 			m.flushExploreCard()
+			m.ensureBlank()
 			m.commitTranscriptSource(transcriptSource{
 				kind: transcriptSourceToolCard, raw: e.Tool.Name, aux: e.Tool.Args, shellID: e.Tool.ID,
 			})
 			m.toolCardIdx[e.Tool.ID] = len(m.transcript) - 1
+			m.hadWorkActivity = true
 			m.beginToolRunning(e.Tool.ID)
 		}
 
@@ -4228,6 +4223,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		// and gate a plan-mode proposal on the user's approval. Autosave already
 		// happened in Controller so every frontend shares the same activity-time
 		// semantics.
+		m.flushExploreCard()
 		m.commitReasoning()
 		m.commitPending()
 		// The bubble was echoed on Enter and an un-sent turn is swallowed above
@@ -4243,6 +4239,12 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		} else if e.Err != nil && e.Err.Error() != "" && !strings.Contains(e.Err.Error(), "context canceled") {
 			m.commitLine(wrapForViewport(i18n.M.ErrorPrefix+" "+e.Err.Error(), m.width, activeCLITheme.warn))
 		}
+		// Dim ─ rule after turns that did concrete tool work (Codex FinalMessageSeparator).
+		if m.hadWorkActivity {
+			m.ensureBlank()
+			m.commitLine(finalMessageSeparator(m.width, m.elapsed))
+		}
+		m.hadWorkActivity = false
 		// Plan-mode approval is now driven by the controller (it emits an
 		// ApprovalRequest when a plan-mode turn produces a proposal), so there's
 		// nothing to detect here.

@@ -16,6 +16,18 @@ import (
 	"corvus/internal/provider"
 )
 
+// nonEmptyTranscript filters blank gap rows inserted by ensureBlank.
+func nonEmptyTranscript(blocks []string) []string {
+	out := make([]string, 0, len(blocks))
+	for _, b := range blocks {
+		if strings.TrimSpace(b) != "" {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+
 // newTestChatTUI builds a chatTUI with just the pieces the streaming/commit and
 // completion paths need, for unit tests that don't run the bubbletea loop.
 func newTestChatTUI() chatTUI {
@@ -46,6 +58,7 @@ func newTestChatTUI() chatTUI {
 		shellExpanded:        shellExp,
 		shellMeta:            shellMeta,
 		shellNativeFlushed:   map[string]bool{},
+		shellLiveIdx:         map[string]int{},
 		shellTranscriptIdx:   shellIdx,
 		toolCardIdx:          map[string]int{},
 	}
@@ -214,16 +227,17 @@ func TestIngestEventFlushesAnswer(t *testing.T) {
 	m := newTestChatTUI()
 	m.ingestEvent(event.Event{Kind: event.Text, Text: "partial answer "})
 	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{Name: "read_file", Args: `{"path":"x"}`}})
-	// answer, then the Explored card (no blank spacer — compact tool calls).
-	if n := len(*m.pendingCommit); n != 2 {
-		t.Fatalf("answer + tool card should be two commits, got %d: %v", n, *m.pendingCommit)
+	// answer, optional blank gap, then the Explored card.
+	commits := nonEmptyTranscript(*m.pendingCommit)
+	if n := len(commits); n != 2 {
+		t.Fatalf("answer + tool card should be two non-empty commits, got %d: %v", n, *m.pendingCommit)
 	}
-	if !strings.Contains((*m.pendingCommit)[0], "partial answer") {
-		t.Errorf("first commit should be the buffered answer, got %q", (*m.pendingCommit)[0])
+	if !strings.Contains(commits[0], "partial answer") {
+		t.Errorf("first commit should be the buffered answer, got %q", commits[0])
 	}
-	joined := strings.Join(*m.pendingCommit, "\n")
+	joined := strings.Join(commits, "\n")
 	if !strings.Contains(joined, "Explored") || !strings.Contains(joined, "x") {
-		t.Errorf("second commit should be the Explored card, got %v", *m.pendingCommit)
+		t.Errorf("second commit should be the Explored card, got %v", commits)
 	}
 	if m.pending.Len() != 0 {
 		t.Errorf("answer buffer should be drained after the event line")
@@ -309,27 +323,23 @@ func TestToolProgressStreamsThenCollapses(t *testing.T) {
 	}
 }
 
-// TestToolWorkingLineThenClears proves a dispatched tool that streams no output
-// (e.g. symbol_context) shows a live "working · Ns" line so it doesn't look
-// frozen, and that the line is removed on the result — no "0 lines", no blank
-// slot.
-func TestToolWorkingLineThenClears(t *testing.T) {
+// TestBeginToolRunningDoesNotPaintWorkingWall proves a dispatched tool that
+// streams no output does not paint a braille "working…" wall into the
+// transcript (progress is ambient above the composer).
+func TestBeginToolRunningDoesNotPaintWorkingWall(t *testing.T) {
 	m := newTestChatTUI()
 	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "c1", Name: "symbol_context", Args: `{"q":"x"}`}})
 
-	m.tickToolRunning() // one elapsed tick fills the placeholder
-	joined := strings.Join(m.transcript, "\n")
-	if !strings.Contains(joined, "└") || !strings.Contains(joined, "working") {
-		t.Fatalf("a running tool should show a 'working' progress line:\n%s", joined)
+	m.tickToolRunning()
+	joined := ansi.Strip(strings.Join(m.transcript, "\n"))
+	if strings.Contains(joined, "working") || strings.Contains(joined, "⠋") {
+		t.Fatalf("must not paint working wall into transcript, got %q", joined)
 	}
 
 	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "c1", Name: "symbol_context"}})
-	joined = strings.Join(m.transcript, "\n")
+	joined = ansi.Strip(strings.Join(m.transcript, "\n"))
 	if strings.Contains(joined, "working") {
-		t.Fatalf("working line should be removed after the result:\n%s", joined)
-	}
-	if strings.Contains(joined, "0 lines") || strings.Contains(joined, "-1 lines") {
-		t.Fatalf("a no-output tool must not leave a count summary:\n%s", joined)
+		t.Fatalf("working wall must not appear after the result:\n%s", joined)
 	}
 	if strings.TrimSpace(joined) == "" {
 		t.Fatalf("the card itself must remain:\n%q", joined)
@@ -353,16 +363,16 @@ func TestConsecutiveToolCallsStayCompact(t *testing.T) {
 	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-1", Name: "bash", Output: "On branch main-v2\nnothing to commit\n"}})
 	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-2", Name: "bash", Output: "* main-v2\n"}})
 
-	transcript := m.transcript
-	if len(transcript) != 2 {
-		t.Fatalf("expected exactly the two cards, got %d blocks:\n%s", len(transcript), strings.Join(transcript, "\n"))
+	cards := nonEmptyTranscript(m.transcript)
+	if len(cards) != 2 {
+		t.Fatalf("expected exactly the two cards, got %d blocks:\n%s", len(cards), strings.Join(m.transcript, "\n"))
 	}
-	idx1 := strings.Index(transcript[0], "git status")
-	idx2 := strings.Index(transcript[1], "git branch -a")
+	idx1 := strings.Index(cards[0], "git status")
+	idx2 := strings.Index(cards[1], "git branch -a")
 	if idx1 < 0 || idx2 < 0 {
-		t.Fatalf("cards should remain in dispatch order:\n%s", strings.Join(transcript, "\n"))
+		t.Fatalf("cards should remain in dispatch order:\n%s", strings.Join(m.transcript, "\n"))
 	}
-	joined := strings.Join(transcript, "\n")
+	joined := strings.Join(m.transcript, "\n")
 	// Short previews under └ are expected; ban only count-summary noise.
 	for _, banned := range []string{"0 lines", "-1 lines"} {
 		if strings.Contains(joined, banned) {
@@ -372,11 +382,9 @@ func TestConsecutiveToolCallsStayCompact(t *testing.T) {
 	if !strings.Contains(joined, "On branch") || !strings.Contains(joined, "* main-v2") {
 		t.Fatalf("cards should keep short previews:\n%s", joined)
 	}
-	if _, ok := m.shellTranscriptIdx["shell-1"]; !ok {
-		t.Fatalf("shell-1 must keep a Ctrl+B anchor on its card")
-	}
-	if idx := m.shellTranscriptIdx["shell-1"]; idx != 0 {
-		t.Fatalf("shell-1 anchor should be the card index 0, got %d", idx)
+	idx, ok := m.shellTranscriptIdx["shell-1"]
+	if !ok || idx < 0 || idx >= len(m.transcript) || !strings.Contains(m.transcript[idx], "git status") {
+		t.Fatalf("shell-1 must keep a Ctrl+B anchor on its card, ok=%v idx=%d", ok, idx)
 	}
 }
 
@@ -631,7 +639,7 @@ func TestLateResultDoesNotClobberActiveStream(t *testing.T) {
 	if m.toolStreamID != "" || m.toolStreamIdx != -1 {
 		t.Fatalf("active stream should close on its own result, id=%q idx=%d", m.toolStreamID, m.toolStreamIdx)
 	}
-	if got := len(m.transcript); got != 2 {
+	if got := len(nonEmptyTranscript(m.transcript)); got != 2 {
 		t.Fatalf("only the two cards should remain, got %d blocks:\n%s", got, strings.Join(m.transcript, "\n"))
 	}
 }
@@ -653,19 +661,26 @@ func TestToolCardAnchorsFollowRemovedBlocks(t *testing.T) {
 	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-b", Name: "bash", Output: "b-out\n"}})
 	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-c", Name: "bash", Output: "c-out\n"}})
 
-	if got := len(m.transcript); got != 3 {
+	cards := nonEmptyTranscript(m.transcript)
+	if got := len(cards); got != 3 {
 		t.Fatalf("expected exactly the three cards, got %d blocks:\n%s", got, strings.Join(m.transcript, "\n"))
 	}
-	for id, want := range map[string]int{"shell-a": 0, "shell-b": 1, "shell-c": 2} {
-		if got := m.shellTranscriptIdx[id]; got != want {
-			t.Fatalf("Ctrl+B anchor for %s = %d, want %d", id, got, want)
+	// Anchors point at card blocks (may be offset by blank gap rows).
+	for _, id := range []string{"shell-a", "shell-b", "shell-c"} {
+		idx, ok := m.shellTranscriptIdx[id]
+		if !ok || idx < 0 || idx >= len(m.transcript) {
+			t.Fatalf("Ctrl+B anchor missing for %s", id)
+		}
+		if !strings.Contains(m.transcript[idx], "Ran") {
+			t.Fatalf("anchor for %s should be a card, got %q", id, m.transcript[idx])
 		}
 	}
 	m.toggleShellOutput()
 	if !m.shellExpanded["shell-c"] {
 		t.Fatalf("Ctrl+B should expand the most recent card, expanded=%v", m.shellExpanded)
 	}
-	if got := m.transcript[2]; !strings.Contains(got, "c-out") || !strings.Contains(got, "└") {
+	cIdx := m.toolCardIdx["shell-c"]
+	if got := m.transcript[cIdx]; !strings.Contains(got, "c-out") || !strings.Contains(got, "└") {
 		t.Fatalf("most recent card should carry its output when expanded, got %q", got)
 	}
 }

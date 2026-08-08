@@ -167,6 +167,14 @@ func (m *chatTUI) removeTranscriptBlock(index int) {
 			m.shellTranscriptIdx[id] = i - 1
 		}
 	}
+	for id, i := range m.shellLiveIdx {
+		switch {
+		case i == index:
+			delete(m.shellLiveIdx, id)
+		case i > index:
+			m.shellLiveIdx[id] = i - 1
+		}
+	}
 	for id, i := range m.toolCardIdx {
 		switch {
 		case i == index:

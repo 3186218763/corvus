@@ -40,15 +40,17 @@ func TestParallelBashCallsStayCompact(t *testing.T) {
 	if !strings.Contains(joined, "…") && !strings.Contains(joined, "+") {
 		t.Fatalf("long output should be ellipsized in preview:\n%s", joined)
 	}
-	if len(transcript) != 3 {
-		t.Fatalf("only the three cards should remain, got %d blocks:\n%s", len(transcript), joined)
+	cards := nonEmptyTranscript(transcript)
+	if len(cards) != 3 {
+		t.Fatalf("only the three cards should remain, got %d blocks:\n%s", len(cards), joined)
 	}
 	for i, id := range ids {
-		if !strings.Contains(transcript[i], "Ran ls") {
-			t.Fatalf("card %d should be Ran ls in dispatch order, got %q\n%s", i, transcript[i], joined)
+		if !strings.Contains(cards[i], "Ran ls") {
+			t.Fatalf("card %d should be Ran ls in dispatch order, got %q\n%s", i, cards[i], joined)
 		}
-		if idx, ok := m.shellTranscriptIdx[id]; !ok || idx != i {
-			t.Fatalf("%s must keep a Ctrl+B anchor on its card (index %d), got ok=%v idx=%d", id, i, ok, idx)
+		idx, ok := m.shellTranscriptIdx[id]
+		if !ok || idx < 0 || idx >= len(m.transcript) || !strings.Contains(m.transcript[idx], "Ran") {
+			t.Fatalf("%s must keep a Ctrl+B anchor on its card, ok=%v idx=%d", id, ok, idx)
 		}
 	}
 }
@@ -76,10 +78,11 @@ func TestNonShellToolsLateResultsLeaveOnlyCards(t *testing.T) {
 	if !strings.Contains(joined, "second") || !strings.Contains(joined, "third") {
 		t.Fatalf("card preview should include result lines:\n%s", joined)
 	}
-	if len(transcript) != 2 {
-		t.Fatalf("only the two cards should remain, got %d blocks:\n%s", len(transcript), joined)
+	cards := nonEmptyTranscript(transcript)
+	if len(cards) != 2 {
+		t.Fatalf("only the two cards should remain, got %d blocks:\n%s", len(cards), joined)
 	}
-	if !strings.Contains(transcript[0], "echo a") || !strings.Contains(transcript[1], "echo b") {
+	if !strings.Contains(cards[0], "echo a") || !strings.Contains(cards[1], "echo b") {
 		t.Fatalf("cards should remain in dispatch order:\n%s", joined)
 	}
 	if m.toolStreamIdx != -1 {
