@@ -209,11 +209,18 @@ func exploreLeafFrom(name, args string) exploreLeaf {
 	return exploreLeaf{Verb: toolDisplayName(name), Arg: toolArg(name, args)}
 }
 
+// exploreTree prefixes give each leaf its own branch so multi-tool Explored
+// cells read as a tree (not a flat list under a single └).
+const (
+	exploreBranchMid  = "    ├ " // non-last leaf
+	exploreBranchLast = "    └ " // last leaf / +N more
+)
+
 // exploredCard renders:
 //
 //	• Explored
-//	  └ Search pattern
-//	    Read a.go, b.go
+//	  ├ Read config.go
+//	  └ Search Bash|Sandbox|…
 func exploredCard(leaves []exploreLeaf, width int) string {
 	if width < 8 {
 		width = 8
@@ -230,25 +237,37 @@ func exploredCard(leaves []exploreLeaf, width int) string {
 		extra = len(show) - exploreMaxLeaves
 		show = show[:exploreMaxLeaves]
 	}
-	var body []string
-	prefixW := len([]rune(connector))
-	for _, leaf := range show {
-		verb := treeVerbColor(leaf.Verb)
-		arg := leaf.Arg
+	// +N more is its own trailing leaf for branch painting.
+	n := len(show)
+	if extra > 0 {
+		n++
+	}
+	var out strings.Builder
+	out.WriteString(head)
+	for i, leaf := range show {
+		branch := exploreBranchMid
+		if i == n-1 {
+			branch = exploreBranchLast
+		}
+		prefixW := len([]rune(branch))
 		avail := width - prefixW - visibleWidth(leaf.Verb) - 1
 		if avail < 4 {
 			avail = 4
 		}
-		if arg != "" {
-			body = append(body, verb+" "+clampPlain(arg, avail))
-		} else {
-			body = append(body, verb)
+		line := treeVerbColor(leaf.Verb)
+		if leaf.Arg != "" {
+			line += " " + clampPlain(leaf.Arg, avail)
 		}
+		out.WriteByte('\n')
+		out.WriteString(dim(branch))
+		out.WriteString(line)
 	}
 	if extra > 0 {
-		body = append(body, dim(fmt.Sprintf("+%d more", extra)))
+		out.WriteByte('\n')
+		out.WriteString(dim(exploreBranchLast))
+		out.WriteString(dim(fmt.Sprintf("+%d more", extra)))
 	}
-	return head + "\n" + connectorBlock(body)
+	return out.String()
 }
 
 // coalesceReadLeaves merges consecutive Read verbs into one comma-joined row.

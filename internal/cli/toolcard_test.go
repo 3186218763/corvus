@@ -110,6 +110,35 @@ func TestExploredCardCoalescesReads(t *testing.T) {
 	if !strings.Contains(plain, "a.go, b.go, c.go") {
 		t.Fatalf("merged read names, got %q", plain)
 	}
+	// Hierarchy: non-last ├, last └, with nested indent under Explored.
+	if !strings.Contains(plain, "├") || !strings.Contains(plain, "└") {
+		t.Fatalf("want tree branches ├/└, got %q", plain)
+	}
+	for _, line := range strings.Split(plain, "\n")[1:] {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, "    ") {
+			t.Fatalf("leaf should be nested under Explored (4-space indent), got %q", line)
+		}
+	}
+}
+
+func TestExploredCardTreeHierarchy(t *testing.T) {
+	plain := ansi.Strip(exploredCard([]exploreLeaf{
+		{Verb: "Read", Arg: "config.go"},
+		{Verb: "Search", Arg: "Bash|Sandbox|enforce|off"},
+	}, 80))
+	lines := strings.Split(plain, "\n")
+	if len(lines) != 3 {
+		t.Fatalf("want head + 2 leaves, got %d: %q", len(lines), plain)
+	}
+	if !strings.Contains(lines[1], "├") || !strings.Contains(lines[1], "Read") {
+		t.Fatalf("first leaf should be ├ Read, got %q", lines[1])
+	}
+	if !strings.Contains(lines[2], "└") || !strings.Contains(lines[2], "Search") {
+		t.Fatalf("last leaf should be └ Search, got %q", lines[2])
+	}
 }
 
 func TestExploredCardMaxLeaves(t *testing.T) {
