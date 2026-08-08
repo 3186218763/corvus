@@ -46,7 +46,10 @@ Users experience long sessions as “busy” rather than “dense but clear.”
 4. **Assistant body** — no per-answer `◆ Corvus` name; default foreground prose; history slightly demoted.
 5. **Footer** — single row: interaction state + model + path; Effort/Work/CTX/cache% not permanent (available via `/status` or custom statusline).
 6. **Composer** — ~2-row default height; keep cool tint from prior work.
-7. **Color discipline** — drop multi-color category `●`; prefer default fg + cyan tips + green success + red error.
+7. **Color discipline (Codex palette, not monochrome)**  
+   - Follow Codex `styles.md` + exec rendering: default fg body; **cyan** for tips/status/tree verbs (`Search`/`Read`/`List`); **green** success bullets & outcomes; **red** failures; **magenta** sparingly (e.g. shell `$`/accents); bash/commands use **syntax highlight** (syntect-style).  
+   - Drop multi-color category `●` dots (read=cyan card / write=green card / exec=yellow card as competing systems). Unified `•` with **semantic** green/red for outcome, not tool-category rainbow.  
+
 8. **Acceptance** — static target HTML reviewed first; ship only when real TUI matches HTML hierarchy on the fixed script.
 9. **Tests** — pure render helpers + updated `toolcard` / `transcript` / `status_footer` / chat render tests.
 

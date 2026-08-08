@@ -18,6 +18,9 @@
     --composer-bg: #161b22;
     --blue-cmd: #89b4fa;
     --cmd-rest: #cdd6f4;
+    --magenta: #d2a8ff;
+    --str: #a6e3a1;
+    --flag: #f9e2af;
   }
   * { box-sizing: border-box; }
   body {
@@ -54,8 +57,9 @@
   .user .txt { color: var(--fg); }
   .reason { color: var(--dim); font-style: italic; }
   .reason .pfx { font-style: normal; color: var(--faint); }
-  .tool .verb { font-weight: 700; }
+  .tool .verb { font-weight: 700; color: var(--fg); }
   .tool .tree { color: var(--dim); }
+  .tool .tv { color: var(--cyan); font-weight: 600; }
   .tool .item { color: var(--fg); }
   .tool .sub { color: var(--dim); padding-left: 4ch; }
   .tool .cmd { color: var(--cmd-rest); }
@@ -137,6 +141,33 @@
   .screen { min-height: unset; }
   .transcript { flex: 0 1 auto; }
 
+
+  /* Codex-accurate keyword colors (styles.md + exec_cell) */
+  --magenta: #d2a8ff;
+  --str: #a6e3a1;
+  --flag: #f9e2af;
+  .bul { color: var(--dim); }
+  .bul.ok { color: var(--green); font-weight: 700; }
+  .bul.err { color: var(--red); font-weight: 700; }
+  .verb { color: var(--fg); font-weight: 700; }
+  .tv { color: var(--cyan); font-weight: 600; } /* tree verb: Search/Read/List */
+  .path, .item { color: var(--fg); }
+  .in { color: var(--dim); }
+  .cmd { color: var(--cmd-rest); }
+  .cmd .tok { color: var(--blue-cmd); }      /* command name */
+  .cmd .flag { color: var(--flag); }         /* -flags (syntax theme) */
+  .cmd .str { color: var(--str); }           /* string/path args */
+  .cmd .num { color: var(--magenta); }
+  .out { color: var(--dim); }
+  .ok { color: var(--green); }
+  .err { color: var(--red); }
+  .asst .code { color: var(--cyan); }
+  .asst strong { color: var(--fg); font-weight: 700; }
+  .footer .accent, .footer .hint { color: var(--cyan); }
+  .footer .model { color: var(--fg); }
+  .banner .brand { color: var(--cyan); font-weight: 700; }
+  .reason { color: var(--dim); font-style: italic; }
+
 </style>
 </head>
 <body>
@@ -155,10 +186,10 @@
 <div class="user"><span class="pfx">› </span><span class="txt">Why does the status footer wrap awkwardly on medium-width terminals? Trace the layout and summarize the cause — don't edit yet.</span></div>
 <div class="reason"><span class="pfx">• </span>Need the footer layout path and any width breakpoints that split left/right groups.</div>
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Explored</span></div>
+  <div><span class="bul">•</span> <span class="verb">Explored</span></div>
   <div class="tree">
-    <div>└ <span class="item">Search</span> layoutStatusSides|wrapStatusGroups|status footer</div>
-    <div class="sub">Read status_footer.go, status_footer_test.go, chat_tui.go</div>
+    <div>└ <span class="tv">Search</span> layoutStatusSides|wrapStatusGroups|status footer</div>
+    <div class="sub"><span class="tv">Read</span> status_footer.go, status_footer_test.go, chat_tui.go</div>
   </div>
 </div>
 <div class="asst">
@@ -173,34 +204,34 @@
 <hr class="hr" />
 <div class="user"><span class="pfx">› </span><span class="txt">Ok — make the second row quieter: keep model right-anchored when possible, and demote Effort/Work to dim secondary. Still no behavior change beyond layout/chrome.</span></div>
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Ran</span> <span class="cmd"><span class="tok">sed</span> -n '113,200p' internal/cli/status_footer.go</span></div>
+  <div><span class="bul ok">•</span> <span class="verb">Ran</span> <span class="cmd"><span class="tok">sed</span> <span class="flag">-n</span> <span class="str">'113,200p'</span> internal/cli/status_footer.go</span></div>
   <div class="tree"><div class="out">└ <span class="ok">88 lines</span></div></div>
 </div>
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Edited</span> <span class="item">status_footer.go</span> <span class="out">(+24 −11)</span></div>
+  <div><span class="bul">•</span> <span class="verb">Edited</span> <span class="item">status_footer.go</span> <span class="out">(+24 −11)</span></div>
 </div>
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Ran</span> <span class="cmd"><span class="tok">go</span> test ./internal/cli -run StatusFooter -count=1</span></div>
+  <div><span class="bul ok">•</span> <span class="verb">Ran</span> <span class="cmd"><span class="tok">go</span> test ./internal/cli <span class="flag">-run</span> StatusFooter <span class="flag">-count</span>=<span class="num">1</span></span></div>
   <div class="tree"><div class="out">└ <span class="ok">ok</span>  · 0.41s</div></div>
 </div>
 <div class="asst">Done. Right-side model/work stays one unit longer before splitting; Effort/Work render as secondary so Model remains the only bright token on that band.</div>
 <hr class="hr" />
 <div class="user"><span class="pfx">› </span><span class="txt">Also collapse consecutive Read calls the way Codex does for Explored — if the agent reads 4 small files, show one tree, not four cards.</span></div>
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Explored</span></div>
+  <div><span class="bul">•</span> <span class="verb">Explored</span></div>
   <div class="tree">
-    <div>└ <span class="item">Search</span> toolCard|transcriptSourceToolCard|read_file</div>
-    <div class="sub">Read toolcard.go, transcript.go, chat_tui.go</div>
+    <div>└ <span class="tv">Search</span> toolCard|transcriptSourceToolCard|read_file</div>
+    <div class="sub"><span class="tv">Read</span> toolcard.go, transcript.go, chat_tui.go</div>
   </div>
 </div>
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Edited</span> toolcard.go, transcript.go <span class="out">(+61 −8)</span></div>
+  <div><span class="bul">•</span> <span class="verb">Edited</span> toolcard.go, transcript.go <span class="out">(+61 −8)</span></div>
 </div>
 <div class="asst">Sequential pure-reads now coalesce into a single <span class="code">• Explored</span> cell with nested file names (max 5 visible, then <span class="code">+N more</span>). Writes/exec still stay as individual cells.</div>
 <hr class="hr" />
 <div class="user"><span class="pfx">› </span><span class="txt">Run the focused tests again and paste the summary.</span></div>
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Ran</span> <span class="cmd"><span class="tok">go</span> test ./internal/cli -run 'StatusFooter|ToolCardCoalesce' -count=1</span></div>
+  <div><span class="bul ok">•</span> <span class="verb">Ran</span> <span class="cmd"><span class="tok">go</span> test ./internal/cli <span class="flag">-run</span> <span class="str">'StatusFooter|ToolCardCoalesce'</span> <span class="flag">-count</span>=<span class="num">1</span></span></div>
   <div class="tree"><div class="out">└ <span class="ok">ok</span>  · 0.52s</div></div>
 </div>
 <div class="asst">All focused tests passed (StatusFooter + ToolCardCoalesce). Ready for a visual check at ~90 columns.</div>
@@ -209,7 +240,7 @@
         <div class="composer"><span class="prompt">›</span><span class="ph">Ask Codex to continue…</span></div>
         <div class="footer">
           <span><span class="accent">?</span> for shortcuts</span>
-          <span class="r">deepseek-v4-flash max · ~/dv_project/corvus</span>
+          <span class="r"><span class="model">deepseek-v4-flash</span> max · ~/dv_project/corvus</span>
         </div>
       </div>
     </div>

@@ -18,7 +18,13 @@
     --composer-bg: #1a2332;
     --blue-cmd: #89b4fa;
     --cmd-rest: #cdd6f4;
+    --magenta: #d2a8ff;
+    --str: #a6e3a1;
+    --flag: #f9e2af;
     --accent: #56d4dd;
+    --magenta: #d2a8ff;
+    --str: #a6e3a1;
+    --flag: #f9e2af;
   }
   * { box-sizing: border-box; }
   body {
@@ -72,8 +78,9 @@
   .reason { color: var(--dim); font-style: italic; }
   .reason .pfx { font-style: normal; color: var(--faint); }
 
-  .tool .verb { font-weight: 700; }
+  .tool .verb { font-weight: 700; color: var(--fg); }
   .tool .tree { color: var(--dim); }
+  .tool .tv { color: var(--cyan); font-weight: 600; }
   .tool .item { color: var(--fg); }
   .tool .sub { color: var(--dim); padding-left: 4ch; }
   .tool .cmd { color: var(--cmd-rest); }
@@ -184,6 +191,33 @@
   .screen { min-height: unset; }
   .transcript { flex: 0 1 auto; }
 
+
+  /* Codex-accurate keyword colors (styles.md + exec_cell) */
+  --magenta: #d2a8ff;
+  --str: #a6e3a1;
+  --flag: #f9e2af;
+  .bul { color: var(--dim); }
+  .bul.ok { color: var(--green); font-weight: 700; }
+  .bul.err { color: var(--red); font-weight: 700; }
+  .verb { color: var(--fg); font-weight: 700; }
+  .tv { color: var(--cyan); font-weight: 600; } /* tree verb: Search/Read/List */
+  .path, .item { color: var(--fg); }
+  .in { color: var(--dim); }
+  .cmd { color: var(--cmd-rest); }
+  .cmd .tok { color: var(--blue-cmd); }      /* command name */
+  .cmd .flag { color: var(--flag); }         /* -flags (syntax theme) */
+  .cmd .str { color: var(--str); }           /* string/path args */
+  .cmd .num { color: var(--magenta); }
+  .out { color: var(--dim); }
+  .ok { color: var(--green); }
+  .err { color: var(--red); }
+  .asst .code { color: var(--cyan); }
+  .asst strong { color: var(--fg); font-weight: 700; }
+  .footer .accent, .footer .hint { color: var(--cyan); }
+  .footer .model { color: var(--fg); }
+  .banner .brand { color: var(--cyan); font-weight: 700; }
+  .reason { color: var(--dim); font-style: italic; }
+
 </style>
 </head>
 <body>
@@ -216,10 +250,10 @@
 </div>
 
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Explored</span></div>
+  <div><span class="bul">•</span> <span class="verb">Explored</span></div>
   <div class="tree">
-    <div>└ <span class="item">Search</span> layoutStatusSides|wrapStatusGroups|status footer</div>
-    <div class="sub">Read status_footer.go, status_footer_test.go, chat_tui.go</div>
+    <div>└ <span class="tv">Search</span> layoutStatusSides|wrapStatusGroups|status footer</div>
+    <div class="sub"><span class="tv">Read</span> status_footer.go, status_footer_test.go, chat_tui.go</div>
   </div>
 </div>
 
@@ -240,20 +274,20 @@
 </div>
 
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Ran</span>
-    <span class="cmd"><span class="tok">sed</span> -n '113,200p' internal/cli/status_footer.go</span>
+  <div><span class="bul ok">•</span> <span class="verb">Ran</span>
+    <span class="cmd"><span class="tok">sed</span> <span class="flag">-n</span> <span class="str">'113,200p'</span> internal/cli/status_footer.go</span>
   </div>
   <div class="tree"><div class="out">└ <span class="ok">88 lines</span></div></div>
 </div>
 
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Edited</span> <span class="item">status_footer.go</span> <span class="out">(+24 −11)</span></div>
+  <div><span class="bul">•</span> <span class="verb">Edited</span> <span class="item">status_footer.go</span> <span class="out">(+24 −11)</span></div>
   <div class="tree"><div class="out">└ keep right group intact down to 72 cols; dim Effort/Work values</div></div>
 </div>
 
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Ran</span>
-    <span class="cmd"><span class="tok">go</span> test ./internal/cli -run StatusFooter -count=1</span>
+  <div><span class="bul ok">•</span> <span class="verb">Ran</span>
+    <span class="cmd"><span class="tok">go</span> test ./internal/cli <span class="flag">-run</span> StatusFooter <span class="flag">-count</span>=<span class="num">1</span></span>
   </div>
   <div class="tree"><div class="out">└ <span class="ok">ok</span>  · 0.41s</div></div>
 </div>
@@ -270,15 +304,15 @@
 </div>
 
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Explored</span></div>
+  <div><span class="bul">•</span> <span class="verb">Explored</span></div>
   <div class="tree">
-    <div>└ <span class="item">Search</span> toolCard|transcriptSourceToolCard|read_file</div>
-    <div class="sub">Read toolcard.go, transcript.go, chat_tui.go</div>
+    <div>└ <span class="tv">Search</span> toolCard|transcriptSourceToolCard|read_file</div>
+    <div class="sub"><span class="tv">Read</span> toolcard.go, transcript.go, chat_tui.go</div>
   </div>
 </div>
 
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Edited</span> <span class="item">toolcard.go</span>, <span class="item">transcript.go</span> <span class="out">(+61 −8)</span></div>
+  <div><span class="bul">•</span> <span class="verb">Edited</span> <span class="item">toolcard.go</span>, <span class="item">transcript.go</span> <span class="out">(+61 −8)</span></div>
 </div>
 
 <div class="asst">
@@ -295,8 +329,8 @@
 </div>
 
 <div class="tool">
-  <div><span style="color:var(--dim)">•</span> <span class="verb">Ran</span>
-    <span class="cmd"><span class="tok">go</span> test ./internal/cli -run 'StatusFooter|ToolCardCoalesce' -count=1</span>
+  <div><span class="bul ok">•</span> <span class="verb">Ran</span>
+    <span class="cmd"><span class="tok">go</span> test ./internal/cli <span class="flag">-run</span> <span class="str">'StatusFooter|ToolCardCoalesce'</span> <span class="flag">-count</span>=<span class="num">1</span></span>
   </div>
   <div class="tree"><div class="out">└ <span class="ok">ok</span>  · 0.52s</div></div>
 </div>
@@ -314,7 +348,7 @@
         </div>
         <div class="footer">
           <span><span class="yolo">YOLO</span> · ready</span>
-          <span class="r">deepseek-v4-flash · ~/dv_project/corvus</span>
+          <span class="r"><span class="model">deepseek-v4-flash</span> · ~/dv_project/corvus</span>
         </div>
       </div>
     </div>
@@ -323,7 +357,7 @@
   <div class="callout">
     <strong>Acceptance checklist (HTML ↔ real TUI)</strong>
     <ul class="checklist">
-      <li class="pass">User lines use <code>›</code>; agent/tool lines use dim <code>•</code> — no multi-color <code>●</code>.</li>
+      <li class="pass">User lines use <code>›</code>; agent/tool use <code>•</code> (success green / fail red). Tree verbs <code>Search</code>/<code>Read</code> are <span style="color:#56d4dd">cyan</span>; bash is syntax-highlighted — not monochrome.</li>
       <li class="pass">Consecutive reads/searches appear as one <code>• Explored</code> tree, not N cards.</li>
       <li class="pass">Bash/write stay separate: <code>• Ran</code> / <code>• Edited</code>.</li>
       <li class="pass">No <code>▎ thinking…</code> body wall; no per-answer <code>◆ Corvus</code> nameplate; no per-turn cache receipt under answers.</li>
