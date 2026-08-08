@@ -841,6 +841,7 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	prevLines := len(m.transcript)
 	prevWidth := m.width
 	prevYOff := m.viewport.YOffset()
+	wasHidingComposer := m.hideComposer()
 	var resizeAnchor transcriptResizeAnchor
 	if size, ok := msg.(tea.WindowSizeMsg); ok && size.Width != m.width && !wasAtBottom {
 		resizeAnchor = captureTranscriptResizeAnchor(m.transcript, m.viewport.Width(), prevYOff)
@@ -851,6 +852,12 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Render the bottom region once per event; bottomRows()/View() read it.
 	cm.panels = cm.renderBottomPanels()
 	cm.panelsValid = true
+	// Modal managers (skills/MCP/resume/…) hide the composer. When they close,
+	// drop any prior raise-hold so the input returns to the bottom instead of
+	// floating at the height left by an earlier slash menu.
+	if wasHidingComposer && !cm.hideComposer() {
+		cm.composerRaisedRows = 0
+	}
 	// Codex-style raise: while the composer is visible, any bottom panel lifts
 	// the input; the height is held after the panel closes until submission.
 	// Monotonic: the composer only rises, never drops, while a popup lifecycle
@@ -950,14 +957,25 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		// Skill/MCP-style managers hide the composer and own the main area:
+		// route the wheel to list selection instead of scrolling the transcript
+		// under the overlay (which left the input at a stale raised height).
+		if m.scrollHiddenComposerOverlay(msg) {
+			return m, nil
+		}
 		// Outside the composer, or once its internal viewport has reached the
 		// requested edge, continue the gesture in the transcript. This mirrors
 		// ordinary nested-scroll behavior and avoids a dead wheel at boundaries.
+		prevOff := m.viewport.YOffset()
 		switch msg.Button {
 		case tea.MouseWheelUp:
 			m.viewport.ScrollUp(3)
 		case tea.MouseWheelDown:
 			m.viewport.ScrollDown(3)
+		}
+		// Reading history should reclaim vertical space: drop any Codex raise-hold.
+		if m.viewport.YOffset() != prevOff {
+			m.composerRaisedRows = 0
 		}
 		return m, nil
 
@@ -2054,6 +2072,161 @@ func (m chatTUI) bottomRows() int {
 		return rows + m.statusLineCount
 	}
 	return rows + 1 // fallback for tests that don't set statusLineCount
+}
+
+// scrollHiddenComposerOverlay routes mouse-wheel to the active modal list when
+// the composer is hidden (skills/MCP/resume/…). Returns true when the wheel was
+// consumed so the transcript does not scroll underneath the overlay.
+func (m *chatTUI) scrollHiddenComposerOverlay(msg tea.MouseWheelMsg) bool {
+	if !m.hideComposer() {
+		return false
+	}
+	delta := 0
+	switch msg.Button {
+	case tea.MouseWheelUp:
+		delta = -1
+	case tea.MouseWheelDown:
+		delta = 1
+	default:
+		return false
+	}
+	// Prefer the same step size as keyboard j/k (one row per notch).
+	for i := 0; i < 3; i++ {
+		if !m.nudgeHiddenComposerOverlay(delta) {
+			break
+		}
+	}
+	return true
+}
+
+// nudgeHiddenComposerOverlay moves the active overlay selection by one step.
+// Returns false when the selection cannot move further in that direction.
+func (m *chatTUI) nudgeHiddenComposerOverlay(delta int) bool {
+	switch {
+	case m.skillPick != nil:
+		return m.nudgeSkillPicker(delta)
+	case m.mcp != nil:
+		p := m.mcp
+		if p.stage != mcpStageList {
+			return false
+		}
+		n := len(p.snapshot.servers)
+		if n == 0 {
+			return false
+		}
+		next := p.sel + delta
+		if next < 0 || next >= n {
+			return false
+		}
+		p.sel = next
+		return true
+	case m.resumePick != nil:
+		r := m.resumePick
+		if r.quick != nil {
+			items := r.quick.filteredItems()
+			if len(items) == 0 {
+				return false
+			}
+			next := r.quick.selected + delta
+			if next < 0 || next >= len(items) {
+				return false
+			}
+			r.quick.selected = next
+			r.sel = next
+			return true
+		}
+		if len(r.sessions) == 0 {
+			return false
+		}
+		next := r.sel + delta
+		if next < 0 || next >= len(r.sessions) {
+			return false
+		}
+		r.sel = next
+		return true
+	case m.quickPick != nil:
+		items := m.quickPick.filteredItems()
+		if len(items) == 0 {
+			return false
+		}
+		next := m.quickPick.selected + delta
+		if next < 0 || next >= len(items) {
+			return false
+		}
+		m.quickPick.selected = next
+		return true
+	case m.copyPick != nil:
+		if len(m.copyPick.parts) == 0 {
+			return false
+		}
+		next := m.copyPick.sel + delta
+		if next < 0 || next >= len(m.copyPick.parts) {
+			return false
+		}
+		m.copyPick.sel = next
+		return true
+	default:
+		return false
+	}
+}
+
+func (m *chatTUI) nudgeSkillPicker(delta int) bool {
+	p := m.skillPick
+	if p == nil {
+		return false
+	}
+	switch p.mode {
+	case pickerSkills:
+		items := p.skills
+		if p.searchActive {
+			items = p.filteredSkills()
+		}
+		if len(items) == 0 {
+			return false
+		}
+		next := p.sel + delta
+		if next < 0 || next >= len(items) {
+			return false
+		}
+		p.sel = next
+		return true
+	case pickerSources:
+		visible := p.visibleRoots()
+		if len(visible) == 0 {
+			return false
+		}
+		next := p.sourceSel + delta
+		if next < 0 || next >= len(visible) {
+			return false
+		}
+		p.sourceSel = next
+		return true
+	case pickerSourceSkills:
+		skills := p.selectedRootSkills()
+		if len(skills) == 0 {
+			return false
+		}
+		next := p.sourceSkillSel + delta
+		if next < 0 || next >= len(skills) {
+			return false
+		}
+		p.sourceSkillSel = next
+		return true
+	case pickerDetail:
+		// detail actions length is dynamic; use a safe upper bound via render path
+		next := p.detailAction + delta
+		if next < 0 {
+			return false
+		}
+		// allow a few actions; clamp later on key path if needed
+		if next > 8 {
+			return false
+		}
+		p.detailAction = next
+		return true
+	default:
+		return false
+	}
 }
 
 // hideComposer is the single ownership gate for the bottom composer.
