@@ -607,6 +607,40 @@ func TestAssistantMarkdownHistoryDropsName(t *testing.T) {
 	}
 }
 
+func TestUserBubbleFullLineBackgroundWhenColorOn(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.TrueColor
+	configureCLITheme("dark")
+	// ensure theme has userBubbleBG
+	got := renderUserBubble("hello rhythm", 40, false, true)
+	if !strings.Contains(got, bgSGR(activeCLITheme.userBubbleBG)) {
+		t.Fatalf("want userBubbleBG on bubble, got %q", got)
+	}
+	if !strings.Contains(got, completionPadCell) {
+		t.Fatalf("want NBSP pad for full-line bg survival, got %q", got)
+	}
+	plain := ansi.Strip(got)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("want pad + body + pad, got %d lines: %q", len(lines), plain)
+	}
+	if !strings.Contains(lines[1], "›") || !strings.Contains(lines[1], "hello rhythm") {
+		t.Fatalf("body line missing › message: %q", lines[1])
+	}
+}
+
+func TestUserBubbleNoPipeWhenColorOff(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.NoTTY
+	got := ansi.Strip(renderUserBubble("hi", 40, false, true))
+	if strings.Contains(got, "│") {
+		t.Fatalf("color-off must not use │ prefix, got %q", got)
+	}
+	if !strings.Contains(got, "›") {
+		t.Fatalf("want › marker, got %q", got)
+	}
+}
+
 func TestUserBubbleFadedHistory(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
@@ -767,8 +801,12 @@ func TestReplayBundleInternalLiveness(t *testing.T) {
 	if strings.Contains(plainLive, "Corvus old answer") {
 		t.Fatalf("live bundle must not name earlier assistant bodies, got %q", live)
 	}
-	if !strings.Contains(live, fgSGR(activeCLITheme.accent)+"› latest question") {
+	// Soft bubble may re-arm bg after resets; pin accent SGR immediately before body text.
+	if !strings.Contains(live, fgSGR(activeCLITheme.accent)+"latest question") {
 		t.Fatalf("live bundle should render the last user full accent, got %q", live)
+	}
+	if !strings.Contains(plainLive, "› latest question") {
+		t.Fatalf("live bundle should show › latest question, got %q", plainLive)
 	}
 	if !strings.Contains(live, fgSGR(activeCLITheme.userBubbleFaded)) {
 		t.Fatalf("live bundle should fade earlier user bubbles, got %q", live)
@@ -776,11 +814,16 @@ func TestReplayBundleInternalLiveness(t *testing.T) {
 
 	// A new user message demotes the whole bundle.
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "new question"})
-	if plain := ansi.Strip(strings.Join(m.transcript, "\n")); strings.Contains(plain, "Corvus") {
+	joined := strings.Join(m.transcript, "\n")
+	if plain := ansi.Strip(joined); strings.Contains(plain, "Corvus") {
 		t.Fatalf("bundle must carry no name after a new user message, got %q", plain)
 	}
-	if strings.Contains(strings.Join(m.transcript, "\n"), fgSGR(activeCLITheme.accent)+"› latest question") {
-		t.Fatalf("bundle internal user must fade after a new user message, got %q", strings.Join(m.transcript, "\n"))
+	// Bundle-internal "latest question" fades; only "new question" keeps accent body.
+	if strings.Contains(joined, fgSGR(activeCLITheme.accent)+"latest question") {
+		t.Fatalf("bundle internal user must fade after a new user message, got %q", joined)
+	}
+	if !strings.Contains(joined, fgSGR(activeCLITheme.userBubbleFaded)+"latest question") {
+		t.Fatalf("bundle internal user should use faded body after demotion, got %q", joined)
 	}
 }
 

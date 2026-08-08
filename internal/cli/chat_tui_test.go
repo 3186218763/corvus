@@ -1459,9 +1459,9 @@ func TestUserBubbleEchoedImmediately(t *testing.T) {
 }
 
 func TestUserBubbleIsLightweightTranscriptLine(t *testing.T) {
-	prevColor := activeColorProfile
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	defer func() { activeColorProfile = prevColor }()
+	configureCLITheme("dark")
 
 	got := renderUserBubble("hello world", 80, false, true)
 	plain := ansi.Strip(got)
@@ -1471,8 +1471,20 @@ func TestUserBubbleIsLightweightTranscriptLine(t *testing.T) {
 	if got == plain {
 		t.Fatalf("user bubble should use themed foreground color when color is enabled: %q", got)
 	}
-	if w := ansi.StringWidth(plain); w > 20 {
-		t.Fatalf("user bubble should not render as a full-width input-like block, width=%d text=%q", w, plain)
+	// Soft full-line wash: userBubbleBG + NBSP pad (not a bordered input box).
+	if !strings.Contains(got, bgSGR(activeCLITheme.userBubbleBG)) {
+		t.Fatalf("user bubble should paint soft full-line bg, got %q", got)
+	}
+	if !strings.Contains(got, completionPadCell) {
+		t.Fatalf("user bubble should NBSP-pad for bg survival, got %q", got)
+	}
+	// Body is still a › line (not a multi-field composer chrome).
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("want pad + body + pad, got %d lines: %q", len(lines), plain)
+	}
+	if strings.Contains(lines[1], "│") {
+		t.Fatalf("body must not use box borders, got %q", lines[1])
 	}
 }
 
@@ -4414,7 +4426,8 @@ func TestReplayBundleTrailingUserDemotesInternalAssistant(t *testing.T) {
 	if !strings.Contains(plain, "a1") || strings.Contains(plain, "◆ Corvus") {
 		t.Fatalf("internal assistant should render plain body without nameplate, got %q", plain)
 	}
-	if !strings.Contains(m.transcript[0], fgSGR(activeCLITheme.accent)+"› q2") {
+	if !strings.Contains(m.transcript[0], fgSGR(activeCLITheme.accent)) ||
+		!strings.Contains(ansi.Strip(m.transcript[0]), "› q2") {
 		t.Fatalf("trailing user bubble should stay full accent, got %q", m.transcript[0])
 	}
 }

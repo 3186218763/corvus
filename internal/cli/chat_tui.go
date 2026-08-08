@@ -4957,23 +4957,46 @@ func wrapForViewport(text string, width int, fg cliColor) string {
 	return themeStyle(fg).Width(width).Render(text)
 }
 
-// renderUserBubble renders the just-submitted prompt as a transcript line. Keep
-// it visually lighter than the real bottom composer so a fresh session does not
-// look like it has a second input box in the transcript.
+// renderUserBubble renders the just-submitted prompt as a Codex-style soft
+// full-line bubble: pad row + › body + pad row when color is on. Color-off is a
+// plain › line (no box │ prefix) so it stays lighter than the composer chrome.
 func renderUserBubble(line string, width int, planMode bool, current bool) string {
 	line = displayLineForImageRefs(line)
 	prefix := "› "
 	if planMode {
 		prefix = "› [plan] "
 	}
+	if width < 8 {
+		width = 8
+	}
 	if !colorOn() {
-		return "│ " + prefix + line
+		return prefix + line
 	}
-	color := activeCLITheme.accent
+	fg := activeCLITheme.accent
 	if !current {
-		color = activeCLITheme.userBubbleFaded
+		fg = activeCLITheme.userBubbleFaded
 	}
-	return "  " + themeFg(color, prefix+line)
+	bg := bgSGR(activeCLITheme.userBubbleBG)
+	// Bold › marker + accent/faded body (design §4.1). Separate themeFg calls so
+	// bold's trailing reset does not strip the body colour; paintUserBubbleRow
+	// re-arms bg after every reset (diffBar survival).
+	body := bold(themeFg(fg, prefix)) + themeFg(fg, line)
+	pad := paintUserBubbleRow("", width, bg)
+	return pad + "\n" + paintUserBubbleRow(body, width, bg) + "\n" + pad
+}
+
+// paintUserBubbleRow draws one soft-bg row: background from the first cell,
+// content (already styled), then NBSP pad so cell-diff redraws cannot erase the
+// wash with EL/ECH — same survival strategy as diffBar.
+func paintUserBubbleRow(content string, width int, bg string) string {
+	pad := width - visibleWidth(content)
+	if pad < 0 {
+		pad = 0
+	}
+	if content != "" {
+		content = reapplyBG(content, bg)
+	}
+	return bg + content + strings.Repeat(completionPadCell, pad) + ansiReset
 }
 
 var cliImageRefRe = regexp.MustCompile(`(?:^|\s)@\.corvus/attachments/clipboard-\d{8}-\d{6}\.\d+(?:-(?:\d{6}|[a-f0-9]{8}))?\.(?:png|jpg|jpeg|gif|webp)`)
