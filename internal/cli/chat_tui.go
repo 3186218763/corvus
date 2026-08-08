@@ -657,10 +657,12 @@ func configureChatTextarea(ti *textarea.Model) {
 	// placeholder through refreshInputPlaceholder.
 	ti.Placeholder = ""
 	ti.DynamicHeight = true
-	ti.MinHeight = 2
+	// Three-row idle field: a bit taller than a slim two-line box so the
+	// composer reads as a comfortable input surface (grows up to maxInputRows).
+	ti.MinHeight = 3
 	ti.MaxHeight = maxInputRows
 	ti.MaxContentHeight = ti.CharLimit
-	ti.SetHeight(2)
+	ti.SetHeight(3)
 	ti.ShowLineNumbers = false
 	applyTextareaTheme(ti)
 	// Use the real terminal cursor (not a styled virtual one) so View can place

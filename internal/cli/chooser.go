@@ -166,7 +166,7 @@ func (m chatTUI) chooserActivate(row int) (tea.Model, tea.Cmd) {
 		c.typing = true
 		c.cursor = row
 		m.input.Reset()
-		m.input.SetHeight(2)
+		m.input.SetHeight(3)
 		m.refreshInputPlaceholder()
 		return m, nil
 	default: // Chat about this

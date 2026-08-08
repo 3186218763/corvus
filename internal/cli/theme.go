@@ -80,9 +80,8 @@ var (
 		info:      cliColor{"#5eb0ff", 75},
 		secondary: cliColor{"#b18cff", 141},
 		border:    cliColor{"#273343", 237},
-		// Cool elevated surface for no-probe dark shells (avoids cement gray on
-		// purple Ubuntu-like backgrounds when relative tint is unavailable).
-		inputBoxBG:   cliColor{"#2b3344", 237},
+		// No-probe dark fallback ≈ 12% white over near-black (#0c0c10 → #29292d).
+		inputBoxBG:   cliColor{"#29292d", 235},
 		selection:    cliColor{"#4a9bff", 75},
 		userBubbleBG: cliColor{"#222631", 235},
 		diffAddBG:    cliColor{"#213A2B", 22},
@@ -243,26 +242,24 @@ func mixHex(a, b string, t float64) string {
 	return fmt.Sprintf("#%02x%02x%02x", mix(ar, br), mix(ag, bg), mix(ab, bb))
 }
 
-// Relative compositor lift/sink against the probed terminal background.
-// Pure white/black mixes wash purple Ubuntu shells into cement gray; blend
-// toward cool gray-blue targets so the field stays elevated and hue-friendly.
+// Relative compositor "transparency" against the probed terminal background:
+// dark shells lift toward white, light shells sink toward black — a simple
+// alpha overlay (no second cool-gray target). Terminal cells can't do real
+// alpha; mixHex is the translucent stack.
 const (
-	inputBoxDarkLift  = 0.28 // weight of cool target on dark shells
-	inputBoxLightSink = 0.14 // weight of cool target on light shells
-	inputBoxDarkRef   = "#8b95a8"
-	inputBoxLightRef  = "#5a6470"
+	inputBoxDarkLift  = 0.12 // ~12% white over dark bg
+	inputBoxLightSink = 0.08 // ~8% black over light bg
 )
 
 // inputBoxTintFromBackground computes the composer fill from the probed
-// terminal background. Dark shells mix toward a cool gray-blue; light shells
-// mix toward a cool slate. The 256 colour fallback uses ansi.Convert256 on the
-// computed hex (probed path only — curated palette slots stay hand-picked).
+// terminal background as a translucent wash of white (dark) or black (light).
+// The 256 colour fallback uses ansi.Convert256 on the computed hex.
 func inputBoxTintFromBackground(rgb terminalRGB, dark bool) cliColor {
 	bg := fmt.Sprintf("#%02x%02x%02x", rgb.r, rgb.g, rgb.b)
-	ref := inputBoxDarkRef
+	ref := "#ffffff"
 	ratio := inputBoxDarkLift
 	if !dark {
-		ref = inputBoxLightRef
+		ref = "#000000"
 		ratio = inputBoxLightSink
 	}
 	final := mixHex(bg, ref, ratio)

@@ -309,14 +309,14 @@ func TestTranscriptViewportSizing(t *testing.T) {
 	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = m0.(chatTUI)
 
-	if got := m.bottomRows(); got != 3 {
-		t.Fatalf("bottomRows with an empty composer = %d, want 3 (input 2 + footer 1)", got)
+	if got := m.bottomRows(); got != 4 {
+		t.Fatalf("bottomRows with an empty composer = %d, want 4 (input 3 + footer 1)", got)
 	}
 	if m.viewport.Width() != 79 {
 		t.Errorf("viewport content width = %d, want 79 (terminal 80 - 1 scrollbar column)", m.viewport.Width())
 	}
-	if want := m.transcriptHeight(); m.viewport.Height() != want || want != 21 {
-		t.Errorf("viewport height = %d, transcriptHeight = %d, want 21 (24-3)", m.viewport.Height(), want)
+	if want := m.transcriptHeight(); m.viewport.Height() != want || want != 20 {
+		t.Errorf("viewport height = %d, transcriptHeight = %d, want 20 (24-4)", m.viewport.Height(), want)
 	}
 	if m.viewport.TotalLineCount() == 0 {
 		t.Errorf("viewport should hold the committed banner after the first resize")
@@ -514,16 +514,16 @@ func TestManualNewlineGrowsComposerWithoutHidingFirstLine(t *testing.T) {
 
 	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
 	m = m0.(chatTUI)
-	if got := m.input.Height(); got != 2 {
-		t.Fatalf("empty composer height = %d, want 2 (two-row field)", got)
+	if got := m.input.Height(); got != 3 {
+		t.Fatalf("empty composer height = %d, want 3 (three-row field)", got)
 	}
 	m.input.SetValue("first line")
 
 	m0, _ = m.Update(tea.KeyPressMsg{Code: 'j', Mod: tea.ModCtrl})
 	m = m0.(chatTUI)
 
-	if got := m.input.Height(); got != 2 {
-		t.Fatalf("input height after Ctrl+J = %d, want 2", got)
+	if got := m.input.Height(); got != 3 {
+		t.Fatalf("input height after Ctrl+J = %d, want 3", got)
 	}
 	if got := m.input.ScrollYOffset(); got != 0 {
 		t.Fatalf("input scroll offset after Ctrl+J = %d, want 0 so the first line remains visible", got)
@@ -537,8 +537,8 @@ func TestEmptyComposerShowsOnlyPrompt(t *testing.T) {
 	m = m0.(chatTUI)
 
 	lines := strings.Split(ansi.Strip(m.renderComposerInput()), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("empty composer should render %d rows, want 2", len(lines))
+	if len(lines) != 3 {
+		t.Fatalf("empty composer should render %d rows, want 3", len(lines))
 	}
 	if strings.TrimSpace(lines[0]) != "❯" {
 		t.Fatalf("empty composer = %q, want only the prompt", lines[0])
@@ -3444,8 +3444,8 @@ func TestPasteMsgFoldsBeforeTextareaConsumesNewlines(t *testing.T) {
 	if got.input.Value() != "[Pasted text #1 · 5 lines] " {
 		t.Fatalf("input = %q", got.input.Value())
 	}
-	if got.input.Height() != 2 {
-		t.Fatalf("folded paste should keep the two-row minimum, got %d", got.input.Height())
+	if got.input.Height() != 3 {
+		t.Fatalf("folded paste should keep the three-row minimum, got %d", got.input.Height())
 	}
 }
 
