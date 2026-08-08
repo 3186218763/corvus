@@ -101,6 +101,8 @@ func (p *quickPicker) handleKey(msg tea.KeyPressMsg) quickPickerResult {
 			p.selected = 0
 		}
 	default:
+		// Searchable menus: a–z always feed the filter (Codex/Claude pattern).
+		// Letter labels remain visual; confirm with Enter after ↑/↓.
 		text := msg.Text
 		if text == "" {
 			s := msg.String()
@@ -145,7 +147,7 @@ func (p *quickPicker) render(width int) string {
 			if item.Status != "" {
 				label += " " + dim("("+item.Status+")")
 			}
-			b.WriteString(rowLine(i == p.selected, i+1, "", label, item.Status == "active") + "\n")
+			b.WriteString(selectionRow(i == p.selected, i, "", label, item.Status == "active") + "\n")
 			if item.Description != "" {
 				b.WriteString(dim("     "+ansi.Truncate(item.Description, contentWidth, "…")) + "\n")
 			}
@@ -159,7 +161,7 @@ func (p *quickPicker) render(width int) string {
 		hint = "Type to filter · ↑/↓ navigate · Enter select · Esc cancel"
 	}
 	b.WriteString(dim(hint))
-	return choicePanelStyle.Width(w).Render(b.String())
+	return selectionPanel(b.String(), w)
 }
 
 func quickPickerWindow(total, selected int) (int, int) {

@@ -30,6 +30,12 @@ func (m chatTUI) handleClearConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 			return m.confirmClearContext()
 		}
 		m.clearConfirm = nil
+	default:
+		if idx := selectionIndexKey(msg.String()); idx == 0 {
+			return m.confirmClearContext()
+		} else if idx == 1 {
+			m.clearConfirm = nil
+		}
 	}
 	return m, nil
 }
@@ -74,7 +80,8 @@ func (m chatTUI) renderClearConfirm() string {
 	var b strings.Builder
 	b.WriteString(i18n.M.SlashClearPrompt + "\n")
 	b.WriteString(viewMeta("This deletes the current transcript from local history and keeps only the system prompt.") + "\n\n")
-	b.WriteString(rowLine(m.clearConfirm.confirm == 0, 1, "", "Clear", false) + "\n")
-	b.WriteString(rowLine(m.clearConfirm.confirm == 1, 2, "", "Cancel", false))
-	return choicePanelStyle.Width(w).Render(b.String())
+	b.WriteString(selectionRow(m.clearConfirm.confirm == 0, 0, "", "Clear", false) + "\n")
+	b.WriteString(selectionRow(m.clearConfirm.confirm == 1, 1, "", "Cancel", false) + "\n")
+	b.WriteString(selectionFooter(""))
+	return selectionPanel(b.String(), w)
 }

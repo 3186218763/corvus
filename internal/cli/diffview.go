@@ -142,29 +142,36 @@ func diffBody(d event.FileDiff, path string, width, maxLines int) []string {
 	return rows
 }
 
-// diffBar draws one added/removed row on a full-width coloured background. The
-// bg is re-applied after every chroma reset — \033[0m would otherwise end the
-// bar mid-line — and padded to the bar width so it runs edge to edge.
+// diffBar draws one added/removed row on a full-width coloured background
+// (Codex-style: indent + gutter + sign + code all share the tint). The bg is
+// re-applied after every SGR reset so chroma/dim never hollows the bar; the
+// trailing pad uses non-clearable NBSP cells so cell-diff / non-fullscreen
+// redraws cannot erase the fill with EL/ECH.
 func diffBar(sign byte, code, path string, width int, bg, signFg string, lineNo, gw int) string {
-	gutter := dim(lpad(strconv.Itoa(lineNo), gw))
-	barW := width - 2 - gw - 1
-	if barW < 4 {
-		barW = 4
+	// Layout: "  " + gutter(gw) + " " + sign + " " + code  → prefix cols = 2+gw+1+1+1
+	prefixCols := 2 + gw + 3
+	codeMax := width - prefixCols
+	if codeMax < 1 {
+		codeMax = 1
 	}
-	code = clampPlain(code, barW-2)
+	code = clampPlain(code, codeMax)
+	gutterPlain := lpad(strconv.Itoa(lineNo), gw)
 	if !colorOn() {
-		return "  " + gutter + " " + string(sign) + " " + code
+		return "  " + gutterPlain + " " + string(sign) + " " + code
 	}
 	hl := highlightCode(path, code)
 	if sign == '-' {
 		hl = ansiDim + strings.ReplaceAll(hl, ansiReset, ansiReset+ansiDim)
 	}
 	hl = reapplyBG(hl, bg)
-	pad := barW - 2 - visibleWidth(code)
+	gutter := reapplyBG(dim(gutterPlain), bg)
+	pad := width - prefixCols - visibleWidth(code)
 	if pad < 0 {
 		pad = 0
 	}
-	return "  " + gutter + " " + bg + signFg + string(sign) + ansiReset + bg + " " + hl + strings.Repeat(" ", pad) + ansiReset
+	// Full-line arm: bg covers indent/gutter/sign/code/pad; every reset re-arms.
+	return bg + "  " + gutter + bg + " " + signFg + string(sign) + ansiReset + bg + " " + hl +
+		strings.Repeat(completionPadCell, pad) + ansiReset
 }
 
 // diffContext draws an unchanged line: the gutter, no background, code aligned

@@ -2685,19 +2685,7 @@ func (m chatTUI) handleApprovalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return answer(approvalChoice{})
 	}
 	lower := strings.ToLower(msg.String())
-	if len(lower) == 1 && lower[0] >= '1' && lower[0] <= '9' {
-		idx := int(lower[0] - '1')
-		if idx < len(choices) {
-			return answer(choices[idx])
-		}
-		// Legacy muscle memory: tool approvals historically numbered deny as 4.
-		// Honor 4 as deny even when the current prompt shows fewer rows, matching
-		// the "legacy 4 still deny" contract in this function's doc comment.
-		if lower == "4" {
-			return answer(approvalChoice{})
-		}
-		return m, nil
-	}
+	// Semantic shortcuts first (display uses a/b/c…; key "a" remains session-allow).
 	switch lower {
 	case "y":
 		if len(choices) > 0 {
@@ -2717,6 +2705,16 @@ func (m chatTUI) handleApprovalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case "n":
 		return answer(approvalChoice{})
+	}
+	// Letter/digit index (b–z and 1–9; "a" already handled as semantic above).
+	if idx := selectionIndexKey(lower); idx >= 0 {
+		if idx < len(choices) && lower != "a" {
+			return answer(choices[idx])
+		}
+		// Legacy muscle memory: tool approvals historically numbered deny as 4.
+		if lower == "4" {
+			return answer(approvalChoice{})
+		}
 	}
 	return m, nil
 }
@@ -2749,6 +2747,8 @@ var (
 	todoPanelStyle   lipgloss.Style
 	statusBlockStyle lipgloss.Style
 	workingStyle     lipgloss.Style
+	// choicePanelStyle frames bottom pickers / approval / ask surfaces.
+	choicePanelStyle lipgloss.Style
 )
 
 func (m chatTUI) cancelRequested() bool {
@@ -3122,10 +3122,23 @@ func (m chatTUI) renderApprovalBanner() string {
 	var b strings.Builder
 	b.WriteString("⏸ " + text + "\n")
 	for i, choice := range approvalChoices(m.pendingApproval) {
-		b.WriteString(rowLine(i == m.approvalSelection, i+1, "", choice.label, false) + "\n")
+		hint := ""
+		switch {
+		case choice.exitPlan:
+			hint = ""
+		case !choice.allow:
+			hint = "n"
+		case choice.persistToConfig:
+			hint = "p"
+		case choice.allowForSession:
+			hint = "a"
+		default:
+			hint = "y"
+		}
+		b.WriteString(selectionRowWithHint(i == m.approvalSelection, i, "", choice.label, hint, false, w-4) + "\n")
 	}
-	b.WriteString(dim("↑/↓ navigate · Enter select · y/a/p/n shortcuts"))
-	return choicePanelStyle.Width(w).Render(b.String())
+	b.WriteString(selectionFooter("y/a/p/n"))
+	return selectionPanel(b.String(), w)
 }
 
 func compactApprovalPlan(plan string) string {
@@ -3738,7 +3751,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		case planApprovalTool:
 			// No longer a tool, but guard anyway: the plan is the assistant's reply.
 		default:
-			if block := diffBlock(e.Tool.Name, e.Tool.Args, e.Tool.FileDiff, m.width, m.diffMaxLines); block != nil {
+			if block := diffBlock(e.Tool.Name, e.Tool.Args, e.Tool.FileDiff, transcriptContentWidth(m.width, m.nativeScrollback), m.diffMaxLines); block != nil {
 				for _, ln := range block {
 					m.commitLine(ln)
 				}

@@ -96,6 +96,11 @@ func (m chatTUI) handleResumePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		return m.applyResumePick()
 	case "esc":
 		m.resumePick = nil
+	default:
+		if idx := selectionIndexKey(msg.String()); idx >= 0 && idx < len(r.sessions) {
+			r.sel = idx
+			return m.applyResumePick()
+		}
 	}
 	return m, nil
 }
@@ -149,10 +154,10 @@ func (m chatTUI) renderResumePicker() string {
 		if i == r.active {
 			label = dim(label) + " " + dim("(active)")
 		}
-		b.WriteString(rowLine(i == r.sel, i+1, "", label, false) + "\n")
+		b.WriteString(selectionRow(i == r.sel, i, "", label, false) + "\n")
 	}
 	b.WriteString(dim(i18n.M.ResumePickHint))
-	return choicePanelStyle.Width(w).Render(b.String())
+	return selectionPanel(b.String(), w)
 }
 
 // sessionPickerLabel is the "N turns · display title" line, truncated to fit.

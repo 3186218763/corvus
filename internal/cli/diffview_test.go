@@ -102,6 +102,30 @@ func TestDiffBarReappliesBackground(t *testing.T) {
 	}
 }
 
+func TestDiffBarFullLineWidthAndNBSPPad(t *testing.T) {
+	defer func(prev colorprofile.Profile) { activeColorProfile = prev }(activeColorProfile)
+	activeColorProfile = colorprofile.ANSI256
+	bg := bgSGR(activeCLITheme.diffAddBG)
+	const width = 40
+	line := diffBar('+', "x", "x.go", width, bg, fgSGR(activeCLITheme.success), 1, 2)
+	if !strings.HasPrefix(line, bg) {
+		t.Fatalf("full-line bar must open with background (covers indent/gutter): %q", line)
+	}
+	if !strings.HasSuffix(line, ansiReset) {
+		t.Fatalf("row must end with reset: %q", line)
+	}
+	if !strings.Contains(line, completionPadCell) {
+		t.Fatalf("short rows must pad with NBSP so cell-diff cannot EL the fill: %q", line)
+	}
+	if w := visibleWidth(ansi.Strip(line)); w != width {
+		t.Fatalf("visible width = %d, want %d: %q", w, width, ansi.Strip(line))
+	}
+	// Gutter digits sit after the opening bg (not outside the tint).
+	if !strings.Contains(line, bg+"  ") {
+		t.Fatalf("indent must be painted under the bar background: %q", line)
+	}
+}
+
 func TestActiveDiffChromaStyleFollowsCLITheme(t *testing.T) {
 	previous := activeCLITheme
 	defer func() { activeCLITheme = previous }()

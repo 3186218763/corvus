@@ -1191,7 +1191,7 @@ func TestPlanChangeApprovalStartsWithoutSelection(t *testing.T) {
 		t.Fatalf("plan approval selection = %d, want no default", m.approvalSelection)
 	}
 	banner := ansi.Strip(m.renderApprovalBanner())
-	if strings.Contains(banner, "❯ 1.") || strings.Contains(banner, "❯ 2.") {
+	if strings.Contains(banner, "›") || strings.Contains(banner, "❯") {
 		t.Fatalf("plan approval banner preselected a choice:\n%s", banner)
 	}
 
@@ -1216,8 +1216,11 @@ func TestApprovalArrowKeysMoveVisibleSelection(t *testing.T) {
 		t.Fatalf("approval selection = %d, want 1", m.approvalSelection)
 	}
 	banner := ansi.Strip(m.renderApprovalBanner())
-	if !strings.Contains(banner, "❯ 2.") {
-		t.Fatalf("approval banner should highlight second row:\n%s", banner)
+	if !strings.Contains(banner, "› b.") && !strings.Contains(banner, "b.") {
+		t.Fatalf("approval banner should highlight second row with letter b:\n%s", banner)
+	}
+	if !strings.Contains(banner, "›") {
+		t.Fatalf("selected row should show › marker:\n%s", banner)
 	}
 }
 
@@ -3505,8 +3508,11 @@ func TestSandboxEscapeApprovalBannerUsesRealEnvironmentChoice(t *testing.T) {
 	if !strings.Contains(banner, "允许一次") {
 		t.Fatalf("approval banner = %q, want desktop-matching allow-once choice", banner)
 	}
-	if !strings.Contains(banner, "3. 拒绝") || strings.Contains(banner, "4. 拒绝") {
-		t.Fatalf("approval banner = %q, want conventional 1/2/3 sandbox choices", banner)
+	if !strings.Contains(banner, "c. 拒绝") {
+		t.Fatalf("approval banner = %q, want lettered deny choice (c.)", banner)
+	}
+	if strings.Contains(banner, "4. 拒绝") {
+		t.Fatalf("approval banner = %q, must not show legacy fourth deny", banner)
 	}
 	if strings.Contains(banner, "sandbox_escape") {
 		t.Fatalf("approval banner leaked raw tool grant: %q", banner)
@@ -3525,8 +3531,8 @@ func TestFreshApprovalBannerUsesConventionalDenyChoice(t *testing.T) {
 		Subject: "保存/更新记忆",
 	}
 	banner := m.renderApprovalBanner()
-	if !strings.Contains(banner, "1. 本次允许") || !strings.Contains(banner, "2. 拒绝") {
-		t.Fatalf("approval banner = %q, want conventional 1/2 fresh choices", banner)
+	if !strings.Contains(banner, "a. 本次允许") || !strings.Contains(banner, "b. 拒绝") {
+		t.Fatalf("approval banner = %q, want lettered a/b fresh choices", banner)
 	}
 	if strings.Contains(banner, "4. 拒绝") {
 		t.Fatalf("approval banner = %q, must not show non-consecutive deny choice", banner)
@@ -3544,8 +3550,8 @@ func TestDynamicMCPFreshApprovalHidesRememberedChoices(t *testing.T) {
 		Fresh:   true,
 	}
 	banner := m.renderApprovalBanner()
-	if !strings.Contains(banner, "1. Allow once") || !strings.Contains(banner, "2. Deny") {
-		t.Fatalf("approval banner = %q, want fresh two-choice prompt", banner)
+	if !strings.Contains(banner, "a. Allow once") || !strings.Contains(banner, "b. Deny") {
+		t.Fatalf("approval banner = %q, want lettered a/b fresh two-choice prompt", banner)
 	}
 	if strings.Contains(banner, "for this session") || strings.Contains(banner, "Always allow") {
 		t.Fatalf("approval banner offers remembered grant for destructive MCP: %q", banner)

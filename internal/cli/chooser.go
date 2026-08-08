@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"corvus/internal/event"
 	"corvus/internal/i18n"
@@ -138,11 +137,9 @@ func (m chatTUI) handleChooserKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		return m.chooserActivate(c.cursor)
 	default:
-		// number keys 1..9 jump to / pick an option
-		if s := msg.String(); len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
-			if idx := int(s[0] - '1'); idx < len(q.Options) {
-				return m.chooserActivate(idx)
-			}
+		// a–z (and legacy 1–9) jump to / pick a row including type/chat rows.
+		if idx := selectionIndexKey(msg.String()); idx >= 0 && idx < c.rowCount() {
+			return m.chooserActivate(idx)
 		}
 	}
 	return m, nil
@@ -226,7 +223,7 @@ func (m chatTUI) renderChooser() string {
 			fmt.Fprintf(&b, "  %s: %s\n", dim(label), ans)
 		}
 		b.WriteString(dim(i18n.M.AskSubmitHint))
-		return choicePanelStyle.Width(w).Render(b.String())
+		return selectionPanel(b.String(), w)
 	}
 
 	q := c.questions[c.tab]
@@ -242,13 +239,14 @@ func (m chatTUI) renderChooser() string {
 	} else if c.typing {
 		typeLabel = i18n.M.AskTypingHint
 	}
-	b.WriteString(rowLine(c.cursor == typeRow, typeRow+1, "", typeLabel, c.typing && c.custom[c.tab] == "") + "\n")
+	b.WriteString(selectionRow(c.cursor == typeRow, typeRow, "", typeLabel, c.typing && c.custom[c.tab] == "") + "\n")
 	// Chat about this
 	b.WriteString(dim(strings.Repeat("─", min(w-2, 40))) + "\n")
 	chatRow := typeRow + 1
-	b.WriteString(rowLine(c.cursor == chatRow, chatRow+1, "", i18n.M.AskChatInstead, false))
+	b.WriteString(selectionRow(c.cursor == chatRow, chatRow, "", i18n.M.AskChatInstead, false) + "\n")
+	b.WriteString(selectionFooter(""))
 
-	return choicePanelStyle.Width(w).Render(b.String())
+	return selectionPanel(b.String(), w)
 }
 
 func (m chatTUI) chooserTabs() string {
@@ -290,28 +288,11 @@ func (m chatTUI) chooserOptionRow(j int, opt event.AskOption, multi bool) string
 			box = "☑ "
 		}
 	}
-	line := rowLine(c.cursor == j, j+1, box, opt.Label, false)
+	line := selectionRow(c.cursor == j, j, box, opt.Label, false)
 	if opt.Description != "" {
 		line += "\n" + dim("       "+opt.Description)
 	}
 	return line
-}
-
-// rowLine formats a selectable row: "❯ N. <box><label>", highlighted when current.
-func rowLine(cur bool, num int, box, label string, active bool) string {
-	prefix := "  "
-	if cur {
-		prefix = accent("❯ ")
-	}
-	body := fmt.Sprintf("%d. %s%s", num, box, label)
-	if cur {
-		body = bold(body)
-	} else if active {
-		body = yellow(body)
-	} else {
-		body = dim(body)
-	}
-	return prefix + body
 }
 
 func headerOr(q event.AskQuestion, i int) string {
@@ -320,6 +301,3 @@ func headerOr(q event.AskQuestion, i int) string {
 	}
 	return fmt.Sprintf("Q%d", i+1)
 }
-
-// choicePanelStyle frames the question card in the accent colour.
-var choicePanelStyle lipgloss.Style

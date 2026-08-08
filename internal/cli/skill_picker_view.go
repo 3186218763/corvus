@@ -165,7 +165,7 @@ func (m chatTUI) renderSkillPickerSources() string {
 	roots := p.visibleRoots()
 	for i, r := range roots {
 		label := sourceRowLabel(r, m.width)
-		b.WriteString(rowLine(i == p.sourceSel, i+1, "", label, false))
+		b.WriteString(selectionRow(i == p.sourceSel, i, "", label, false))
 		b.WriteByte('\n')
 	}
 
@@ -225,7 +225,7 @@ func (m chatTUI) renderSkillPickerDetail() string {
 	b.WriteByte('\n')
 	actions := skillActionsFor(p.detailSkill)
 	for i, action := range actions {
-		b.WriteString(rowLine(i == p.detailAction, i+1, "", action.label, false))
+		b.WriteString(selectionRow(i == p.detailAction, i, "", action.label, false))
 		b.WriteByte('\n')
 	}
 	if body := renderSkillBodyPreview(p.detailSkill, m.width, 6); body != "" {
@@ -246,9 +246,9 @@ func (m chatTUI) renderSkillPickerConfirmDelete() string {
 		b.WriteByte('\n')
 	}
 	b.WriteByte('\n')
-	b.WriteString(rowLine(p.confirm == 0, 1, "", i18n.M.SkillPickerDeleteConfirm, false))
+	b.WriteString(selectionRow(p.confirm == 0, 0, "", i18n.M.SkillPickerDeleteConfirm, false))
 	b.WriteByte('\n')
-	b.WriteString(rowLine(p.confirm == 1, 2, "", i18n.M.SkillPickerDeleteCancel, false))
+	b.WriteString(selectionRow(p.confirm == 1, 1, "", i18n.M.SkillPickerDeleteCancel, false))
 	return b.String()
 }
 

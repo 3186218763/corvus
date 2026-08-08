@@ -161,7 +161,7 @@ func (p *mcpManager) renderDetail(width int) string {
 		b.WriteString(viewMeta("No actions available.") + "\n")
 	} else {
 		for i, a := range actions {
-			b.WriteString(rowLine(i == p.action, i+1, "", a.label, false) + "\n")
+			b.WriteString(selectionRow(i == p.action, i, "", a.label, false) + "\n")
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")
@@ -219,8 +219,8 @@ func (p *mcpManager) renderConfirmRemove(width int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Remove MCP server %q?\n", v.Name)
 	b.WriteString(viewMeta("This removes it from Corvus config. It cannot be undone from this panel.") + "\n\n")
-	b.WriteString(rowLine(p.confirm == 0, 1, "", "Confirm remove", false) + "\n")
-	b.WriteString(rowLine(p.confirm == 1, 2, "", "Cancel", false) + "\n")
+	b.WriteString(selectionRow(p.confirm == 0, 0, "", "Confirm remove", false) + "\n")
+	b.WriteString(selectionRow(p.confirm == 1, 1, "", "Cancel", false) + "\n")
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -233,8 +233,8 @@ func (p *mcpManager) renderConfirmClearAuth(width int) string {
 	fmt.Fprintf(&b, "Clear authentication for MCP server %q?\n", v.Name)
 	hint := "This removes local auth-like headers, environment values, and URL tokens; the server stays in config."
 	b.WriteString(viewMeta(viewCompactText(hint, viewBudget(width, 0))) + "\n\n")
-	b.WriteString(rowLine(p.confirm == 0, 1, "", "Confirm clear authentication", false) + "\n")
-	b.WriteString(rowLine(p.confirm == 1, 2, "", "Cancel", false) + "\n")
+	b.WriteString(selectionRow(p.confirm == 0, 0, "", "Confirm clear authentication", false) + "\n")
+	b.WriteString(selectionRow(p.confirm == 1, 1, "", "Cancel", false) + "\n")
 	return strings.TrimRight(b.String(), "\n")
 }
 

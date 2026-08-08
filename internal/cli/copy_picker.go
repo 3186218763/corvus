@@ -48,6 +48,11 @@ func (m chatTUI) handleCopyPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.applyCopyPick()
 	case "esc":
 		m.copyPick = nil
+	default:
+		if idx := selectionIndexKey(msg.String()); idx >= 0 && idx < len(p.parts) {
+			p.sel = idx
+			return m.applyCopyPick()
+		}
 	}
 	return m, nil
 }
@@ -71,8 +76,8 @@ func (m chatTUI) renderCopyPicker() string {
 	var b strings.Builder
 	b.WriteString(accent(i18n.M.SlashCopyListHeader) + "\n")
 	for i, part := range p.parts {
-		b.WriteString(rowLine(i == p.sel, i+1, "", firstLine(part), false) + "\n")
+		b.WriteString(selectionRow(i == p.sel, i, "", firstLine(part), false) + "\n")
 	}
 	b.WriteString(dim("↑/↓ navigate · Enter copy · Esc cancel"))
-	return choicePanelStyle.Width(w).Render(b.String())
+	return selectionPanel(b.String(), w)
 }

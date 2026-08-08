@@ -121,6 +121,14 @@ func (m chatTUI) handleRewindKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			r.scope = 5
 			return m.applyRewind()
 		}
+	default:
+		// Stage 0: a–z jump to a turn. Stage 1 keeps b/c/d/f/s/u mnemonics above.
+		if r.stage == 0 {
+			if idx := selectionIndexKey(msg.String()); idx >= 0 && idx < len(r.metas) {
+				r.sel = idx
+				r.stage = 1
+			}
+		}
 	}
 	return m, nil
 }
@@ -220,10 +228,10 @@ func (m chatTUI) renderRewind() string {
 	if r.stage == 0 {
 		b.WriteString(accent(i18n.M.RewindPickTitle) + "\n")
 		for i, meta := range r.metas {
-			b.WriteString(rowLine(i == r.sel, meta.Turn+1, "", turnLabel(meta, w), false) + "\n")
+			b.WriteString(selectionRow(i == r.sel, i, "", turnLabel(meta, w), false) + "\n")
 		}
 		b.WriteString(dim(i18n.M.RewindPickHint))
-		return choicePanelStyle.Width(w).Render(b.String())
+		return selectionPanel(b.String(), w)
 	}
 	meta := r.metas[r.sel]
 	if r.stage == 2 {
@@ -231,14 +239,14 @@ func (m chatTUI) renderRewind() string {
 		b.WriteString(fmt.Sprintf(i18n.M.RewindCoverageWarningFmt, len(r.pendingPlan.CoverageGaps)) + "\n")
 		b.WriteString(dim(fmt.Sprintf(i18n.M.RewindRestoreTitleFmt, meta.Turn+1)+oneLine(meta.Prompt, 48)) + "\n")
 		b.WriteString(dim(i18n.M.RewindConfirmHint))
-		return choicePanelStyle.Width(w).Render(b.String())
+		return selectionPanel(b.String(), w)
 	}
 	b.WriteString(accent(fmt.Sprintf(i18n.M.RewindRestoreTitleFmt, meta.Turn+1)) + dim(oneLine(meta.Prompt, 48)) + "\n")
 	for i := range rewindActions {
-		b.WriteString(rowLine(i == r.scope, i+1, "", rewindActionLabel(i), false) + "\n")
+		b.WriteString(selectionRow(i == r.scope, i, "", rewindActionLabel(i), false) + "\n")
 	}
 	b.WriteString(dim(i18n.M.RewindApplyHint))
-	return choicePanelStyle.Width(w).Render(b.String())
+	return selectionPanel(b.String(), w)
 }
 
 func rewindActionLabel(i int) string {

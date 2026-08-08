@@ -439,11 +439,11 @@ func visibleRange(total, sel, limit int) (int, int) {
 }
 
 func numberKeyIndex(s string, limit int) (int, bool) {
-	if len(s) != 1 || s[0] < '1' || s[0] > '9' {
-		return 0, false
+	// a–z and legacy 1–9 (selectionIndexKey).
+	if idx := selectionIndexKey(s); idx >= 0 && idx < limit {
+		return idx, true
 	}
-	idx := int(s[0] - '1')
-	return idx, idx < limit
+	return 0, false
 }
 
 func fallbackText(s, fallback string) string {

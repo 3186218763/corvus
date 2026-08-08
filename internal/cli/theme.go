@@ -67,22 +67,22 @@ var (
 	// labels/dim text, border is low-chroma chrome for rules and tool-card edges.
 	// Accents stay style-driven; do not add new default theme names here.
 	cliDarkTheme = cliPalette{
-		name:         "dark",
-		style:        "graphite",
-		accent:       cliColor{"#4a9bff", 75},
-		muted:        cliColor{"#d6dde8", 253},
-		faint:        cliColor{"#8a93a3", 245},
-		subtle:       cliColor{"#a4adbc", 247},
-		success:      cliColor{"#6fce8a", 78},
-		warn:         cliColor{"#e2b93b", 179},
-		err:          cliColor{"#f0706e", 203},
-		danger:       cliColor{"#e5484d", 167},
-		info:         cliColor{"#5eb0ff", 75},
-		secondary:    cliColor{"#b18cff", 141},
-		border:       cliColor{"#273343", 237},
-		// Clearer elevated surface than near-black navy — reads as a field on
-		// typical dark terminals when OSC-11 probe is unavailable.
-		inputBoxBG: cliColor{"#353c4d", 238},
+		name:      "dark",
+		style:     "graphite",
+		accent:    cliColor{"#4a9bff", 75},
+		muted:     cliColor{"#d6dde8", 253},
+		faint:     cliColor{"#8a93a3", 245},
+		subtle:    cliColor{"#a4adbc", 247},
+		success:   cliColor{"#6fce8a", 78},
+		warn:      cliColor{"#e2b93b", 179},
+		err:       cliColor{"#f0706e", 203},
+		danger:    cliColor{"#e5484d", 167},
+		info:      cliColor{"#5eb0ff", 75},
+		secondary: cliColor{"#b18cff", 141},
+		border:    cliColor{"#273343", 237},
+		// Cool elevated surface for no-probe dark shells (avoids cement gray on
+		// purple Ubuntu-like backgrounds when relative tint is unavailable).
+		inputBoxBG:   cliColor{"#2b3344", 237},
 		selection:    cliColor{"#4a9bff", 75},
 		userBubbleBG: cliColor{"#222631", 235},
 		diffAddBG:    cliColor{"#213A2B", 22},
@@ -244,25 +244,25 @@ func mixHex(a, b string, t float64) string {
 }
 
 // Relative compositor lift/sink against the probed terminal background.
-// Dark lift is strong enough to read as a soft elevated surface (Codex-like)
-// without returning to the hard mid-grey slab of a ~32% mix.
+// Pure white/black mixes wash purple Ubuntu shells into cement gray; blend
+// toward cool gray-blue targets so the field stays elevated and hue-friendly.
 const (
-	inputBoxDarkLift  = 0.22 // toward white on dark shells
-	inputBoxLightSink = 0.12 // toward black on light shells
+	inputBoxDarkLift  = 0.28 // weight of cool target on dark shells
+	inputBoxLightSink = 0.14 // weight of cool target on light shells
+	inputBoxDarkRef   = "#8b95a8"
+	inputBoxLightRef  = "#5a6470"
 )
 
 // inputBoxTintFromBackground computes the composer fill from the probed
-// terminal background, keeping the background's hue: dark shells lift
-// inputBoxDarkLift toward white; light shells sink inputBoxLightSink toward
-// black for a recessed field. The 256 colour fallback is the nearest xterm
-// index via ansi.Convert256 — unlike the curated palette slots, this value
-// is computed because it tracks a live background the designer cannot pin.
+// terminal background. Dark shells mix toward a cool gray-blue; light shells
+// mix toward a cool slate. The 256 colour fallback uses ansi.Convert256 on the
+// computed hex (probed path only — curated palette slots stay hand-picked).
 func inputBoxTintFromBackground(rgb terminalRGB, dark bool) cliColor {
 	bg := fmt.Sprintf("#%02x%02x%02x", rgb.r, rgb.g, rgb.b)
-	ref := "#ffffff"
+	ref := inputBoxDarkRef
 	ratio := inputBoxDarkLift
 	if !dark {
-		ref = "#000000"
+		ref = inputBoxLightRef
 		ratio = inputBoxLightSink
 	}
 	final := mixHex(bg, ref, ratio)
