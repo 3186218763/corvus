@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -25,6 +26,7 @@ func newTestChatTUI() chatTUI {
 	shellIdx := map[string]int{}
 	shellOut := map[string]string{}
 	shellExp := map[string]bool{}
+	shellMeta := map[string]shellRunMeta{}
 	return chatTUI{
 		input:                ti,
 		width:                80,
@@ -42,6 +44,8 @@ func newTestChatTUI() chatTUI {
 		pendingCommit:        &commit,
 		shellOutputs:         shellOut,
 		shellExpanded:        shellExp,
+		shellMeta:            shellMeta,
+		shellNativeFlushed:   map[string]bool{},
 		shellTranscriptIdx:   shellIdx,
 		toolCardIdx:          map[string]int{},
 	}
@@ -293,14 +297,15 @@ func TestToolProgressStreamsThenCollapses(t *testing.T) {
 
 	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "b1", Name: "bash", Output: "ok pkg/a\nok pkg/b\n"}})
 	joined = strings.Join(m.transcript, "\n")
-	if strings.Contains(joined, "ok pkg/a") {
-		t.Fatalf("output must be removed after completion:\n%s", joined)
+	// Default finished card keeps a ≤5-line preview under └ (not a live stream).
+	if !strings.Contains(joined, "ok pkg/a") || !strings.Contains(joined, "└") {
+		t.Fatalf("completed card should keep a short preview:\n%s", joined)
 	}
-	if strings.Contains(joined, "lines") {
+	if strings.Contains(joined, "0 lines") || strings.Contains(joined, "-1 lines") {
 		t.Fatalf("no line-count summary may remain:\n%s", joined)
 	}
 	if len(m.transcript) != 1 {
-		t.Fatalf("only the card should remain, got %d blocks:\n%s", len(m.transcript), joined)
+		t.Fatalf("only the card (with preview) should remain, got %d blocks:\n%s", len(m.transcript), joined)
 	}
 }
 
@@ -335,9 +340,9 @@ func TestToolWorkingLineThenClears(t *testing.T) {
 }
 
 // TestConsecutiveToolCallsStayCompact is the regression test for back-to-back
-// Bash tool calls: each tool's live block is removed when ITS OWN result
-// lands, no summary rows remain, and the transcript holds only the two cards
-// in dispatch order (no blank spacer, no └ markers).
+// Bash tool calls: each tool's live stream is removed when ITS OWN result
+// lands, and the transcript holds only the two cards (with short previews) in
+// dispatch order — no blank spacer, no line-count summaries.
 func TestConsecutiveToolCallsStayCompact(t *testing.T) {
 	m := newTestChatTUI()
 	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-1", Name: "bash", Args: `{"command":"git status"}`}})
@@ -358,10 +363,14 @@ func TestConsecutiveToolCallsStayCompact(t *testing.T) {
 		t.Fatalf("cards should remain in dispatch order:\n%s", strings.Join(transcript, "\n"))
 	}
 	joined := strings.Join(transcript, "\n")
-	for _, banned := range []string{"└", "lines", "On branch", "nothing to commit", "* main-v2"} {
+	// Short previews under └ are expected; ban only count-summary noise.
+	for _, banned := range []string{"0 lines", "-1 lines"} {
 		if strings.Contains(joined, banned) {
 			t.Fatalf("compact transcript must not contain %q:\n%s", banned, joined)
 		}
+	}
+	if !strings.Contains(joined, "On branch") || !strings.Contains(joined, "* main-v2") {
+		t.Fatalf("cards should keep short previews:\n%s", joined)
 	}
 	if _, ok := m.shellTranscriptIdx["shell-1"]; !ok {
 		t.Fatalf("shell-1 must keep a Ctrl+B anchor on its card")
@@ -393,26 +402,39 @@ func TestRepeatedShellCommandDoesNotAccumulateOutput(t *testing.T) {
 }
 
 // TestCtrlBTogglesOutputOnTheCardBlock proves Ctrl+B expands the finished
-// shell output onto the card block (card + └ output) and collapses back to
-// the bare card, surviving a reflow (resize) in the expanded state.
+// shell output onto the card block (full output) and collapses back to the
+// default ≤5-line preview, surviving a reflow (resize) in the expanded state.
 func TestCtrlBTogglesOutputOnTheCardBlock(t *testing.T) {
 	m := newTestChatTUI()
 	const id = "shell-long"
-	lines := make([]string, 4)
+	lines := make([]string, 8)
 	for i := range lines {
-		lines[i] = "line"
+		lines[i] = fmt.Sprintf("line-%d", i)
 	}
 	output := strings.Join(lines, "\n") + "\n"
 	m.shellOutputs[id] = output
-	m.transcript = []string{"  ● Bash(cmd)"}
+	m.shellMeta[id] = shellRunMeta{ok: true, durationMs: 410}
+	m.transcript = []string{toolCard("bash", `{"command":"cmd"}`, 80)}
 	m.transcriptSources = []transcriptSource{{kind: transcriptSourceToolCard, raw: "bash", aux: `{"command":"cmd"}`, shellID: id}}
 	m.shellTranscriptIdx[id] = 0
 	m.toolCardIdx = map[string]int{id: 0}
+	// Paint default collapsed preview first.
+	m.setLiveBlock(0, m.renderTranscriptSource(m.transcriptSources[0], m.width, markerNone))
+	collapsed := ansi.Strip(m.transcript[0])
+	if !strings.Contains(collapsed, "line-0") || !strings.Contains(collapsed, "└") {
+		t.Fatalf("collapsed card should show preview under └, got %q", collapsed)
+	}
+	if strings.Contains(collapsed, "line-7") {
+		t.Fatalf("collapsed preview must cap lines, got %q", collapsed)
+	}
+	if !strings.Contains(collapsed, "✓") {
+		t.Fatalf("collapsed card should show success outcome, got %q", collapsed)
+	}
 
 	m.toggleShellOutput()
-	got := m.transcript[0]
-	if !strings.Contains(got, "line") || !strings.Contains(got, "└") {
-		t.Fatalf("expanded card should carry the output under the connector, got %q", got)
+	got := ansi.Strip(m.transcript[0])
+	if !strings.Contains(got, "line-7") || !strings.Contains(got, "└") {
+		t.Fatalf("expanded card should carry full output, got %q", got)
 	}
 
 	// Reflow keeps the expanded state (source-driven render).
@@ -421,13 +443,17 @@ func TestCtrlBTogglesOutputOnTheCardBlock(t *testing.T) {
 	if !m.shellExpanded[id] {
 		t.Fatalf("expanded state must survive a resize")
 	}
-	if got := m.transcript[0]; !strings.Contains(got, "line") {
+	if got := ansi.Strip(m.transcript[0]); !strings.Contains(got, "line-7") {
 		t.Fatalf("reflowed expanded card lost the output: %q", got)
 	}
 
 	m.toggleShellOutput()
-	if got := m.transcript[0]; strings.Contains(got, "line") || strings.Contains(got, "└") {
-		t.Fatalf("collapsed card should be bare, got %q", got)
+	got = ansi.Strip(m.transcript[0])
+	if strings.Contains(got, "line-7") {
+		t.Fatalf("collapsed card should drop lines beyond preview, got %q", got)
+	}
+	if !strings.Contains(got, "line-0") {
+		t.Fatalf("collapsed card should keep preview head, got %q", got)
 	}
 	if m.shellExpanded[id] {
 		t.Fatalf("second toggle must collapse the output")
@@ -492,8 +518,13 @@ func TestToolProgressTailCap(t *testing.T) {
 		t.Fatalf("oldest line should have scrolled out of the tail:\n%s", block)
 	}
 	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "b1", Name: "bash", Output: "lineA\n"}})
-	if got := strings.Join(m.transcript, "\n"); strings.Contains(got, "line") {
-		t.Fatalf("completed tool output must be removed:\n%s", got)
+	// Live tail is gone; card keeps the result preview (ToolResult output).
+	if m.toolStreamIdx != -1 {
+		t.Fatalf("live stream must close after result, idx=%d", m.toolStreamIdx)
+	}
+	got := strings.Join(m.transcript, "\n")
+	if !strings.Contains(got, "lineA") {
+		t.Fatalf("completed card should keep result preview:\n%s", got)
 	}
 }
 
@@ -590,8 +621,10 @@ func TestLateResultDoesNotClobberActiveStream(t *testing.T) {
 	if !strings.Contains(joined, "b1") {
 		t.Fatalf("active tool's live output must survive the late result:\n%s", joined)
 	}
-	if strings.Contains(joined, "a1") {
-		t.Fatalf("late tool's stale block must be removed:\n%s", joined)
+	// shell-a may keep a collapsed preview of a1 on its card; the live stream
+	// for a must still be gone (only b streams).
+	if m.toolStreamID != "shell-b" {
+		t.Fatalf("only shell-b should still stream, id=%q", m.toolStreamID)
 	}
 
 	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-b", Name: "bash", Output: "b1\n"}})

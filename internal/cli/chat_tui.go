@@ -186,6 +186,11 @@ type chatTUI struct {
 	// collapse and Ctrl+B can toggle the complete output.
 	shellOutputs  map[string]string
 	shellExpanded map[string]bool
+	// shellMeta stores outcome for finished shells (duration / ok).
+	shellMeta map[string]shellRunMeta
+	// shellNativeFlushed records ids whose finished preview was already
+	// printed into native scrollback (no in-place rewrite there).
+	shellNativeFlushed map[string]bool
 	// shellTranscriptIdx maps a shell tool ID to the transcript index of its
 	// collapsed output block, so Ctrl+B can rewrite it in place.
 	shellTranscriptIdx map[string]int
@@ -451,6 +456,13 @@ type tuiShutdownMsg struct{}
 
 // elapsedTickMsg fires once a second while a turn runs, driving the "thinking
 // Ns" counter in the status line.
+// shellRunMeta is the outcome attached to a finished shell tool card.
+type shellRunMeta struct {
+	ok         bool
+	durationMs int64
+	err        string
+}
+
 type elapsedTickMsg struct{}
 
 // balanceMsg carries the result of an async wallet-balance fetch; text is the
@@ -615,6 +627,8 @@ func newChatTUI(ctrl control.SessionAPI, missing string, eventCh chan event.Even
 		showReasoning:        nativeScrollback,
 		shellOutputs:         make(map[string]string),
 		shellExpanded:        make(map[string]bool),
+		shellMeta:            make(map[string]shellRunMeta),
+		shellNativeFlushed:   make(map[string]bool),
 		shellTranscriptIdx:   make(map[string]int),
 		toolCardIdx:          make(map[string]int),
 		eventCh:              eventCh,
@@ -1914,6 +1928,8 @@ func (m *chatTUI) clearTranscriptDisplay() {
 	m.viewport.SetContent("")
 	m.shellOutputs = make(map[string]string)
 	m.shellExpanded = make(map[string]bool)
+	m.shellMeta = make(map[string]shellRunMeta)
+	m.shellNativeFlushed = make(map[string]bool)
 	m.shellTranscriptIdx = make(map[string]int)
 	m.toolCardIdx = make(map[string]int)
 	m.answerIdx = -1
@@ -2481,23 +2497,32 @@ func (m *chatTUI) pushToolLine(line string) {
 	}
 }
 
-// collapseToolOutput finalises a finished tool's live block: the block is
-// removed so only the ● Verb(arg) card remains (compact scrollback), and the
-// Ctrl+B anchor moves to the card block. No-op when id isn't streaming.
+// collapseToolOutput finalises a finished tool's live stream block: the live
+// canvas is removed and the card is re-rendered with default ≤5-line preview +
+// outcome (Ctrl+B still expands full output). No-op when id isn't streaming.
 func (m *chatTUI) collapseToolOutput(id string) {
+	if id == "" {
+		return
+	}
 	if m.nativeScrollback {
-		if id == "" {
-			return
-		}
-		// Termux has no viewport to rewrite: print the finished output to the
-		// native scrollback (capped). Each id prints at most once — the entry is
-		// dropped after printing, and a late result prints without touching the
-		// active stream's state.
-		if full, ok := m.shellOutputs[id]; ok {
-			delete(m.shellOutputs, id)
-			if block := renderToolOutputBlock(full, m.width); block != "" {
-				m.commitLine(block)
+		// Native scrollback cannot rewrite earlier cards: emit preview once.
+		if !m.shellNativeFlushed[id] {
+			if full, ok := m.shellOutputs[id]; ok && strings.TrimSpace(full) != "" {
+				meta, hasMeta := m.shellMeta[id]
+				ok := true
+				dur := int64(-1)
+				if hasMeta {
+					ok = meta.ok
+					dur = meta.durationMs
+				}
+				if block := renderToolOutputPreview(full, m.width, toolCallPreviewMaxLines); block != "" {
+					m.commitLine(block)
+				}
+				if line := toolOutcomeLine(ok, "", dur); line != "" {
+					m.commitLine(line)
+				}
 			}
+			m.shellNativeFlushed[id] = true
 		}
 		if m.toolStreamID == id {
 			m.toolStreamIdx = -1
@@ -2509,18 +2534,16 @@ func (m *chatTUI) collapseToolOutput(id string) {
 		return
 	}
 	idx := -1
-	active := m.toolStreamIdx >= 0 && id != "" && m.toolStreamID == id
+	active := m.toolStreamIdx >= 0 && m.toolStreamID == id
 	if active {
 		idx = m.toolStreamIdx
 	} else if i, ok := m.shellTranscriptIdx[id]; ok && i >= 0 && i < len(m.transcript) && m.transcriptSources[i].kind == transcriptSourceFixed {
 		idx = i
 	}
-	if idx < 0 || idx >= len(m.transcript) {
-		return
+	if idx >= 0 && idx < len(m.transcript) {
+		// Remove the finished live block; removeTranscriptBlock shifts later indexes.
+		m.removeTranscriptBlock(idx)
 	}
-	// Remove the finished live block; removeTranscriptBlock shifts every later
-	// recorded index (including the active stream's) down by one.
-	m.removeTranscriptBlock(idx)
 	if active {
 		m.toolStreamIdx = -1
 		m.toolStreamID = ""
@@ -2528,16 +2551,19 @@ func (m *chatTUI) collapseToolOutput(id string) {
 		m.toolPartial = ""
 		m.toolLineCount = 0
 	}
-	// Re-anchor Ctrl+B expansion on the tool's card block.
+	// Re-anchor Ctrl+B and paint collapsed preview on the card.
 	if cardIdx, ok := m.toolCardIdx[id]; ok && cardIdx >= 0 && cardIdx < len(m.transcript) {
 		m.shellTranscriptIdx[id] = cardIdx
 		m.shellExpanded[id] = false
+		if cardIdx < len(m.transcriptSources) {
+			src := m.transcriptSources[cardIdx]
+			m.setLiveBlock(cardIdx, m.renderTranscriptSource(src, m.width, markerNone))
+		}
 	}
 }
 
-// toggleShellOutput expands or collapses the output of the most recent shell
-// command. Expansion is anchored to the tool card block: collapsed shows only
-// the card; expanded renders the card plus its output under the ⎿ connector.
+// toggleShellOutput expands or collapses shell output on the card block.
+// Collapsed = ≤5-line preview + outcome; expanded = full output + outcome.
 // Called on Ctrl+B.
 func (m *chatTUI) toggleShellOutput() {
 	var lastID string
@@ -2583,6 +2609,8 @@ func (m *chatTUI) beginToolRunning(id string) {
 	// output or inherit the previous run's expansion.
 	delete(m.shellOutputs, id)
 	delete(m.shellExpanded, id)
+	delete(m.shellMeta, id)
+	delete(m.shellNativeFlushed, id)
 	m.toolStreamStart = time.Now()
 	m.toolStreamFrame = 0
 	if m.nativeScrollback {
@@ -4064,6 +4092,8 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 			// the previous run's output or expansion state.
 			delete(m.shellOutputs, e.Tool.ID)
 			delete(m.shellExpanded, e.Tool.ID)
+			delete(m.shellMeta, e.Tool.ID)
+			delete(m.shellNativeFlushed, e.Tool.ID)
 			if isExploreCoalesceTool(e.Tool.Name) {
 				m.appendExploreTool(e.Tool.ID, e.Tool.Name, e.Tool.Args)
 				m.beginToolRunning(e.Tool.ID)
@@ -4081,9 +4111,22 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		m.streamToolOutput(e.Tool.ID, e.Tool.Output)
 
 	case event.ToolResult:
-		// A successful result is silent (it only feeds the model); a blocked/failed
-		// call surfaces a red "⏺ Verb ⊘ <reason>" card. The live output block is
-		// removed entirely so only the card line remains (compact scrollback).
+		// Capture full output + outcome so the card can show a ≤5-line preview
+		// (and Ctrl+B can expand). Then drop the live stream canvas.
+		if e.Tool.Name == "bash" || strings.HasPrefix(e.Tool.ID, "shell-") {
+			if e.Tool.Output != "" {
+				m.shellOutputs[e.Tool.ID] = e.Tool.Output
+			}
+			dur := e.Tool.DurationMs
+			if dur == 0 && !m.toolStreamStart.IsZero() && m.toolStreamID == e.Tool.ID {
+				dur = time.Since(m.toolStreamStart).Milliseconds()
+			}
+			m.shellMeta[e.Tool.ID] = shellRunMeta{
+				ok:         e.Tool.Err == "",
+				durationMs: dur,
+				err:        e.Tool.Err,
+			}
+		}
 		m.collapseToolOutput(e.Tool.ID)
 		if e.Tool.Name == "todo_write" && e.Tool.Err == "" {
 			m.todoArgs = e.Tool.Args

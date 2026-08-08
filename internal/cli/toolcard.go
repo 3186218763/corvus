@@ -365,7 +365,14 @@ func editedCard(name, args string, width int) string {
 	return head + " " + clampPlain(path, max(avail, 4))
 }
 
-// bashToolCard renders "  • Ran <highlighted command>".
+// Ran command wrap / output gutters (Codex EXEC_DISPLAY_LAYOUT).
+const (
+	ranCmdPipePrefix        = "  │ "
+	toolCallPreviewMaxLines = 5
+	ranCmdContinuationMax   = 2
+)
+
+// bashToolCard renders "  • Ran <highlighted command>" with │ continuations.
 func bashToolCard(name, args string, width int) string {
 	cmd := strings.TrimSpace(toolArg(name, args))
 	label := "Ran"
@@ -375,27 +382,82 @@ func bashToolCard(name, args string, width int) string {
 	lines := strings.Split(cmd, "\n")
 	headW := width - 4 - len([]rune(label)) - 1 // "  • Ran "
 	first := highlightBash(clampPlain(lines[0], max(headW, 4)))
-	rest := make([]string, 0, len(lines)-1)
-	for _, ln := range lines[1:] {
-		rest = append(rest, highlightBash(clampPlain(ln, max(width-len([]rune(connector)), 4))))
-	}
 	head := "  " + toolBullet() + " " + bold(label) + " " + first
-	if len(rest) == 0 {
+	if len(lines) == 1 {
 		return head
 	}
-	return head + "\n" + connectorBlock(rest)
+	rest := lines[1:]
+	extra := 0
+	if len(rest) > ranCmdContinuationMax {
+		extra = len(rest) - ranCmdContinuationMax
+		rest = rest[:ranCmdContinuationMax]
+	}
+	pipeW := len([]rune(ranCmdPipePrefix))
+	var out strings.Builder
+	out.WriteString(head)
+	for _, ln := range rest {
+		out.WriteByte('\n')
+		out.WriteString(dim(ranCmdPipePrefix))
+		out.WriteString(highlightBash(clampPlain(ln, max(width-pipeW, 4))))
+	}
+	if extra > 0 {
+		out.WriteByte('\n')
+		out.WriteString(dim(ranCmdPipePrefix))
+		out.WriteString(dim(fmt.Sprintf("… +%d lines", extra)))
+	}
+	return out.String()
 }
 
-// renderToolCardExpanded renders the tool card followed by its output under └.
-func renderToolCardExpanded(name, args, output string, width int) string {
+// renderToolCardCollapsed is the default finished card: short preview + outcome.
+func renderToolCardCollapsed(name, args, output string, width int, ok bool, durationMs int64) string {
 	card := toolCard(name, args, width)
-	if block := renderToolOutputBlock(output, width); block != "" {
-		return card + "\n" + block
+	if block := renderToolOutputPreview(output, width, toolCallPreviewMaxLines); block != "" {
+		card += "\n" + block
+	}
+	if line := toolOutcomeLine(ok, "", durationMs); line != "" {
+		card += "\n" + line
 	}
 	return card
 }
 
-// renderToolOutputBlock renders output under the └ connector.
+// renderToolCardExpanded renders the tool card plus full output under └.
+func renderToolCardExpanded(name, args, output string, width int) string {
+	return renderToolCardExpandedWithOutcome(name, args, output, width, true, 0)
+}
+
+func renderToolCardExpandedWithOutcome(name, args, output string, width int, ok bool, durationMs int64) string {
+	card := toolCard(name, args, width)
+	if block := renderToolOutputBlock(output, width); block != "" {
+		card += "\n" + block
+	}
+	if line := toolOutcomeLine(ok, "", durationMs); line != "" {
+		card += "\n" + line
+	}
+	return card
+}
+
+// renderToolOutputPreview is the default ≤N-line output nest under └.
+func renderToolOutputPreview(output string, width, maxLines int) string {
+	if strings.TrimSpace(output) == "" {
+		return ""
+	}
+	if maxLines < 1 {
+		maxLines = toolCallPreviewMaxLines
+	}
+	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+	show := min(len(lines), maxLines)
+	rendered := make([]string, show)
+	bodyW := max(width-len([]rune(connector)), 4)
+	for i := 0; i < show; i++ {
+		rendered[i] = dim(clampPlain(lines[i], bodyW))
+	}
+	if len(lines) > maxLines {
+		rendered = append(rendered, dim(fmt.Sprintf("… +%d lines", len(lines)-maxLines)))
+	}
+	return connectorBlock(rendered)
+}
+
+// renderToolOutputBlock renders full output under the └ connector (Ctrl+B).
 func renderToolOutputBlock(output string, width int) string {
 	if strings.TrimSpace(output) == "" {
 		return ""
@@ -410,6 +472,31 @@ func renderToolOutputBlock(output string, width int) string {
 		rendered = append(rendered, dim(fmt.Sprintf("… %d more lines", len(lines)-shellExpandMaxLines)))
 	}
 	return connectorBlock(rendered)
+}
+
+// toolOutcomeLine renders "  ✓ · 0.41s" / "  ✗ · 1.5s". durationMs < 0 omits time.
+func toolOutcomeLine(ok bool, exitHint string, durationMs int64) string {
+	var mark string
+	if ok {
+		mark = themeFg(activeCLITheme.success, bold("✓"))
+	} else {
+		mark = themeFg(activeCLITheme.danger, bold("✗"))
+		if exitHint != "" {
+			mark += " " + dim("("+exitHint+")")
+		}
+	}
+	if durationMs < 0 {
+		return "  " + mark
+	}
+	sec := float64(durationMs) / 1000
+	// Compact like Codex: 0.41s / 1.5s
+	var dur string
+	if sec < 10 {
+		dur = fmt.Sprintf("%.2fs", sec)
+	} else {
+		dur = fmt.Sprintf("%.1fs", sec)
+	}
+	return "  " + mark + dim(" · "+dur)
 }
 
 // toolHead builds a bold, category-tinted verb + optional arg for diff headers.

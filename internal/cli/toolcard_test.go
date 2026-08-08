@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -29,8 +30,40 @@ func TestBashToolCardHighlightsAndContinues(t *testing.T) {
 		t.Fatalf("command should be syntax-highlighted, got %q", lines[0])
 	}
 	plain1 := ansi.Strip(lines[1])
-	if !strings.Contains(plain1, "└") || !strings.Contains(plain1, "go test ./...") {
-		t.Fatalf("continuation should use the └ gutter, got %q", lines[1])
+	if !strings.Contains(plain1, "│") || !strings.Contains(plain1, "go test ./...") {
+		t.Fatalf("command wrap should use │ gutter, got %q", lines[1])
+	}
+	if strings.Contains(plain1, "└") {
+		t.Fatalf("command wrap must not use └ (reserved for output), got %q", plain1)
+	}
+}
+
+func TestRenderToolOutputPreviewCapsFiveLines(t *testing.T) {
+	var b strings.Builder
+	for i := 0; i < 10; i++ {
+		b.WriteString(fmt.Sprintf("line-%d\n", i))
+	}
+	block := renderToolOutputPreview(b.String(), 80, 5)
+	plain := ansi.Strip(block)
+	if strings.Count(plain, "line-") > 5 {
+		t.Fatalf("preview should cap at 5 content lines, got %q", plain)
+	}
+	if !strings.Contains(plain, "└") {
+		t.Fatalf("output should start with └, got %q", plain)
+	}
+	if !strings.Contains(plain, "+") && !strings.Contains(plain, "…") {
+		t.Fatalf("want ellipsis for omitted lines, got %q", plain)
+	}
+}
+
+func TestToolOutcomeLineSuccessAndFail(t *testing.T) {
+	ok := ansi.Strip(toolOutcomeLine(true, "", 410))
+	if !strings.Contains(ok, "✓") {
+		t.Fatalf("success marker: %q", ok)
+	}
+	bad := ansi.Strip(toolOutcomeLine(false, "1", 1500))
+	if !strings.Contains(bad, "✗") {
+		t.Fatalf("fail marker: %q", bad)
 	}
 }
 

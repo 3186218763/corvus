@@ -9,9 +9,9 @@ import (
 
 // TestParallelBashCallsStayCompact is the compact parallel-Bash regression:
 // three parallel Bash(ls) calls in one turn, ids "call_<n>" (no "shell-"
-// prefix), each streams 22 lines then finishes. Each card's live block is
-// removed when ITS OWN result lands, leaving only the three cards — no
-// "└ N lines" summaries, no stacked output slots, no negative counts.
+// prefix), each streams 22 lines then finishes. Each card's live stream is
+// removed when ITS OWN result lands, leaving only the three cards with short
+// previews — no "N lines" count summaries, no stacked live slots.
 func TestParallelBashCallsStayCompact(t *testing.T) {
 	m := newTestChatTUI()
 	ids := []string{"call_1", "call_2", "call_3"}
@@ -31,10 +31,14 @@ func TestParallelBashCallsStayCompact(t *testing.T) {
 	}
 	transcript := m.transcript
 	joined := strings.Join(transcript, "\n")
-	for _, banned := range []string{"lines", "└", "line"} {
+	for _, banned := range []string{"0 lines", "-1 lines"} {
 		if strings.Contains(joined, banned) {
 			t.Fatalf("compact transcript must not contain %q:\n%s", banned, joined)
 		}
+	}
+	// Preview is capped; ellipsis should appear for 22-line dumps.
+	if !strings.Contains(joined, "…") && !strings.Contains(joined, "+") {
+		t.Fatalf("long output should be ellipsized in preview:\n%s", joined)
 	}
 	if len(transcript) != 3 {
 		t.Fatalf("only the three cards should remain, got %d blocks:\n%s", len(transcript), joined)
@@ -52,7 +56,7 @@ func TestParallelBashCallsStayCompact(t *testing.T) {
 // TestNonShellToolsLateResultsLeaveOnlyCards is the no-streaming compact
 // variant: a second Bash dispatches before the first emits any ToolProgress,
 // and the first's result lands last. No live slots or count summaries may
-// remain — just the two cards in dispatch order.
+// remain — just the two cards (with short previews) in dispatch order.
 func TestNonShellToolsLateResultsLeaveOnlyCards(t *testing.T) {
 	m := newTestChatTUI()
 	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "call_a", Name: "bash", Args: `{"command":"echo a"}`}})
@@ -63,10 +67,14 @@ func TestNonShellToolsLateResultsLeaveOnlyCards(t *testing.T) {
 
 	transcript := m.transcript
 	joined := strings.Join(transcript, "\n")
-	for _, banned := range []string{"lines", "└", "second", "third"} {
+	for _, banned := range []string{"0 lines", "-1 lines"} {
 		if strings.Contains(joined, banned) {
 			t.Fatalf("transcript must not contain %q:\n%s", banned, joined)
 		}
+	}
+	// Short multi-line preview is expected under └.
+	if !strings.Contains(joined, "second") || !strings.Contains(joined, "third") {
+		t.Fatalf("card preview should include result lines:\n%s", joined)
 	}
 	if len(transcript) != 2 {
 		t.Fatalf("only the two cards should remain, got %d blocks:\n%s", len(transcript), joined)

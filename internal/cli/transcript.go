@@ -256,8 +256,21 @@ func (m *chatTUI) renderTranscriptSource(source transcriptSource, terminalWidth 
 	case transcriptSourceReasoning:
 		return reasoningBlock(source.raw, terminalWidth, source.maxLines)
 	case transcriptSourceToolCard:
-		if source.shellID != "" && m.shellExpanded[source.shellID] {
-			return renderToolCardExpanded(source.raw, source.aux, m.shellOutputs[source.shellID], terminalWidth)
+		if source.shellID != "" {
+			out := m.shellOutputs[source.shellID]
+			meta, hasMeta := m.shellMeta[source.shellID]
+			if out != "" || hasMeta {
+				ok := true
+				dur := int64(-1)
+				if hasMeta {
+					ok = meta.ok
+					dur = meta.durationMs
+				}
+				if m.shellExpanded[source.shellID] {
+					return renderToolCardExpandedWithOutcome(source.raw, source.aux, out, terminalWidth, ok, dur)
+				}
+				return renderToolCardCollapsed(source.raw, source.aux, out, terminalWidth, ok, dur)
+			}
 		}
 		return toolCard(source.raw, source.aux, terminalWidth)
 	case transcriptSourceDiff:
