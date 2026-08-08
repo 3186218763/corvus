@@ -168,6 +168,52 @@ func TestVerboseReasoningKeepsTextWithoutSummary(t *testing.T) {
 	}
 }
 
+// TestVerboseReasoningKeepsOnlyLatestTurn proves that when showReasoning is on,
+// starting a new turn's thinking drops prior turns' reasoning blocks so the
+// transcript never accumulates every historical thought.
+func TestVerboseReasoningKeepsOnlyLatestTurn(t *testing.T) {
+	m := newTestChatTUI()
+	m.showReasoning = true
+	m.width = 80
+
+	// Turn 1
+	m.ingestEvent(event.Event{Kind: event.Reasoning, Text: "old thought A"})
+	m.ingestEvent(event.Event{Kind: event.Text, Text: "Answer one"})
+	m.ingestEvent(event.Event{Kind: event.Message})
+	if countReasoningSources(m) != 1 {
+		t.Fatalf("after turn 1 want 1 reasoning block, got %d sources=%v", countReasoningSources(m), m.transcriptSources)
+	}
+	if !strings.Contains(strings.Join(m.transcript, "\n"), "old thought A") {
+		t.Fatalf("turn 1 reasoning missing: %v", m.transcript)
+	}
+
+	// Turn 2 — should prune turn 1 reasoning
+	m.ingestEvent(event.Event{Kind: event.Reasoning, Text: "new thought B"})
+	m.ingestEvent(event.Event{Kind: event.Text, Text: "Answer two"})
+	m.ingestEvent(event.Event{Kind: event.Message})
+
+	if n := countReasoningSources(m); n != 1 {
+		t.Fatalf("after turn 2 want exactly 1 reasoning block, got %d transcript=%v", n, m.transcript)
+	}
+	joined := strings.Join(m.transcript, "\n")
+	if strings.Contains(joined, "old thought A") {
+		t.Fatalf("old reasoning should be pruned, got:\n%s", joined)
+	}
+	if !strings.Contains(joined, "new thought B") {
+		t.Fatalf("latest reasoning should remain, got:\n%s", joined)
+	}
+}
+
+func countReasoningSources(m chatTUI) int {
+	n := 0
+	for _, s := range m.transcriptSources {
+		if s.kind == transcriptSourceReasoning {
+			n++
+		}
+	}
+	return n
+}
+
 // TestIngestEventFlushesAnswer confirms an event line (e.g. a tool dispatch)
 // finalizes the answer streamed before it, preserving order in scrollback.
 func TestIngestEventFlushesAnswer(t *testing.T) {

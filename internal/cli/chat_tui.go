@@ -2389,15 +2389,37 @@ func (m *chatTUI) tickToolRunning() {
 	m.setLiveBlock(m.toolStreamIdx, connectorBlock([]string{dim(fmt.Sprintf(i18n.M.ChatToolWorkingFmt, frame, formatElapsedFixed(secs)))}))
 }
 
+// pruneOlderReasoningBlocks removes committed reasoning transcript blocks so
+// the history only shows the latest thinking. keep is the index to retain
+// (-1 removes every reasoning block). removeTranscriptBlock already shifts
+// live reasoning/answer/tool indices.
+func (m *chatTUI) pruneOlderReasoningBlocks(keep int) {
+	m.ensureTranscriptSources()
+	for i := len(m.transcriptSources) - 1; i >= 0; i-- {
+		if i == keep {
+			continue
+		}
+		if m.transcriptSources[i].kind == transcriptSourceReasoning {
+			m.removeTranscriptBlock(i)
+			if keep > i {
+				keep--
+			}
+		}
+	}
+}
+
 // commitReasoning closes the live thinking block: the "▎ thinking…" marker and
 // the streamed text below it are removed so no "thought for Ns" summary stays
-// in the transcript. Verbose mode keeps the full thinking text. It reports
-// whether any reasoning block remains visible (used to keep the answer spacing
-// clean when the whole block collapses).
+// in the transcript. Verbose mode keeps the full thinking text for the *latest*
+// turn only (older reasoning blocks are pruned). It reports whether any
+// reasoning block remains visible (used to keep the answer spacing clean when
+// the whole block collapses).
 func (m *chatTUI) commitReasoning() bool {
 	if m.reasoningNative {
 		kept := m.showReasoning && strings.TrimSpace(m.reasoning.String()) != ""
 		if kept {
+			// Native scrollback cannot rewrite prior printed turns; only the
+			// latest kept block is meaningful for the in-memory path below.
 			m.commitSpacer()
 			m.commitLine(reasoningBlock(m.reasoning.String(), m.width, 0))
 		}
@@ -2414,6 +2436,8 @@ func (m *chatTUI) commitReasoning() bool {
 	if m.reasoningTextIdx >= 0 {
 		if m.showReasoning && strings.TrimSpace(m.reasoning.String()) != "" {
 			raw := m.reasoning.String()
+			// Drop previous turns' thinking before locking in this turn's text.
+			m.pruneOlderReasoningBlocks(m.reasoningTextIdx)
 			m.setTranscriptBlock(m.reasoningTextIdx, reasoningBlock(raw, m.width, 0), transcriptSource{
 				kind: transcriptSourceReasoning, raw: raw,
 			})
@@ -3715,6 +3739,9 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 			break
 		}
 		if m.reasoningLineIdx < 0 {
+			// Only the latest thinking stays in history: drop any prior verbose
+			// reasoning blocks before opening a new live one.
+			m.pruneOlderReasoningBlocks(-1)
 			// Show the marker plus a live text block the moment thinking starts; the
 			// text streams in below it and the block collapses to "thought for Ns"
 			// when it closes (kept expanded only in verbose mode).
