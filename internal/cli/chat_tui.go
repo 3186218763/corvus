@@ -2033,14 +2033,15 @@ func (m *chatTUI) commitLine(s string) {
 	m.appendTranscriptBlock(s, transcriptSource{kind: transcriptSourceFixed})
 }
 
-// commitSpacer separates the next block (a thinking marker or a tool line) from
-// the previous one with a single blank line, skipping it at the top of the
-// transcript or when a blank already trails so spacers never double up.
-func (m *chatTUI) commitSpacer() {
+// ensureBlank guarantees a single blank line before the next cell.
+// No-op at top of transcript or when a blank already trails.
+func (m *chatTUI) ensureBlank() {
 	if n := len(m.transcript); n > 0 && strings.TrimSpace(m.transcript[n-1]) != "" {
 		m.commitLine("")
 	}
 }
+
+func (m *chatTUI) commitSpacer() { m.ensureBlank() }
 
 // bottomRows is the terminal-row height of the pinned bottom region: any open
 // bottom panels (todo / approval / chooser / rewind / completion), the composer

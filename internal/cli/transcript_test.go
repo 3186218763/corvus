@@ -550,6 +550,39 @@ func TestCommitSpacerNeverDoubleSpaces(t *testing.T) {
 	}
 }
 
+func TestEnsureBlankInsertsSingleBlankBetweenCells(t *testing.T) {
+	m := newTestChatTUI()
+	m.commitLine("cell-a")
+	m.ensureBlank()
+	m.commitLine("cell-b")
+	joined := strings.Join(m.transcript, "\n")
+	if !strings.Contains(joined, "cell-a\n\ncell-b") {
+		t.Fatalf("want exactly one blank between cells, got %q", m.transcript)
+	}
+	if strings.Contains(joined, "\n\n\n") {
+		t.Fatalf("double blank: %q", m.transcript)
+	}
+}
+
+func TestEnsureBlankNoOpWhenAlreadyBlank(t *testing.T) {
+	m := newTestChatTUI()
+	m.commitLine("a")
+	m.commitLine("")
+	n := len(m.transcript)
+	m.ensureBlank()
+	if len(m.transcript) != n {
+		t.Fatalf("ensureBlank must not add second blank, got %v", m.transcript)
+	}
+}
+
+func TestEnsureBlankNoOpOnEmptyTranscript(t *testing.T) {
+	m := newTestChatTUI()
+	m.ensureBlank()
+	if len(m.transcript) != 0 {
+		t.Fatalf("empty transcript should stay empty, got %v", m.transcript)
+	}
+}
+
 func TestAssistantMarkdownHistoryDropsName(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
