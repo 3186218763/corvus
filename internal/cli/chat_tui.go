@@ -192,7 +192,11 @@ type chatTUI struct {
 	// toolCardIdx maps a dispatched tool id to its card block index, so
 	// completion can re-anchor Ctrl+B expansion to the card.
 	toolCardIdx map[string]int
-	// toolStreamStart / toolStreamFrame drive the "⎿ working · Ns" line shown
+	// exploreIdx is the transcript index of the open • Explored cell, or -1.
+	// Consecutive read-category tools append leaves and re-render that block.
+	exploreIdx    int
+	exploreLeaves []exploreLeaf
+	// toolStreamStart / toolStreamFrame drive the "└ working · Ns" line shown
 	// under a dispatched tool that hasn't produced output yet, so a slow tool
 	// reads as making progress rather than frozen.
 	toolStreamStart time.Time
@@ -603,6 +607,7 @@ func newChatTUI(ctrl control.SessionAPI, missing string, eventCh chan event.Even
 		reasoningTextIdx:     -1,
 		answerIdx:            -1,
 		toolStreamIdx:        -1,
+		exploreIdx:           -1,
 		reasoning:            &strings.Builder{},
 		pending:              &strings.Builder{},
 		pendingCommit:        &commitBuf,
@@ -647,9 +652,9 @@ func configureChatTextarea(ti *textarea.Model) {
 			return ""
 		}
 		if info.Focused {
-			return accent("❯ ")
+			return accent("› ")
 		}
-		return dim("❯ ")
+		return dim("› ")
 	})
 	ti.CharLimit = 16384
 	// The prompt and real terminal cursor already show where typing starts. Keep
@@ -657,12 +662,11 @@ func configureChatTextarea(ti *textarea.Model) {
 	// placeholder through refreshInputPlaceholder.
 	ti.Placeholder = ""
 	ti.DynamicHeight = true
-	// Three-row idle field: a bit taller than a slim two-line box so the
-	// composer reads as a comfortable input surface (grows up to maxInputRows).
-	ti.MinHeight = 3
+	// Two-row idle field (Codex density); grows with content up to maxInputRows.
+	ti.MinHeight = 2
 	ti.MaxHeight = maxInputRows
 	ti.MaxContentHeight = ti.CharLimit
-	ti.SetHeight(3)
+	ti.SetHeight(2)
 	ti.ShowLineNumbers = false
 	applyTextareaTheme(ti)
 	// Use the real terminal cursor (not a styled virtual one) so View can place
@@ -1537,6 +1541,7 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.turnTokens = 0
 				m.pendingRestore = line
 				m.bubbleStartIdx = len(m.transcript)
+				m.flushExploreCard()
 				m.commitLine("")
 				m.commitTranscriptSource(transcriptSource{
 					kind: transcriptSourceUser, raw: line, planMode: m.planMode,
@@ -1903,6 +1908,54 @@ func (m *chatTUI) clearTranscriptDisplay() {
 	m.toolTail = nil
 	m.toolPartial = ""
 	m.toolLineCount = 0
+	m.flushExploreCard()
+}
+
+// flushExploreCard closes the open • Explored coalesce buffer so the next
+// non-read tool or user turn starts a fresh cell.
+func (m *chatTUI) flushExploreCard() {
+	m.exploreIdx = -1
+	m.exploreLeaves = nil
+}
+
+// appendExploreTool merges a read-category tool into the open Explored cell
+// (or opens one). All tool ids in the group share the same transcript index.
+func (m *chatTUI) appendExploreTool(id, name, args string) {
+	leaf := exploreLeafFrom(name, args)
+	// exploreIdx zero-value is 0; require non-empty leaves so a fresh TUI
+	// (exploreIdx unset) never overwrites transcript[0].
+	open := m.exploreIdx >= 0 && m.exploreIdx < len(m.transcript) && len(m.exploreLeaves) > 0
+	if !open {
+		m.exploreLeaves = []exploreLeaf{leaf}
+		m.commitTranscriptSource(transcriptSource{
+			kind:    transcriptSourceToolCard,
+			raw:     "explored",
+			aux:     encodeExploreLeaves(m.exploreLeaves),
+			shellID: id,
+		})
+		m.exploreIdx = len(m.transcript) - 1
+		if id != "" {
+			m.toolCardIdx[id] = m.exploreIdx
+		}
+		return
+	}
+	m.exploreLeaves = append(m.exploreLeaves, leaf)
+	if id != "" {
+		m.toolCardIdx[id] = m.exploreIdx
+	}
+	m.reRenderExploreCard()
+}
+
+// reRenderExploreCard rewrites the open Explored transcript block from leaves.
+func (m *chatTUI) reRenderExploreCard() {
+	if m.exploreIdx < 0 || m.exploreIdx >= len(m.transcript) {
+		return
+	}
+	aux := encodeExploreLeaves(m.exploreLeaves)
+	src := transcriptSource{kind: transcriptSourceToolCard, raw: "explored", aux: aux}
+	block := exploredCard(m.exploreLeaves, m.width)
+	m.setTranscriptBlock(m.exploreIdx, block, src)
+	m.transcriptDirty = true
 }
 
 // scrollChunkHeight is the largest block (in lines) finalize prints at once in
@@ -2408,18 +2461,14 @@ func (m *chatTUI) pruneOlderReasoningBlocks(keep int) {
 	}
 }
 
-// commitReasoning closes the live thinking block: the "▎ thinking…" marker and
-// the streamed text below it are removed so no "thought for Ns" summary stays
-// in the transcript. Verbose mode keeps the full thinking text for the *latest*
-// turn only (older reasoning blocks are pruned). It reports whether any
-// reasoning block remains visible (used to keep the answer spacing clean when
-// the whole block collapses).
+// commitReasoning closes any live thinking surface. Default mode never put a
+// wall in the transcript (ambient working line only). Verbose mode keeps the
+// full thinking text for the *latest* turn only. Reports whether a reasoning
+// block remains visible (answer spacing).
 func (m *chatTUI) commitReasoning() bool {
 	if m.reasoningNative {
 		kept := m.showReasoning && strings.TrimSpace(m.reasoning.String()) != ""
 		if kept {
-			// Native scrollback cannot rewrite prior printed turns; only the
-			// latest kept block is meaningful for the in-memory path below.
 			m.commitSpacer()
 			m.commitLine(reasoningBlock(m.reasoning.String(), m.width, 0))
 		}
@@ -2429,39 +2478,65 @@ func (m *chatTUI) commitReasoning() bool {
 		m.thinkStart = time.Time{}
 		return kept
 	}
-	if m.reasoningLineIdx < 0 {
+	// Default (non-verbose): no transcript rows for thinking.
+	if !m.showReasoning {
+		if m.reasoningTextIdx >= 0 {
+			m.removeTranscriptBlock(m.reasoningTextIdx)
+		}
+		if m.reasoningLineIdx >= 0 {
+			m.removeTranscriptBlock(m.reasoningLineIdx)
+		}
+		m.reasoning.Reset()
+		m.reasoningView = m.reasoningView[:0]
+		m.reasoningLineIdx = -1
+		m.reasoningTextIdx = -1
+		m.thinkStart = time.Time{}
+		m.transcriptDirty = true
 		return false
 	}
+	// Verbose: keep full text body if any.
 	kept := false
-	if m.reasoningTextIdx >= 0 {
-		if m.showReasoning && strings.TrimSpace(m.reasoning.String()) != "" {
-			raw := m.reasoning.String()
-			// Drop previous turns' thinking before locking in this turn's text.
+	if strings.TrimSpace(m.reasoning.String()) != "" {
+		raw := m.reasoning.String()
+		if m.reasoningTextIdx >= 0 {
 			m.pruneOlderReasoningBlocks(m.reasoningTextIdx)
 			m.setTranscriptBlock(m.reasoningTextIdx, reasoningBlock(raw, m.width, 0), transcriptSource{
 				kind: transcriptSourceReasoning, raw: raw,
 			})
 			kept = true
 		} else {
-			m.removeTranscriptBlock(m.reasoningTextIdx)
+			m.pruneOlderReasoningBlocks(-1)
+			m.commitSpacer()
+			m.commitLine(reasoningBlock(raw, m.width, 0))
+			// commitLine doesn't set source kind; fix last block if possible.
+			if idx := len(m.transcript) - 1; idx >= 0 {
+				m.setTranscriptBlock(idx, reasoningBlock(raw, m.width, 0), transcriptSource{
+					kind: transcriptSourceReasoning, raw: raw,
+				})
+			}
+			kept = true
 		}
+	} else if m.reasoningTextIdx >= 0 {
+		m.removeTranscriptBlock(m.reasoningTextIdx)
 	}
-	m.removeTranscriptBlock(m.reasoningLineIdx)
+	if m.reasoningLineIdx >= 0 {
+		m.removeTranscriptBlock(m.reasoningLineIdx)
+	}
 	m.transcriptDirty = true
 	m.reasoning.Reset()
 	m.reasoningView = m.reasoningView[:0]
 	m.reasoningLineIdx = -1
 	m.reasoningTextIdx = -1
+	m.thinkStart = time.Time{}
 	return kept
 }
 
 // commitReasoningBeforeAnswer closes a real reasoning block and leaves exactly
 // one blank transcript row before the assistant answer — but only when a
-// reasoning block is still visible (verbose mode), because the collapsed
-// thinking marker is removed entirely. Answers that start without reasoning
-// keep their existing compact placement.
+// reasoning block is still visible (verbose mode). Default ambient thinking
+// leaves no transcript rows.
 func (m *chatTUI) commitReasoningBeforeAnswer() {
-	hadReasoning := m.reasoningNative || m.reasoningLineIdx >= 0
+	hadReasoning := m.reasoningNative || m.reasoningLineIdx >= 0 || m.reasoningTextIdx >= 0 || m.reasoning.Len() > 0
 	kept := m.commitReasoning()
 	if hadReasoning && kept {
 		m.commitSpacer()
@@ -3653,6 +3728,7 @@ func (m *chatTUI) startControllerTurn(displayed, restore string, start func()) t
 	m.pendingRestore = restore
 	m.pendingPastes = m.pasteLabelsIn(restore)
 	m.bubbleStartIdx = len(m.transcript)
+	m.flushExploreCard()
 	m.commitLine("") // blank line separating turns
 	m.commitTranscriptSource(transcriptSource{
 		kind: transcriptSourceUser, raw: displayed, planMode: m.planMode,
@@ -3730,30 +3806,46 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 	}
 	switch e.Kind {
 	case event.Reasoning:
+		// Default: buffer full text for verbose /debug, but do not paint a
+		// "▎ thinking…" wall into the transcript. Live progress is the ambient
+		// working line above the composer (Codex density).
+		if m.thinkStart.IsZero() {
+			m.thinkStart = time.Now()
+		}
+		m.reasoning.WriteString(e.Text)
 		if m.nativeScrollback {
-			if !m.reasoningNative {
-				m.thinkStart = time.Now()
-				m.reasoningNative = true
-			}
-			m.streamReasoning(e.Text)
+			m.reasoningNative = true
+			// Native scrollback still buffers only; verbose commit may print later.
 			break
 		}
-		if m.reasoningLineIdx < 0 {
-			// Only the latest thinking stays in history: drop any prior verbose
-			// reasoning blocks before opening a new live one.
-			m.pruneOlderReasoningBlocks(-1)
-			// Show the marker plus a live text block the moment thinking starts; the
-			// text streams in below it and the block collapses to "thought for Ns"
-			// when it closes (kept expanded only in verbose mode).
-			m.commitSpacer()
-			m.thinkStart = time.Now()
-			m.reasoningLineIdx = len(m.transcript)
-			m.commitLine(dim("  ▎ " + i18n.M.ChatThinking))
-			m.reasoningTextIdx = len(m.transcript)
-			m.commitLine("")
-			m.reasoningView = m.reasoningView[:0]
+		// Verbose live stream: show trailing body without the old ▎ marker wall.
+		if m.showReasoning {
+			if m.reasoningTextIdx < 0 {
+				m.pruneOlderReasoningBlocks(-1)
+				m.commitSpacer()
+				m.reasoningTextIdx = len(m.transcript)
+				m.commitLine("")
+				m.reasoningView = m.reasoningView[:0]
+			}
+			// streamReasoning expects reasoning already appended once; undo double write
+			// by only streaming the chunk into the view (reasoning already has full text).
+			chunk := e.Text
+			if m.reasoningTextIdx >= 0 {
+				m.reasoningView = append(m.reasoningView, chunk...)
+				if len(m.reasoningView) > reasoningViewMax {
+					drop := len(m.reasoningView) - reasoningViewMax
+					for drop < len(m.reasoningView) && !utf8.RuneStart(m.reasoningView[drop]) {
+						drop++
+					}
+					m.reasoningView = m.reasoningView[:copy(m.reasoningView, m.reasoningView[drop:])]
+				}
+				raw := string(m.reasoningView)
+				m.setTranscriptBlock(m.reasoningTextIdx, reasoningBlock(raw, m.width, reasoningTailLines), transcriptSource{
+					kind: transcriptSourceReasoning, raw: raw, maxLines: reasoningTailLines,
+				})
+				m.transcriptDirty = true
+			}
 		}
-		m.streamReasoning(e.Text)
 
 	case event.Text:
 		m.commitReasoningBeforeAnswer()
@@ -3781,6 +3873,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 			// No longer a tool, but guard anyway: the plan is the assistant's reply.
 		default:
 			if block := diffBlock(e.Tool.Name, e.Tool.Args, e.Tool.FileDiff, transcriptContentWidth(m.width, m.nativeScrollback), m.diffMaxLines); block != nil {
+				m.flushExploreCard()
 				for _, ln := range block {
 					m.commitLine(ln)
 				}
@@ -3790,6 +3883,12 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 			// the previous run's output or expansion state.
 			delete(m.shellOutputs, e.Tool.ID)
 			delete(m.shellExpanded, e.Tool.ID)
+			if isExploreCoalesceTool(e.Tool.Name) {
+				m.appendExploreTool(e.Tool.ID, e.Tool.Name, e.Tool.Args)
+				m.beginToolRunning(e.Tool.ID)
+				break
+			}
+			m.flushExploreCard()
 			m.commitTranscriptSource(transcriptSource{
 				kind: transcriptSourceToolCard, raw: e.Tool.Name, aux: e.Tool.Args, shellID: e.Tool.ID,
 			})
@@ -3810,7 +3909,8 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		}
 		if e.Tool.Err != "" {
 			m.finalizeStreamed()
-			m.commitLine("  " + red("●") + " " + bold(toolDisplayName(e.Tool.Name)) + " " + red("⊘ "+e.Tool.Err))
+			m.flushExploreCard()
+			m.commitLine("  " + toolBulletErr() + " " + bold(toolDisplayName(e.Tool.Name)) + " " + red("⊘ "+e.Tool.Err))
 		}
 
 	case event.Usage:

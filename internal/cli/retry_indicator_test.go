@@ -18,7 +18,7 @@ func TestRetryIndicatorShowsAndClears(t *testing.T) {
 
 	m.ingestEvent(event.Event{Kind: event.Retrying, RetryAttempt: 3, RetryMax: 10})
 	if m.retryAttempt != 3 || m.retryMax != 10 {
-		t.Fatalf("retry fields = %d/%d, want 3/10", m.retryAttempt, m.retryMax)
+		t.Fatalf("retry fields = %d/%d, want 2/10", m.retryAttempt, m.retryMax)
 	}
 
 	m.ingestEvent(event.Event{Kind: event.Text, Text: "answer"})

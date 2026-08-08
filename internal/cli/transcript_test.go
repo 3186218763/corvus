@@ -21,13 +21,16 @@ func TestAssistantMarkdownHasIdentityAndIndentedBody(t *testing.T) {
 	rendered := renderAssistantMarkdown("A concise answer that wraps across the available width.", 32, true)
 	lines := strings.Split(ansi.Strip(rendered), "\n")
 	if len(lines) < 2 {
-		t.Fatalf("assistant block should open with the marker on the first body row:\n%s", rendered)
+		t.Fatalf("assistant block should wrap across multiple rows:\n%s", rendered)
 	}
-	if !strings.HasPrefix(lines[0], "  ◆ Corvus ") {
-		t.Fatalf("assistant first row should carry marker + name + content, got %q", lines[0])
+	if !strings.HasPrefix(lines[0], "  ") {
+		t.Fatalf("assistant first row should use two-cell gutter, got %q", lines[0])
+	}
+	if strings.Contains(lines[0], "◆") || strings.Contains(lines[0], "Corvus") {
+		t.Fatalf("assistant must not carry ◆ Corvus nameplate, got %q", lines[0])
 	}
 	if !strings.Contains(lines[0], "A concise answer") {
-		t.Fatalf("assistant first row should join the body content, got %q", lines[0])
+		t.Fatalf("assistant first row should carry body content, got %q", lines[0])
 	}
 	for i, line := range lines[1:] {
 		if line != "" && !strings.HasPrefix(line, assistantTranscriptIndent) {
@@ -51,8 +54,12 @@ func TestReplaySectionsKeepAssistantIdentity(t *testing.T) {
 	if len(sections) != 2 {
 		t.Fatalf("replay sections = %d, want user and assistant", len(sections))
 	}
-	if plain := ansi.Strip(sections[1]); !strings.HasPrefix(plain, "  ◆ Version 1.2.3") {
-		t.Fatalf("demoted replay should keep a bare diamond on the first body row: %q", plain)
+	plain := ansi.Strip(sections[1])
+	if !strings.HasPrefix(plain, "  Version 1.2.3") {
+		t.Fatalf("replay assistant should be plain indented body, got %q", plain)
+	}
+	if strings.Contains(plain, "◆") || strings.Contains(plain, "Corvus") {
+		t.Fatalf("replay must not use nameplate, got %q", plain)
 	}
 }
 
@@ -71,7 +78,7 @@ func TestReplaySectionsRestoreInterruptedLocalOutput(t *testing.T) {
 		},
 	}, 64)
 	plain := ansi.Strip(strings.Join(sections, ""))
-	for _, want := range []string{"change config", "checking config", "partial answer", "Write", "bounded recovery summary"} {
+	for _, want := range []string{"change config", "checking config", "partial answer", "Edited", "bounded recovery summary"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("replayed interrupted history missing %q:\n%s", want, plain)
 		}
@@ -394,7 +401,7 @@ func TestCopyToClipboard(t *testing.T) {
 // tool cards, CJK user bubbles, and plain assistant text.
 func mixedBlocks() []string {
 	return []string{
-		"\x1b[2m  ⎿  " + strings.Repeat("tool output line", 4) + "\x1b[0m",
+		"\x1b[2m  └  " + strings.Repeat("tool output line", 4) + "\x1b[0m",
 		"\x1b[38;5;173m● Tool(verb)\x1b[0m",
 		"普通文本行 1：中文内容用于宽度与换行测试",
 		"\x1b[38;5;245m· \x1b[0m\x1b[38;5;252m" + strings.Repeat("assistant text ", 8) + "\x1b[0m",
@@ -419,9 +426,9 @@ func TestWrappedCacheEqualsFullWrapAfterMutations(t *testing.T) {
 	}
 
 	// Live update of the LAST block (streaming hot path).
-	m.setLiveBlock(len(m.transcript)-1, "\x1b[2m  ⎿  new tail line\x1b[0m")
+	m.setLiveBlock(len(m.transcript)-1, "\x1b[2m  └  new tail line\x1b[0m")
 	m.rewrapBlock(len(m.transcript)-1, width)
-	blocks[len(blocks)-1] = "\x1b[2m  ⎿  new tail line\x1b[0m"
+	blocks[len(blocks)-1] = "\x1b[2m  └  new tail line\x1b[0m"
 	if !reflect.DeepEqual(m.wrappedLines, fullWrap(blocks, width)) {
 		t.Fatalf("last-block rewrite mismatch")
 	}
@@ -518,7 +525,7 @@ func TestTranscriptNeverDoubleBlanks(t *testing.T) {
 	m.commitSpacer()
 	m.commitLine(dim("  ▎ thinking…"))
 	m.commitSpacer()
-	m.commitLine("  ⎿  tool line")
+	m.commitLine("  └  tool line")
 	m.commitSpacer()
 	m.commitLine("assistant answer")
 	m.commitSpacer()
@@ -549,19 +556,19 @@ func TestAssistantMarkdownHistoryDropsName(t *testing.T) {
 	configureCLITheme("dark")
 
 	named := renderAssistantMarkdown("Live answer", 48, true)
-	if plain := ansi.Strip(named); !strings.HasPrefix(plain, "  ◆ Corvus") {
-		t.Fatalf("named header should keep the name, got %q", plain)
+	if plain := ansi.Strip(named); !strings.HasPrefix(plain, "  Live answer") {
+		t.Fatalf("live answer should be plain indented body, got %q", plain)
+	}
+	if strings.Contains(ansi.Strip(named), "◆") || strings.Contains(ansi.Strip(named), "Corvus") {
+		t.Fatalf("live answer must not use nameplate, got %q", named)
 	}
 	history := renderAssistantMarkdown("History answer", 48, false)
 	plain := ansi.Strip(history)
-	if strings.HasPrefix(plain, "  ◆ Corvus") {
-		t.Fatalf("history header must not carry the name, got %q", plain)
+	if !strings.HasPrefix(plain, "  History answer") {
+		t.Fatalf("history answer should be plain indented body, got %q", plain)
 	}
-	if !strings.HasPrefix(plain, "  ◆") {
-		t.Fatalf("history header should keep the diamond, got %q", plain)
-	}
-	if !strings.Contains(history, fgSGR(activeCLITheme.faint)) {
-		t.Fatalf("history diamond should be faint-colored, got %q", history)
+	if strings.Contains(plain, "◆") || strings.Contains(plain, "Corvus") {
+		t.Fatalf("history must not use nameplate, got %q", plain)
 	}
 }
 
@@ -591,7 +598,7 @@ func TestSecondExchangeDemotesFirst(t *testing.T) {
 	m := newTestChatTUI()
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "first question"})
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "first answer"})
-	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ") || strings.Contains(plain, "◆") {
 		t.Fatalf("first answer should be named, got %q", plain)
 	}
 	if !strings.Contains(m.transcript[0], fgSGR(activeCLITheme.accent)) {
@@ -607,7 +614,7 @@ func TestSecondExchangeDemotesFirst(t *testing.T) {
 	}
 
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "second answer"})
-	if plain := ansi.Strip(m.transcript[3]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+	if plain := ansi.Strip(m.transcript[3]); !strings.HasPrefix(plain, "  ") || strings.Contains(plain, "◆") {
 		t.Fatalf("second answer should be named, got %q", plain)
 	}
 }
@@ -624,7 +631,7 @@ func TestNonLiveCommitsKeepMarkers(t *testing.T) {
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "a"})
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceBanner})
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceToolCard, raw: "bash", aux: `{"command":"ls"}`})
-	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ") || strings.Contains(plain, "◆") {
 		t.Fatalf("banner/tool commits must not demote the live answer, got %q", plain)
 	}
 	if !strings.Contains(m.transcript[0], fgSGR(activeCLITheme.accent)) {
@@ -646,7 +653,7 @@ func TestUnsendRegainsAssistantName(t *testing.T) {
 		t.Fatalf("precondition: a1 should be demoted while q2 is pending, got %q", plain)
 	}
 	m.truncateTranscriptBlocks(m.bubbleStartIdx)
-	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ") || strings.Contains(plain, "◆") {
 		t.Fatalf("after un-send the previous answer should regain its name, got %q", plain)
 	}
 }
@@ -660,11 +667,11 @@ func TestRemoveLastAnswerRetagsPrevious(t *testing.T) {
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q"})
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "a1"})
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "a2"})
-	if plain := ansi.Strip(m.transcript[2]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+	if plain := ansi.Strip(m.transcript[2]); !strings.HasPrefix(plain, "  ") || strings.Contains(plain, "◆") {
 		t.Fatalf("a2 should be named, got %q", plain)
 	}
 	m.removeTranscriptBlock(2)
-	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ") || strings.Contains(plain, "◆") {
 		t.Fatalf("after removing a2, a1 should regain the name, got %q", plain)
 	}
 }
@@ -678,11 +685,11 @@ func TestReflowPreservesMarkers(t *testing.T) {
 	m.width = 80
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q"})
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceMarkdown, raw: "answer"})
-	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ") || strings.Contains(plain, "◆") {
 		t.Fatalf("precondition: answer should be named, got %q", plain)
 	}
 	m.reflowTranscript(40)
-	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ◆ Corvus") {
+	if plain := ansi.Strip(m.transcript[1]); !strings.HasPrefix(plain, "  ") || strings.Contains(plain, "◆") {
 		t.Fatalf("reflow must preserve the named marker, got %q", plain)
 	}
 
@@ -714,10 +721,15 @@ func TestReplayBundleInternalLiveness(t *testing.T) {
 	m.label = "model-x"
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceReplayBundle, history: history})
 	live := strings.Join(m.transcript, "\n")
-	if !strings.Contains(ansi.Strip(live), "◆ Corvus latest answer") {
-		t.Fatalf("live bundle should name the last assistant body, got %q", live)
+	plainLive := ansi.Strip(live)
+	if !strings.Contains(plainLive, "latest answer") {
+		t.Fatalf("live bundle should include last assistant body, got %q", live)
 	}
-	if strings.Contains(ansi.Strip(live), "Corvus old answer") {
+	// Banner may use ◆ corvus; assistant bodies must not use nameplates.
+	if strings.Contains(plainLive, "◆ Corvus") || strings.Contains(plainLive, "Corvus latest") {
+		t.Fatalf("assistant bodies must not use nameplate, got %q", live)
+	}
+	if strings.Contains(plainLive, "Corvus old answer") {
 		t.Fatalf("live bundle must not name earlier assistant bodies, got %q", live)
 	}
 	if !strings.Contains(live, fgSGR(activeCLITheme.accent)+"› latest question") {
@@ -757,14 +769,11 @@ func TestCopyTranscriptDropsNameOnHistoryAnswers(t *testing.T) {
 		t.Fatal("buildCopyTranscript failed on a two-turn transcript")
 	}
 	plain := ansi.Strip(copied)
-	if n := strings.Count(plain, "Corvus"); n != 1 {
-		t.Fatalf("copy should name exactly the last answer, got %d occurrences:\n%s", n, plain)
+	if strings.Contains(plain, "Corvus") || strings.Contains(plain, "◆") {
+		t.Fatalf("copy must not use assistant nameplates:\n%s", plain)
 	}
-	if !strings.Contains(plain, "  ◆ a1") {
-		t.Fatalf("first answer should copy as a bare demoted diamond, got:\n%s", plain)
-	}
-	if !strings.Contains(plain, "  ◆ Corvus a2") {
-		t.Fatalf("last answer should copy with the name, got:\n%s", plain)
+	if !strings.Contains(plain, "a1") || !strings.Contains(plain, "a2") {
+		t.Fatalf("copy should include both answer bodies:\n%s", plain)
 	}
 }
 

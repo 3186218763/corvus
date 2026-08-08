@@ -36,6 +36,7 @@ func newTestChatTUI() chatTUI {
 		reasoningTextIdx:     -1,
 		answerIdx:            -1,
 		toolStreamIdx:        -1,
+		exploreIdx:           -1,
 		reasoning:            &strings.Builder{},
 		pending:              &strings.Builder{},
 		pendingCommit:        &commit,
@@ -58,27 +59,22 @@ func TestCacheRateLabelKeepsTwoDecimals(t *testing.T) {
 	}
 }
 
-// TestIngestSeparatesReasoningFromAnswer proves the thinking marker plus its
-// live text appear as reasoning streams, then vanish entirely (marker and
-// streamed text removed, no "thought for Ns" summary) when the answer begins,
-// and the answer commits as its own distinct entry.
+// TestIngestSeparatesReasoningFromAnswer proves default mode keeps thinking off
+// the transcript (ambient only), then the answer commits as its own entry.
 func TestIngestSeparatesReasoningFromAnswer(t *testing.T) {
 	m := newTestChatTUI()
 
-	m.ingestEvent(event.Event{Kind: event.Reasoning, Text: "…reasoning…"}) // thinking → marker + live text
-	if len(m.transcript) != 2 || !strings.Contains(m.transcript[0], "thinking") {
-		t.Fatalf("thinking marker should appear at once, transcript=%v", m.transcript)
+	m.ingestEvent(event.Event{Kind: event.Reasoning, Text: "…reasoning…"})
+	if len(m.transcript) != 0 {
+		t.Fatalf("default mode must not paint thinking into transcript, transcript=%v", m.transcript)
 	}
-	if !strings.Contains(m.transcript[1], "…reasoning…") {
-		t.Fatalf("reasoning text should stream live below the marker, transcript=%v", m.transcript)
+	if m.reasoning.String() != "…reasoning…" {
+		t.Fatalf("reasoning should still buffer for verbose, got %q", m.reasoning.String())
 	}
 
-	m.ingestEvent(event.Event{Kind: event.Text, Text: "Hello answer"}) // answer begins → block removed
+	m.ingestEvent(event.Event{Kind: event.Text, Text: "Hello answer"})
 	if len(m.transcript) != 0 {
-		t.Fatalf("collapsed thinking should leave no summary or separator in the transcript, transcript=%v", m.transcript)
-	}
-	if strings.Contains(strings.Join(m.transcript, "\n"), "…reasoning…") {
-		t.Fatalf("collapsed reasoning text should be removed, transcript=%v", m.transcript)
+		t.Fatalf("answer stream should not leave thinking residue, transcript=%v", m.transcript)
 	}
 	if m.pending.String() != "Hello answer" {
 		t.Errorf("answer should be live in pending, got %q", m.pending.String())
@@ -87,12 +83,12 @@ func TestIngestSeparatesReasoningFromAnswer(t *testing.T) {
 		t.Errorf("reasoning buffer should be cleared after commit")
 	}
 
-	m.commitPending() // turn end
+	m.commitPending()
 	if len(m.transcript) != 1 || !strings.Contains(m.transcript[0], "Hello") {
 		t.Fatalf("answer should commit as a separate entry, transcript=%v", m.transcript)
 	}
-	if plain := ansi.Strip(m.transcript[0]); !strings.HasPrefix(plain, "  ◆ Corvus Hello answer") {
-		t.Fatalf("answer should have an explicit assistant identity and indented body, got %q", plain)
+	if plain := ansi.Strip(m.transcript[0]); !strings.HasPrefix(plain, "  Hello answer") {
+		t.Fatalf("answer should be plain indented body (no nameplate), got %q", plain)
 	}
 }
 
@@ -104,7 +100,7 @@ func TestAssistantAnswerWithoutReasoningHasNoLeadingSpacer(t *testing.T) {
 	if len(m.transcript) != 1 {
 		t.Fatalf("direct answer should remain one compact block, got %d: %v", len(m.transcript), m.transcript)
 	}
-	if plain := ansi.Strip(m.transcript[0]); !strings.HasPrefix(plain, "  ◆ Corvus Direct answer") {
+	if plain := ansi.Strip(m.transcript[0]); !strings.HasPrefix(plain, "  Direct answer") {
 		t.Fatalf("direct answer block = %q", plain)
 	}
 }
@@ -130,16 +126,10 @@ func TestTurnReceiptMovesBelowComposer(t *testing.T) {
 	if !strings.Contains(ansi.Strip(m.turnReceipt), "cached 90.00%") {
 		t.Fatalf("turn receipt not captured, got %q", m.turnReceipt)
 	}
+	// Density pack: cache hit is not permanent footer chrome (lives on /status).
 	view := m.View().Content
-	if !strings.Contains(ansi.Strip(view), "cached 90.00%") {
-		t.Fatalf("View should render the receipt below the composer:\n%s", ansi.Strip(view))
-	}
-	// The receipt sits after the composer box: it must appear after "❯" input
-	// prompt marker in the rendered output.
-	boxIdx := strings.LastIndex(view, "❯")
-	receiptIdx := strings.Index(view, "cached")
-	if boxIdx < 0 || receiptIdx < 0 || receiptIdx < boxIdx {
-		t.Fatalf("receipt should render below the composer (box at %d, receipt at %d)", boxIdx, receiptIdx)
+	if strings.Contains(ansi.Strip(view), "cached 90.00%") {
+		t.Fatalf("View must not pin cache receipt on the default footer:\n%s", ansi.Strip(view))
 	}
 }
 
@@ -220,15 +210,16 @@ func TestIngestEventFlushesAnswer(t *testing.T) {
 	m := newTestChatTUI()
 	m.ingestEvent(event.Event{Kind: event.Text, Text: "partial answer "})
 	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{Name: "read_file", Args: `{"path":"x"}`}})
-	// answer, then the tool card (no blank spacer — compact tool calls).
+	// answer, then the Explored card (no blank spacer — compact tool calls).
 	if n := len(*m.pendingCommit); n != 2 {
 		t.Fatalf("answer + tool card should be two commits, got %d: %v", n, *m.pendingCommit)
 	}
 	if !strings.Contains((*m.pendingCommit)[0], "partial answer") {
 		t.Errorf("first commit should be the buffered answer, got %q", (*m.pendingCommit)[0])
 	}
-	if !strings.Contains((*m.pendingCommit)[1], "Read(x)") {
-		t.Errorf("second commit should be the tool card, got %q", (*m.pendingCommit)[1])
+	joined := strings.Join(*m.pendingCommit, "\n")
+	if !strings.Contains(joined, "Explored") || !strings.Contains(joined, "x") {
+		t.Errorf("second commit should be the Explored card, got %v", *m.pendingCommit)
 	}
 	if m.pending.Len() != 0 {
 		t.Errorf("answer buffer should be drained after the event line")
@@ -284,7 +275,7 @@ func TestFlushableMarkdownPrefixKeepsOpenFence(t *testing.T) {
 }
 
 // TestToolProgressStreamsThenCollapses proves a running tool's output streams
-// live under its card via the ⎿ connector, then vanishes entirely when the
+// live under its card via the └ connector, then vanishes entirely when the
 // result lands — only the ● Verb(arg) card remains (no line-count summary).
 func TestToolProgressStreamsThenCollapses(t *testing.T) {
 	m := newTestChatTUI()
@@ -296,8 +287,8 @@ func TestToolProgressStreamsThenCollapses(t *testing.T) {
 	if !strings.Contains(joined, "ok pkg/a") || !strings.Contains(joined, "ok pkg/b") {
 		t.Fatalf("live output should be visible while running:\n%s", joined)
 	}
-	if !strings.Contains(joined, "⎿") {
-		t.Fatalf("live output should use the ⎿ connector:\n%s", joined)
+	if !strings.Contains(joined, "└") {
+		t.Fatalf("live output should use the └ connector:\n%s", joined)
 	}
 
 	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "b1", Name: "bash", Output: "ok pkg/a\nok pkg/b\n"}})
@@ -323,7 +314,7 @@ func TestToolWorkingLineThenClears(t *testing.T) {
 
 	m.tickToolRunning() // one elapsed tick fills the placeholder
 	joined := strings.Join(m.transcript, "\n")
-	if !strings.Contains(joined, "⎿") || !strings.Contains(joined, "working") {
+	if !strings.Contains(joined, "└") || !strings.Contains(joined, "working") {
 		t.Fatalf("a running tool should show a 'working' progress line:\n%s", joined)
 	}
 
@@ -346,7 +337,7 @@ func TestToolWorkingLineThenClears(t *testing.T) {
 // TestConsecutiveToolCallsStayCompact is the regression test for back-to-back
 // Bash tool calls: each tool's live block is removed when ITS OWN result
 // lands, no summary rows remain, and the transcript holds only the two cards
-// in dispatch order (no blank spacer, no ⎿ markers).
+// in dispatch order (no blank spacer, no └ markers).
 func TestConsecutiveToolCallsStayCompact(t *testing.T) {
 	m := newTestChatTUI()
 	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-1", Name: "bash", Args: `{"command":"git status"}`}})
@@ -367,7 +358,7 @@ func TestConsecutiveToolCallsStayCompact(t *testing.T) {
 		t.Fatalf("cards should remain in dispatch order:\n%s", strings.Join(transcript, "\n"))
 	}
 	joined := strings.Join(transcript, "\n")
-	for _, banned := range []string{"⎿", "lines", "On branch", "nothing to commit", "* main-v2"} {
+	for _, banned := range []string{"└", "lines", "On branch", "nothing to commit", "* main-v2"} {
 		if strings.Contains(joined, banned) {
 			t.Fatalf("compact transcript must not contain %q:\n%s", banned, joined)
 		}
@@ -402,7 +393,7 @@ func TestRepeatedShellCommandDoesNotAccumulateOutput(t *testing.T) {
 }
 
 // TestCtrlBTogglesOutputOnTheCardBlock proves Ctrl+B expands the finished
-// shell output onto the card block (card + ⎿ output) and collapses back to
+// shell output onto the card block (card + └ output) and collapses back to
 // the bare card, surviving a reflow (resize) in the expanded state.
 func TestCtrlBTogglesOutputOnTheCardBlock(t *testing.T) {
 	m := newTestChatTUI()
@@ -420,7 +411,7 @@ func TestCtrlBTogglesOutputOnTheCardBlock(t *testing.T) {
 
 	m.toggleShellOutput()
 	got := m.transcript[0]
-	if !strings.Contains(got, "line") || !strings.Contains(got, "⎿") {
+	if !strings.Contains(got, "line") || !strings.Contains(got, "└") {
 		t.Fatalf("expanded card should carry the output under the connector, got %q", got)
 	}
 
@@ -435,7 +426,7 @@ func TestCtrlBTogglesOutputOnTheCardBlock(t *testing.T) {
 	}
 
 	m.toggleShellOutput()
-	if got := m.transcript[0]; strings.Contains(got, "line") || strings.Contains(got, "⎿") {
+	if got := m.transcript[0]; strings.Contains(got, "line") || strings.Contains(got, "└") {
 		t.Fatalf("collapsed card should be bare, got %q", got)
 	}
 	if m.shellExpanded[id] {
@@ -443,9 +434,9 @@ func TestCtrlBTogglesOutputOnTheCardBlock(t *testing.T) {
 	}
 }
 
-// TestConsecutiveNonShellToolsLeaveNoSlots proves back-to-back non-shell tools
-// (e.g. read_file) leave only their cards after each result — no count
-// summaries, no blank slots, no negative counts.
+// TestConsecutiveNonShellToolsLeaveNoSlots proves back-to-back read tools
+// coalesce into one Explored cell after results — no count summaries, no
+// raw file contents left in the transcript.
 func TestConsecutiveNonShellToolsLeaveNoSlots(t *testing.T) {
 	m := newTestChatTUI()
 	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "read_file-1", Name: "read_file", Args: `{"path":"a.txt"}`}})
@@ -454,13 +445,16 @@ func TestConsecutiveNonShellToolsLeaveNoSlots(t *testing.T) {
 	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "read_file-2", Name: "read_file", Output: "b.txt contents"}})
 
 	joined := strings.Join(m.transcript, "\n")
-	for _, banned := range []string{"lines", "⎿", "a.txt contents", "b.txt contents"} {
+	for _, banned := range []string{"lines", "a.txt contents", "b.txt contents"} {
 		if strings.Contains(joined, banned) {
 			t.Fatalf("transcript must not contain %q:\n%s", banned, joined)
 		}
 	}
-	if len(m.transcript) != 2 {
-		t.Fatalf("only the two cards should remain, got %d blocks:\n%s", len(m.transcript), joined)
+	if len(m.transcript) != 1 {
+		t.Fatalf("consecutive reads should coalesce into one Explored cell, got %d blocks:\n%s", len(m.transcript), joined)
+	}
+	if !strings.Contains(joined, "Explored") || !strings.Contains(joined, "a.txt") || !strings.Contains(joined, "b.txt") {
+		t.Fatalf("Explored cell should list both paths:\n%s", joined)
 	}
 }
 
@@ -503,15 +497,19 @@ func TestToolProgressTailCap(t *testing.T) {
 	}
 }
 
-// TestReasoningViewBounded proves the live thinking view stays bounded under a
+// TestReasoningViewBounded proves verbose live thinking stays bounded under a
 // long stream — the fix for the O(n²)/multi-GB re-render of the full thought.
 func TestReasoningViewBounded(t *testing.T) {
 	m := newTestChatTUI()
+	m.showReasoning = true
 	for i := 0; i < 5000; i++ {
 		m.ingestEvent(event.Event{Kind: event.Reasoning, Text: "some thinking text token "})
 	}
 	if len(m.reasoningView) > reasoningViewMax {
 		t.Fatalf("reasoningView unbounded: %d > %d", len(m.reasoningView), reasoningViewMax)
+	}
+	if m.reasoningTextIdx < 0 {
+		t.Fatal("verbose mode should open a live reasoning block")
 	}
 	if c := strings.Count(m.transcript[m.reasoningTextIdx], "\n") + 1; c > reasoningTailLines {
 		t.Fatalf("live reasoning block kept %d lines, want <= %d", c, reasoningTailLines)
@@ -618,7 +616,7 @@ func TestToolCardAnchorsFollowRemovedBlocks(t *testing.T) {
 	if !m.shellExpanded["shell-c"] {
 		t.Fatalf("Ctrl+B should expand the most recent card, expanded=%v", m.shellExpanded)
 	}
-	if got := m.transcript[2]; !strings.Contains(got, "c-out") || !strings.Contains(got, "⎿") {
+	if got := m.transcript[2]; !strings.Contains(got, "c-out") || !strings.Contains(got, "└") {
 		t.Fatalf("most recent card should carry its output when expanded, got %q", got)
 	}
 }
@@ -641,7 +639,7 @@ func TestSameIDRerunDoesNotInheritExpansion(t *testing.T) {
 	if m.shellExpanded[id] {
 		t.Fatalf("re-dispatch must clear the previous run's expanded state")
 	}
-	if got := m.transcript[1]; strings.Contains(got, "/one") || strings.Contains(got, "⎿") {
+	if got := m.transcript[1]; strings.Contains(got, "/one") || strings.Contains(got, "└") {
 		t.Fatalf("fresh card must render collapsed without stale output, got %q", got)
 	}
 }
@@ -724,32 +722,30 @@ func TestAnswerStreamSurvivesToolBlockRemoval(t *testing.T) {
 	}
 }
 
-// TestReasoningStreamSurvivesToolBlockRemoval is the regression test for a tool
-// result that removes its live block while reasoning is streaming below it:
-// the marker/text indices must shift so the live reasoning block keeps
-// updating and collapses cleanly on the message boundary.
+// TestReasoningStreamSurvivesToolBlockRemoval is the regression for a tool
+// result that removes its live block while reasoning is buffering: default
+// mode keeps thinking ambient (no transcript wall) and still clears cleanly.
 func TestReasoningStreamSurvivesToolBlockRemoval(t *testing.T) {
 	m := newTestChatTUI()
 	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-a", Name: "bash", Args: `{"command":"a"}`}})
 	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-a", Output: "tool-out\n"}})
 	m.ingestEvent(event.Event{Kind: event.Reasoning, Text: "think "})
-	if m.reasoningTextIdx != 4 || m.reasoningLineIdx != 3 {
-		t.Fatalf("reasoning blocks should sit below the tool's live block, line=%d text=%d", m.reasoningLineIdx, m.reasoningTextIdx)
+	if m.reasoningTextIdx != -1 || m.reasoningLineIdx != -1 {
+		t.Fatalf("default reasoning must stay ambient, line=%d text=%d", m.reasoningLineIdx, m.reasoningTextIdx)
+	}
+	if m.reasoning.String() != "think " {
+		t.Fatalf("reasoning should buffer, got %q", m.reasoning.String())
 	}
 	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-a", Name: "bash", Output: "tool-out\n"}})
-	if m.reasoningTextIdx != 3 || m.reasoningLineIdx != 2 {
-		t.Fatalf("reasoning indices should shift down, line=%d text=%d", m.reasoningLineIdx, m.reasoningTextIdx)
-	}
 	m.ingestEvent(event.Event{Kind: event.Reasoning, Text: "more"})
-	joined := strings.Join(m.transcript, "\n")
-	if !strings.Contains(joined, "think more") {
-		t.Fatalf("live reasoning block must keep updating after the removal:\n%s", joined)
+	if m.reasoning.String() != "think more" {
+		t.Fatalf("reasoning buffer must keep appending after tool removal, got %q", m.reasoning.String())
+	}
+	if strings.Contains(strings.Join(m.transcript, "\n"), "think more") {
+		t.Fatalf("default mode must not paint reasoning into transcript:\n%s", strings.Join(m.transcript, "\n"))
 	}
 	m.ingestEvent(event.Event{Kind: event.Message})
-	if m.reasoningTextIdx != -1 || m.reasoningLineIdx != -1 {
-		t.Fatalf("reasoning should close on the message boundary, line=%d text=%d", m.reasoningLineIdx, m.reasoningTextIdx)
-	}
-	if got := strings.Join(m.transcript, "\n"); strings.Contains(got, "think more") {
-		t.Fatalf("reasoning text block should collapse after the message:\n%s", got)
+	if m.reasoningTextIdx != -1 || m.reasoningLineIdx != -1 || m.reasoning.Len() != 0 {
+		t.Fatalf("reasoning should clear on message boundary, line=%d text=%d buf=%q", m.reasoningLineIdx, m.reasoningTextIdx, m.reasoning.String())
 	}
 }

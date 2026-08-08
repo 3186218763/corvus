@@ -105,16 +105,13 @@ func TestStatusFooterSemanticPaletteAcrossThemes(t *testing.T) {
 			m.effortLevel = "auto"
 			m.runtimeProfile = "full"
 			got := m.statusModelWorkGroup(80)
-			for _, want := range []string{
-				tt.labelSGR + "Model",
-				tt.infoSGR + "deepseek-v4-flash",
-				tt.labelSGR + "Effort",
-				tt.valueSGR + "auto",
-				tt.labelSGR + "Work",
-				tt.secondarySGR + "balanced",
-			} {
-				if !strings.Contains(got, want) {
-					t.Fatalf("model/work group %q missing semantic style %q", got, want)
+			// Density: bare model with info color; no Effort/Work labels.
+			if !strings.Contains(got, tt.infoSGR+"deepseek-v4-flash") {
+				t.Fatalf("model group %q missing info-styled model name", got)
+			}
+			for _, banned := range []string{"Model", "Effort", "Work", "auto", "balanced"} {
+				if strings.Contains(ansi.Strip(got), banned) {
+					t.Fatalf("model group must omit %q: %q", banned, got)
 				}
 			}
 			primary := m.primaryStatusLine(false, false)
@@ -257,9 +254,12 @@ func TestStatusFooterNoColorKeepsSemanticLabels(t *testing.T) {
 	if strings.Contains(block, "\033[") {
 		t.Fatalf("NO_COLOR footer contains escapes: %q", block)
 	}
-	for _, want := range []string{"Model deepseek-v4-flash", "Effort auto", "Work balanced"} {
-		if !strings.Contains(block, want) {
-			t.Fatalf("NO_COLOR footer missing %q:\n%s", want, block)
+	if !strings.Contains(block, "deepseek-v4-flash") {
+		t.Fatalf("NO_COLOR footer missing model:\n%s", block)
+	}
+	for _, banned := range []string{"Effort", "Work", "CTX", "Model "} {
+		if strings.Contains(block, banned) {
+			t.Fatalf("NO_COLOR lean footer must omit %q:\n%s", banned, block)
 		}
 	}
 	if strings.Contains(block, "BAL") || strings.Contains(block, "¥12.34") {
@@ -272,9 +272,9 @@ func TestStatusFooterLocalizedGroupsWrapCleanly(t *testing.T) {
 	for _, tt := range []struct {
 		lang, session string
 	}{
-		{lang: "en", session: "Model deepseek-v4-flash   Effort auto   Work balanced"},
-		{lang: "zh", session: "模型 deepseek-v4-flash   强度 auto   模式 均衡"},
-		{lang: "zh-TW", session: "模型 deepseek-v4-flash   強度 auto   模式 均衡"},
+		{lang: "en", session: "deepseek-v4-flash"},
+		{lang: "zh", session: "deepseek-v4-flash"},
+		{lang: "zh-TW", session: "deepseek-v4-flash"},
 	} {
 		t.Run(tt.lang, func(t *testing.T) {
 			i18n.DetectLanguage(tt.lang)
@@ -322,12 +322,12 @@ func TestStatusFooterLocalizesMetricLabelsAndKeepsNarrowRows(t *testing.T) {
 	}{
 		{
 			lang:      "zh",
-			session:   "模型 deepseek-v4-flash   强度 auto   模式 均衡",
+			session:   "deepseek-v4-flash",
 			telemetry: []string{"上下文", "压缩", "任务"},
 		},
 		{
 			lang:      "zh-TW",
-			session:   "模型 deepseek-v4-flash   強度 auto   模式 均衡",
+			session:   "deepseek-v4-flash",
 			telemetry: []string{"上下文", "壓縮", "任務"},
 		},
 	} {
@@ -392,10 +392,10 @@ func TestStatusFooterWideLayoutSingleRow(t *testing.T) {
 	if strings.Count(plain, "\n") != 0 {
 		t.Fatalf("wide status block should be one row:\n%s", plain)
 	}
-	if !strings.Contains(plain, "Model deepseek-v4-flash   Effort auto   Work balanced") {
-		t.Fatalf("single row should keep model, effort, and work in one session group:\n%s", plain)
+	if !strings.Contains(plain, "deepseek-v4-flash") {
+		t.Fatalf("single row should keep model:\n%s", plain)
 	}
-	for _, banned := range []string{"DeepSeek-Corvus", "BAL", "¥12.34", "+1199", "CTX"} {
+	for _, banned := range []string{"DeepSeek-Corvus", "BAL", "¥12.34", "+1199", "CTX", "Effort", "Work balanced", "Model "} {
 		if strings.Contains(plain, banned) {
 			t.Fatalf("single row must omit %q:\n%s", banned, plain)
 		}
@@ -446,16 +446,18 @@ func TestStatusFooterMediumLayoutLeftAlignsModelWork(t *testing.T) {
 
 	primary := m.primaryStatusLine(false, false)
 	lines := strings.Split(ansi.Strip(m.renderStatusBlock(primary, 82)), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("medium footer rows = %d, want primary plus model/work without an empty data band:\n%s", len(lines), strings.Join(lines, "\n"))
+	if len(lines) < 1 || len(lines) > 2 {
+		t.Fatalf("medium footer rows = %d, want 1–2:\n%s", len(lines), strings.Join(lines, "\n"))
 	}
-	modelRow := lines[1]
-	if !strings.HasPrefix(modelRow, statusFooterIndent+"Model deepseek-v4-flash") ||
-		!strings.Contains(modelRow, "Effort auto   Work balanced") {
-		t.Fatalf("medium model/effort/work row should be left aligned, got %q:\n%s", modelRow, strings.Join(lines, "\n"))
+	// Density: prefer single row; if wrapped, second row is model · path only.
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "deepseek-v4-flash") {
+		t.Fatalf("medium footer missing model:\n%s", joined)
 	}
-	if strings.Count(strings.TrimLeft(modelRow, " "), "Model") != 1 {
-		t.Fatalf("medium model/work row should remain a single semantic group: %q", modelRow)
+	for _, banned := range []string{"Effort", "Work balanced", "CTX", "Model "} {
+		if strings.Contains(joined, banned) {
+			t.Fatalf("medium footer must omit %q:\n%s", banned, joined)
+		}
 	}
 }
 
@@ -521,7 +523,7 @@ func TestStatusFooterNarrowLayoutWrapsLongModel(t *testing.T) {
 			t.Fatalf("row %d width = %d, want <= 40: %q", i, got, line)
 		}
 	}
-	if !strings.Contains(block, "Model") {
+	if !strings.Contains(block, "provider/") && !strings.Contains(block, "long-model") && !strings.Contains(block, "…") {
 		t.Fatalf("narrow layout dropped the model group:\n%s", block)
 	}
 	for _, banned := range []string{"@", "+20", "¥123.45", "BAL"} {
@@ -611,7 +613,7 @@ func TestStatusFooterSingleLineOmitsBalanceGitCacheContext(t *testing.T) {
 			t.Fatalf("single-line footer must omit %q:\n%s", banned, plain)
 		}
 	}
-	for _, want := range []string{"/home/user/project", "Model deepseek-v4-flash", "Work balanced", "cached 90.00%"} {
+	for _, want := range []string{"/home/user/project", "deepseek-v4-flash"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("single-line footer missing %q:\n%s", want, plain)
 		}

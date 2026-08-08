@@ -11,7 +11,7 @@ import (
 // three parallel Bash(ls) calls in one turn, ids "call_<n>" (no "shell-"
 // prefix), each streams 22 lines then finishes. Each card's live block is
 // removed when ITS OWN result lands, leaving only the three cards — no
-// "⎿ N lines" summaries, no stacked output slots, no negative counts.
+// "└ N lines" summaries, no stacked output slots, no negative counts.
 func TestParallelBashCallsStayCompact(t *testing.T) {
 	m := newTestChatTUI()
 	ids := []string{"call_1", "call_2", "call_3"}
@@ -31,7 +31,7 @@ func TestParallelBashCallsStayCompact(t *testing.T) {
 	}
 	transcript := m.transcript
 	joined := strings.Join(transcript, "\n")
-	for _, banned := range []string{"lines", "⎿", "line"} {
+	for _, banned := range []string{"lines", "└", "line"} {
 		if strings.Contains(joined, banned) {
 			t.Fatalf("compact transcript must not contain %q:\n%s", banned, joined)
 		}
@@ -40,8 +40,8 @@ func TestParallelBashCallsStayCompact(t *testing.T) {
 		t.Fatalf("only the three cards should remain, got %d blocks:\n%s", len(transcript), joined)
 	}
 	for i, id := range ids {
-		if !strings.Contains(transcript[i], "Bash ls") {
-			t.Fatalf("card %d should be Bash ls in dispatch order, got %q\n%s", i, transcript[i], joined)
+		if !strings.Contains(transcript[i], "Ran ls") {
+			t.Fatalf("card %d should be Ran ls in dispatch order, got %q\n%s", i, transcript[i], joined)
 		}
 		if idx, ok := m.shellTranscriptIdx[id]; !ok || idx != i {
 			t.Fatalf("%s must keep a Ctrl+B anchor on its card (index %d), got ok=%v idx=%d", id, i, ok, idx)
@@ -63,7 +63,7 @@ func TestNonShellToolsLateResultsLeaveOnlyCards(t *testing.T) {
 
 	transcript := m.transcript
 	joined := strings.Join(transcript, "\n")
-	for _, banned := range []string{"lines", "⎿", "second", "third"} {
+	for _, banned := range []string{"lines", "└", "second", "third"} {
 		if strings.Contains(joined, banned) {
 			t.Fatalf("transcript must not contain %q:\n%s", banned, joined)
 		}

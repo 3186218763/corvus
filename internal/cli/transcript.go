@@ -312,12 +312,10 @@ func (m chatTUI) renderReplayBundleCopy(
 
 const assistantTranscriptIndent = "  "
 
-// renderAssistantMarkdown gives assistant prose the same explicit transcript
-// identity that user, reasoning, tool, and receipt blocks already have. The
-// body keeps a restrained two-cell gutter instead of using a heavy card, and
-// rendering at the reduced width keeps every indented row inside the viewport.
-// Only the live (bottom-most) assistant block carries the name; history blocks
-// render a bare faint diamond.
+// renderAssistantMarkdown gives assistant prose a restrained two-cell gutter
+// (Codex density: no ◆ Corvus nameplate on every answer). History demotion is
+// handled by the caller via marker/theme if needed; named is retained for API
+// compatibility but no longer injects a product name.
 func renderAssistantMarkdown(raw string, contentWidth int, named bool) string {
 	contentWidth = max(contentWidth, 1)
 	indent := assistantTranscriptIndent
@@ -332,9 +330,6 @@ func renderAssistantMarkdown(raw string, contentWidth int, named bool) string {
 	}
 	body := strings.TrimRight(rendered, "\n")
 	if blankTranscriptBody(body) {
-		// Blank/whitespace-only assistant content (e.g. a turn that ended with
-		// a stray newline or invisible format characters) must not paint a
-		// bare orphan diamond.
 		return ""
 	}
 	return assistantBlock(body, indent, named)
@@ -361,32 +356,24 @@ func renderAssistantMarkdownCopy(raw string, contentWidth int, prefix string, na
 	return assistantBlock(body, indent, named)
 }
 
-// assistantBodyWidth reserves the marker column so the joined first row
-// ("◆ [Corvus ]content") never exceeds contentWidth; continuation rows are
-// narrower by the same amount, which reads as a hanging-indent gutter.
+// assistantBodyWidth reserves the two-cell gutter so every row stays inside
+// contentWidth. named is ignored (no nameplate).
 func assistantBodyWidth(contentWidth int, indent string, named bool) int {
-	marker := indent + "◆ "
-	if named {
-		marker = indent + "◆ Corvus "
-	}
-	return max(contentWidth-visibleWidth(marker), 1)
+	_ = named
+	return max(contentWidth-visibleWidth(indent), 1)
 }
 
-// assistantBlock joins the ◆ identity marker with the first body line so the
-// marker never floats on its own row; continuation lines keep the two-cell
-// gutter. Leading blank rows are skipped so an answer starting with a newline
-// still opens with the marker on the first visible line.
+// assistantBlock indents the assistant body with a two-cell gutter. Leading
+// blank rows are skipped so an answer starting with a newline still opens on
+// the first visible line. No ◆ Corvus nameplate (Codex-first density).
 func assistantBlock(body, indent string, named bool) string {
+	_ = named
 	lines := strings.Split(body, "\n")
 	first := 0
 	for first < len(lines) && strings.TrimSpace(lines[first]) == "" {
 		first++
 	}
-	prefix := indent + dim("◆") + " "
-	if named {
-		prefix = indent + accent("◆") + " " + bold("Corvus") + " "
-	}
-	out := prefix + lines[first]
+	out := indent + lines[first]
 	if first+1 < len(lines) {
 		out += "\n" + indentTranscriptBlock(strings.Join(lines[first+1:], "\n"), indent)
 	}

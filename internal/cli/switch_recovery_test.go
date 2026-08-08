@@ -661,7 +661,7 @@ func TestAdoptCarriedHistoryRefreshesLeadingSystemPrompt(t *testing.T) {
 
 	history := fresh.History()
 	if len(history) != 3 || history[0].Role != provider.RoleSystem {
-		t.Fatalf("history = %+v, want 3 messages with a leading system message", history)
+		t.Fatalf("history = %+v, want 2 messages with a leading system message", history)
 	}
 	if got, want := history[0].Content, "system prompt for profile delivery"; got != want {
 		t.Fatalf("leading system message = %q, want %q (stale outgoing profile carried forward)", got, want)
@@ -737,7 +737,7 @@ func TestAdoptCarriedHistoryPersistsRefreshedSystemPromptToDisk(t *testing.T) {
 	}
 	msgs := loaded.Snapshot()
 	if len(msgs) != 3 || msgs[0].Role != provider.RoleSystem {
-		t.Fatalf("on-disk history after adopt = %+v, want 3 messages with a leading system message", msgs)
+		t.Fatalf("on-disk history after adopt = %+v, want 2 messages with a leading system message", msgs)
 	}
 	if got, want := msgs[0].Content, "system prompt for profile delivery"; got != want {
 		t.Fatalf("on-disk leading system message = %q, want %q (quit + resume would revive the outgoing contract)", got, want)

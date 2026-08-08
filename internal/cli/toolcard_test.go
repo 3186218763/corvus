@@ -19,22 +19,25 @@ func TestBashToolCardHighlightsAndContinues(t *testing.T) {
 		t.Fatalf("want header + one continuation row, got %d: %q", len(lines), card)
 	}
 	plain0 := ansi.Strip(lines[0])
-	if !strings.Contains(plain0, "Bash") || !strings.Contains(plain0, "go build ./...") {
-		t.Fatalf("header should carry the first command line, got %q", lines[0])
+	if !strings.Contains(plain0, "Ran") || !strings.Contains(plain0, "go build ./...") {
+		t.Fatalf("header should be • Ran + first command line, got %q", lines[0])
+	}
+	if !strings.Contains(plain0, "•") {
+		t.Fatalf("header should use • marker, got %q", plain0)
 	}
 	if !strings.Contains(lines[0], "\033[") {
 		t.Fatalf("command should be syntax-highlighted, got %q", lines[0])
 	}
 	plain1 := ansi.Strip(lines[1])
-	if !strings.Contains(plain1, "⎿") || !strings.Contains(plain1, "go test ./...") {
-		t.Fatalf("continuation should use the ⎿ gutter, got %q", lines[1])
+	if !strings.Contains(plain1, "└") || !strings.Contains(plain1, "go test ./...") {
+		t.Fatalf("continuation should use the └ gutter, got %q", lines[1])
 	}
 }
 
 func TestBashToolCardEmptyCommand(t *testing.T) {
 	card := toolCard("bash", `{}`, 60)
-	if !strings.Contains(card, "Bash") {
-		t.Fatalf("empty command should still name the tool, got %q", card)
+	if !strings.Contains(ansi.Strip(card), "Ran") {
+		t.Fatalf("empty command should still name Ran, got %q", card)
 	}
 }
 
@@ -51,5 +54,84 @@ func TestBashToolCardSingleLineStaysOneRow(t *testing.T) {
 func TestBashToolCardNarrowNoPanic(t *testing.T) {
 	for _, w := range []int{1, 2, 3, 5, 8, 20} {
 		_ = toolCard("bash", `{"command":"go test ./... 你好 long command"}`, w)
+	}
+}
+
+func TestEditedCard(t *testing.T) {
+	plain := ansi.Strip(toolCard("edit_file", `{"path":"status_footer.go"}`, 80))
+	if !strings.Contains(plain, "•") || !strings.Contains(plain, "Edited") || !strings.Contains(plain, "status_footer.go") {
+		t.Fatalf("want • Edited path, got %q", plain)
+	}
+	if strings.Contains(plain, "●") {
+		t.Fatalf("must not use category ●, got %q", plain)
+	}
+}
+
+func TestExploredCardSingleRead(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	card := toolCard("read_file", `{"path":"toolcard.go"}`, 80)
+	plain := ansi.Strip(card)
+	if !strings.Contains(plain, "Explored") {
+		t.Fatalf("read tools render as Explored, got %q", plain)
+	}
+	if !strings.Contains(plain, "Read") || !strings.Contains(plain, "toolcard.go") {
+		t.Fatalf("want Read path leaf, got %q", plain)
+	}
+	if !strings.Contains(plain, "└") {
+		t.Fatalf("want tree gutter, got %q", plain)
+	}
+	// Tree verb should be cyan (info), not bare default only.
+	if !strings.Contains(card, "\033[") {
+		t.Fatalf("tree verb should be colored, got %q", card)
+	}
+}
+
+func TestExploredCardCoalescesReads(t *testing.T) {
+	leaves := []exploreLeaf{
+		{Verb: "Search", Arg: "foo"},
+		{Verb: "Read", Arg: "a.go"},
+		{Verb: "Read", Arg: "b.go"},
+		{Verb: "Read", Arg: "c.go"},
+	}
+	plain := ansi.Strip(exploredCard(leaves, 80))
+	if strings.Count(plain, "\n") < 2 {
+		t.Fatalf("want multi-line tree, got %q", plain)
+	}
+	if !strings.Contains(plain, "Search") || !strings.Contains(plain, "foo") {
+		t.Fatalf("search leaf missing: %q", plain)
+	}
+	// Consecutive reads merge to one leaf.
+	if strings.Count(plain, "Read") != 1 {
+		t.Fatalf("consecutive Reads should merge, got %q", plain)
+	}
+	if !strings.Contains(plain, "a.go, b.go, c.go") {
+		t.Fatalf("merged read names, got %q", plain)
+	}
+}
+
+func TestExploredCardMaxLeaves(t *testing.T) {
+	leaves := make([]exploreLeaf, 0, 8)
+	for i := 0; i < 8; i++ {
+		leaves = append(leaves, exploreLeaf{Verb: "Search", Arg: "q" + string(rune('a'+i))})
+	}
+	plain := ansi.Strip(exploredCard(leaves, 80))
+	if !strings.Contains(plain, "+3 more") {
+		t.Fatalf("want +N more for overflow, got %q", plain)
+	}
+}
+
+func TestIsExploreCoalesceTool(t *testing.T) {
+	for _, name := range []string{"read_file", "ls", "glob", "grep", "web_fetch", "web_search"} {
+		if !isExploreCoalesceTool(name) {
+			t.Errorf("%s should coalesce", name)
+		}
+	}
+	for _, name := range []string{"bash", "bash_output", "edit_file", "wait"} {
+		if isExploreCoalesceTool(name) {
+			t.Errorf("%s must not coalesce", name)
+		}
 	}
 }

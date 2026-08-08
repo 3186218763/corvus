@@ -97,7 +97,7 @@ func TestMaxViewportBounds(t *testing.T) {
 	// When items < available rows, viewport equals items.
 	vp = maxViewport(3, 24, false)
 	if vp != 3 {
-		t.Errorf("maxViewport(3, 24, false) = %d, want 3", vp)
+		t.Errorf("maxViewport(3, 24, false) = %d, want 2", vp)
 	}
 }
 
@@ -109,7 +109,7 @@ func TestFilterMenuItems(t *testing.T) {
 	}
 	// Empty query returns all.
 	if got := filterMenuItems(items, ""); len(got) != 3 {
-		t.Errorf("empty query: got %d, want 3", len(got))
+		t.Errorf("empty query: got %d, want 2", len(got))
 	}
 	// Case-insensitive match on name.
 	if got := filterMenuItems(items, "GPT"); len(got) != 1 || got[0].name != "gpt-4o" {

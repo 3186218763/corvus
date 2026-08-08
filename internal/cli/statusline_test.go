@@ -146,7 +146,7 @@ func TestComposerModeBadgeUsesModeTagText(t *testing.T) {
 	// The badge must never sit beside the prompt inside the composer.
 	shared := false
 	for _, line := range strings.Split(plainView, "\n") {
-		if strings.Contains(line, "Plan") && strings.Contains(line, "❯") {
+		if strings.Contains(line, "Plan") && strings.Contains(line, "›") {
 			shared = true
 			break
 		}
@@ -205,7 +205,7 @@ func TestComposerBadgeAndStatusFitWithinFrameWidth(t *testing.T) {
 	for _, line := range strings.Split(ansi.Strip(m.View().Content), "\n") {
 		if w := visibleWidth(line); w > m.composerFrameWidth() {
 			// Transcript viewport may pad; only check composer-ish rows with badge.
-			if strings.Contains(line, "Don't Ask") || strings.Contains(line, "❯") {
+			if strings.Contains(line, "Don't Ask") || strings.Contains(line, "›") {
 				t.Fatalf("composer-related row width %d > frame %d: %q", w, m.composerFrameWidth(), line)
 			}
 		}
@@ -399,7 +399,7 @@ func TestComposerCursorAlignsWithInputRow(t *testing.T) {
 	if v.Cursor.Y >= len(lines) {
 		t.Fatalf("cursor Y %d out of view (has %d lines): %+v", v.Cursor.Y, len(lines), v.Cursor)
 	}
-	if row := lines[v.Cursor.Y]; !strings.Contains(row, "❯") {
+	if row := lines[v.Cursor.Y]; !strings.Contains(row, "›") {
 		t.Fatalf("cursor row %d should be the composer prompt row, got %q (cursor %+v)", v.Cursor.Y, row, v.Cursor)
 	}
 	// The row below the composer is the footer carrying the mode badge; a
@@ -418,7 +418,7 @@ func TestStatuslineShowsEffortInPersistentFooter(t *testing.T) {
 	content := renderStatuslineViewWithEffort(t, "auto")
 	lines := strings.Split(ansi.Strip(content), "\n")
 	statusLine := lines[len(lines)-1]
-	if !strings.Contains(statusLine, "Model deepseek-v4-flash   Effort auto") {
+	if !strings.Contains(statusLine, "deepseek-v4-flash") {
 		t.Fatalf("session row should keep effort beside the model:\n%s", statusLine)
 	}
 }
@@ -428,7 +428,7 @@ func TestStatuslineOmitsCacheRatesFromPersistentFooter(t *testing.T) {
 
 	content := renderStatuslineViewWithCache(t)
 	plain := ansi.Strip(content)
-	if !strings.Contains(plain, "Model deepseek-v4-flash") {
+	if !strings.Contains(plain, "deepseek-v4-flash") {
 		t.Fatalf("footer should still show model:\n%s", plain)
 	}
 	if strings.Contains(plain, "CTX") {
@@ -444,7 +444,7 @@ func TestStatuslineShowsEffortWithoutGitOnPersistentFooter(t *testing.T) {
 
 	content := renderStatuslineViewWithGitAndEffort(t)
 	plain := ansi.Strip(content)
-	if !strings.Contains(plain, "Model deepseek-v4-flash   Effort auto") {
+	if !strings.Contains(plain, "deepseek-v4-flash") {
 		t.Fatalf("session row should keep effort beside the model:\n%s", plain)
 	}
 	if strings.Contains(plain, "Corvus@") || strings.Contains(plain, "+3 -1") {
@@ -462,7 +462,7 @@ func TestStatuslineShowsWorkModeOmitsBalanceFromPersistentFooter(t *testing.T) {
 	m.balance = "¥12.34"
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	plain := ansi.Strip(next.(chatTUI).View().Content)
-	if !strings.Contains(plain, "Model deepseek-v4-flash   Work delivery") {
+	if !strings.Contains(plain, "deepseek-v4-flash") {
 		t.Fatalf("footer should show model and work mode:\n%s", plain)
 	}
 	if strings.Contains(plain, "BAL") || strings.Contains(plain, "¥12.34") {

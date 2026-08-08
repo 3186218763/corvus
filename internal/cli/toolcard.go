@@ -1,5 +1,5 @@
-// Formats a tool call as a Claude-style card line: a "● Verb(primary arg)"
-// header instead of the raw "-> name {json}", plus the "⎿" continuation gutter.
+// Formats tool calls in Codex-style density: "• Ran/Edited/Explored" with
+// cyan tree verbs and └ gutters (not multi-color category ● cards).
 package cli
 
 import (
@@ -11,11 +11,13 @@ import (
 	"corvus/internal/tool"
 )
 
-// connector is the Claude-style "⎿" gutter that ties a continuation block (tool
-// output, streamed thinking) to the header line above it.
-const connector = "  ⎿  "
+// connector is the tree gutter under a tool header (output / multi-line cmd).
+const connector = "  └ "
 
-// connectorBlock renders lines under the connector: the first carries the "⎿"
+// exploreMaxLeaves caps visible Explored tree rows before "+N more".
+const exploreMaxLeaves = 5
+
+// connectorBlock renders lines under the connector: the first carries the └
 // gutter, the rest align beneath it. Returns "" for no lines.
 func connectorBlock(lines []string) string {
 	if len(lines) == 0 {
@@ -31,18 +33,18 @@ func connectorBlock(lines []string) string {
 
 // toolVerb maps a tool's snake_case id to the verb shown in its card.
 var toolVerb = map[string]string{
-	"bash":           "Bash",
+	"bash":           "Ran",
 	"bash_output":    "Output",
 	"kill_shell":     "Kill",
 	"wait":           "Wait",
 	"read_file":      "Read",
-	"write_file":     "Write",
-	"edit_file":      "Update",
-	"multi_edit":     "Update",
+	"write_file":     "Edited",
+	"edit_file":      "Edited",
+	"multi_edit":     "Edited",
 	"move_file":      "Move",
-	"delete_range":   "Update",
-	"delete_symbol":  "Update",
-	"notebook_edit":  "Update",
+	"delete_range":   "Edited",
+	"delete_symbol":  "Edited",
+	"notebook_edit":  "Edited",
 	"glob":           "Glob",
 	"grep":           "Search",
 	"ls":             "List",
@@ -53,8 +55,7 @@ var toolVerb = map[string]string{
 	"use_capability": "MCP",
 }
 
-// toolArgKey is the JSON field shown in parentheses for each tool (wait is
-// special-cased — it carries a job_ids array, not a scalar).
+// toolArgKey is the JSON field shown as the primary arg for each tool.
 var toolArgKey = map[string]string{
 	"bash":          "command",
 	"bash_output":   "job_id",
@@ -76,9 +77,8 @@ var toolArgKey = map[string]string{
 	"task":          "description",
 }
 
-// toolCategoryColor returns the semantic color for a tool's category: reads
-// cyan, writes green, shell yellow, process control magenta, everything else
-// copper. Shared by the ● dot and the card verb.
+// toolCategoryColor returns a legacy category color (diff headers / errors).
+// New tool cards use dim • + cyan tree verbs instead of category-colored ●.
 func toolCategoryColor(name string) cliColor {
 	switch toolCategory[name] {
 	case "read":
@@ -94,11 +94,19 @@ func toolCategoryColor(name string) cliColor {
 	}
 }
 
-// toolDot returns the "●" status glyph coloured by the tool's category so the eye
-// can tell reads (cyan) from writes (green), shell (yellow), process control
-// (magenta), and everything else (copper) at a glance.
+// toolBullet is the default dim Codex marker for tool/agent rows.
+func toolBullet() string { return dim("•") }
+
+// toolBulletOK is a green success marker (completed Ran).
+func toolBulletOK() string { return themeFg(activeCLITheme.success, bold("•")) }
+
+// toolBulletErr is a red failure marker.
+func toolBulletErr() string { return themeFg(activeCLITheme.danger, bold("•")) }
+
+// toolDot is kept for call sites that still want a bullet; always dim •.
 func toolDot(name string) string {
-	return themeFg(toolCategoryColor(name), "●")
+	_ = name
+	return toolBullet()
 }
 
 var toolCategory = map[string]string{
@@ -110,8 +118,23 @@ var toolCategory = map[string]string{
 	"wait": "proc", "kill_shell": "proc",
 }
 
-// toolDisplayName returns the card verb for a tool: a mapped builtin verb, the
-// short name for an MCP tool (mcp__server__tool), or the raw id as a fallback.
+// isExploreCoalesceTool reports whether consecutive calls of this tool merge
+// into one • Explored cell (read-category minus process readbacks).
+func isExploreCoalesceTool(name string) bool {
+	switch name {
+	case "read_file", "ls", "glob", "grep", "web_fetch", "web_search":
+		return true
+	default:
+		return false
+	}
+}
+
+// isWriteTool reports tools that render as • Edited.
+func isWriteTool(name string) bool {
+	return toolCategory[name] == "write"
+}
+
+// toolDisplayName returns the card verb for a tool.
 func toolDisplayName(name string) string {
 	if _, short, ok := tool.SplitMCPName(name); ok {
 		return short
@@ -122,7 +145,12 @@ func toolDisplayName(name string) string {
 	return name
 }
 
-// toolArg pulls the primary argument shown in the card's parentheses.
+// treeVerbColor is cyan for Explored tree labels (Search/Read/List/…).
+func treeVerbColor(verb string) string {
+	return themeFg(activeCLITheme.info, verb)
+}
+
+// toolArg pulls the primary argument shown beside the verb.
 func toolArg(name, args string) string {
 	var m map[string]any
 	if json.Unmarshal([]byte(args), &m) != nil {
@@ -170,43 +198,177 @@ func argList(v any) string {
 	return strings.Join(parts, ", ")
 }
 
-// toolCard renders the dispatch line: "  ⏺ Verb(arg)", arg clamped to width.
-// bash commands are syntax-highlighted via bashToolCard instead.
+// exploreLeaf is one row under • Explored.
+type exploreLeaf struct {
+	Verb string
+	Arg  string
+}
+
+// exploreLeafFrom builds a leaf from a tool dispatch.
+func exploreLeafFrom(name, args string) exploreLeaf {
+	return exploreLeaf{Verb: toolDisplayName(name), Arg: toolArg(name, args)}
+}
+
+// exploredCard renders:
+//
+//	• Explored
+//	  └ Search pattern
+//	    Read a.go, b.go
+func exploredCard(leaves []exploreLeaf, width int) string {
+	if width < 8 {
+		width = 8
+	}
+	head := "  " + toolBullet() + " " + bold("Explored")
+	if len(leaves) == 0 {
+		return head
+	}
+	// Merge consecutive Read leaves into one "Read a, b, c" row (Codex).
+	rows := coalesceReadLeaves(leaves)
+	show := rows
+	extra := 0
+	if len(show) > exploreMaxLeaves {
+		extra = len(show) - exploreMaxLeaves
+		show = show[:exploreMaxLeaves]
+	}
+	var body []string
+	prefixW := len([]rune(connector))
+	for _, leaf := range show {
+		verb := treeVerbColor(leaf.Verb)
+		arg := leaf.Arg
+		avail := width - prefixW - visibleWidth(leaf.Verb) - 1
+		if avail < 4 {
+			avail = 4
+		}
+		if arg != "" {
+			body = append(body, verb+" "+clampPlain(arg, avail))
+		} else {
+			body = append(body, verb)
+		}
+	}
+	if extra > 0 {
+		body = append(body, dim(fmt.Sprintf("+%d more", extra)))
+	}
+	return head + "\n" + connectorBlock(body)
+}
+
+// coalesceReadLeaves merges consecutive Read verbs into one comma-joined row.
+func coalesceReadLeaves(leaves []exploreLeaf) []exploreLeaf {
+	out := make([]exploreLeaf, 0, len(leaves))
+	for _, leaf := range leaves {
+		if leaf.Verb == "Read" && len(out) > 0 && out[len(out)-1].Verb == "Read" {
+			if leaf.Arg == "" {
+				continue
+			}
+			if out[len(out)-1].Arg == "" {
+				out[len(out)-1].Arg = leaf.Arg
+			} else {
+				out[len(out)-1].Arg += ", " + leaf.Arg
+			}
+			continue
+		}
+		out = append(out, leaf)
+	}
+	return out
+}
+
+// encodeExploreLeaves serializes leaves for transcriptSource.aux re-render.
+func encodeExploreLeaves(leaves []exploreLeaf) string {
+	type row struct {
+		Verb string `json:"verb"`
+		Arg  string `json:"arg"`
+	}
+	rows := make([]row, len(leaves))
+	for i, leaf := range leaves {
+		rows[i] = row{Verb: leaf.Verb, Arg: leaf.Arg}
+	}
+	b, err := json.Marshal(map[string]any{"leaves": rows})
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
+// decodeExploreLeaves restores leaves from encodeExploreLeaves.
+func decodeExploreLeaves(args string) []exploreLeaf {
+	var payload struct {
+		Leaves []struct {
+			Verb string `json:"verb"`
+			Arg  string `json:"arg"`
+		} `json:"leaves"`
+	}
+	if json.Unmarshal([]byte(args), &payload) != nil {
+		return nil
+	}
+	out := make([]exploreLeaf, 0, len(payload.Leaves))
+	for _, leaf := range payload.Leaves {
+		out = append(out, exploreLeaf{Verb: leaf.Verb, Arg: leaf.Arg})
+	}
+	return out
+}
+
+// toolCard renders a single tool dispatch in Codex density form.
 func toolCard(name, args string, width int) string {
+	if name == "explored" {
+		return exploredCard(decodeExploreLeaves(args), width)
+	}
 	if name == "bash" {
 		return bashToolCard(name, args, width)
 	}
-	return "  " + toolDot(name) + " " + toolHead(name, toolArg(name, args), width)
+	if isExploreCoalesceTool(name) {
+		return exploredCard([]exploreLeaf{exploreLeafFrom(name, args)}, width)
+	}
+	if isWriteTool(name) {
+		return editedCard(name, args, width)
+	}
+	// MCP / other: • Verb arg
+	label := toolDisplayName(name)
+	arg := toolArg(name, args)
+	head := "  " + toolBullet() + " " + bold(label)
+	if arg == "" {
+		return head
+	}
+	avail := width - 4 - len([]rune(label)) - 1
+	return head + " " + clampPlain(arg, max(avail, 4))
 }
 
-// bashToolCard renders "  ● Bash <command>" with the command chroma-highlighted
-// (catppuccin + flag tint). Multi-line commands continue under the ⎿ connector;
-// every line is clamped to the terminal width.
+// editedCard renders "  • Edited path".
+func editedCard(name, args string, width int) string {
+	path := toolArg(name, args)
+	head := "  " + toolBullet() + " " + bold("Edited")
+	if path == "" {
+		// Fall back to display name for non-path writes (e.g. delete_symbol).
+		label := toolDisplayName(name)
+		if label != "Edited" {
+			head = "  " + toolBullet() + " " + bold(label)
+		}
+		return head
+	}
+	avail := width - 4 - len([]rune("Edited")) - 1
+	return head + " " + clampPlain(path, max(avail, 4))
+}
+
+// bashToolCard renders "  • Ran <highlighted command>".
 func bashToolCard(name, args string, width int) string {
 	cmd := strings.TrimSpace(toolArg(name, args))
-	dot := toolDot(name)
-	label := toolDisplayName(name)
+	label := "Ran"
 	if cmd == "" {
-		return "  " + dot + " " + bold(label)
+		return "  " + toolBullet() + " " + bold(label)
 	}
 	lines := strings.Split(cmd, "\n")
-	headW := width - 5 - len([]rune(label)) // 2 indent + ● + space + label + space
-	first := highlightBash(clampPlain(lines[0], headW))
+	headW := width - 4 - len([]rune(label)) - 1 // "  • Ran "
+	first := highlightBash(clampPlain(lines[0], max(headW, 4)))
 	rest := make([]string, 0, len(lines)-1)
 	for _, ln := range lines[1:] {
-		rest = append(rest, highlightBash(clampPlain(ln, width-len([]rune(connector)))))
+		rest = append(rest, highlightBash(clampPlain(ln, max(width-len([]rune(connector)), 4))))
 	}
-	head := "  " + dot + " " + bold(label) + " " + first
+	head := "  " + toolBullet() + " " + bold(label) + " " + first
 	if len(rest) == 0 {
 		return head
 	}
 	return head + "\n" + connectorBlock(rest)
 }
 
-// renderToolCardExpanded renders the tool card followed by its output (capped
-// at shellExpandMaxLines) under the ⎿ connector. Used by Ctrl+B expansion,
-// which anchors to the card block itself. Empty output renders as the bare
-// card.
+// renderToolCardExpanded renders the tool card followed by its output under └.
 func renderToolCardExpanded(name, args, output string, width int) string {
 	card := toolCard(name, args, width)
 	if block := renderToolOutputBlock(output, width); block != "" {
@@ -215,9 +377,7 @@ func renderToolCardExpanded(name, args, output string, width int) string {
 	return card
 }
 
-// renderToolOutputBlock renders a tool's output under the ⎿ connector, capped
-// at shellExpandMaxLines with a "… N more lines" tail. Returns "" when the
-// output is empty so callers can render a bare card.
+// renderToolOutputBlock renders output under the └ connector.
 func renderToolOutputBlock(output string, width int) string {
 	if strings.TrimSpace(output) == "" {
 		return ""
@@ -226,7 +386,7 @@ func renderToolOutputBlock(output string, width int) string {
 	show := min(len(lines), shellExpandMaxLines)
 	rendered := make([]string, show)
 	for i := 0; i < show; i++ {
-		rendered[i] = dim(clampPlain(lines[i], width-len([]rune(connector))))
+		rendered[i] = dim(clampPlain(lines[i], max(width-len([]rune(connector)), 4)))
 	}
 	if len(lines) > shellExpandMaxLines {
 		rendered = append(rendered, dim(fmt.Sprintf("… %d more lines", len(lines)-shellExpandMaxLines)))
@@ -234,15 +394,15 @@ func renderToolOutputBlock(output string, width int) string {
 	return connectorBlock(rendered)
 }
 
-// toolHead builds "Verb(arg)" with the verb bold and category-coloured and the
-// arg in the toolArg tone, clamped to fit the remaining width; shared by
-// toolCard and the diff block header.
+// toolHead builds a bold, category-tinted verb + optional arg for diff headers.
 func toolHead(name, arg string, width int) string {
 	label := toolDisplayName(name)
+	// Diff headers keep category color so write/read/exec stay scannable.
+	// For write tools the display name is "Edited" (not "Update").
 	head := themeFg(toolCategoryColor(name), bold(label))
 	if arg != "" {
 		avail := width - 4 - len([]rune(label)) - 2
-		head += dim("(") + themeFg(activeCLITheme.toolArg, clampPlain(arg, avail)) + dim(")")
+		head += dim("(") + themeFg(activeCLITheme.toolArg, clampPlain(arg, max(avail, 4))) + dim(")")
 	}
 	return head
 }

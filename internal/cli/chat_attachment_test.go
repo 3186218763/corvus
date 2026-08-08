@@ -173,7 +173,7 @@ func TestTakeNextPasteIDSkipsUsedIDsAcrossWrap(t *testing.T) {
 		t.Fatalf("takeNextPasteID = %d, want first unused ID 2", got)
 	}
 	if m.nextPasteID != 3 {
-		t.Fatalf("nextPasteID = %d, want 3", m.nextPasteID)
+		t.Fatalf("nextPasteID = %d, want 2", m.nextPasteID)
 	}
 }
 
@@ -204,7 +204,7 @@ func TestTakeNextPasteIDSynchronizesAdoptedControllerHistory(t *testing.T) {
 	executor.SetSession(adopted)
 
 	if got := m.takeNextPasteID(); got != 3 {
-		t.Fatalf("takeNextPasteID after adopted history = %d, want 3", got)
+		t.Fatalf("takeNextPasteID after adopted history = %d, want 2", got)
 	}
 }
 

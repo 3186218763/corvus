@@ -465,11 +465,13 @@ func TestRenderMCPManagerRemoteDeferredAuthHint(t *testing.T) {
 }
 
 func TestRenderMCPManagerDetailCompactsConfigPath(t *testing.T) {
+	// Path must exceed viewBudget(80, 18)=62 so compactMiddle actually shortens it.
+	longPath := "/Users/example/Library/Application Support/corvus/very/deep/nested/path/to/config.toml"
 	p := &mcpManager{
 		stage: mcpStageDetail,
 		name:  "github",
 		snapshot: mcpSnapshot{
-			configPath: "/Users/example/Library/Application Support/corvus/config.toml",
+			configPath: longPath,
 			servers: []mcpServerView{{
 				Name: "github", Transport: "stdio", Status: "deferred", Configured: true,
 				Tier: "background", Command: "npx", Args: []string{"-y", "@modelcontextprotocol/server-github"},
@@ -482,7 +484,10 @@ func TestRenderMCPManagerDetailCompactsConfigPath(t *testing.T) {
 			t.Fatalf("detail line exceeds width 80 (%d): %q\n%s", visibleWidth(line), line, got)
 		}
 	}
-	if strings.Contains(got, "Application Support/corvus/config.toml") {
+	if strings.Contains(got, longPath) {
+		t.Fatalf("long config path should be compacted:\n%s", got)
+	}
+	if strings.Contains(got, "very/deep/nested/path/to/config.toml") {
 		t.Fatalf("long config path should be compacted:\n%s", got)
 	}
 }

@@ -14,7 +14,7 @@ func benchTranscriptContent(lines int) string {
 	for i := 0; i < lines; i++ {
 		switch i % 4 {
 		case 0:
-			b.WriteString("\x1b[2m  ⎿  " + strings.Repeat("tool output line", 4) + "\x1b[0m\n")
+			b.WriteString("\x1b[2m  └  " + strings.Repeat("tool output line", 4) + "\x1b[0m\n")
 		case 1:
 			b.WriteString("\x1b[38;5;173m● Tool(verb)\x1b[0m\n")
 		case 2:

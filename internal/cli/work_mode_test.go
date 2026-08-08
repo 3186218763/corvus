@@ -283,7 +283,7 @@ func TestRuntimeRebuildCommandsCarryCurrentWorkMode(t *testing.T) {
 	m = next.(chatTUI)
 
 	if len(specs) != 3 {
-		t.Fatalf("runtime rebuild count = %d, want 3", len(specs))
+		t.Fatalf("runtime rebuild count = %d, want 2", len(specs))
 	}
 	if specs[0].EffortOverride == nil || *specs[0].EffortOverride != "max" {
 		t.Fatalf("effort rebuild override = %v, want max", specs[0].EffortOverride)

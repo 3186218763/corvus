@@ -110,60 +110,25 @@ func (m chatTUI) primaryStatusLine(shellMode, cancelRequested bool) string {
 	return status
 }
 
-// statusModelWorkGroup is the bounded, session-level group placed at the right
-// edge of the first footer row. A custom statusline still replaces every
-// built-in data field, matching its existing configuration contract.
+// statusModelWorkGroup is the model token for the right side of the footer.
+// Effort/Work are not permanent chrome (Codex density); they live on /status.
+// A custom statusline still replaces every built-in data field.
 func (m chatTUI) statusModelWorkGroup(maxWidth int) string {
 	if m.statuslineCmd != "" && m.statuslineOut != "" {
 		return ""
 	}
 	model := strings.TrimSpace(m.label)
-	work := ""
-	if m.runtimeProfile != "" {
-		work = runtimeProfileDisplay(m.runtimeProfile)
+	if model == "" {
+		return ""
 	}
 	if maxWidth <= 0 {
 		maxWidth = 1
 	}
-
-	const separator = "   "
-	tail := make([]string, 0, 2)
-	if effort := m.effortTag(); effort != "" {
-		tail = append(tail, effort)
+	// Bare model name (no "Model " label) — quieter, denser right cluster.
+	if visibleWidth(model) <= maxWidth {
+		return footerInfo(model)
 	}
-	if work != "" {
-		tail = append(tail, footerMetric(i18n.M.ChatStatusWorkLabel, footerSecondary(work)))
-	}
-	if model == "" && len(tail) == 0 {
-		return ""
-	}
-
-	fields := append([]string(nil), tail...)
-	if model != "" {
-		fields = append([]string{footerMetric(i18n.M.ChatStatusModelLabel, footerInfo(model))}, fields...)
-	}
-	full := strings.Join(fields, separator)
-	if visibleWidth(full) <= maxWidth {
-		return full
-	}
-
-	// Model names own the flexible slot. Keep effort and work intact while they
-	// fit, and compact only the model before falling back to a bounded plain group.
-	if model != "" {
-		tailWidth := visibleWidth(strings.Join(tail, separator))
-		if len(tail) > 0 {
-			tailWidth += visibleWidth(separator)
-		}
-		modelBudget := maxWidth - tailWidth - visibleWidth(i18n.M.ChatStatusModelLabel+" ")
-		if modelBudget >= 4 {
-			modelField := footerMetric(i18n.M.ChatStatusModelLabel, footerInfo(compactMiddle(model, modelBudget)))
-			if len(tail) == 0 {
-				return modelField
-			}
-			return modelField + separator + strings.Join(tail, separator)
-		}
-	}
-	return footerHint(compactMiddle(ansi.Strip(full), maxWidth))
+	return footerInfo(compactMiddle(model, maxWidth))
 }
 
 func renderContextStatusGroups(used, window int, ratio float64) []string {
@@ -205,23 +170,20 @@ func renderContextStatusGroups(used, window int, ratio float64) []string {
 	}
 }
 
-// statusTelemetryGroups returns independently placeable session metrics for the
-// default data band: context (+ compact headroom) and jobs when > 0. Balance,
-// cache diagnostics, and git porcelain live on /status instead of permanent chrome.
-// A custom statusline still replaces this entire band.
+// statusTelemetryGroups returns optional session metrics for the legacy data
+// band. Default density chrome no longer mounts CTX/jobs permanently (see
+// statusRightGroup); custom statusline still owns this path when configured.
 func (m chatTUI) statusTelemetryGroups() []string {
 	if m.statuslineCmd != "" && m.statuslineOut != "" {
 		return []string{m.statuslineOut}
 	}
-	var data []string
+	// Jobs still surface when non-zero — actionable, not ambient metrics.
 	if m.ctrl != nil {
-		used, window := m.ctrl.ContextSnapshot()
-		data = append(data, renderContextStatusGroups(used, window, m.ctrl.CompactRatio())...)
 		if jt := m.jobsTag(); jt != "" {
-			data = append(data, footerMetric(i18n.M.ChatStatusJobsLabel, footerInfo(ansi.Strip(jt))))
+			return []string{footerMetric(i18n.M.ChatStatusJobsLabel, footerInfo(ansi.Strip(jt)))}
 		}
 	}
-	return data
+	return nil
 }
 
 func layoutStatusSides(left, right string, width int) string {
@@ -305,22 +267,23 @@ func (m chatTUI) projectPath() string {
 	return abbrevHome(root)
 }
 
-// statusRightGroup renders the right half of the single footer row: project
-// path · model · cache hit. A configured custom statusline replaces all of it
-// (existing contract: it owns the data fields).
+// statusRightGroup renders the right half of the single footer row:
+// model · path (Codex density). Cache hit / CTX / Effort / Work are not
+// permanent. A configured custom statusline replaces all of it.
 func (m chatTUI) statusRightGroup(width int) string {
 	if m.statuslineCmd != "" && m.statuslineOut != "" {
 		return footerHint(ansi.Strip(m.statuslineOut))
 	}
 	var groups []string
-	if path := m.projectPath(); path != "" {
-		groups = append(groups, footerSecondary(compactMiddle(path, max(width/3, 12))))
-	}
-	if model := m.statusModelWorkGroup(max(width-visibleWidth(strings.Join(groups, " · "))-1, 1)); model != "" {
+	if model := m.statusModelWorkGroup(max(width/2, 8)); model != "" {
 		groups = append(groups, model)
 	}
-	if m.turnReceipt != "" {
-		groups = append(groups, m.turnReceipt)
+	if path := m.projectPath(); path != "" {
+		budget := max(width/3, 12)
+		if rem := width - visibleWidth(strings.Join(groups, " · ")) - 3; rem > 0 && rem < budget {
+			budget = rem
+		}
+		groups = append(groups, footerSecondary(compactMiddle(path, budget)))
 	}
 	return strings.Join(groups, " · ")
 }

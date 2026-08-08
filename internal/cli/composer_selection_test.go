@@ -534,7 +534,7 @@ func TestComposerFieldPaintsContinuousBackground(t *testing.T) {
 	if bg == "" {
 		t.Fatal("composerFieldBackground should be non-empty with color on")
 	}
-	view := "\x1b[2m❯ \x1b[0mhello\x1b[m"
+	view := "\x1b[2m› \x1b[0mhello\x1b[m"
 	got := renderComposerField(view, 12)
 	if !strings.HasPrefix(got, bg) {
 		t.Fatalf("painted field must open with the background SGR: %q", got)
@@ -572,7 +572,7 @@ func TestComposerFieldClosesBackgroundBeforeNextRow(t *testing.T) {
 		view  string
 		width int
 	}{
-		{name: "short", view: "\x1b[2m❯ \x1b[0mhi\x1b[m", width: 20},
+		{name: "short", view: "\x1b[2m› \x1b[0mhi\x1b[m", width: 20},
 		{name: "full", view: strings.Repeat("x", 12), width: 12},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
