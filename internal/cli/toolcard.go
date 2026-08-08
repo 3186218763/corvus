@@ -209,18 +209,18 @@ func exploreLeafFrom(name, args string) exploreLeaf {
 	return exploreLeaf{Verb: toolDisplayName(name), Arg: toolArg(name, args)}
 }
 
-// exploreTree prefixes give each leaf its own branch so multi-tool Explored
-// cells read as a tree (not a flat list under a single └).
+// Codex Explored nest: one hanging └ for the first leaf, four-space indent for
+// the rest (prefix_lines semantics — not a sibling ├/└ tree).
 const (
-	exploreBranchMid  = "    ├ " // non-last leaf
-	exploreBranchLast = "    └ " // last leaf / +N more
+	exploreHangPrefix = "  └ " // first leaf only
+	exploreContPrefix = "    " // subsequent leaves / +N more
 )
 
 // exploredCard renders:
 //
 //	• Explored
-//	  ├ Read config.go
-//	  └ Search Bash|Sandbox|…
+//	  └ Search …
+//	    Read a.go, b.go
 func exploredCard(leaves []exploreLeaf, width int) string {
 	if width < 8 {
 		width = 8
@@ -237,19 +237,14 @@ func exploredCard(leaves []exploreLeaf, width int) string {
 		extra = len(show) - exploreMaxLeaves
 		show = show[:exploreMaxLeaves]
 	}
-	// +N more is its own trailing leaf for branch painting.
-	n := len(show)
-	if extra > 0 {
-		n++
-	}
 	var out strings.Builder
 	out.WriteString(head)
 	for i, leaf := range show {
-		branch := exploreBranchMid
-		if i == n-1 {
-			branch = exploreBranchLast
+		prefix := exploreContPrefix
+		if i == 0 {
+			prefix = exploreHangPrefix
 		}
-		prefixW := len([]rune(branch))
+		prefixW := len([]rune(prefix))
 		avail := width - prefixW - visibleWidth(leaf.Verb) - 1
 		if avail < 4 {
 			avail = 4
@@ -259,12 +254,16 @@ func exploredCard(leaves []exploreLeaf, width int) string {
 			line += " " + clampPlain(leaf.Arg, avail)
 		}
 		out.WriteByte('\n')
-		out.WriteString(dim(branch))
+		if i == 0 {
+			out.WriteString(dim(prefix))
+		} else {
+			out.WriteString(prefix)
+		}
 		out.WriteString(line)
 	}
 	if extra > 0 {
 		out.WriteByte('\n')
-		out.WriteString(dim(exploreBranchLast))
+		out.WriteString(exploreContPrefix)
 		out.WriteString(dim(fmt.Sprintf("+%d more", extra)))
 	}
 	return out.String()
