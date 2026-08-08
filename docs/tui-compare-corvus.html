@@ -26,10 +26,10 @@
     margin: 0;
     background: #0a0b0e;
     color: var(--fg);
-    font: 13px/1.45 "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, Menlo, Consolas, monospace;
+    font: 12.5px/1.22 "DejaVu Sans Mono", "Noto Sans Mono", "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   }
-  .page { max-width: 920px; margin: 0 auto; padding: 24px 16px 48px; }
-  .meta { color: var(--dim); margin-bottom: 16px; font-size: 12px; line-height: 1.5; }
+  .page { max-width: 900px; margin: 0 auto; padding: 16px 12px 32px; }
+  .meta { color: var(--dim); margin-bottom: 10px; font-size: 12px; line-height: 1.4; }
   .meta h1 { margin: 0 0 6px; font-size: 15px; color: var(--fg); font-weight: 600; }
   .meta code { color: var(--accent); }
   .term {
@@ -41,27 +41,27 @@
   }
   .titlebar {
     display: flex; gap: 6px; align-items: center;
-    padding: 10px 12px; background: #1a1d24; border-bottom: 1px solid #2a2e38;
+    padding: 6px 10px; background: #1a1d24; border-bottom: 1px solid #2a2e38;
     color: var(--dim); font-size: 12px;
   }
   .dot { width: 10px; height: 10px; border-radius: 50%; }
   .dot.r { background: #ff5f56; }
   .dot.y { background: #ffbd2e; }
   .dot.g { background: #27c93f; }
-  .screen { padding: 12px 14px 0; min-height: 720px; display: flex; flex-direction: column; }
-  .header-banner { color: var(--dim); margin-bottom: 10px; }
+  .screen { padding: 8px 12px 0; min-height: 0; display: flex; flex-direction: column; }
+  .header-banner { color: var(--dim); margin-bottom: 4px; }
   .header-banner .brand { color: var(--accent); font-weight: 700; }
-  .transcript { flex: 1; white-space: pre-wrap; }
-  .blank { height: 0.55em; }
-  .user { color: var(--accent); margin: 2px 0 8px; }
+  .transcript { flex: 1; white-space: normal; }
+  .blank { height: 0.15em; }
+  .user { color: var(--accent); margin: 1px 0 2px; }
   .user.history { color: var(--accent-faded); }
   .user .pfx { font-weight: 700; }
-  .think { margin: 4px 0 8px; color: var(--dim); }
+  .think { margin: 1px 0 2px; color: var(--dim); }
   .think .title { color: var(--faint); }
   .think .body {
     border-left: 2px solid #3a3f4b; margin-left: 2px; padding-left: 10px; margin-top: 2px;
   }
-  .card { margin: 4px 0 6px; }
+  .card { margin: 0; }
   .card .bullet { font-weight: 700; }
   .card.read .bullet, .card.read .verb { color: var(--cyan); }
   .card.write .bullet, .card.write .verb { color: var(--green); }
@@ -73,7 +73,7 @@
   .card .conn { color: var(--faint); }
   .card .out { color: var(--dim); }
   .card .out.ok { color: var(--green); }
-  .asst { margin: 6px 0 10px; color: var(--fg); }
+  .asst { margin: 1px 0 2px; color: var(--fg); }
   .asst .mark { color: var(--accent); font-weight: 700; }
   .asst .name { color: var(--fg); font-weight: 700; }
   .asst.history .mark { color: var(--faint); font-weight: 400; }
@@ -81,16 +81,16 @@
   .asst .li { padding-left: 2ch; }
   .asst .code { color: var(--info); }
   .asst .muted { color: var(--dim); }
-  .receipt { color: var(--faint); font-size: 12px; margin: 2px 0 8px; padding-left: 2ch; }
-  .bottom { margin: 8px -14px 0; padding: 0 14px 10px; }
-  .status-live { color: var(--dim); padding: 4px 0 6px; font-size: 12px; }
+  .receipt { color: var(--faint); font-size: 12px; margin: 1px 0 2px; padding-left: 2ch; }
+  .bottom { margin: 4px -12px 0; padding: 2px 12px 8px; }
+  .status-live { color: var(--dim); padding: 1px 0 2px; font-size: 12px; }
   .status-live .yolo { color: var(--yolo); }
   .composer {
     background: var(--composer-bg); border: 1px solid var(--composer-border);
-    border-radius: 6px; min-height: 3.6em; padding: 8px 10px; display: flex; gap: 6px;
+    border-radius: 6px; min-height: 1.8em; padding: 4px 8px; display: flex; gap: 6px;
   }
   .composer .prompt { color: var(--accent); font-weight: 700; }
-  .footer { padding: 6px 2px 0; color: var(--dim); font-size: 12px; line-height: 1.55; }
+  .footer { padding: 2px 0 0; color: var(--dim); font-size: 12px; line-height: 1.35; }
   .footer .row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .footer .lbl { color: var(--faint); }
   .footer .val { color: var(--muted); }
@@ -101,11 +101,61 @@
   .callout {
     margin-top: 18px; padding: 12px 14px; border: 1px solid #2a2e38;
     border-radius: 8px; background: #12141a; color: var(--dim);
-    font-size: 12px; line-height: 1.55;
+    font-size: 12px; line-height: 1.35;
   }
   .callout strong { color: var(--fg); }
   .callout ul { margin: 6px 0 0 1.1em; padding: 0; }
   .callout .gap { color: #e0a060; }
+
+  /* terminal-tight density */
+  /* terminal-line-stack */
+  .transcript { white-space: normal; }
+  .transcript .user,
+  .transcript .tool,
+  .transcript .asst,
+  .transcript .reason,
+  .transcript .card,
+  .transcript .think,
+  .transcript .receipt,
+  .transcript .hr { display: block; }
+  .tool .tree div,
+  .tool > div,
+  .asst .li,
+  .asst > div { line-height: 1.22; }
+  /* one terminal-ish gap between major cells only */
+  .transcript .user { margin: 0.35em 0 0.15em; }
+  .transcript .tool + .tool { margin-top: 0.05em; }
+  .transcript .asst { margin: 0.25em 0 0.15em; }
+  .transcript .tool { margin: 0.05em 0; }
+
+  .transcript { line-height: 1.22; }
+  .transcript > * { margin-top: 0; margin-bottom: 0; }
+  .tool, .asst, .reason, .card, .think { margin: 0; padding: 0; }
+  .user { margin-top: 2px; margin-bottom: 2px; }
+  .blank { display: none; } /* kill spacer divs — use 0-1 blank line max via content */
+  .hr { margin: 3px -12px; }
+  .asst .blank, .blank { display: none; }
+  .asst .li { margin: 0; padding-left: 2ch; }
+  .asst p, .asst .para { margin: 0.25em 0 0; }
+  .callout { margin-top: 12px; padding: 8px 10px; }
+  .callout ul { margin: 4px 0 0 1.1em; }
+  .footer { line-height: 1.22; }
+  .composer { line-height: 1.22; }
+
+  /* paragraph breaks without air */
+  .asst { white-space: normal; }
+  .asst .li { display: block; margin: 0; padding-left: 2ch; }
+  .asst .muted { display: block; margin-top: 0.15em; }
+  .asst .para { display: block; margin: 0.2em 0 0; }
+  .tool .tree { display: block; }
+  .tool .tree > div { display: block; margin: 0; }
+  .think .body { display: block; margin: 0; padding: 0 0 0 0.75em; border-left: 2px solid #3a3f4b; }
+  .receipt { display: block; margin: 0 0 0.15em; padding-left: 2ch; }
+  .card .conn, .card .head { display: block; margin: 0; }
+  /* kill leftover huge page bottom void */
+  .screen { min-height: unset; }
+  .transcript { flex: 0 1 auto; }
+
 </style>
 </head>
 <body>

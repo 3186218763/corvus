@@ -25,10 +25,10 @@
     margin: 0;
     background: #010409;
     color: var(--fg);
-    font: 13px/1.45 "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, Menlo, Consolas, monospace;
+    font: 12.5px/1.22 "DejaVu Sans Mono", "Noto Sans Mono", "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   }
-  .page { max-width: 920px; margin: 0 auto; padding: 24px 16px 48px; }
-  .meta { color: var(--dim); margin-bottom: 16px; font-size: 12px; line-height: 1.5; }
+  .page { max-width: 900px; margin: 0 auto; padding: 16px 12px 32px; }
+  .meta { color: var(--dim); margin-bottom: 10px; font-size: 12px; line-height: 1.4; }
   .meta h1 { margin: 0 0 6px; font-size: 15px; color: var(--fg); font-weight: 600; }
   .meta code { color: var(--cyan); }
   .links { margin: 8px 0 0; }
@@ -42,7 +42,7 @@
   }
   .titlebar {
     display: flex; gap: 6px; align-items: center;
-    padding: 10px 12px; background: #161b22; border-bottom: 1px solid #21262d;
+    padding: 6px 10px; background: #161b22; border-bottom: 1px solid #21262d;
     color: var(--dim); font-size: 12px;
   }
   .dot { width: 10px; height: 10px; border-radius: 50%; }
@@ -50,20 +50,20 @@
   .dot.y { background: #ffbd2e; }
   .dot.g { background: #27c93f; }
   .screen {
-    padding: 14px 16px 0;
-    min-height: 640px;
+    padding: 8px 12px 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
   }
-  .banner { color: var(--dim); margin-bottom: 12px; }
+  .banner { color: var(--dim); margin-bottom: 4px; }
   .banner .brand { color: var(--accent); font-weight: 700; }
-  .transcript { flex: 1; white-space: pre-wrap; }
-  .blank { height: 0.65em; }
+  .transcript { flex: 1; white-space: normal; }
+  .blank { height: 0.15em; }
 
   .user {
     background: var(--user-bg);
-    margin: 0 -16px;
-    padding: 0.55em 16px;
+    margin: 0 -12px;
+    padding: 0.12em 12px;
   }
   .user.history { opacity: 0.78; }
   .user .pfx { color: var(--dim); font-weight: 700; }
@@ -89,19 +89,19 @@
   .hr {
     border: 0;
     border-top: 1px solid var(--sep);
-    margin: 10px -16px;
+    margin: 4px -12px;
   }
 
   .bottom {
-    margin: 0 -16px;
-    padding: 0 16px 10px;
+    margin: 0 -12px;
+    padding: 2px 12px 8px;
   }
   .composer {
     border: 1px solid #30363d;
     border-radius: 8px;
     background: var(--composer-bg);
-    padding: 8px 10px;
-    min-height: 2.2em;
+    padding: 4px 8px;
+    min-height: 1.6em;
     display: flex;
     gap: 6px;
   }
@@ -111,7 +111,7 @@
     display: flex;
     justify-content: space-between;
     gap: 12px;
-    padding: 6px 2px 2px;
+    padding: 2px 0 0;
     color: var(--dim);
     font-size: 12px;
   }
@@ -127,13 +127,63 @@
     background: #0d1117;
     color: var(--dim);
     font-size: 12px;
-    line-height: 1.55;
+    line-height: 1.35;
   }
   .callout strong { color: var(--fg); }
   .callout ul { margin: 6px 0 0 1.1em; padding: 0; }
   .callout .pass { color: var(--green); }
   .checklist { margin-top: 10px; }
   .checklist li { margin: 4px 0; }
+
+  /* terminal-tight density */
+  /* terminal-line-stack */
+  .transcript { white-space: normal; }
+  .transcript .user,
+  .transcript .tool,
+  .transcript .asst,
+  .transcript .reason,
+  .transcript .card,
+  .transcript .think,
+  .transcript .receipt,
+  .transcript .hr { display: block; }
+  .tool .tree div,
+  .tool > div,
+  .asst .li,
+  .asst > div { line-height: 1.22; }
+  /* one terminal-ish gap between major cells only */
+  .transcript .user { margin: 0.35em 0 0.15em; }
+  .transcript .tool + .tool { margin-top: 0.05em; }
+  .transcript .asst { margin: 0.25em 0 0.15em; }
+  .transcript .tool { margin: 0.05em 0; }
+
+  .transcript { line-height: 1.22; }
+  .transcript > * { margin-top: 0; margin-bottom: 0; }
+  .tool, .asst, .reason, .card, .think { margin: 0; padding: 0; }
+  .user { margin-top: 2px; margin-bottom: 2px; }
+  .blank { display: none; } /* kill spacer divs — use 0-1 blank line max via content */
+  .hr { margin: 3px -12px; }
+  .asst .blank, .blank { display: none; }
+  .asst .li { margin: 0; padding-left: 2ch; }
+  .asst p, .asst .para { margin: 0.25em 0 0; }
+  .callout { margin-top: 12px; padding: 8px 10px; }
+  .callout ul { margin: 4px 0 0 1.1em; }
+  .footer { line-height: 1.22; }
+  .composer { line-height: 1.22; }
+
+  /* paragraph breaks without air */
+  .asst { white-space: normal; }
+  .asst .li { display: block; margin: 0; padding-left: 2ch; }
+  .asst .muted { display: block; margin-top: 0.15em; }
+  .asst .para { display: block; margin: 0.2em 0 0; }
+  .tool .tree { display: block; }
+  .tool .tree > div { display: block; margin: 0; }
+  .think .body { display: block; margin: 0; padding: 0 0 0 0.75em; border-left: 2px solid #3a3f4b; }
+  .receipt { display: block; margin: 0 0 0.15em; padding-left: 2ch; }
+  .card .conn, .card .head { display: block; margin: 0; }
+  /* kill leftover huge page bottom void */
+  .screen { min-height: unset; }
+  .transcript { flex: 0 1 auto; }
+
 </style>
 </head>
 <body>
@@ -164,7 +214,6 @@
 <div class="user history">
   <span class="pfx">› </span><span class="txt">Why does the status footer wrap awkwardly on medium-width terminals? Trace the layout and summarize the cause — don't edit yet.</span>
 </div>
-<div class="blank"></div>
 
 <div class="tool">
   <div><span style="color:var(--dim)">•</span> <span class="verb">Explored</span></div>
@@ -173,16 +222,13 @@
     <div class="sub">Read status_footer.go, status_footer_test.go, chat_tui.go</div>
   </div>
 </div>
-<div class="blank"></div>
 
 <div class="asst">
-  Medium-width wrap is intentional in <span class="code">layoutStatusSides</span>: when left interaction + right model/work no longer fit with a 2-col gap, the right group drops to a <strong>new left-aligned row</strong> instead of floating as an orphan.
-  <div class="blank"></div>
-  That reads as “awkward” because:
+  <div>Medium-width wrap is intentional in <span class="code">layoutStatusSides</span>: when left interaction + right model/work no longer fit with a 2-col gap, the right group drops to a <strong>new left-aligned row</strong> instead of floating as an orphan.</div>
+  <div class="para">That reads as “awkward” because:</div>
   <div class="li">1. Row 1 still looks like a full status line (YOLO / idle).</div>
   <div class="li">2. Row 2 suddenly restarts with Model / Effort / Work at the left margin — hierarchy collapses.</div>
   <div class="li">3. Labels are always present, so the second row is long even when values are short.</div>
-  <div class="blank"></div>
   <span class="muted">No files changed.</span>
 </div>
 
@@ -192,7 +238,6 @@
 <div class="user history">
   <span class="pfx">› </span><span class="txt">Ok — make the second row quieter: keep model right-anchored when possible, and demote Effort/Work to dim secondary. Still no behavior change beyond layout/chrome.</span>
 </div>
-<div class="blank"></div>
 
 <div class="tool">
   <div><span style="color:var(--dim)">•</span> <span class="verb">Ran</span>
@@ -200,13 +245,11 @@
   </div>
   <div class="tree"><div class="out">└ <span class="ok">88 lines</span></div></div>
 </div>
-<div class="blank"></div>
 
 <div class="tool">
   <div><span style="color:var(--dim)">•</span> <span class="verb">Edited</span> <span class="item">status_footer.go</span> <span class="out">(+24 −11)</span></div>
   <div class="tree"><div class="out">└ keep right group intact down to 72 cols; dim Effort/Work values</div></div>
 </div>
-<div class="blank"></div>
 
 <div class="tool">
   <div><span style="color:var(--dim)">•</span> <span class="verb">Ran</span>
@@ -214,7 +257,6 @@
   </div>
   <div class="tree"><div class="out">└ <span class="ok">ok</span>  · 0.41s</div></div>
 </div>
-<div class="blank"></div>
 
 <div class="asst">
   Done. Right-side model/work stays one unit longer before splitting; Effort/Work render as secondary so Model remains the only bright token on that band.
@@ -226,7 +268,6 @@
 <div class="user history">
   <span class="pfx">› </span><span class="txt">Also collapse consecutive Read calls the way Codex does for Explored — if the agent reads 4 small files, show one tree, not four cards.</span>
 </div>
-<div class="blank"></div>
 
 <div class="tool">
   <div><span style="color:var(--dim)">•</span> <span class="verb">Explored</span></div>
@@ -235,12 +276,10 @@
     <div class="sub">Read toolcard.go, transcript.go, chat_tui.go</div>
   </div>
 </div>
-<div class="blank"></div>
 
 <div class="tool">
   <div><span style="color:var(--dim)">•</span> <span class="verb">Edited</span> <span class="item">toolcard.go</span>, <span class="item">transcript.go</span> <span class="out">(+61 −8)</span></div>
 </div>
-<div class="blank"></div>
 
 <div class="asst">
   Sequential pure-reads now coalesce into a single
@@ -254,7 +293,6 @@
 <div class="user">
   <span class="pfx">› </span><span class="txt">Run the focused tests again and paste the summary.</span>
 </div>
-<div class="blank"></div>
 
 <div class="tool">
   <div><span style="color:var(--dim)">•</span> <span class="verb">Ran</span>
@@ -262,7 +300,6 @@
   </div>
   <div class="tree"><div class="out">└ <span class="ok">ok</span>  · 0.52s</div></div>
 </div>
-<div class="blank"></div>
 
 <div class="asst">
   All focused tests passed (StatusFooter + ToolCardCoalesce). Ready for a visual check at ~90 columns.
