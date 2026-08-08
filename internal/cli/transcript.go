@@ -14,6 +14,7 @@ import (
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/x/ansi"
 
+	"corvus/internal/event"
 	"corvus/internal/provider"
 )
 
@@ -27,6 +28,7 @@ const (
 	transcriptSourceToolCard
 	transcriptSourceBanner
 	transcriptSourceReplayBundle
+	transcriptSourceDiff // file change: re-render full-line +/- bars at current width
 )
 
 // transcriptSource retains only the semantic inputs needed to reproduce a
@@ -41,6 +43,8 @@ type transcriptSource struct {
 	planMode bool
 	maxLines int
 	history  []provider.Message
+	// fileDiff is set for transcriptSourceDiff (tool name in raw, args in aux).
+	fileDiff event.FileDiff
 }
 
 // transcriptMarker marks the live block in the transcript: the bottom-most
@@ -256,6 +260,14 @@ func (m *chatTUI) renderTranscriptSource(source transcriptSource, terminalWidth 
 			return renderToolCardExpanded(source.raw, source.aux, m.shellOutputs[source.shellID], terminalWidth)
 		}
 		return toolCard(source.raw, source.aux, terminalWidth)
+	case transcriptSourceDiff:
+		// Re-paint at current content width so +/- full-line bars never wrap
+		// through lipgloss (wrapping mid-bar strips resets and looks broken).
+		block := diffBlock(source.raw, source.aux, source.fileDiff, contentWidth, source.maxLines)
+		if len(block) == 0 {
+			return ""
+		}
+		return strings.Join(block, "\n")
 	case transcriptSourceBanner:
 		return strings.TrimRight(renderTUIBanner(m.label, source.raw, contentWidth), "\n")
 	case transcriptSourceReplayBundle:

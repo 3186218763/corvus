@@ -3872,11 +3872,18 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		case planApprovalTool:
 			// No longer a tool, but guard anyway: the plan is the assistant's reply.
 		default:
-			if block := diffBlock(e.Tool.Name, e.Tool.Args, e.Tool.FileDiff, transcriptContentWidth(m.width, m.nativeScrollback), m.diffMaxLines); block != nil {
+			if e.Tool.FileDiff.Diff != "" {
+				// One reflowable source (not fixed-width commitLine rows): bars
+				// re-render at the live transcript width so narrow / non-fullscreen
+				// viewports never lipgloss-wrap mid-background.
 				m.flushExploreCard()
-				for _, ln := range block {
-					m.commitLine(ln)
-				}
+				m.commitTranscriptSource(transcriptSource{
+					kind:     transcriptSourceDiff,
+					raw:      e.Tool.Name,
+					aux:      e.Tool.Args,
+					maxLines: m.diffMaxLines,
+					fileDiff: e.Tool.FileDiff,
+				})
 				break
 			}
 			// A re-run of the same tool id must not render the fresh card with
