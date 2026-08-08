@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Codex TUI — density reference (mockup)</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --dim: #8b949e;
+    --faint: #6e7681;
+    --cyan: #56d4dd;
+    --green: #3fb950;
+    --red: #f85149;
+    --user-bg: rgba(255,255,255,0.06);
+    --sep: #30363d;
+    --composer-bg: #161b22;
+    --blue-cmd: #89b4fa;
+    --cmd-rest: #cdd6f4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #010409;
+    color: var(--fg);
+    font: 13px/1.45 "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, Menlo, Consolas, monospace;
+  }
+  .page { max-width: 920px; margin: 0 auto; padding: 24px 16px 48px; }
+  .meta { color: var(--dim); margin-bottom: 16px; font-size: 12px; line-height: 1.5; }
+  .meta h1 { margin: 0 0 6px; font-size: 15px; color: var(--fg); font-weight: 600; }
+  .meta code { color: var(--cyan); }
+  .term {
+    background: var(--bg);
+    border: 1px solid #21262d;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0,0,0,.45);
+  }
+  .titlebar {
+    display: flex; gap: 6px; align-items: center;
+    padding: 10px 12px; background: #161b22; border-bottom: 1px solid #21262d;
+    color: var(--dim); font-size: 12px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.r { background: #ff5f56; }
+  .dot.y { background: #ffbd2e; }
+  .dot.g { background: #27c93f; }
+  .screen { padding: 14px 16px 0; min-height: 640px; display: flex; flex-direction: column; }
+  .transcript { flex: 1; white-space: pre-wrap; }
+  .blank { height: 0.65em; }
+  .user { background: var(--user-bg); margin: 0 -16px; padding: 0.55em 16px; }
+  .user .pfx { color: var(--dim); font-weight: 700; }
+  .user .txt { color: var(--fg); }
+  .reason { color: var(--dim); font-style: italic; }
+  .reason .pfx { font-style: normal; color: var(--faint); }
+  .tool .verb { font-weight: 700; }
+  .tool .tree { color: var(--dim); }
+  .tool .item { color: var(--fg); }
+  .tool .sub { color: var(--dim); padding-left: 4ch; }
+  .tool .cmd { color: var(--cmd-rest); }
+  .tool .cmd .tok { color: var(--blue-cmd); }
+  .tool .out { color: var(--dim); }
+  .tool .ok { color: var(--green); }
+  .asst { color: var(--fg); }
+  .asst .code { color: var(--cyan); }
+  .asst .li { padding-left: 2ch; }
+  .asst .muted { color: var(--dim); }
+  .hr { border: 0; border-top: 1px solid var(--sep); margin: 10px -16px; }
+  .bottom { margin: 0 -16px; padding: 0 16px 10px; }
+  .composer {
+    border: 1px solid #30363d; border-radius: 8px; background: var(--composer-bg);
+    padding: 8px 10px; min-height: 2.4em; display: flex; gap: 6px;
+  }
+  .composer .prompt { color: var(--dim); font-weight: 700; }
+  .composer .ph { color: var(--faint); }
+  .footer {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 6px 2px 2px; color: var(--dim); font-size: 12px;
+  }
+  .footer .r { color: var(--faint); }
+  .footer .accent { color: var(--cyan); }
+  .callout {
+    margin-top: 18px; padding: 12px 14px; border: 1px solid #30363d;
+    border-radius: 8px; background: #0d1117; color: var(--dim);
+    font-size: 12px; line-height: 1.55;
+  }
+  .callout strong { color: var(--fg); }
+  .callout ul { margin: 6px 0 0 1.1em; padding: 0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="meta">
+    <h1>Codex CLI 0.147 — information density reference</h1>
+    Mockup from live PTY + Codex source snapshots. Same conversation as Corvus compare/target mockups.
+  </div>
+  <div class="term">
+    <div class="titlebar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span style="margin-left:8px">codex · ~/dv_project/corvus · 110×48</span>
+    </div>
+    <div class="screen">
+      <div class="transcript">
+<div class="user"><span class="pfx">› </span><span class="txt">Why does the status footer wrap awkwardly on medium-width terminals? Trace the layout and summarize the cause — don't edit yet.</span></div>
+<div class="blank"></div>
+<div class="reason"><span class="pfx">• </span>Need the footer layout path and any width breakpoints that split left/right groups.</div>
+<div class="blank"></div>
+<div class="tool">
+  <div><span style="color:var(--dim)">•</span> <span class="verb">Explored</span></div>
+  <div class="tree">
+    <div>└ <span class="item">Search</span> layoutStatusSides|wrapStatusGroups|status footer</div>
+    <div class="sub">Read status_footer.go, status_footer_test.go, chat_tui.go</div>
+  </div>
+</div>
+<div class="blank"></div>
+<div class="asst">
+  Medium-width wrap is intentional in <span class="code">layoutStatusSides</span>: when left interaction + right model/work no longer fit with a 2-col gap, the right group drops to a <strong>new left-aligned row</strong> instead of floating as an orphan.
+  <div class="blank"></div>
+  That reads as “awkward” because:
+  <div class="li">1. Row 1 still looks like a full status line (YOLO / idle).</div>
+  <div class="li">2. Row 2 suddenly restarts with Model / Effort / Work at the left margin — hierarchy collapses.</div>
+  <div class="li">3. Labels are always present, so the second row is long even when values are short.</div>
+  <div class="blank"></div>
+  <span class="muted">No files changed.</span>
+</div>
+<hr class="hr" />
+<div class="user"><span class="pfx">› </span><span class="txt">Ok — make the second row quieter: keep model right-anchored when possible, and demote Effort/Work to dim secondary. Still no behavior change beyond layout/chrome.</span></div>
+<div class="blank"></div>
+<div class="tool">
+  <div><span style="color:var(--dim)">•</span> <span class="verb">Ran</span> <span class="cmd"><span class="tok">sed</span> -n '113,200p' internal/cli/status_footer.go</span></div>
+  <div class="tree"><div class="out">└ <span class="ok">88 lines</span></div></div>
+</div>
+<div class="blank"></div>
+<div class="tool">
+  <div><span style="color:var(--dim)">•</span> <span class="verb">Edited</span> <span class="item">status_footer.go</span> <span class="out">(+24 −11)</span></div>
+</div>
+<div class="blank"></div>
+<div class="tool">
+  <div><span style="color:var(--dim)">•</span> <span class="verb">Ran</span> <span class="cmd"><span class="tok">go</span> test ./internal/cli -run StatusFooter -count=1</span></div>
+  <div class="tree"><div class="out">└ <span class="ok">ok</span>  · 0.41s</div></div>
+</div>
+<div class="blank"></div>
+<div class="asst">Done. Right-side model/work stays one unit longer before splitting; Effort/Work render as secondary so Model remains the only bright token on that band.</div>
+<hr class="hr" />
+<div class="user"><span class="pfx">› </span><span class="txt">Also collapse consecutive Read calls the way Codex does for Explored — if the agent reads 4 small files, show one tree, not four cards.</span></div>
+<div class="blank"></div>
+<div class="tool">
+  <div><span style="color:var(--dim)">•</span> <span class="verb">Explored</span></div>
+  <div class="tree">
+    <div>└ <span class="item">Search</span> toolCard|transcriptSourceToolCard|read_file</div>
+    <div class="sub">Read toolcard.go, transcript.go, chat_tui.go</div>
+  </div>
+</div>
+<div class="blank"></div>
+<div class="tool">
+  <div><span style="color:var(--dim)">•</span> <span class="verb">Edited</span> toolcard.go, transcript.go <span class="out">(+61 −8)</span></div>
+</div>
+<div class="blank"></div>
+<div class="asst">Sequential pure-reads now coalesce into a single <span class="code">• Explored</span> cell with nested file names (max 5 visible, then <span class="code">+N more</span>). Writes/exec still stay as individual cells.</div>
+<hr class="hr" />
+<div class="user"><span class="pfx">› </span><span class="txt">Run the focused tests again and paste the summary.</span></div>
+<div class="blank"></div>
+<div class="tool">
+  <div><span style="color:var(--dim)">•</span> <span class="verb">Ran</span> <span class="cmd"><span class="tok">go</span> test ./internal/cli -run 'StatusFooter|ToolCardCoalesce' -count=1</span></div>
+  <div class="tree"><div class="out">└ <span class="ok">ok</span>  · 0.52s</div></div>
+</div>
+<div class="blank"></div>
+<div class="asst">All focused tests passed (StatusFooter + ToolCardCoalesce). Ready for a visual check at ~90 columns.</div>
+      </div>
+      <div class="bottom">
+        <div class="composer"><span class="prompt">›</span><span class="ph">Ask Codex to continue…</span></div>
+        <div class="footer">
+          <span><span class="accent">?</span> for shortcuts</span>
+          <span class="r">deepseek-v4-flash max · ~/dv_project/corvus</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="callout">
+    <strong>Codex density traits</strong>
+    <ul>
+      <li>One marker system: <code>•</code> / <code>›</code></li>
+      <li>Coalesced <code>Explored</code> trees</li>
+      <li>Quiet reasoning; plain assistant prose</li>
+      <li>Thin single-line chrome</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>
