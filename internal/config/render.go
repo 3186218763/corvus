@@ -77,7 +77,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		if strings.TrimSpace(c.UI.CursorShape) != "" {
 			fmt.Fprintf(&b, "cursor_shape = %q   # block|underline|bar; text input cursor shape\n", c.UICursorShape())
 		} else {
-			b.WriteString("# cursor_shape = \"bar\"   # block|underline|bar; text input cursor shape\n")
+			b.WriteString("# cursor_shape = \"block\"   # block|underline|bar; text input cursor shape\n")
 		}
 		if c.UI.ShowReasoning {
 			b.WriteString("show_reasoning = true   # CLI: show thinking text by default; false = collapsed (toggle with Ctrl+O)\n")

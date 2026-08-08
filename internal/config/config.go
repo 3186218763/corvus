@@ -190,7 +190,7 @@ type UIConfig struct {
 	Currency       string   `toml:"currency"`        // auto|CNY|USD pricing preference
 	ProviderAccess []string `toml:"provider_access"` // providers visible in the TUI setup flow
 	ShowReasoning  bool     `toml:"show_reasoning"`  // Ctrl+O / /verbose: show thinking text in CLI; false = collapsed
-	CursorShape    string   `toml:"cursor_shape"`    // block|underline|bar; empty defaults to bar
+	CursorShape    string   `toml:"cursor_shape"`    // block|underline|bar; empty defaults to block
 }
 
 // EnvironmentConfig controls the stable startup environment block injected into
@@ -237,17 +237,18 @@ func (c *Config) UIShortcutLayout() string {
 	}
 }
 
-// UICursorShape normalizes ui.cursor_shape. The slim "bar" default stays
-// visible without covering CJK wide characters. Valid values are "block",
-// "underline", and "bar".
+// UICursorShape normalizes ui.cursor_shape. The default is a full-cell "block"
+// caret so the insertion point is large and centered in the cell; "bar" remains
+// available for a slim caret that does not cover CJK glyphs. Valid values are
+// "block", "underline", and "bar".
 func (c *Config) UICursorShape() string {
 	switch strings.ToLower(strings.TrimSpace(c.UI.CursorShape)) {
-	case "block":
-		return "block"
+	case "bar":
+		return "bar"
 	case "underline":
 		return "underline"
 	default:
-		return "bar"
+		return "block"
 	}
 }
 

@@ -252,11 +252,11 @@ func TestApplyTextareaThemeHonorsCursorShape(t *testing.T) {
 		in   string
 		want tea.CursorShape
 	}{
-		{name: "default", in: "", want: tea.CursorBar},
+		{name: "default", in: "", want: tea.CursorBlock},
 		{name: "underline", in: "underline", want: tea.CursorUnderline},
 		{name: "block", in: "block", want: tea.CursorBlock},
 		{name: "bar", in: "bar", want: tea.CursorBar},
-		{name: "unknown", in: "unknown", want: tea.CursorBar},
+		{name: "unknown", in: "unknown", want: tea.CursorBlock},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			cliCursorShape = tt.in
@@ -264,6 +264,9 @@ func TestApplyTextareaThemeHonorsCursorShape(t *testing.T) {
 			applyTextareaTheme(&ti)
 			if got := ti.Styles().Cursor.Shape; got != tt.want {
 				t.Fatalf("cursor shape = %v, want %v", got, tt.want)
+			}
+			if !ti.Styles().Cursor.Blink {
+				t.Fatalf("cursor blink must be enabled for shape %q", tt.in)
 			}
 		})
 	}
@@ -280,7 +283,7 @@ func TestComposerTintAndCursorFollowTheme(t *testing.T) {
 			configureCLITheme(theme.name)
 			wantTint := cliColor{"#eceff4", 255}
 			if theme.mode == "dark" {
-				wantTint = cliColor{"#2a3140", 236}
+				wantTint = cliColor{"#353c4d", 238}
 			}
 			if got := activeCLITheme.inputBoxBG; !reflect.DeepEqual(got, wantTint) {
 				t.Fatalf("%s inputBoxBG = %v, want %v", theme.name, got, wantTint)
@@ -305,7 +308,7 @@ func TestComposerTintAndCursorFollowTheme(t *testing.T) {
 
 	activeColorProfile = colorprofile.NoTTY
 	configureCLITheme("dark")
-	if got := activeCLITheme.inputBoxBG; !reflect.DeepEqual(got, cliColor{"#2a3140", 236}) {
+	if got := activeCLITheme.inputBoxBG; !reflect.DeepEqual(got, cliColor{"#353c4d", 238}) {
 		t.Fatalf("dark theme must keep its tint slot even under NO_COLOR, got %v", got)
 	}
 	if got := inputBoxStyle.GetBorderTop(); got {
@@ -537,10 +540,10 @@ func TestUserBubbleFadedFollowsAccent(t *testing.T) {
 }
 
 func TestInputBoxTintPureFunctions(t *testing.T) {
-	if got, want := mixHex("#0a0c10", "#ffffff", inputBoxDarkLift), "#313336"; got != want {
+	if got, want := mixHex("#0a0c10", "#ffffff", inputBoxDarkLift), "#404145"; got != want {
 		t.Fatalf("mixHex dark lift = %s, want %s", got, want)
 	}
-	if got, want := mixHex("#f0f2f5", "#000000", inputBoxLightSink), "#d8dadd"; got != want {
+	if got, want := mixHex("#f0f2f5", "#000000", inputBoxLightSink), "#d3d5d8"; got != want {
 		t.Fatalf("mixHex light sink = %s, want %s", got, want)
 	}
 	if got, want := mixHex("#000000", "#ffffff", 0), "#000000"; got != want {
@@ -553,24 +556,24 @@ func TestInputBoxTintPureFunctions(t *testing.T) {
 		t.Fatalf("mixHex invalid hex = %q, want input returned as-is", got)
 	}
 
-	// Dark bg (10,12,16): lift inputBoxDarkLift toward white → #313336.
-	if got := inputBoxTintFromBackground(terminalRGB{10, 12, 16}, true); got != (cliColor{hex: "#313336", xterm: 236}) {
-		t.Fatalf("dark tint = %+v, want #313336/236", got)
+	// Dark bg (10,12,16): lift inputBoxDarkLift toward white → #404145.
+	if got := inputBoxTintFromBackground(terminalRGB{10, 12, 16}, true); got != (cliColor{hex: "#404145", xterm: 238}) {
+		t.Fatalf("dark tint = %+v, want #404145/238", got)
 	}
-	// Light bg (240,242,245): sink inputBoxLightSink toward black → #d8dadd.
-	if got := inputBoxTintFromBackground(terminalRGB{240, 242, 245}, false); got != (cliColor{hex: "#d8dadd", xterm: 253}) {
-		t.Fatalf("light tint = %+v, want #d8dadd/253", got)
+	// Light bg (240,242,245): sink inputBoxLightSink toward black → #d3d5d8.
+	if got := inputBoxTintFromBackground(terminalRGB{240, 242, 245}, false); got != (cliColor{hex: "#d3d5d8", xterm: 188}) {
+		t.Fatalf("light tint = %+v, want #d3d5d8/188", got)
 	}
 	// Hue-preserving: deep purple shell stays purple-tinted, not grey.
-	if got := inputBoxTintFromBackground(terminalRGB{48, 10, 36}, true); got != (cliColor{hex: "#513147", xterm: 238}) {
-		t.Fatalf("purple dark tint = %+v, want #513147/238", got)
+	if got := inputBoxTintFromBackground(terminalRGB{48, 10, 36}, true); got != (cliColor{hex: "#5e4054", xterm: 239}) {
+		t.Fatalf("purple dark tint = %+v, want #5e4054/239", got)
 	}
-	// Extremes: pure black lifted → #292929/235; pure white sunk → #e6e6e6/254.
-	if got := inputBoxTintFromBackground(terminalRGB{0, 0, 0}, true); got != (cliColor{hex: "#292929", xterm: 235}) {
-		t.Fatalf("black dark tint = %+v, want #292929/235", got)
+	// Extremes: pure black lifted → #383838/237; pure white sunk → #e0e0e0/254.
+	if got := inputBoxTintFromBackground(terminalRGB{0, 0, 0}, true); got != (cliColor{hex: "#383838", xterm: 237}) {
+		t.Fatalf("black dark tint = %+v, want #383838/237", got)
 	}
-	if got := inputBoxTintFromBackground(terminalRGB{255, 255, 255}, false); got != (cliColor{hex: "#e6e6e6", xterm: 254}) {
-		t.Fatalf("white light tint = %+v, want #e6e6e6/254", got)
+	if got := inputBoxTintFromBackground(terminalRGB{255, 255, 255}, false); got != (cliColor{hex: "#e0e0e0", xterm: 254}) {
+		t.Fatalf("white light tint = %+v, want #e0e0e0/254", got)
 	}
 }
 
@@ -597,8 +600,8 @@ func TestBuildCLIThemeTintUnderProbe(t *testing.T) {
 	})
 
 	// Outside the probe the curated fallback colors stay.
-	if got := resolveCLITheme("dark").inputBoxBG; !reflect.DeepEqual(got, cliColor{"#2a3140", 236}) {
-		t.Fatalf("fallback dark inputBoxBG = %v, want #2a3140/236", got)
+	if got := resolveCLITheme("dark").inputBoxBG; !reflect.DeepEqual(got, cliColor{"#353c4d", 238}) {
+		t.Fatalf("fallback dark inputBoxBG = %v, want #353c4d/238", got)
 	}
 	if got := resolveCLITheme("light").inputBoxBG; !reflect.DeepEqual(got, cliColor{"#eceff4", 255}) {
 		t.Fatalf("fallback light inputBoxBG = %v, want #eceff4/255", got)

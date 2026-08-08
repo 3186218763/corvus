@@ -80,7 +80,9 @@ var (
 		info:         cliColor{"#5eb0ff", 75},
 		secondary:    cliColor{"#b18cff", 141},
 		border:       cliColor{"#273343", 237},
-		inputBoxBG:   cliColor{"#2a3140", 236},
+		// Clearer elevated surface than near-black navy — reads as a field on
+		// typical dark terminals when OSC-11 probe is unavailable.
+		inputBoxBG: cliColor{"#353c4d", 238},
 		selection:    cliColor{"#4a9bff", 75},
 		userBubbleBG: cliColor{"#222631", 235},
 		diffAddBG:    cliColor{"#213A2B", 22},
@@ -148,8 +150,9 @@ var (
 func noTerminalBackground() (terminalRGB, bool) { return terminalRGB{}, false }
 
 // cliCursorShape is the active cursor shape for the textarea input, configured
-// via [ui] cursor_shape. Defaults to the slim bar used by the chat composer.
-var cliCursorShape = "bar"
+// via [ui] cursor_shape. Defaults to a full cell block so the caret reads large
+// and centered in the cell (bar is available via config for a slim caret).
+var cliCursorShape = "block"
 
 func configureCLITheme(mode string) {
 	configureCLIThemeWithStyle(mode, "")
@@ -241,10 +244,11 @@ func mixHex(a, b string, t float64) string {
 }
 
 // Relative compositor lift/sink against the probed terminal background.
-// Kept soft so the field reads translucent rather than a hard grey panel.
+// Dark lift is strong enough to read as a soft elevated surface (Codex-like)
+// without returning to the hard mid-grey slab of a ~32% mix.
 const (
-	inputBoxDarkLift  = 0.16 // toward white on dark shells
-	inputBoxLightSink = 0.10 // toward black on light shells
+	inputBoxDarkLift  = 0.22 // toward white on dark shells
+	inputBoxLightSink = 0.12 // toward black on light shells
 )
 
 // inputBoxTintFromBackground computes the composer fill from the probed
@@ -549,13 +553,16 @@ func applyTextareaTheme(ti *textarea.Model) {
 	} else {
 		styles.Cursor.Color = nil
 	}
+	// Always blink: a steady thin caret is easy to lose on a tinted field.
+	styles.Cursor.Blink = true
 	switch cliCursorShape {
-	case "block":
-		styles.Cursor.Shape = tea.CursorBlock
+	case "bar":
+		styles.Cursor.Shape = tea.CursorBar
 	case "underline":
 		styles.Cursor.Shape = tea.CursorUnderline
 	default:
-		styles.Cursor.Shape = tea.CursorBar
+		// block (and unknown): full-cell caret — larger and cell-centered.
+		styles.Cursor.Shape = tea.CursorBlock
 	}
 	ti.SetStyles(styles)
 }

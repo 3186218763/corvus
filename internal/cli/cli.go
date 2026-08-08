@@ -112,7 +112,7 @@ func configureCLIThemeFromConfig() {
 		cliCursorShape = cfg.UICursorShape()
 	} else {
 		configureCLITheme("auto")
-		cliCursorShape = "bar"
+		cliCursorShape = "block"
 	}
 }
 

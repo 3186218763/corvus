@@ -288,7 +288,7 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 		t.Errorf("ui.shortcut_layout = %q, want desktop", got.UI.ShortcutLayout)
 	}
 	if got.UICursorShape() != "bar" {
-		t.Errorf("ui.cursor_shape = %q, want bar", got.UICursorShape())
+		t.Errorf("ui.cursor_shape = %q, want bar (explicit config preserved)", got.UICursorShape())
 	}
 	if got.PricingCurrency() != "CNY" {
 		t.Errorf("ui.currency = %q, want CNY", got.PricingCurrency())
