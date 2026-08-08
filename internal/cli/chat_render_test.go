@@ -87,8 +87,8 @@ func TestIngestSeparatesReasoningFromAnswer(t *testing.T) {
 	if len(m.transcript) != 1 || !strings.Contains(m.transcript[0], "Hello") {
 		t.Fatalf("answer should commit as a separate entry, transcript=%v", m.transcript)
 	}
-	if plain := ansi.Strip(m.transcript[0]); !strings.HasPrefix(plain, "  Hello answer") {
-		t.Fatalf("answer should be plain indented body (no nameplate), got %q", plain)
+	if plain := ansi.Strip(m.transcript[0]); !strings.HasPrefix(plain, "• Hello answer") {
+		t.Fatalf("answer should start with • (no nameplate), got %q", plain)
 	}
 }
 
@@ -100,7 +100,7 @@ func TestAssistantAnswerWithoutReasoningHasNoLeadingSpacer(t *testing.T) {
 	if len(m.transcript) != 1 {
 		t.Fatalf("direct answer should remain one compact block, got %d: %v", len(m.transcript), m.transcript)
 	}
-	if plain := ansi.Strip(m.transcript[0]); !strings.HasPrefix(plain, "  Direct answer") {
+	if plain := ansi.Strip(m.transcript[0]); !strings.HasPrefix(plain, "• Direct answer") {
 		t.Fatalf("direct answer block = %q", plain)
 	}
 }
@@ -521,14 +521,17 @@ func TestRenderTUIBannerWideAndNarrow(t *testing.T) {
 	activeColorProfile = colorprofile.ANSI256
 
 	wide := renderTUIBanner("model-x", "", 120)
-	if strings.Count(wide, "\n") < 1 {
-		t.Fatalf("wide banner should keep the tip line, got %q", wide)
+	if strings.Count(strings.TrimRight(wide, "\n"), "\n") != 0 {
+		t.Fatalf("wide banner must be one line, got %q", wide)
 	}
-	if !strings.Contains(wide, i18n.M.ChatTip) {
-		t.Fatalf("wide banner should contain the tip, got %q", wide)
+	if strings.Contains(wide, i18n.M.ChatTip) {
+		t.Fatalf("banner must not include tip, got %q", wide)
+	}
+	if !strings.Contains(wide, "corvus") || !strings.Contains(wide, "model-x") {
+		t.Fatalf("wide banner missing wordmark/model: %q", wide)
 	}
 	narrow := renderTUIBanner("model-x", "", 40)
-	if strings.Count(narrow, "\n") != 0 {
+	if strings.Count(strings.TrimRight(narrow, "\n"), "\n") != 0 {
 		t.Fatalf("narrow banner must be a single line, got %q", narrow)
 	}
 	if strings.Contains(narrow, i18n.M.ChatTip) {
@@ -539,18 +542,31 @@ func TestRenderTUIBannerWideAndNarrow(t *testing.T) {
 	}
 	// A long label must actually truncate to the target width, not overflow.
 	truncated := renderTUIBanner(strings.Repeat("long-label-", 8), "", 40)
-	if strings.Count(truncated, "\n") != 0 || !strings.Contains(truncated, "…") {
+	if strings.Count(strings.TrimRight(truncated, "\n"), "\n") != 0 || !strings.Contains(truncated, "…") {
 		t.Fatalf("narrow banner should truncate a long label, got %q", truncated)
 	}
 	if w := ansi.StringWidth(truncated); w > 40 {
 		t.Fatalf("truncated banner width %d exceeds 40", w)
 	}
-	// 60 is the wide/narrow gate.
-	if got := strings.Count(renderTUIBanner("model-x", "", 59), "\n"); got != 0 {
-		t.Fatalf("width 59 must be narrow (single line), got %d lines", got)
+	// 60 is the wide/narrow gate for spacing, but both remain single-line (no tip).
+	if got := strings.Count(strings.TrimRight(renderTUIBanner("model-x", "", 59), "\n"), "\n"); got != 0 {
+		t.Fatalf("width 59 must be single line, got %d extra newlines", got)
 	}
-	if got := strings.Count(renderTUIBanner("model-x", "", 60), "\n"); got < 1 {
-		t.Fatalf("width 60 must be wide (tip line present), got %d lines", got)
+	if got := strings.Count(strings.TrimRight(renderTUIBanner("model-x", "", 60), "\n"), "\n"); got != 0 {
+		t.Fatalf("width 60 must be single line (no tip), got %d extra newlines", got)
+	}
+}
+
+func TestRenderTUIBannerSingleLineNoTip(t *testing.T) {
+	got := ansi.Strip(renderTUIBanner("deepseek-v4-flash", "", 100))
+	if strings.Count(strings.TrimRight(got, "\n"), "\n") != 0 {
+		t.Fatalf("banner must be one line, got %q", got)
+	}
+	if strings.Contains(got, i18n.M.ChatTip) {
+		t.Fatalf("banner must not include tip, got %q", got)
+	}
+	if !strings.Contains(got, "corvus") || !strings.Contains(got, "deepseek-v4-flash") {
+		t.Fatalf("banner missing wordmark/model: %q", got)
 	}
 }
 

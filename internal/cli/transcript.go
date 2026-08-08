@@ -322,16 +322,25 @@ func (m chatTUI) renderReplayBundleCopy(
 	}, marker)
 }
 
-const assistantTranscriptIndent = "  "
+const (
+	// assistantBulletPrefix is the dim • anchor on the first assistant row.
+	// Visible width is two cells, matching the continuation gutter.
+	assistantBulletPrefix = "• "
+	// assistantContIndent is the two-space gutter on wrapped/continuation rows.
+	assistantContIndent = "  "
+	// assistantTranscriptIndent is the historical alias for the two-cell gutter
+	// width (bullet and continuation both reserve two columns).
+	assistantTranscriptIndent = assistantContIndent
+)
 
-// renderAssistantMarkdown gives assistant prose a restrained two-cell gutter
-// (Codex density: no ◆ Corvus nameplate on every answer). History demotion is
-// handled by the caller via marker/theme if needed; named is retained for API
-// compatibility but no longer injects a product name.
+// renderAssistantMarkdown gives assistant prose a Codex-style • first line and
+// two-cell continuation gutter (no ◆ Corvus nameplate on every answer). History
+// demotion is handled by the caller via marker/theme if needed; named is
+// retained for API compatibility but no longer injects a product name.
 func renderAssistantMarkdown(raw string, contentWidth int, named bool) string {
 	contentWidth = max(contentWidth, 1)
-	indent := assistantTranscriptIndent
-	if contentWidth <= visibleWidth(indent) {
+	indent := assistantContIndent
+	if contentWidth <= visibleWidth(assistantBulletPrefix) {
 		indent = ""
 	}
 	bodyWidth := assistantBodyWidth(contentWidth, indent, named)
@@ -351,8 +360,8 @@ func renderAssistantMarkdown(raw string, contentWidth int, named bool) string {
 // and adds zero-width math markers for on-demand clipboard reconstruction.
 func renderAssistantMarkdownCopy(raw string, contentWidth int, prefix string, named bool) string {
 	contentWidth = max(contentWidth, 1)
-	indent := assistantTranscriptIndent
-	if contentWidth <= visibleWidth(indent) {
+	indent := assistantContIndent
+	if contentWidth <= visibleWidth(assistantBulletPrefix) {
 		indent = ""
 	}
 	bodyWidth := assistantBodyWidth(contentWidth, indent, named)
@@ -368,26 +377,29 @@ func renderAssistantMarkdownCopy(raw string, contentWidth int, prefix string, na
 	return assistantBlock(body, indent, named)
 }
 
-// assistantBodyWidth reserves the two-cell gutter so every row stays inside
-// contentWidth. named is ignored (no nameplate).
+// assistantBodyWidth reserves the two-cell • / continuation gutter so every
+// row stays inside contentWidth. named is ignored (no nameplate).
 func assistantBodyWidth(contentWidth int, indent string, named bool) int {
 	_ = named
-	return max(contentWidth-visibleWidth(indent), 1)
+	_ = indent
+	return max(contentWidth-visibleWidth(assistantBulletPrefix), 1)
 }
 
-// assistantBlock indents the assistant body with a two-cell gutter. Leading
-// blank rows are skipped so an answer starting with a newline still opens on
-// the first visible line. No ◆ Corvus nameplate (Codex-first density).
+// assistantBlock opens the assistant body with a dim • anchor on the first
+// visible row and a two-space gutter on continuations. Leading blank rows are
+// skipped so an answer starting with a newline still opens on the first
+// visible line. No ◆ Corvus nameplate (Codex-first density).
 func assistantBlock(body, indent string, named bool) string {
 	_ = named
+	_ = indent // fixed Codex gutters: •  then "  "
 	lines := strings.Split(body, "\n")
 	first := 0
 	for first < len(lines) && strings.TrimSpace(lines[first]) == "" {
 		first++
 	}
-	out := indent + lines[first]
+	out := dim(assistantBulletPrefix) + lines[first]
 	if first+1 < len(lines) {
-		out += "\n" + indentTranscriptBlock(strings.Join(lines[first+1:], "\n"), indent)
+		out += "\n" + indentTranscriptBlock(strings.Join(lines[first+1:], "\n"), assistantContIndent)
 	}
 	return out
 }

@@ -4931,14 +4931,14 @@ func interruptedTurnDisplayNotice() string {
 	return i18n.M.InterruptedRecovery
 }
 
-// renderTUIBanner is the title + tip + optional missing-key warning printed once
-// at the top of the session. Its symbols share the transcript's two-column
-// gutter so the banner ◆ lines up with the assistant ◆ and user › markers.
+// renderTUIBanner is the single-line session wordmark + model label printed
+// once at the top of the session (optional missing-key warning may follow).
+// The ◆ wordmark shares the transcript's two-column gutter with user › and
+// assistant • markers. ChatTip is intentionally omitted for Codex density.
 func renderTUIBanner(label, missing string, width int) string {
 	var b strings.Builder
 	if width >= 60 {
 		b.WriteString("  " + accent("◆") + " " + bold("corvus") + "  " + dim("· "+label) + "\n")
-		b.WriteString(dim("  "+i18n.M.ChatTip) + "\n")
 	} else {
 		line := "  " + accent("◆") + " " + bold("corvus") + " " + dim("· "+label)
 		b.WriteString(ansi.Truncate(line, width, "…"))
