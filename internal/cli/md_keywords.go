@@ -111,7 +111,7 @@ var proseKeywords = []proseKeyword{
 }
 
 var proseStructuralRe = regexp.MustCompile(
-	`(?:\./)?(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9]+|[A-Z][A-Za-z0-9_]*\(\)|[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*`,
+	`(?:/|\./)?(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9]+|(?:[A-Za-z0-9_-]+\.)+(?:go|md|markdown|json|yaml|yml|toml|txt|sh|bash|zsh|fish|py|ts|tsx|js|jsx|css|html|sql|rs|java|c|cc|cpp|h|hpp|rb|php|swift|kt|kts|lua|vue|svelte)\b|[A-Z][A-Za-z0-9_]*\(\)|[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*`,
 )
 
 type proseMatch struct {
@@ -143,11 +143,10 @@ func highlightProseText(text string, budget *proseHighlightBudget) string {
 		if match.start < pos || budget.remaining <= 0 {
 			continue
 		}
-		key := strings.ToLower(text[match.start:match.end])
-		if _, seen := budget.seen[key]; seen {
+		if _, seen := budget.seen[match.key]; seen {
 			continue
 		}
-		budget.seen[key] = struct{}{}
+		budget.seen[match.key] = struct{}{}
 		b.WriteString(text[pos:match.start])
 		b.WriteString(themeFg(proseKeywordColor(match.class), text[match.start:match.end]))
 		pos = match.end
@@ -161,19 +160,29 @@ func highlightProseText(text string, budget *proseHighlightBudget) string {
 }
 
 func proseKeywordMatches(text string) []proseMatch {
-	lower := strings.ToLower(text)
 	matches := make([]proseMatch, 0, len(proseKeywords))
 	for _, keyword := range proseKeywords {
-		needle := strings.ToLower(keyword.text)
-		for from := 0; from <= len(lower)-len(needle); {
-			rel := strings.Index(lower[from:], needle)
-			if rel < 0 {
-				break
+		if isNonASCII(keyword.text) {
+			for from := 0; from <= len(text)-len(keyword.text); {
+				rel := strings.Index(text[from:], keyword.text)
+				if rel < 0 {
+					break
+				}
+				start := from + rel
+				matches = append(matches, proseMatch{
+					start: start,
+					end:   start + len(keyword.text),
+					key:   keyword.text,
+					class: keyword.class,
+				})
+				from = start + len(keyword.text)
 			}
-			start := from + rel
-			end := start + len(needle)
-			if !isNonASCII(keyword.text) && !asciiTokenBoundary(lower, start, end) {
-				from = end
+			continue
+		}
+
+		for start := 0; start+len(keyword.text) <= len(text); start++ {
+			end := start + len(keyword.text)
+			if !asciiEqualFoldAt(text, start, keyword.text) || !asciiTokenBoundary(text, start, end) {
 				continue
 			}
 			matches = append(matches, proseMatch{
@@ -182,7 +191,6 @@ func proseKeywordMatches(text string) []proseMatch {
 				key:   strings.ToLower(keyword.text),
 				class: keyword.class,
 			})
-			from = end
 		}
 	}
 	for _, loc := range proseStructuralRe.FindAllStringIndex(text, -1) {
@@ -200,6 +208,22 @@ func proseKeywordMatches(text string) []proseMatch {
 		return matches[i].end > matches[j].end
 	})
 	return matches
+}
+
+func asciiEqualFoldAt(text string, start int, keyword string) bool {
+	for i := 0; i < len(keyword); i++ {
+		if asciiLower(text[start+i]) != asciiLower(keyword[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func asciiLower(b byte) byte {
+	if b >= 'A' && b <= 'Z' {
+		return b + ('a' - 'A')
+	}
+	return b
 }
 
 func isNonASCII(s string) bool {

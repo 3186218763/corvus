@@ -52,6 +52,41 @@ func TestHighlightProseTextMatchesChineseAndStructuredTokens(t *testing.T) {
 	}
 }
 
+func TestHighlightProseTextMatchesCompleteFilenameAndAbsolutePath(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+	budget := newProseHighlightBudget()
+	input := "Update theme.go before /srv/corvus/internal/cli/md.go."
+	got := highlightProseText(input, &budget)
+	if plain := ansi.Strip(got); plain != input {
+		t.Fatalf("visible text changed: %q", plain)
+	}
+	for _, want := range []string{
+		fgSGR(activeCLITheme.accent) + "theme.go",
+		fgSGR(activeCLITheme.accent) + "/srv/corvus/internal/cli/md.go",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing complete structured token %q in %q", want, got)
+		}
+	}
+}
+
+func TestHighlightProseTextPreservesUnicodeBeforeASCIIKeyword(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+	budget := newProseHighlightBudget()
+	input := "\u212A renderer is ready."
+	got := highlightProseText(input, &budget)
+	if plain := ansi.Strip(got); plain != input {
+		t.Fatalf("visible text changed: got %q, want %q", plain, input)
+	}
+	if !strings.Contains(got, fgSGR(activeCLITheme.secondary)+"renderer") {
+		t.Fatalf("renderer was not highlighted after Unicode text: %q", got)
+	}
+}
+
 func TestHighlightProseTextCapsMatchesAndDeduplicates(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
