@@ -1603,6 +1603,39 @@ func TestUserBubbleIsLightweightTranscriptLine(t *testing.T) {
 	}
 }
 
+func TestUserBubbleTransparentCrossTheme(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	for _, tc := range []struct {
+		name    string
+		profile colorprofile.Profile
+		mode    string
+	}{
+		{"dark-256", colorprofile.ANSI256, "dark"},
+		{"light-256", colorprofile.ANSI256, "light"},
+		{"dark-truecolor", colorprofile.TrueColor, "dark"},
+		{"light-truecolor", colorprofile.TrueColor, "light"},
+		{"notty", colorprofile.NoTTY, "dark"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			activeColorProfile = tc.profile
+			configureCLITheme(tc.mode)
+			got := renderUserBubble("hello world", 80, false, true)
+			if strings.Contains(got, bgSGR(activeCLITheme.inputBoxBG)) ||
+				strings.Contains(got, bgSGR(activeCLITheme.userBubbleBG)) {
+				t.Fatalf("transparent rendering emitted a surface background: %q", got)
+			}
+			plain := ansi.Strip(got)
+			if !strings.Contains(plain, "› hello world") {
+				t.Fatalf("user bubble missing prompt text in %s: %q", tc.name, plain)
+			}
+			lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+			if len(lines) != 1 {
+				t.Fatalf("want one user row in %s, got %d: %q", tc.name, len(lines), plain)
+			}
+		})
+	}
+}
+
 // TestUnsendDiscardsBufferedEvents proves that after an un-send (Esc before any
 // packet) the turn's already-buffered events are swallowed — nothing reaches
 // scrollback — and its TurnDone settles the model back to idle.

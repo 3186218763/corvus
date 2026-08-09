@@ -595,3 +595,34 @@ func TestComposerFieldRespectsNoColor(t *testing.T) {
 		t.Fatalf("NO_COLOR composerFieldBackground = %q, want empty", got)
 	}
 }
+
+func TestComposerFieldStaysTransparentCrossTheme(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	for _, tc := range []struct {
+		name    string
+		profile colorprofile.Profile
+		mode    string
+	}{
+		{"dark-256", colorprofile.ANSI256, "dark"},
+		{"light-256", colorprofile.ANSI256, "light"},
+		{"dark-truecolor", colorprofile.TrueColor, "dark"},
+		{"light-truecolor", colorprofile.TrueColor, "light"},
+		{"notty", colorprofile.NoTTY, "dark"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			activeColorProfile = tc.profile
+			configureCLITheme(tc.mode)
+			view := "› draft text"
+			rendered := renderComposerField(view, 20)
+			if strings.Contains(rendered, bgSGR(activeCLITheme.inputBoxBG)) ||
+				strings.Contains(rendered, bgSGR(activeCLITheme.userBubbleBG)) {
+				t.Fatalf("transparent rendering emitted a surface background: %q", rendered)
+			}
+			if tc.profile == colorprofile.NoTTY {
+				if rendered != view {
+					t.Fatalf("NO_COLOR must pass through unchanged: %q", rendered)
+				}
+			}
+		})
+	}
+}
