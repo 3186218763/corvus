@@ -181,6 +181,7 @@ type chatTUI struct {
 	toolTail      []string
 	toolPartial   string
 	toolLineCount int
+	toolStreams   map[string]*toolProgressState
 	// shellOutputs stores the full accumulated output of each shell command
 	// (tool IDs with "shell-" prefix), so the first 10 lines can be shown after
 	// collapse and Ctrl+B can toggle the complete output.
@@ -470,6 +471,13 @@ type shellRunMeta struct {
 	err        string
 }
 
+type toolProgressState struct {
+	tail      []string
+	partial   string
+	lineCount int
+	startedAt time.Time
+}
+
 type elapsedTickMsg struct{}
 
 // balanceMsg carries the result of an async wallet-balance fetch; text is the
@@ -639,6 +647,7 @@ func newChatTUI(ctrl control.SessionAPI, missing string, eventCh chan event.Even
 		shellLiveIdx:         make(map[string]int),
 		shellTranscriptIdx:   make(map[string]int),
 		toolCardIdx:          make(map[string]int),
+		toolStreams:          make(map[string]*toolProgressState),
 		eventCh:              eventCh,
 		history:              history,
 		host:                 ctrl.Host(),
@@ -812,28 +821,187 @@ func (m *chatTUI) resetQueueNavigation() {
 // renderQueueIndicator renders the pending-message queue as dim text to show
 // above the input box when messages are queued during a running turn.
 func (m chatTUI) renderQueueIndicator() string {
-	if m.state != tuiRunning || len(m.pendingInterject) == 0 {
+	if m.state != tuiRunning || m.hideComposer() || len(m.pendingInterject) == 0 {
 		return ""
 	}
 	queueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")) // dim grey
 	highlightStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 	var lines []string
-	for i, msg := range m.pendingInterject {
-		preview := msg
-		// Truncate long messages for the compact preview.
-		runes := []rune(preview)
-		if len(runes) > 50 {
-			preview = string(runes[:47]) + "…"
-		}
+	rowBudget := m.queueVisibleItemRows()
+	if rowBudget == 0 {
+		return ""
+	}
+	start, end := m.queueVisibleRange()
+	hidden := len(m.pendingInterject) - (end - start)
+	if rowBudget <= 1 && start < end {
+		i := start
 		cursor := " "
 		style := queueStyle
 		if m.queueEditCursor == i {
 			cursor = "▸"
 			style = highlightStyle
 		}
-		lines = append(lines, style.Render(fmt.Sprintf("  %s [%d] %s", cursor, i+1, preview)))
+		prefix := fmt.Sprintf("  %s [%d] ", cursor, i+1)
+		suffix := ""
+		if hidden > 0 {
+			suffix = fmt.Sprintf(" · +%d queued", hidden)
+		}
+		previewWidth := max(m.composerFrameWidth()-visibleWidth(prefix)-visibleWidth(suffix), 1)
+		line := prefix + ansi.Truncate(oneLineText(m.pendingInterject[i]), previewWidth, "…") + suffix
+		return style.Render(ansi.Truncate(line, m.composerFrameWidth(), "…"))
+	}
+	if hidden > 0 {
+		lines = append(lines, queueStyle.Render(fmt.Sprintf("  … %d queued hidden", hidden)))
+	}
+	for i := start; i < end; i++ {
+		msg := m.pendingInterject[i]
+		cursor := " "
+		style := queueStyle
+		if m.queueEditCursor == i {
+			cursor = "▸"
+			style = highlightStyle
+		}
+		prefix := fmt.Sprintf("  %s [%d] ", cursor, i+1)
+		previewWidth := max(m.composerFrameWidth()-visibleWidth(prefix), 1)
+		preview := ansi.Truncate(oneLineText(msg), previewWidth, "…")
+		lines = append(lines, style.Render(prefix+preview))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// queueVisibleRange leaves room for the transcript, working/status lines, and
+// composer before deciding how many queued feedback previews fit. The current
+// edit target, or the newest queued item when not editing, remains in view.
+func (m chatTUI) queueVisibleRange() (int, int) {
+	total := len(m.pendingInterject)
+	if total == 0 {
+		return 0, 0
+	}
+	available := m.queueVisibleItemRows()
+	if total <= available {
+		return 0, total
+	}
+	focus := m.queueEditCursor
+	if focus < 0 || focus >= total {
+		focus = total - 1
+	}
+	if available <= 1 {
+		return focus, focus + 1
+	}
+	// Reserve one row for the hidden-count hint when the list is windowed.
+	return visibleRange(total, focus, available-1)
+}
+
+func (m chatTUI) queueVisibleItemRows() int {
+	if m.height <= 0 {
+		return len(m.pendingInterject)
+	}
+	return m.interactivePanelBudget().queueRows
+}
+
+// interactivePanelBudget assigns the rows left after the status block,
+// composer, and one transcript row. Completion gets first claim on spare rows
+// because it is the active interaction; queued feedback and the persistent
+// todo list retain a compact one-row representation when space is tight.
+func (m chatTUI) interactivePanelBudget() interactivePanelBudget {
+	if m.height <= 0 || m.hideComposer() {
+		return interactivePanelBudget{}
+	}
+
+	remaining := m.height - m.computeStatusLineCount(m.composerFrameWidth()) - max(m.input.Height(), 1) - 1
+	todos, done := m.todoPanelState()
+	hasTodo := len(todos) > 0 && done < len(todos)
+	hasQueue := m.state == tuiRunning && len(m.pendingInterject) > 0
+	hasCompletion := m.completion.active && len(m.completion.items) > 0
+	var budget interactivePanelBudget
+	take := func(want int) int {
+		if remaining <= 0 || want <= 0 {
+			return 0
+		}
+		rows := min(want, remaining)
+		remaining -= rows
+		return rows
+	}
+
+	if hasCompletion {
+		budget.completionRows = take(2) // selected item + footer
+	}
+	if hasQueue {
+		budget.queueRows = take(1)
+	}
+	if hasTodo {
+		budget.todoRows = take(renderedLineCount(m.renderTodoPanelItems(todos, done, 0)))
+	}
+
+	if hasCompletion {
+		desired := min(maxCompRows+1, len(m.completion.items)+1)
+		budget.completionRows += take(desired - budget.completionRows)
+	}
+	if hasQueue {
+		// One extra row is needed only when a windowed queue needs its hidden
+		// count hint; the allocator caps it to the live terminal budget.
+		budget.queueRows += take(len(m.pendingInterject) + 1 - budget.queueRows)
+	}
+	if hasTodo {
+		budget.todoRows += take(m.todoPanelDesiredRows(todos, done) - budget.todoRows)
+	}
+	return budget
+}
+
+type interactivePanelBudget struct {
+	queueRows      int
+	todoRows       int
+	completionRows int
+}
+
+func wrappedRowCount(s string, width int) int {
+	if s == "" {
+		return 0
+	}
+	return strings.Count(wrapStatusLine(s, width), "\n") + 1
+}
+
+func (m chatTUI) queueIndicatorRows(width int) int {
+	if m.hideComposer() {
+		return 0
+	}
+	return wrappedRowCount(m.renderQueueIndicator(), width)
+}
+
+// consumeModalPaste gives an open overlay exclusive ownership of terminal
+// paste. Searchable overlays accept the text as a query; choice-only overlays
+// swallow it so a hidden composer cannot accumulate an accidental command.
+func (m *chatTUI) consumeModalPaste(content string) bool {
+	query := oneLineText(content)
+	switch {
+	case m.skillPick != nil:
+		p := m.skillPick
+		if p.mode == pickerSkills && query != "" {
+			p.searchActive = true
+			p.query += query
+			p.sel = clampSel(p.sel, p.filteredSkills())
+		}
+		return true
+	case m.quickPick != nil:
+		if query != "" {
+			m.quickPick.query += query
+			m.quickPick.selected = 0
+		}
+		return true
+	case m.resumePick != nil && m.resumePick.quick != nil:
+		if query != "" {
+			m.resumePick.quick.query += query
+			m.resumePick.quick.selected = 0
+			m.resumePick.sel = 0
+		}
+		return true
+	case m.chooserTyping():
+		return false
+	case m.hideComposer() || m.cheatsheetOpen:
+		return true
+	default:
+		return false
+	}
 }
 
 // prompts returns the MCP prompts discovered at startup (nil when no plugins).
@@ -880,12 +1048,10 @@ func (m chatTUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if wasHidingComposer && !cm.hideComposer() {
 		cm.composerRaisedRows = 0
 	}
-	// Codex-style raise: while the composer is visible, any bottom panel lifts
-	// the input; the height is held after the panel closes until submission.
-	// Monotonic: the composer only rises, never drops, while a popup lifecycle
-	// is open. Once raised past a persistent panel (e.g. the todo list), the
-	// hold survives the popup closing and resets on the next submission.
-	if !cm.hideComposer() && cm.panels.rows > cm.composerRaisedRows {
+	// The composer rises with visible panels, then immediately returns to the
+	// bottom when a transient panel closes. Holding old popup rows strands large
+	// blank regions on short terminals.
+	if !cm.hideComposer() {
 		cm.composerRaisedRows = cm.panels.rows
 	}
 
@@ -1142,6 +1308,9 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, finalize(m, cmds)
 
 	case tea.PasteMsg:
+		if m.consumeModalPaste(msg.Content) {
+			return m, finalize(m, cmds)
+		}
 		m.followComposerCursor()
 		pasteBefore := m.input.Value()
 		if m.state != tuiRunning && m.attachPastedImages(msg.Content) {
@@ -1941,6 +2110,7 @@ func (m *chatTUI) clearTranscriptDisplay() {
 	m.shellLiveIdx = make(map[string]int)
 	m.shellTranscriptIdx = make(map[string]int)
 	m.toolCardIdx = make(map[string]int)
+	m.toolStreams = make(map[string]*toolProgressState)
 	m.answerIdx = -1
 	m.answerFlushed = 0
 	m.reasoningLineIdx = -1
@@ -1999,7 +2169,7 @@ func (m *chatTUI) reRenderExploreCard() {
 	}
 	aux := encodeExploreLeaves(m.exploreLeaves)
 	src := transcriptSource{kind: transcriptSourceToolCard, raw: "explored", aux: aux}
-	block := exploredCard(m.exploreLeaves, m.width)
+	block := exploredCard(m.exploreLeaves, transcriptContentWidth(m.width, m.nativeScrollback))
 	m.setTranscriptBlock(m.exploreIdx, block, src)
 	m.transcriptDirty = true
 }
@@ -2083,10 +2253,9 @@ func (m chatTUI) bottomRows() int {
 	} else {
 		rows = m.renderBottomPanels().rows
 	}
-	// Hold the raised-composer space after a popup closes until the next
-	// submission drops the composer back to the bottom (Codex-style). A
-	// persistent panel (e.g. the todo list) may coexist with the popup, so the
-	// hold covers the difference, not only the all-panels-closed case.
+	// composerRaisedRows mirrors the currently visible panels. It is kept as a
+	// separate value for cursor/layout consumers, but never reserves rows from a
+	// panel that has already closed.
 	if !m.hideComposer() && m.composerRaisedRows > rows {
 		rows = m.composerRaisedRows
 	}
@@ -2096,6 +2265,7 @@ func (m chatTUI) bottomRows() int {
 	// tests that don't call Update first.
 	if !m.hideComposer() {
 		rows += m.input.Height()
+		rows += m.queueIndicatorRows(m.composerFrameWidth())
 	}
 	if m.statusLineCount > 0 {
 		return rows + m.statusLineCount
@@ -2242,13 +2412,9 @@ func (m *chatTUI) nudgeSkillPicker(delta int) bool {
 		p.sourceSkillSel = next
 		return true
 	case pickerDetail:
-		// detail actions length is dynamic; use a safe upper bound via render path
+		actions := skillActionsFor(p.detailSkill)
 		next := p.detailAction + delta
-		if next < 0 {
-			return false
-		}
-		// allow a few actions; clamp later on key path if needed
-		if next > 8 {
+		if next < 0 || next >= len(actions) {
 			return false
 		}
 		p.detailAction = next
@@ -2296,6 +2462,23 @@ func (m chatTUI) renderMainManager() string {
 	return m.renderSkillPicker()
 }
 
+func (m chatTUI) mainManagerWidth() int {
+	return max(transcriptContentWidth(m.width, m.nativeScrollback), 10)
+}
+
+func (m chatTUI) mainManagerContentWidth() int {
+	return max(m.mainManagerWidth()-2, 1)
+}
+
+// mainManagerBodyHeight is the usable content height under the manager's top
+// border. A zero result means the caller has not received a terminal frame yet.
+func (m chatTUI) mainManagerBodyHeight() int {
+	if h := m.viewport.Height(); h > 0 {
+		return max(h-1, 1)
+	}
+	return 0
+}
+
 func managerContentPanelStyle(width int) lipgloss.Style {
 	return choicePanelStyle.
 		Border(lipgloss.NormalBorder(), true, false, false, false).
@@ -2313,6 +2496,9 @@ func (m chatTUI) renderMainManagerFooter() string {
 	switch {
 	case m.mcp != nil:
 		hint = m.mcp.footerHint()
+		if m.width < 48 || (m.height > 0 && m.height <= 16) {
+			hint = m.mcp.compactFooterHint()
+		}
 	case m.clearConfirm != nil:
 		hint = "Enter confirm · y clear · n/Esc cancel"
 	case m.skillPick != nil:
@@ -2321,7 +2507,8 @@ func (m chatTUI) renderMainManagerFooter() string {
 	if strings.TrimSpace(hint) == "" {
 		return ""
 	}
-	w := max(viewWidth(m.width), 40)
+	w := max(viewWidth(m.width), 10)
+	hint = viewCompactText(hint, max(w-2, 1))
 	return managerFooterPanelStyle(w).Render(dim(hint))
 }
 
@@ -2389,7 +2576,8 @@ func (m *chatTUI) streamReasoning(chunk string) {
 		m.reasoningView = m.reasoningView[:copy(m.reasoningView, m.reasoningView[drop:])]
 	}
 	raw := string(m.reasoningView)
-	m.setTranscriptBlock(m.reasoningTextIdx, reasoningBlock(raw, m.width, reasoningTailLines), transcriptSource{
+	contentWidth := transcriptContentWidth(m.width, m.nativeScrollback)
+	m.setTranscriptBlock(m.reasoningTextIdx, reasoningBlock(raw, contentWidth, reasoningTailLines), transcriptSource{
 		kind: transcriptSourceReasoning, raw: raw, maxLines: reasoningTailLines,
 	})
 	m.transcriptDirty = true
@@ -2432,71 +2620,71 @@ func (m *chatTUI) streamToolOutput(id, chunk string) {
 	if id == "" {
 		return
 	}
-	// Ensure a live canvas for this id (no pre-painted working wall).
-	needOpen := m.toolStreamID != id || (!m.nativeScrollback && m.toolStreamIdx < 0)
-	if needOpen {
-		if liveIdx, ok := m.shellLiveIdx[id]; ok && liveIdx >= 0 && liveIdx < len(m.transcript) && m.transcriptSources[liveIdx].kind == transcriptSourceFixed {
-			// Reuse this id's still-open live stream slot (late progress).
-			m.toolStreamID = id
-			m.toolStreamIdx = liveIdx
-			m.toolTail = m.toolTail[:0]
-			m.toolPartial = ""
-			m.toolLineCount = 0
-			needOpen = false
-		}
+	if m.toolStreams == nil {
+		m.toolStreams = make(map[string]*toolProgressState)
 	}
-	if needOpen {
-		m.toolStreamID = id
-		m.toolTail = m.toolTail[:0]
-		m.toolPartial = ""
-		m.toolLineCount = 0
-		if m.nativeScrollback {
-			m.toolStreamIdx = -1
-			delete(m.shellLiveIdx, id)
+	state := m.toolStreams[id]
+	if state == nil {
+		state = &toolProgressState{startedAt: time.Now()}
+		m.toolStreams[id] = state
+	}
+
+	liveIdx := -1
+	if !m.nativeScrollback {
+		if idx, ok := m.shellLiveIdx[id]; ok && idx >= 0 && idx < len(m.transcript) && m.transcriptSources[idx].kind == transcriptSourceFixed {
+			liveIdx = idx
 		} else {
-			m.toolStreamIdx = len(m.transcript)
+			liveIdx = len(m.transcript)
 			m.commitLine("") // placeholder; setLiveBlock fills it
-			m.shellLiveIdx[id] = m.toolStreamIdx
+			m.shellLiveIdx[id] = liveIdx
 		}
+	} else {
+		delete(m.shellLiveIdx, id)
 	}
 	// Accumulate full output for shell commands so Ctrl+B can expand it.
 	if strings.HasPrefix(id, "shell-") {
 		m.shellOutputs[id] += chunk
 	}
 	// Fold completed lines into the bounded tail; keep the trailing partial.
-	data := m.toolPartial + chunk
+	data := state.partial + chunk
 	for {
 		i := strings.IndexByte(data, '\n')
 		if i < 0 {
 			break
 		}
-		m.pushToolLine(strings.TrimRight(data[:i], "\r"))
+		pushToolProgressLine(state, strings.TrimRight(data[:i], "\r"))
 		data = data[i+1:]
 	}
-	m.toolPartial = data
+	state.partial = data
 
-	vis := m.toolTail
-	if m.toolPartial != "" {
-		vis = append(append([]string{}, m.toolTail...), m.toolPartial)
+	vis := state.tail
+	if state.partial != "" {
+		vis = append(append([]string{}, state.tail...), state.partial)
 	}
-	if m.nativeScrollback || m.toolStreamIdx < 0 {
+	m.toolStreamID = id
+	m.toolStreamIdx = liveIdx
+	m.toolTail = state.tail
+	m.toolPartial = state.partial
+	m.toolLineCount = state.lineCount
+	m.toolStreamStart = state.startedAt
+	if m.nativeScrollback || liveIdx < 0 {
 		return
 	}
 	lines := make([]string, len(vis))
+	contentWidth := transcriptContentWidth(m.width, m.nativeScrollback)
 	for i, ln := range vis {
-		lines[i] = dim(clampPlain(ln, m.width-len([]rune(connector))))
+		lines[i] = dim(clampPlain(ln, contentWidth-len([]rune(connector))))
 	}
-	m.setLiveBlock(m.toolStreamIdx, connectorBlock(lines))
+	m.setLiveBlock(liveIdx, connectorBlock(lines))
 }
 
-// pushToolLine appends a completed output line to the bounded tail, dropping the
-// oldest when it exceeds the window (the backing array stays ≤ window+1).
-func (m *chatTUI) pushToolLine(line string) {
-	m.toolLineCount++
-	m.toolTail = append(m.toolTail, line)
-	if len(m.toolTail) > toolStreamTailLines {
-		copy(m.toolTail, m.toolTail[1:])
-		m.toolTail = m.toolTail[:toolStreamTailLines]
+// pushToolProgressLine appends one completed line to a tool-scoped bounded tail.
+func pushToolProgressLine(state *toolProgressState, line string) {
+	state.lineCount++
+	state.tail = append(state.tail, line)
+	if len(state.tail) > toolStreamTailLines {
+		copy(state.tail, state.tail[1:])
+		state.tail = state.tail[:toolStreamTailLines]
 	}
 }
 
@@ -2510,22 +2698,16 @@ func (m *chatTUI) collapseToolOutput(id string) {
 	if m.nativeScrollback {
 		// Native scrollback cannot rewrite earlier cards: emit preview once.
 		if !m.shellNativeFlushed[id] {
-			if full, ok := m.shellOutputs[id]; ok && strings.TrimSpace(full) != "" {
-				meta, hasMeta := m.shellMeta[id]
-				ok := true
-				dur := int64(-1)
-				if hasMeta {
-					ok = meta.ok
-					dur = meta.durationMs
-				}
+			if meta, hasMeta := m.shellMeta[id]; hasMeta {
+				full := m.shellOutputs[id]
 				if block := renderToolOutputPreview(full, m.width, toolCallPreviewMaxLines); block != "" {
 					m.commitLine(block)
 				}
-				if line := toolOutcomeLine(ok, "", dur); line != "" {
+				if line := toolOutcomeLine(meta.ok, "", meta.durationMs); line != "" {
 					m.commitLine(line)
 				}
+				m.shellNativeFlushed[id] = true
 			}
-			m.shellNativeFlushed[id] = true
 		}
 		if m.toolStreamID == id {
 			m.toolStreamIdx = -1
@@ -2534,6 +2716,7 @@ func (m *chatTUI) collapseToolOutput(id string) {
 			m.toolPartial = ""
 			m.toolLineCount = 0
 		}
+		delete(m.toolStreams, id)
 		delete(m.shellLiveIdx, id)
 		return
 	}
@@ -2555,6 +2738,7 @@ func (m *chatTUI) collapseToolOutput(id string) {
 		m.toolPartial = ""
 		m.toolLineCount = 0
 	}
+	delete(m.toolStreams, id)
 	// Re-anchor Ctrl+B and paint collapsed preview on the card.
 	if cardIdx, ok := m.toolCardIdx[id]; ok && cardIdx >= 0 && cardIdx < len(m.transcript) {
 		m.shellTranscriptIdx[id] = cardIdx
@@ -2611,10 +2795,15 @@ func (m *chatTUI) beginToolRunning(id string) {
 	if id == "" {
 		return
 	}
+	if m.toolStreams == nil {
+		m.toolStreams = make(map[string]*toolProgressState)
+	}
+	state := &toolProgressState{startedAt: time.Now()}
+	m.toolStreams[id] = state
 	m.toolStreamID = id
-	m.toolTail = m.toolTail[:0]
-	m.toolPartial = ""
-	m.toolLineCount = 0
+	m.toolTail = state.tail
+	m.toolPartial = state.partial
+	m.toolLineCount = state.lineCount
 	// Clear accumulated output and expansion state for this tool ID so a re-run
 	// (e.g. repeated !pwd with the same "shell-pwd" id) doesn't append to old
 	// output or inherit the previous run's expansion.
@@ -2623,7 +2812,7 @@ func (m *chatTUI) beginToolRunning(id string) {
 	delete(m.shellMeta, id)
 	delete(m.shellNativeFlushed, id)
 	delete(m.shellLiveIdx, id)
-	m.toolStreamStart = time.Now()
+	m.toolStreamStart = state.startedAt
 	m.toolStreamFrame = 0
 	m.toolStreamIdx = -1 // no transcript wall until real output streams
 	// Ctrl+B still anchors to the card (set at dispatch); do not pre-create a
@@ -2662,7 +2851,7 @@ func (m *chatTUI) commitReasoning() bool {
 		kept := m.showReasoning && strings.TrimSpace(m.reasoning.String()) != ""
 		if kept {
 			m.commitSpacer()
-			m.commitLine(reasoningBlock(m.reasoning.String(), m.width, 0))
+			m.commitLine(reasoningBlock(m.reasoning.String(), transcriptContentWidth(m.width, m.nativeScrollback), 0))
 		}
 		m.reasoning.Reset()
 		m.reasoningView = m.reasoningView[:0]
@@ -2690,19 +2879,20 @@ func (m *chatTUI) commitReasoning() bool {
 	kept := false
 	if strings.TrimSpace(m.reasoning.String()) != "" {
 		raw := m.reasoning.String()
+		contentWidth := transcriptContentWidth(m.width, m.nativeScrollback)
 		if m.reasoningTextIdx >= 0 {
 			m.pruneOlderReasoningBlocks(m.reasoningTextIdx)
-			m.setTranscriptBlock(m.reasoningTextIdx, reasoningBlock(raw, m.width, 0), transcriptSource{
+			m.setTranscriptBlock(m.reasoningTextIdx, reasoningBlock(raw, contentWidth, 0), transcriptSource{
 				kind: transcriptSourceReasoning, raw: raw,
 			})
 			kept = true
 		} else {
 			m.pruneOlderReasoningBlocks(-1)
 			m.commitSpacer()
-			m.commitLine(reasoningBlock(raw, m.width, 0))
+			m.commitLine(reasoningBlock(raw, contentWidth, 0))
 			// commitLine doesn't set source kind; fix last block if possible.
 			if idx := len(m.transcript) - 1; idx >= 0 {
-				m.setTranscriptBlock(idx, reasoningBlock(raw, m.width, 0), transcriptSource{
+				m.setTranscriptBlock(idx, reasoningBlock(raw, contentWidth, 0), transcriptSource{
 					kind: transcriptSourceReasoning, raw: raw,
 				})
 			}
@@ -3130,19 +3320,18 @@ func (m chatTUI) View() tea.View {
 	// the composer; popups render BELOW it (Codex-style: typing "/" raises the
 	// input and the menu expands downward).
 	if working != "" {
-		parts = append(parts, workingStyle.Width(boxW).MaxWidth(boxW).Render(wrapStatusLine(working, boxW)))
-		rowsAboveBox++
+		working = wrapStatusLine(working, boxW)
+		parts = append(parts, workingStyle.Width(boxW).MaxWidth(boxW).Render(working))
+		rowsAboveBox += wrappedRowCount(working, boxW)
 	}
 	if !hideComposer {
-		if qi := m.renderQueueIndicator(); qi != "" {
+		if qi := wrapStatusLine(m.renderQueueIndicator(), boxW); qi != "" {
 			parts = append(parts, qi)
-			rowsAboveBox += strings.Count(qi, "\n") + 1
+			rowsAboveBox += wrappedRowCount(qi, boxW)
 		}
 		parts = append(parts, box)
 	}
-	// Popups expand below the composer. While open they raise the input; after
-	// dismissal the raised space is held (composerRaisedRows) until the next
-	// submission drops it back to the bottom.
+	// Popups expand below the composer and raise the input while visible.
 	var panelParts []string
 	for _, s := range []string{panels.todo, panels.banner, panels.chooser, panels.rewind, panels.mcpImport, panels.resumePick, panels.quickPick, panels.copyPick, panels.cheatsheet, panels.completion} {
 		if s != "" {
@@ -3155,8 +3344,8 @@ func (m chatTUI) View() tea.View {
 	if len(panelParts) > 0 {
 		parts = append(parts, panelParts...)
 	}
-	// Persistent panels (e.g. the todo list) can coexist with a transient
-	// popup; hold the difference so closing the popup never moves the input.
+	// This branch only supports a caller that has not yet refreshed panel state;
+	// normal Update paths keep composerRaisedRows equal to panels.rows.
 	if !hideComposer && m.composerRaisedRows > panels.rows {
 		held := m.composerRaisedRows - panels.rows
 		parts = append(parts, strings.Repeat("\n", held-1))
@@ -3409,11 +3598,12 @@ func (m chatTUI) renderApprovalBanner() string {
 	if reason := strings.TrimSpace(m.pendingApproval.Reason); reason != "" {
 		text += " · " + truncateSubject(reason, w)
 	}
-	if len(planDetails) > 0 {
-		text += "\n" + strings.Join(planDetails, "\n")
-	}
 	var b strings.Builder
-	b.WriteString("⏸ " + text + "\n")
+	contentWidth := max(w-4, 1)
+	b.WriteString("⏸ " + viewCompactText(text, contentWidth) + "\n")
+	for _, detail := range planDetails {
+		b.WriteString(viewCompactText(detail, contentWidth) + "\n")
+	}
 	for i, choice := range approvalChoices(m.pendingApproval) {
 		hint := ""
 		switch {
@@ -3504,29 +3694,38 @@ type todoPanelTodo struct {
 // pending ones muted. It returns "" when there's no list or every item is done,
 // so the panel appears while work is outstanding and clears itself when finished.
 func (m chatTUI) renderTodoPanel() string {
-	var p struct {
-		Todos []todoPanelTodo `json:"todos"`
-	}
-	if err := json.Unmarshal([]byte(m.todoArgs), &p); err != nil || len(p.Todos) == 0 {
+	todos, done := m.todoPanelState()
+	if len(todos) == 0 || done == len(todos) {
 		return ""
 	}
-	done := 0
-	for _, t := range p.Todos {
-		if t.Status == "completed" {
-			done++
-		}
+
+	rowBudget := m.todoPanelRowBudget()
+	if m.height > 0 && !m.hideComposer() && rowBudget == 0 {
+		return ""
 	}
-	if done == len(p.Todos) {
-		return "" // all finished — clear the panel
+	itemLimit := m.todoPanelItemLimit(todos, done, rowBudget)
+	if itemLimit < 0 {
+		return ""
+	}
+	return m.renderTodoPanelItems(todos, done, itemLimit)
+}
+
+// renderTodoPanelItems draws a specific task window. Callers measure this
+// final styled string rather than estimating logical rows, so borders and
+// wrapped CJK/long task labels are part of the layout budget.
+func (m chatTUI) renderTodoPanelItems(todos []todoPanelTodo, done, itemLimit int) string {
+	if itemLimit == 0 {
+		summary := fmt.Sprintf("%d/%d", done, len(todos))
+		return todoPanelStyle.Width(max(m.width, 10)).Render(accent("To-dos") + " " + dim(summary))
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s\n", accent("To-dos"), dim(fmt.Sprintf("%d/%d", done, len(p.Todos))))
-	start, end := todoPanelWindow(p.Todos)
+	fmt.Fprintf(&b, "%s %s\n", accent("To-dos"), dim(fmt.Sprintf("%d/%d", done, len(todos))))
+	start, end := todoPanelWindow(todos, itemLimit)
 	if start > 0 {
 		b.WriteString(dim(fmt.Sprintf("  +%d above", start)) + "\n")
 	}
-	for _, t := range p.Todos[start:end] {
+	for _, t := range todos[start:end] {
 		indent := "  "
 		if t.Level >= 1 {
 			indent = "      " // sub-steps sit under their phase
@@ -3544,14 +3743,65 @@ func (m chatTUI) renderTodoPanel() string {
 			b.WriteString(indent + dim("○ "+t.Content) + "\n")
 		}
 	}
-	if end < len(p.Todos) {
-		b.WriteString(dim(fmt.Sprintf("  +%d more", len(p.Todos)-end)) + "\n")
+	if end < len(todos) {
+		b.WriteString(dim(fmt.Sprintf("  +%d more", len(todos)-end)) + "\n")
 	}
 	return todoPanelStyle.Width(max(m.width, 10)).Render(strings.TrimRight(b.String(), "\n"))
 }
 
-func todoPanelWindow(todos []todoPanelTodo) (int, int) {
-	if len(todos) <= todoPanelMaxRows {
+func (m chatTUI) todoPanelState() ([]todoPanelTodo, int) {
+	var p struct {
+		Todos []todoPanelTodo `json:"todos"`
+	}
+	if err := json.Unmarshal([]byte(m.todoArgs), &p); err != nil || len(p.Todos) == 0 {
+		return nil, 0
+	}
+	done := 0
+	for _, t := range p.Todos {
+		if t.Status == "completed" {
+			done++
+		}
+	}
+	return p.Todos, done
+}
+
+// todoPanelRowBudget is the coordinated allocation for the persistent panel.
+// A zero budget means no terminal frame is available yet, so callers retain
+// the normal item cap for initial/non-interactive renders.
+func (m chatTUI) todoPanelRowBudget() int {
+	return m.interactivePanelBudget().todoRows
+}
+
+// todoPanelItemLimit turns a full-panel row budget into the number of todo
+// entries that can be shown. Measure the styled panel so its border, wrapping,
+// and any "+N" markers all fit the same frame budget.
+func (m chatTUI) todoPanelItemLimit(todos []todoPanelTodo, done, rowBudget int) int {
+	limit := min(todoPanelMaxRows, len(todos))
+	if rowBudget <= 0 {
+		return limit
+	}
+	for ; limit >= 0; limit-- {
+		if renderedLineCount(m.renderTodoPanelItems(todos, done, limit)) <= rowBudget {
+			return limit
+		}
+	}
+	return -1
+}
+
+func (m chatTUI) todoPanelDesiredRows(todos []todoPanelTodo, done int) int {
+	limit := min(todoPanelMaxRows, len(todos))
+	return renderedLineCount(m.renderTodoPanelItems(todos, done, limit))
+}
+
+func renderedLineCount(s string) int {
+	if s == "" {
+		return 0
+	}
+	return strings.Count(s, "\n") + 1
+}
+
+func todoPanelWindow(todos []todoPanelTodo, maxItems int) (int, int) {
+	if len(todos) <= maxItems {
 		return 0, len(todos)
 	}
 	active := -1
@@ -3562,16 +3812,16 @@ func todoPanelWindow(todos []todoPanelTodo) (int, int) {
 		}
 	}
 	if active < 0 {
-		return 0, todoPanelMaxRows
+		return 0, maxItems
 	}
-	start := active - todoPanelMaxRows/2
+	start := active - maxItems/2
 	if start < 0 {
 		start = 0
 	}
-	if maxStart := len(todos) - todoPanelMaxRows; start > maxStart {
+	if maxStart := len(todos) - maxItems; start > maxStart {
 		start = maxStart
 	}
-	return start, start + todoPanelMaxRows
+	return start, start + maxItems
 }
 
 // truncateSubject trims a tool subject so the approval banner fits one line.
@@ -3580,7 +3830,7 @@ func truncateSubject(s string, width int) string {
 	if max < 16 {
 		max = 16
 	}
-	return ansi.Truncate(s, max, "…")
+	return ansi.Truncate(oneLineText(s), max, "…")
 }
 
 // wrapStatusLine wraps a status line to `width` visible columns, ANSI-aware,
@@ -3608,7 +3858,7 @@ func (m chatTUI) computeStatusLineCount(width int) int {
 
 	var lines int
 	if m.state == tuiRunning {
-		lines += strings.Count(wrapStatusLine(working, width), "\n") + 1
+		lines += wrappedRowCount(working, width)
 	}
 	lines += strings.Count(statusBlock, "\n") + 1
 	return lines
@@ -4032,7 +4282,8 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 					m.reasoningView = m.reasoningView[:copy(m.reasoningView, m.reasoningView[drop:])]
 				}
 				raw := string(m.reasoningView)
-				m.setTranscriptBlock(m.reasoningTextIdx, reasoningBlock(raw, m.width, reasoningTailLines), transcriptSource{
+				contentWidth := transcriptContentWidth(m.width, m.nativeScrollback)
+				m.setTranscriptBlock(m.reasoningTextIdx, reasoningBlock(raw, contentWidth, reasoningTailLines), transcriptSource{
 					kind: transcriptSourceReasoning, raw: raw, maxLines: reasoningTailLines,
 				})
 				m.transcriptDirty = true
@@ -4113,8 +4364,10 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 				m.shellOutputs[e.Tool.ID] = e.Tool.Output
 			}
 			dur := e.Tool.DurationMs
-			if dur == 0 && !m.toolStreamStart.IsZero() && m.toolStreamID == e.Tool.ID {
-				dur = time.Since(m.toolStreamStart).Milliseconds()
+			if dur == 0 {
+				if state := m.toolStreams[e.Tool.ID]; state != nil && !state.startedAt.IsZero() {
+					dur = time.Since(state.startedAt).Milliseconds()
+				}
 			}
 			m.shellMeta[e.Tool.ID] = shellRunMeta{
 				ok:         e.Tool.Err == "",
@@ -4242,7 +4495,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		// Dim ─ rule after turns that did concrete tool work (Codex FinalMessageSeparator).
 		if m.hadWorkActivity {
 			m.ensureBlank()
-			m.commitLine(finalMessageSeparator(m.width, m.elapsed))
+			m.commitTranscriptSource(transcriptSource{kind: transcriptSourceSeparator, elapsed: m.elapsed})
 		}
 		m.hadWorkActivity = false
 		// Plan-mode approval is now driven by the controller (it emits an
@@ -4252,9 +4505,10 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 }
 
 // finalizeStreamed freezes any in-progress reasoning + answer into scrollback so
-// a following event line lands after them, preserving chronological order.
+// a following event line lands after them, preserving chronological order. Tool
+// streams close only on their matching ToolResult; unrelated events must not
+// invent a successful outcome for a still-running call.
 func (m *chatTUI) finalizeStreamed() {
-	m.collapseToolOutput(m.toolStreamID)
 	m.commitReasoning()
 	m.commitPending()
 }
@@ -5002,18 +5256,17 @@ func wrapForViewport(text string, width int, fg cliColor) string {
 	return themeStyle(fg).Width(width).Render(text)
 }
 
-// renderUserBubble renders the just-submitted prompt as a Codex-style soft
-// full-line bubble: pad row + › body + pad row when color is on. Color-off is a
-// plain › line (no box │ prefix) so it stays lighter than the composer chrome.
+// renderUserBubble renders the just-submitted prompt as a single transcript
+// line. User messages are differentiated with their foreground treatment, not
+// a full-width surface that adds two blank rows and becomes grey in ANSI-256
+// terminals.
 func renderUserBubble(line string, width int, planMode bool, current bool) string {
 	line = displayLineForImageRefs(line)
 	prefix := "› "
 	if planMode {
 		prefix = "› [plan] "
 	}
-	if width < 8 {
-		width = 8
-	}
+	_ = width
 	if !colorOn() {
 		return prefix + line
 	}
@@ -5021,13 +5274,10 @@ func renderUserBubble(line string, width int, planMode bool, current bool) strin
 	if !current {
 		fg = activeCLITheme.userBubbleFaded
 	}
-	bg := bgSGR(activeCLITheme.userBubbleBG)
-	// Bold › marker + accent/faded body (design §4.1). Separate themeFg calls so
-	// bold's trailing reset does not strip the body colour; paintUserBubbleRow
-	// re-arms bg after every reset (diffBar survival).
+	// Bold › marker + accent/faded body. Separate themeFg calls keep bold's
+	// trailing reset from stripping the body colour.
 	body := bold(themeFg(fg, prefix)) + themeFg(fg, line)
-	pad := paintUserBubbleRow("", width, bg)
-	return pad + "\n" + paintUserBubbleRow(body, width, bg) + "\n" + pad
+	return body
 }
 
 // paintUserBubbleRow draws one soft-bg row: background from the first cell,

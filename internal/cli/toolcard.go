@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"corvus/internal/tool"
 )
@@ -209,18 +212,19 @@ func exploreLeafFrom(name, args string) exploreLeaf {
 	return exploreLeaf{Verb: toolDisplayName(name), Arg: toolArg(name, args)}
 }
 
-// Codex Explored nest: one hanging └ for the first leaf, four-space indent for
-// the rest (prefix_lines semantics — not a sibling ├/└ tree).
+// Explored children form a real, visibly nested tree. Four leading spaces keep
+// child text to the right of the heading, while the branch glyph makes adjacent
+// Fetch/Search rows read as children rather than separate transcript entries.
 const (
-	exploreHangPrefix = "  └ " // first leaf only
-	exploreContPrefix = "    " // subsequent leaves / +N more
+	exploreBranchPrefix = "    ├ "
+	exploreLastPrefix   = "    └ "
 )
 
 // exploredCard renders:
 //
-//	• Explored
-//	  └ Search …
-//	    Read a.go, b.go
+//   - Explored
+//     ├ Search …
+//     └ Read a.go, b.go
 func exploredCard(leaves []exploreLeaf, width int) string {
 	if width < 8 {
 		width = 8
@@ -240,11 +244,11 @@ func exploredCard(leaves []exploreLeaf, width int) string {
 	var out strings.Builder
 	out.WriteString(head)
 	for i, leaf := range show {
-		prefix := exploreContPrefix
-		if i == 0 {
-			prefix = exploreHangPrefix
+		prefix := exploreBranchPrefix
+		if i == len(show)-1 && extra == 0 {
+			prefix = exploreLastPrefix
 		}
-		prefixW := len([]rune(prefix))
+		prefixW := visibleWidth(prefix)
 		avail := width - prefixW - visibleWidth(leaf.Verb) - 1
 		if avail < 4 {
 			avail = 4
@@ -254,16 +258,12 @@ func exploredCard(leaves []exploreLeaf, width int) string {
 			line += " " + clampPlain(leaf.Arg, avail)
 		}
 		out.WriteByte('\n')
-		if i == 0 {
-			out.WriteString(dim(prefix))
-		} else {
-			out.WriteString(prefix)
-		}
+		out.WriteString(dim(prefix))
 		out.WriteString(line)
 	}
 	if extra > 0 {
 		out.WriteByte('\n')
-		out.WriteString(exploreContPrefix)
+		out.WriteString(dim(exploreLastPrefix))
 		out.WriteString(dim(fmt.Sprintf("+%d more", extra)))
 	}
 	return out.String()
@@ -464,14 +464,61 @@ func renderToolOutputBlock(output string, width int) string {
 	}
 	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
 	show := min(len(lines), shellExpandMaxLines)
-	rendered := make([]string, show)
+	bodyW := max(width-len([]rune(connector)), 4)
+	rendered := make([]string, 0, show)
+	truncated := len(lines) > shellExpandMaxLines
+
+	// shellExpandMaxLines protects both source lines and terminal rows. A single
+	// unbroken source line can wrap into thousands of rows on a narrow terminal,
+	// so stop while expanding rather than after the large allocation is made.
 	for i := 0; i < show; i++ {
-		rendered[i] = dim(clampPlain(lines[i], max(width-len([]rune(connector)), 4)))
+		line, lineTruncated := boundedToolOutputLine(lines[i], bodyW)
+		needsCellTruncate := strings.ContainsRune(line, '\t') || strings.ContainsRune(line, '\x1b')
+		expanded := expandTabs(line)
+		bounded := expanded
+		if needsCellTruncate {
+			bounded = ansi.Truncate(expanded, bodyW*shellExpandMaxLines, "")
+			if len(bounded) < len(expanded) {
+				lineTruncated = true
+			}
+		}
+		if lineTruncated {
+			truncated = true
+		}
+		for _, wrapped := range strings.Split(ansi.Wrap(bounded, bodyW, ""), "\n") {
+			if len(rendered) == shellExpandMaxLines {
+				truncated = true
+				break
+			}
+			rendered = append(rendered, dim(wrapped))
+		}
+		if truncated && len(rendered) == shellExpandMaxLines {
+			break
+		}
 	}
-	if len(lines) > shellExpandMaxLines {
-		rendered = append(rendered, dim(fmt.Sprintf("… %d more lines", len(lines)-shellExpandMaxLines)))
+	if truncated {
+		// Preserve the visual-row cap while making loss of expanded output clear.
+		if len(rendered) == shellExpandMaxLines {
+			rendered = rendered[:len(rendered)-1]
+		}
+		rendered = append(rendered, dim(ansi.Truncate("… output truncated", bodyW, "…")))
 	}
 	return connectorBlock(rendered)
+}
+
+// boundedToolOutputLine keeps Ctrl+B expansion proportional to its visible-row
+// cap. ansi.Wrap builds the full wrapped block before callers can stop adding
+// rows, so first bound the source while preserving a valid UTF-8 boundary.
+func boundedToolOutputLine(line string, bodyW int) (string, bool) {
+	maxBytes := max(bodyW*shellExpandMaxLines, 1024)
+	if len(line) <= maxBytes {
+		return line, false
+	}
+	line = line[:maxBytes]
+	for len(line) > 0 && !utf8.ValidString(line) {
+		line = line[:len(line)-1]
+	}
+	return line, true
 }
 
 // toolOutcomeLine renders "  ✓ · 0.41s" / "  ✗ · 1.5s". durationMs < 0 omits time.

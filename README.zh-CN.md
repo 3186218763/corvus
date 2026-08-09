@@ -19,8 +19,28 @@ go build -o corvus ./cmd/corvus
 corvus
 ```
 
+## 使用示例
+
+```sh
+# 指定模型与运行时档位（economy | balanced | delivery）
+corvus --model <provider/model> --profile balanced
+
+# 恢复最近的会话
+corvus -c
+
+# 按会话 ID 或关键词恢复历史会话（不带参数则打开选择器）
+corvus -r "修复登录鉴权"
+
+# 在指定目录下启动（作为项目根，配置、沙箱与文件工具都从这里解析）
+corvus --dir ./cmd
+
+# 一次性放行所有需要确认的工具调用（等价于 TUI 内的 Ctrl+Y）
+corvus --yolo
+```
+
 TUI 保留会话恢复、模型选择、本地工作区工具、权限控制、MCP、技能和项目记忆等
-核心能力。在交互式终端中执行 `corvus --help` 可以查看会话启动参数。
+核心能力。在交互式终端中执行 `corvus --help` 可以查看会话启动参数，启动后
+在 TUI 内执行 `/help` 查看全部命令。
 
 TUI 环境变量：
 - `CORVUS_REDUCE_MOTION=1` — 关闭装饰性动画（spinner 旋转、平滑滚动、工具帧轮换）。

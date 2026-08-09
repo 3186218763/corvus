@@ -143,27 +143,20 @@ func TestExploredCardCoalescesReads(t *testing.T) {
 	if !strings.Contains(plain, "a.go, b.go, c.go") {
 		t.Fatalf("merged read names, got %q", plain)
 	}
-	// Codex hang: one └ on first leaf, no sibling ├ tree.
-	if strings.Contains(plain, "├") {
-		t.Fatalf("must not use sibling ├ tree, got %q", plain)
-	}
-	if !strings.Contains(plain, "└") {
-		t.Fatalf("want hanging └ on first leaf, got %q", plain)
+	// Every child needs a visible branch and its text must sit to the right of
+	// the Explored heading. A bare four-space continuation reads as a sibling.
+	if !strings.Contains(plain, "├") || !strings.Contains(plain, "└") {
+		t.Fatalf("want visible sibling tree branches, got %q", plain)
 	}
 	lines := strings.Split(plain, "\n")
-	if len(lines) < 2 || !strings.Contains(lines[1], "└") {
-		t.Fatalf("first leaf under └, got %q", plain)
+	if len(lines) != 3 {
+		t.Fatalf("want head + two leaves, got %q", plain)
 	}
-	for _, line := range lines[2:] {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		if strings.Contains(line, "└") || strings.Contains(line, "├") {
-			t.Fatalf("continuation leaves must not re-branch, got %q", line)
-		}
-		if !strings.HasPrefix(line, "    ") {
-			t.Fatalf("continuation should use 4-space indent, got %q", line)
-		}
+	if !strings.HasPrefix(lines[1], "    ├ ") {
+		t.Fatalf("first leaf should be visibly nested, got %q", lines[1])
+	}
+	if !strings.HasPrefix(lines[2], "    └ ") {
+		t.Fatalf("last leaf should close the nested tree, got %q", lines[2])
 	}
 }
 
@@ -176,32 +169,26 @@ func TestExploredCardTreeHierarchy(t *testing.T) {
 	if len(lines) != 3 {
 		t.Fatalf("want head + 2 leaves, got %d: %q", len(lines), plain)
 	}
-	if strings.Contains(plain, "├") {
-		t.Fatalf("must not use ├, got %q", plain)
+	if !strings.HasPrefix(lines[1], "    ├ ") || !strings.Contains(lines[1], "Read") {
+		t.Fatalf("first leaf should be nested ├ Read, got %q", lines[1])
 	}
-	if !strings.Contains(lines[1], "└") || !strings.Contains(lines[1], "Read") {
-		t.Fatalf("first leaf should be └ Read, got %q", lines[1])
-	}
-	if !strings.HasPrefix(lines[2], "    ") || !strings.Contains(lines[2], "Search") {
-		t.Fatalf("second leaf should be indented Search, got %q", lines[2])
+	if !strings.HasPrefix(lines[2], "    └ ") || !strings.Contains(lines[2], "Search") {
+		t.Fatalf("second leaf should be nested └ Search, got %q", lines[2])
 	}
 }
 
-func TestExploredCardSingleHangingBranch(t *testing.T) {
+func TestExploredCardUsesBranchesForSiblingLeaves(t *testing.T) {
 	leaves := []exploreLeaf{
 		{Verb: "Search", Arg: "foo"},
 		{Verb: "Read", Arg: "a.go"},
 		{Verb: "Read", Arg: "b.go"},
 	}
 	plain := ansi.Strip(exploredCard(leaves, 80))
-	if strings.Contains(plain, "├") {
-		t.Fatalf("must not use sibling ├ tree, got %q", plain)
-	}
 	if !strings.Contains(plain, "a.go, b.go") {
 		t.Fatalf("merged reads missing: %q", plain)
 	}
-	if strings.Count(plain, "└") != 1 {
-		t.Fatalf("want exactly one └, got %q", plain)
+	if strings.Count(plain, "├") != 1 || strings.Count(plain, "└") != 1 {
+		t.Fatalf("want one branch per visible sibling, got %q", plain)
 	}
 }
 

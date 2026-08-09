@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 const defaultViewWidth = 80
@@ -68,6 +70,15 @@ func viewProtectLines(s string, width int) string {
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
 		lines[i] = compactEnd(line, width)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func viewFitLines(s string, width int) string {
+	width = max(1, width)
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, width, "…")
 	}
 	return strings.Join(lines, "\n")
 }

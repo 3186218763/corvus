@@ -29,6 +29,7 @@ const (
 	transcriptSourceBanner
 	transcriptSourceReplayBundle
 	transcriptSourceDiff // file change: re-render full-line +/- bars at current width
+	transcriptSourceSeparator
 )
 
 // transcriptSource retains only the semantic inputs needed to reproduce a
@@ -42,6 +43,7 @@ type transcriptSource struct {
 	shellID  string // tool id for expandable tool cards (Ctrl+B)
 	planMode bool
 	maxLines int
+	elapsed  int
 	history  []provider.Message
 	// fileDiff is set for transcriptSourceDiff (tool name in raw, args in aux).
 	fileDiff event.FileDiff
@@ -257,12 +259,14 @@ type replaySectionRenderers struct {
 func (m *chatTUI) renderTranscriptSource(source transcriptSource, terminalWidth int, marker transcriptMarker) string {
 	contentWidth := transcriptContentWidth(terminalWidth, m.nativeScrollback)
 	switch source.kind {
+	case transcriptSourceSeparator:
+		return finalMessageSeparator(contentWidth, source.elapsed)
 	case transcriptSourceMarkdown:
 		return renderAssistantMarkdown(source.raw, contentWidth, marker&markerAssistantNamed != 0)
 	case transcriptSourceUser:
-		return renderUserBubble(source.raw, terminalWidth, source.planMode, marker&markerUserCurrent != 0)
+		return renderUserBubble(source.raw, contentWidth, source.planMode, marker&markerUserCurrent != 0)
 	case transcriptSourceReasoning:
-		return reasoningBlock(source.raw, terminalWidth, source.maxLines)
+		return reasoningBlock(source.raw, contentWidth, source.maxLines)
 	case transcriptSourceToolCard:
 		if source.shellID != "" {
 			out := m.shellOutputs[source.shellID]
@@ -275,12 +279,12 @@ func (m *chatTUI) renderTranscriptSource(source transcriptSource, terminalWidth 
 					dur = meta.durationMs
 				}
 				if m.shellExpanded[source.shellID] {
-					return renderToolCardExpandedWithOutcome(source.raw, source.aux, out, terminalWidth, ok, dur)
+					return renderToolCardExpandedWithOutcome(source.raw, source.aux, out, contentWidth, ok, dur)
 				}
-				return renderToolCardCollapsed(source.raw, source.aux, out, terminalWidth, ok, dur)
+				return renderToolCardCollapsed(source.raw, source.aux, out, contentWidth, ok, dur)
 			}
 		}
-		return toolCard(source.raw, source.aux, terminalWidth)
+		return toolCard(source.raw, source.aux, contentWidth)
 	case transcriptSourceDiff:
 		// Re-paint at current content width so +/- full-line bars never wrap
 		// through lipgloss (wrapping mid-bar strips resets and looks broken).

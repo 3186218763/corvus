@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -26,7 +27,6 @@ func nonEmptyTranscript(blocks []string) []string {
 	}
 	return out
 }
-
 
 // newTestChatTUI builds a chatTUI with just the pieces the streaming/commit and
 // completion paths need, for unit tests that don't run the bubbletea loop.
@@ -388,6 +388,27 @@ func TestConsecutiveToolCallsStayCompact(t *testing.T) {
 	}
 }
 
+func TestInterleavedToolProgressKeepsEachLiveTail(t *testing.T) {
+	m := newTestChatTUI()
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-a", Name: "bash", Args: `{"command":"a"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-a", Output: "a1\n"}})
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-b", Name: "bash", Args: `{"command":"b"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-b", Output: "b1\n"}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-a", Output: "a2\n"}})
+
+	liveIdx, ok := m.shellLiveIdx["shell-a"]
+	if !ok || liveIdx < 0 || liveIdx >= len(m.transcript) {
+		t.Fatalf("shell-a live block is missing: idx=%d ok=%v", liveIdx, ok)
+	}
+	live := ansi.Strip(m.transcript[liveIdx])
+	if !strings.Contains(live, "a1") || !strings.Contains(live, "a2") {
+		t.Fatalf("shell-a live tail lost output across A→B→A progress:\n%s", live)
+	}
+	if strings.Contains(live, "b1") {
+		t.Fatalf("shell-a live tail contains shell-b output:\n%s", live)
+	}
+}
+
 // TestRepeatedShellCommandDoesNotAccumulateOutput is the regression test for a
 // re-run of the same "!" command (e.g. !pwd three times). RunShell derives a
 // stable id from the command text ("shell-pwd"), so streamToolOutput kept
@@ -468,6 +489,78 @@ func TestCtrlBTogglesOutputOnTheCardBlock(t *testing.T) {
 	}
 }
 
+func TestExpandedToolOutputWrapsWithoutLosingSuffix(t *testing.T) {
+	const width = 24
+	const output = "prefix-0123456789-abcdefghij-RIGHT-SIDE-SUFFIX"
+
+	rendered := renderToolOutputBlock(output, width)
+	plainLines := strings.Split(ansi.Strip(rendered), "\n")
+	var rebuilt strings.Builder
+	for i, line := range plainLines {
+		if got := ansi.StringWidth(line); got > width {
+			t.Fatalf("rendered line %d width = %d, want <= %d: %q", i, got, width, line)
+		}
+		if i == 0 {
+			line = strings.TrimPrefix(line, connector)
+		} else {
+			line = strings.TrimPrefix(line, strings.Repeat(" ", len([]rune(connector))))
+		}
+		rebuilt.WriteString(line)
+	}
+	if got := rebuilt.String(); got != output {
+		t.Fatalf("expanded output = %q, want full line %q", got, output)
+	}
+}
+
+func TestExpandedToolOutputCapsVisualLines(t *testing.T) {
+	const width = 36
+	output := strings.Repeat("x", 32*1024)
+
+	plain := ansi.Strip(renderToolOutputBlock(output, width))
+	if got, want := strings.Count(plain, "\n")+1, shellExpandMaxLines; got > want {
+		t.Fatalf("expanded output renders %d visual rows, want at most %d", got, want)
+	}
+	if !strings.Contains(plain, "output truncated") {
+		t.Fatalf("visually truncated output must explain the truncation:\n%s", plain)
+	}
+}
+
+func TestExpandedToolOutputTruncationMarkerFitsNarrowWidth(t *testing.T) {
+	const width = 10
+	plain := ansi.Strip(renderToolOutputBlock(strings.Repeat("x", 32*1024), width))
+	lines := strings.Split(plain, "\n")
+	if got, want := len(lines), shellExpandMaxLines; got > want {
+		t.Fatalf("expanded output renders %d rows, want at most %d", got, want)
+	}
+	for i, line := range lines {
+		if got := visibleWidth(line); got > width {
+			t.Fatalf("expanded output row %d width = %d, want <= %d: %q", i, got, width, line)
+		}
+	}
+	if !strings.Contains(plain, "…") {
+		t.Fatalf("truncated narrow output must retain an ellipsis marker:\n%s", plain)
+	}
+}
+
+func TestExpandedToolOutputBoundsAllocationForHugeSingleLine(t *testing.T) {
+	output := strings.Repeat("x", 1<<20)
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	rendered := renderToolOutputBlock(output, 36)
+	runtime.KeepAlive(rendered)
+	runtime.ReadMemStats(&after)
+	if got, want := after.TotalAlloc-before.TotalAlloc, uint64(1<<20); got > want {
+		t.Fatalf("expanded huge output allocated %d bytes, want <= %d", got, want)
+	}
+	allocs := testing.AllocsPerRun(1, func() {
+		_ = renderToolOutputBlock(output, 36)
+	})
+	if allocs > 1500 {
+		t.Fatalf("expanded huge output allocates %.0f objects, want <= 1500", allocs)
+	}
+}
+
 // TestConsecutiveNonShellToolsLeaveNoSlots proves back-to-back read tools
 // coalesce into one Explored cell after results — no count summaries, no
 // raw file contents left in the transcript.
@@ -534,6 +627,42 @@ func TestToolProgressTailCap(t *testing.T) {
 	if !strings.Contains(got, "lineA") {
 		t.Fatalf("completed card should keep result preview:\n%s", got)
 	}
+}
+
+func TestLiveTranscriptBlocksUseAltScreenContentWidth(t *testing.T) {
+	assertFits := func(t *testing.T, block string) {
+		t.Helper()
+		want := transcriptContentWidth(40, false)
+		for i, line := range strings.Split(ansi.Strip(block), "\n") {
+			if got := visibleWidth(line); got > want {
+				t.Fatalf("live row %d width = %d, want <= %d: %q", i, got, want, line)
+			}
+		}
+	}
+
+	t.Run("reasoning", func(t *testing.T) {
+		m := newTestChatTUI()
+		m.width = 40
+		m.showReasoning = true
+		m.ingestEvent(event.Event{Kind: event.Reasoning, Text: strings.Repeat("x", 36)})
+		assertFits(t, m.transcript[m.reasoningTextIdx])
+	})
+
+	t.Run("tool progress", func(t *testing.T) {
+		m := newTestChatTUI()
+		m.width = 40
+		m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-live", Name: "bash", Args: `{"command":"x"}`}})
+		m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-live", Output: strings.Repeat("x", 36) + "\n"}})
+		assertFits(t, m.transcript[m.shellLiveIdx["shell-live"]])
+	})
+
+	t.Run("explore refresh", func(t *testing.T) {
+		m := newTestChatTUI()
+		m.width = 40
+		m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "read-a", Name: "read_file", Args: `{"path":"` + strings.Repeat("a", 50) + `"}`}})
+		m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "read-b", Name: "read_file", Args: `{"path":"` + strings.Repeat("b", 50) + `"}`}})
+		assertFits(t, m.transcript[m.exploreIdx])
+	})
 }
 
 // TestReasoningViewBounded proves verbose live thinking stays bounded under a
@@ -727,6 +856,58 @@ func TestNativeScrollbackPrintsFinishedOutput(t *testing.T) {
 	}
 	if m.toolStreamID != "" || m.toolStreamIdx != -1 {
 		t.Fatalf("stream state should reset after the result, id=%q idx=%d", m.toolStreamID, m.toolStreamIdx)
+	}
+}
+
+func TestNativeScrollbackPrintsSilentShellOutcome(t *testing.T) {
+	m := newTestChatTUI()
+	m.nativeScrollback = true
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-true", Name: "bash", Args: `{"command":"true"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-true", Name: "bash", DurationMs: 12}})
+
+	joined := ansi.Strip(strings.Join(m.transcript, "\n"))
+	if !strings.Contains(joined, "✓") {
+		t.Fatalf("native scrollback should show the outcome of a silent shell:\n%s", joined)
+	}
+}
+
+func TestUnrelatedEventsDoNotFinalizeRunningTool(t *testing.T) {
+	tests := []struct {
+		name  string
+		event event.Event
+	}{
+		{name: "notice", event: event.Event{Kind: event.Notice, Text: "still working"}},
+		{name: "next dispatch", event: event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-b", Name: "bash", Args: `{"command":"b"}`}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestChatTUI()
+			m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-a", Name: "bash", Args: `{"command":"a"}`}})
+			m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-a", Output: "a1\n"}})
+			m.ingestEvent(tt.event)
+
+			card := ansi.Strip(m.transcript[m.toolCardIdx["shell-a"]])
+			if strings.Contains(card, "✓") || strings.Contains(card, "✗") {
+				t.Fatalf("unrelated event finalized shell-a before its result:\n%s", card)
+			}
+		})
+	}
+}
+
+func TestNativeScrollbackDoesNotFreezeFalseSuccessBeforeFailure(t *testing.T) {
+	m := newTestChatTUI()
+	m.nativeScrollback = true
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "shell-fail", Name: "bash", Args: `{"command":"false"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: "shell-fail", Output: "partial\n"}})
+	m.ingestEvent(event.Event{Kind: event.Notice, Text: "still working"})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "shell-fail", Name: "bash", Output: "partial\n", Err: "exit status 1", DurationMs: 15}})
+
+	joined := ansi.Strip(strings.Join(m.transcript, "\n"))
+	if strings.Contains(joined, "✓") {
+		t.Fatalf("native scrollback froze a false success before the failure result:\n%s", joined)
+	}
+	if !strings.Contains(joined, "✗") {
+		t.Fatalf("native scrollback should show the failed shell outcome:\n%s", joined)
 	}
 }
 

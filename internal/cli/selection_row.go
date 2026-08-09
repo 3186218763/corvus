@@ -58,7 +58,13 @@ func selectionRowWithHint(selected bool, index int, box, label, hint string, act
 	if width <= 0 {
 		return row + "  " + tag
 	}
-	gap := width - visibleWidth(ansi.Strip(row)) - visibleWidth(hint)
+	hintWidth := visibleWidth(hint)
+	rowWidth := width - hintWidth - 2
+	if rowWidth < 1 {
+		return ansi.Truncate(row, width, "…")
+	}
+	row = ansi.Truncate(row, rowWidth, "…")
+	gap := width - visibleWidth(row) - hintWidth
 	if gap < 2 {
 		gap = 2
 	}

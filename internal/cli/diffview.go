@@ -242,19 +242,22 @@ func expandTabs(s string) string {
 		return s
 	}
 	var b strings.Builder
+	b.Grow(len(s))
 	col := 0
-	for _, r := range s {
-		if r == '\t' {
-			n := tabWidth - col%tabWidth
-			for i := 0; i < n; i++ {
-				b.WriteByte(' ')
-			}
-			col += n
+	start := 0
+	for i, r := range s {
+		if r != '\t' {
 			continue
 		}
-		b.WriteRune(r)
-		col++
+		chunk := s[start:i]
+		b.WriteString(chunk)
+		col += ansi.StringWidth(chunk)
+		n := tabWidth - col%tabWidth
+		b.WriteString(strings.Repeat(" ", n))
+		col += n
+		start = i + 1
 	}
+	b.WriteString(s[start:])
 	return b.String()
 }
 

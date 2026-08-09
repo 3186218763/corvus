@@ -412,6 +412,27 @@ func TestComposerCursorAlignsWithInputRow(t *testing.T) {
 	}
 }
 
+func TestComposerCursorAccountsForWrappedWorkingRows(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 24)
+	m.state = tuiRunning
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 24, Height: 14})
+	m = next.(chatTUI)
+
+	working := wrapStatusLine(m.runningWorkingLine(false, false), m.width)
+	if rows := strings.Count(working, "\n") + 1; rows < 2 {
+		t.Fatalf("fixture must wrap the working line, got %d row: %q", rows, ansi.Strip(working))
+	}
+	v := m.View()
+	if v.Cursor == nil {
+		t.Fatal("composer visible, expected a view cursor")
+	}
+	lines := strings.Split(ansi.Strip(v.Content), "\n")
+	if v.Cursor.Y >= len(lines) || !strings.Contains(lines[v.Cursor.Y], "›") {
+		t.Fatalf("wrapped working rows displaced cursor Y=%d:\n%s", v.Cursor.Y, ansi.Strip(v.Content))
+	}
+}
+
 func TestStatuslineShowsEffortInPersistentFooter(t *testing.T) {
 	i18n.DetectLanguage("en")
 

@@ -108,6 +108,24 @@ func TestRenderConstructs(t *testing.T) {
 	}
 }
 
+func TestNarrowTableFitsRendererWidthWithoutLosingCells(t *testing.T) {
+	const width = 10
+	input := "| alpha | beta | gamma |\n|---|---|---|\n| one | two | three |\n"
+	out := newMarkdownRenderer(width).Render(input)
+
+	for i, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if got := visibleWidth(line); got > width {
+			t.Fatalf("rendered line %d width = %d, want <= %d: %q", i, got, width, ansi.Strip(line))
+		}
+	}
+	plain := ansi.Strip(out)
+	for _, want := range []string{"alpha", "beta", "gamma", "one", "two", "three"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("narrow table lost cell %q:\n%s", want, plain)
+		}
+	}
+}
+
 func TestHighlightCodeLine(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256

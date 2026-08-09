@@ -88,8 +88,18 @@ func (m chatTUI) primaryStatusLine(shellMode, cancelRequested bool) string {
 		body = i18n.M.ChatStatusQuestion
 	case m.pendingApproval != nil && m.pendingApproval.Tool == planApprovalTool:
 		body = i18n.M.ChatStatusPlanApproval
+		if m.shouldCompactApprovalStatus(body) {
+			body = i18n.M.ChatStatusPlanApprovalCompact
+		} else {
+			body = i18n.M.ChatStatusPlanApproval
+		}
 	case m.pendingApproval != nil:
 		body = i18n.M.ChatStatusToolApproval
+		if m.shouldCompactApprovalStatus(body) {
+			body = i18n.M.ChatStatusToolApprovalCompact
+		} else {
+			body = i18n.M.ChatStatusToolApproval
+		}
 	case m.clipboardImagePending:
 		body = yellow(i18n.M.ClipboardImagePastingHint)
 	case m.copyNoticeText != "":
@@ -108,6 +118,24 @@ func (m chatTUI) primaryStatusLine(shellMode, cancelRequested bool) string {
 		status += " · " + mt
 	}
 	return status
+}
+
+func (m chatTUI) shouldCompactApprovalStatus(fullBody string) bool {
+	if m.pendingApproval == nil || m.height <= 0 || m.width <= 0 {
+		return false
+	}
+	primary := statusFooterIndent + fullBody
+	if mt := m.mouseTag(); mt != "" {
+		primary += " · " + mt
+	}
+	statusRows := strings.Count(m.renderStatusBlock(primary, m.width), "\n") + 1
+	workingRows := 0
+	if m.state == tuiRunning {
+		workingRows = wrappedRowCount(m.runningWorkingLine(m.cancelRequested(), false), m.width)
+	}
+	banner := m.renderApprovalBanner()
+	bannerRows := strings.Count(banner, "\n") + 1
+	return 1+workingRows+bannerRows+statusRows > m.height
 }
 
 // statusModelWorkGroup is the model token for the right side of the footer.

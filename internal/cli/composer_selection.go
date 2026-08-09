@@ -9,7 +9,6 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 	rw "github.com/mattn/go-runewidth"
 	"github.com/rivo/uniseg"
 )
@@ -528,13 +527,11 @@ func (m chatTUI) renderDetachedComposerInput() string {
 // selection backgrounds survive painting.
 var sgrResetRe = regexp.MustCompile(`\x1b\[0?m`)
 
-// composerFieldBackground returns the SGR that arms the composer field's
-// translucent tint, or "" when color is off.
+// composerFieldBackground intentionally returns no surface fill. A persistent
+// full-row wash made the composer read as a cement-grey card across terminals;
+// the focused cursor and mode badge already identify the editable region.
 func composerFieldBackground() string {
-	if !colorOn() {
-		return ""
-	}
-	return bgSGR(activeCLITheme.inputBoxBG)
+	return ""
 }
 
 // rearmFieldBackground re-issues the field background after every reset code
@@ -545,29 +542,10 @@ func rearmFieldBackground(s, bg string) string {
 	})
 }
 
-// renderComposerField paints the textarea view as a borderless field: every
-// line opens with the field background, re-arms it after each reset, and
-// right-pads with background-armed spaces to the full box width so the tint
-// reads as one continuous block. Each line ends with a full SGR reset so the
-// background cannot leak into the row below (slash completion, panels, status).
-// Pass-through when color is off.
+// renderComposerField leaves the textarea transparent. The former full-width
+// background painter made the input visually heavier than the transcript and
+// leaked a neutral-grey surface into every terminal theme.
 func renderComposerField(view string, width int) string {
-	bg := composerFieldBackground()
-	if bg == "" || width <= 0 {
-		return view
-	}
-	var out strings.Builder
-	lines := strings.Split(view, "\n")
-	for i, line := range lines {
-		if i > 0 {
-			out.WriteByte('\n')
-		}
-		out.WriteString(bg)
-		out.WriteString(rearmFieldBackground(line, bg))
-		if w := visibleWidth(ansi.Strip(line)); w < width {
-			out.WriteString(ansiReset + bg + strings.Repeat(" ", width-w))
-		}
-		out.WriteString(ansiReset)
-	}
-	return out.String()
+	_ = width
+	return view
 }

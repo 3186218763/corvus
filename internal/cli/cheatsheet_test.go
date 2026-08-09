@@ -6,6 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"corvus/internal/i18n"
 )
 
 func TestCheatsheetOpensOnQuestionWhenComposerEmpty(t *testing.T) {
@@ -51,6 +53,32 @@ func TestCheatsheetListsCriticalBindings(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("cheatsheet missing %q:\n%s", want, body)
 		}
+	}
+}
+
+func TestCheatsheetFitsNarrowWidth(t *testing.T) {
+	const width = 30
+	out := renderCheatsheet(width)
+	for i, line := range strings.Split(out, "\n") {
+		if got := visibleWidth(line); got > width {
+			t.Fatalf("cheatsheet row %d width = %d, want <= %d: %q", i, got, width, ansi.Strip(line))
+		}
+	}
+}
+
+func TestCheatsheetFitsShortFrameAndKeepsCloseHint(t *testing.T) {
+	m := newTestChatTUI()
+	m.cheatsheetOpen = true
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 36, Height: 14})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) != 14 {
+		t.Fatalf("short cheatsheet frame rows = %d, want 14:\n%s", len(lines), plain)
+	}
+	if !strings.Contains(plain, i18n.M.CheatsheetCloseHint) {
+		t.Fatalf("short cheatsheet hides close hint %q:\n%s", i18n.M.CheatsheetCloseHint, plain)
 	}
 }
 

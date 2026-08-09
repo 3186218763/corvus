@@ -14,25 +14,32 @@ func (m chatTUI) renderMCPManager() string {
 	if m.mcp == nil {
 		return ""
 	}
-	return m.mcp.render(m.width)
+	return m.mcp.renderWithHeight(m.mainManagerWidth(), m.mainManagerBodyHeight())
 }
 
 func (p *mcpManager) render(width int) string {
-	w := max(viewWidth(width), 40)
+	return p.renderWithHeight(width, 0)
+}
+
+func (p *mcpManager) renderWithHeight(width, maxBodyRows int) string {
+	w := max(viewWidth(width), 10)
+	contentWidth := max(w-2, 1)
+	var body string
 	switch p.stage {
 	case mcpStageDetail:
-		return managerContentPanelStyle(w).Render(p.renderDetail(w))
+		body = p.renderDetail(contentWidth, maxBodyRows)
 	case mcpStageTools:
-		return managerContentPanelStyle(w).Render(p.renderTools(w))
+		body = p.renderTools(contentWidth, maxBodyRows)
 	case mcpStageLogs:
-		return managerContentPanelStyle(w).Render(p.renderLogs(w))
+		body = p.renderLogs(contentWidth)
 	case mcpStageConfirmRemove:
-		return managerContentPanelStyle(w).Render(p.renderConfirmRemove(w))
+		body = p.renderConfirmRemove(contentWidth)
 	case mcpStageConfirmClearAuth:
-		return managerContentPanelStyle(w).Render(p.renderConfirmClearAuth(w))
+		body = p.renderConfirmClearAuth(contentWidth)
 	default:
-		return managerContentPanelStyle(w).Render(p.renderList(w))
+		body = p.renderList(contentWidth, maxBodyRows)
 	}
+	return managerContentPanelStyle(w).Render(viewFitLines(body, contentWidth))
 }
 
 func (p *mcpManager) footerHint() string {
@@ -51,7 +58,36 @@ func (p *mcpManager) footerHint() string {
 	}
 }
 
-func (p *mcpManager) renderList(width int) string {
+func (p *mcpManager) compactFooterHint() string {
+	switch p.stage {
+	case mcpStageDetail:
+		return "↑↓ · Enter · Esc"
+	case mcpStageTools, mcpStageLogs:
+		return "Esc"
+	case mcpStageConfirmRemove, mcpStageConfirmClearAuth:
+		return "Enter · y · n/Esc"
+	default:
+		return "↑↓ · Enter · r · Esc"
+	}
+}
+
+func (p *mcpManager) renderList(width int, maxBodyRows ...int) string {
+	budget := 0
+	if len(maxBodyRows) > 0 {
+		budget = maxBodyRows[0]
+	}
+	limit := min(mcpListMaxRows, len(p.snapshot.servers))
+	for {
+		start, end := visibleRange(len(p.snapshot.servers), p.sel, limit)
+		body := p.renderListWindow(width, start, end)
+		if budget <= 0 || strings.Count(body, "\n")+1 <= budget || limit == 1 {
+			return body
+		}
+		limit--
+	}
+}
+
+func (p *mcpManager) renderListWindow(width, start, end int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n", viewHeader("Manage MCP servers"))
 	fmt.Fprintf(&b, "%s\n\n", viewMeta(fmt.Sprintf("%d servers", len(p.snapshot.servers))))
@@ -62,7 +98,6 @@ func (p *mcpManager) renderList(width int) string {
 		b.WriteString(viewMeta("No MCP servers configured. Use /mcp add <name> ... to add one.") + "\n\n")
 		return b.String()
 	}
-	start, end := visibleRange(len(p.snapshot.servers), p.sel, mcpListMaxRows)
 	if start > 0 {
 		fmt.Fprintf(&b, "%s\n", viewMeta(fmt.Sprintf("↑ %d more above", start)))
 	}
@@ -116,12 +151,19 @@ func (p *mcpManager) renderListRow(i int, s mcpServerView, width int) string {
 	return fmt.Sprintf("%s%s · %s", prefix, name, viewMeta(meta))
 }
 
-func (p *mcpManager) renderDetail(width int) string {
+func (p *mcpManager) renderDetail(width int, maxBodyRows ...int) string {
+	budget := 0
+	if len(maxBodyRows) > 0 {
+		budget = maxBodyRows[0]
+	}
 	v, ok := p.selectedServer()
 	if !ok {
 		return "MCP server not found\n\n" + dim("Esc to back")
 	}
 	actions := mcpActionsFor(v, p.snapshot.configPath)
+	if p.action < 0 {
+		p.action = 0
+	}
 	if p.action >= len(actions) {
 		p.action = max(0, len(actions)-1)
 	}
@@ -164,10 +206,44 @@ func (p *mcpManager) renderDetail(width int) string {
 			b.WriteString(selectionRow(i == p.action, i, "", a.label, false) + "\n")
 		}
 	}
-	return strings.TrimRight(b.String(), "\n")
+	full := strings.TrimRight(b.String(), "\n")
+	if budget <= 0 || strings.Count(full, "\n")+1 <= budget {
+		return full
+	}
+	return p.renderCompactDetail(v, actions, width, budget)
 }
 
-func (p *mcpManager) renderTools(width int) string {
+func (p *mcpManager) renderCompactDetail(v mcpServerView, actions []mcpActionItem, width, budget int) string {
+	budget = max(budget, 1)
+	if budget == 1 && len(actions) > 0 {
+		return selectionRow(true, p.action, "", actions[p.action].label, false)
+	}
+
+	lines := []string{bold(viewCompactText(titleText(v.Name)+" MCP Server", width))}
+	if budget >= 3 {
+		meta := fmt.Sprintf("%s · %s · %s", mcpStatusLabel(v), fallbackText(v.Transport, "unknown"), countText(v.Tools, "tool"))
+		lines = append(lines, viewCompactText(meta, width))
+	}
+	if len(actions) == 0 {
+		if len(lines) < budget {
+			lines = append(lines, viewMeta("No actions available."))
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	limit := max(1, budget-len(lines))
+	start, end := visibleRange(len(actions), p.action, limit)
+	for i := start; i < end; i++ {
+		lines = append(lines, selectionRow(i == p.action, i, "", actions[i].label, false))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (p *mcpManager) renderTools(width int, maxBodyRows ...int) string {
+	budget := 0
+	if len(maxBodyRows) > 0 {
+		budget = maxBodyRows[0]
+	}
 	v, ok := p.selectedServer()
 	if !ok {
 		return "MCP server not found\n\n" + dim("Esc to back")
@@ -180,6 +256,17 @@ func (p *mcpManager) renderTools(width int) string {
 		limit := len(v.ToolList)
 		if limit > mcpToolMaxRows {
 			limit = mcpToolMaxRows
+		}
+		for limit > 1 && budget > 0 {
+			extra := len(v.ToolList) - limit
+			rows := 2 + limit
+			if extra > 0 {
+				rows++
+			}
+			if rows <= budget {
+				break
+			}
+			limit--
 		}
 		for _, t := range v.ToolList[:limit] {
 			desc := t.Description

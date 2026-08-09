@@ -84,9 +84,11 @@ type Messages struct {
 	ChatStatusCacheNowFmt                  string // cache status tag, "%s" = latest-turn hit rate with percent sign
 	ChatStatusCacheAvgFmt                  string // cache status tag, "%s" = session-average hit rate with percent sign
 	ChatStatusPlanApproval                 string // shortcuts hint while a plan is pending
+	ChatStatusPlanApprovalCompact          string // compact short-screen plan approval hint
 	PlanApprovalPrompt                     string // one-line "plan above is ready" banner shown above the input
 	PlanApprovalChoices                    string // start / revise / exit-without-executing choice list
 	ChatStatusToolApproval                 string // shortcuts hint while a tool call awaits approval
+	ChatStatusToolApprovalCompact          string // compact short-screen tool approval hint
 	ToolApprovalPromptFmt                  string // approval banner — tool, subject suffix, source/intent detail, choices
 	ToolApprovalChoices                    string // standard approval choice list
 	BashPrefixChoices                      string // approval choice list when a bash prefix can be granted

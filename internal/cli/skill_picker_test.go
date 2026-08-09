@@ -7,7 +7,10 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
+	"corvus/internal/control"
+	"corvus/internal/event"
 	"corvus/internal/i18n"
 	"corvus/internal/skill"
 )
@@ -588,6 +591,22 @@ func TestSkillPickerDetailShowsActionsBeforeBodyPreview(t *testing.T) {
 	}
 }
 
+func TestSkillPickerDetailWheelStaysWithinAvailableActions(t *testing.T) {
+	s := skill.Skill{Name: "builtin-review", Scope: skill.ScopeBuiltin}
+	m := newTestChatTUI()
+	m.skillPick = &skillPicker{
+		mode:        pickerDetail,
+		detailSkill: s,
+	}
+
+	if !m.scrollHiddenComposerOverlay(tea.MouseWheelMsg{Button: tea.MouseWheelDown}) {
+		t.Fatal("detail wheel should be consumed by the open skill picker")
+	}
+	if got := m.skillPick.detailAction; got != 0 {
+		t.Fatalf("detailAction = %d after wheel, want the only available action at 0", got)
+	}
+}
+
 func TestDeleteSkillPickRemovesDirectoryTarget(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "review", skill.SkillFile)
@@ -959,5 +978,92 @@ func TestSkillPickerRenderWidthNarrow(t *testing.T) {
 	}
 	if !strings.Contains(out, "Manage skills") {
 		t.Fatalf("narrow render missing title:\n%s", out)
+	}
+	for i, line := range strings.Split(out, "\n") {
+		if got := visibleWidth(line); got > 29 {
+			t.Fatalf("alt-screen skill row %d width = %d, want <= 29: %q", i, got, ansi.Strip(line))
+		}
+	}
+	if got := visibleWidth(strings.Split(out, "\n")[0]); got != 29 {
+		t.Fatalf("skill manager width = %d, want transcript content width 29", got)
+	}
+}
+
+func TestSkillPickerFitsShortTerminalAndShowsSelection(t *testing.T) {
+	skills := []skill.Skill{
+		{Name: "skill-1", Scope: skill.ScopeBuiltin},
+		{Name: "skill-2", Scope: skill.ScopeBuiltin},
+		{Name: "skill-3", Scope: skill.ScopeBuiltin},
+		{Name: "skill-4", Scope: skill.ScopeBuiltin},
+		{Name: "skill-5", Scope: skill.ScopeBuiltin},
+		{Name: "skill-6", Scope: skill.ScopeBuiltin},
+		{Name: "skill-7", Scope: skill.ScopeBuiltin},
+		{Name: "selected-8", Scope: skill.ScopeBuiltin},
+		{Name: "skill-9", Scope: skill.ScopeBuiltin},
+	}
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 36)
+	m.skillPick = &skillPicker{
+		mode:    pickerSkills,
+		skills:  skills,
+		sel:     7,
+		enabled: map[string]bool{"selected-8": true},
+	}
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 36, Height: 14})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) != 14 {
+		t.Fatalf("short skills frame rows = %d, want 14:\n%s", len(lines), plain)
+	}
+	for i, line := range lines {
+		if got := visibleWidth(line); got > 36 {
+			t.Fatalf("short skills row %d width = %d, want <= 36: %q", i, got, line)
+		}
+	}
+	if !strings.Contains(plain, "selected-8") {
+		t.Fatalf("short skills frame hides the selected skill:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Esc") {
+		t.Fatalf("short skills frame hides the exit path:\n%s", plain)
+	}
+}
+
+func TestSkillSourcePickerFitsShortTerminalAndShowsSelection(t *testing.T) {
+	roots := make([]skillRootLine, 20)
+	for i := range roots {
+		roots[i] = skillRootLine{
+			dir:    "/src/root-" + string(rune('a'+i)),
+			scope:  skill.ScopeProject,
+			status: skill.StatusOK,
+			skills: 1,
+		}
+	}
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 36)
+	m.skillPick = &skillPicker{
+		mode:      pickerSources,
+		roots:     roots,
+		sourceSel: 15,
+	}
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 36, Height: 14})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) != 14 {
+		t.Fatalf("short source frame rows = %d, want 14:\n%s", len(lines), plain)
+	}
+	for i, line := range lines {
+		if got := visibleWidth(line); got > 36 {
+			t.Fatalf("short source row %d width = %d, want <= 36: %q", i, got, line)
+		}
+	}
+	if !strings.Contains(plain, "› p.") {
+		t.Fatalf("short source frame hides the selected root:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Esc") {
+		t.Fatalf("short source frame hides the exit path:\n%s", plain)
 	}
 }

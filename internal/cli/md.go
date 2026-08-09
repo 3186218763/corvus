@@ -503,23 +503,41 @@ func (r *mdRenderer) renderTable(buf *strings.Builder, n *extast.Table, src []by
 	}
 
 	// Cap each column so the whole table fits the terminal: total = sum of
-	// widths + separators (3 chars each) + indent. Distribute the budget
-	// proportionally to the natural widths so columns with rich content
-	// keep more space than narrow ones.
+	// widths + separators (3 chars each) + indent. Below the minimum useful
+	// column width, switch to a stacked representation instead of drawing rails
+	// that the terminal would wrap independently.
+	const minTableColumnWidth = 4
 	available := r.width - indent - 3*(cols-1)
-	if available < cols*3 {
-		available = cols * 3
+	if available < cols*minTableColumnWidth {
+		r.renderStackedTable(buf, header, rows, indent)
+		return
 	}
 	total := 0
-	for _, w := range widths {
-		total += w
+	for i, w := range widths {
+		widths[i] = max(w, minTableColumnWidth)
+		total += widths[i]
 	}
 	if total > available {
+		scaledTotal := 0
 		for i := range widths {
 			widths[i] = widths[i] * available / total
-			if widths[i] < 3 {
-				widths[i] = 3
+			if widths[i] < minTableColumnWidth {
+				widths[i] = minTableColumnWidth
 			}
+			scaledTotal += widths[i]
+		}
+		for scaledTotal > available {
+			widest := -1
+			for i, width := range widths {
+				if width > minTableColumnWidth && (widest < 0 || width > widths[widest]) {
+					widest = i
+				}
+			}
+			if widest < 0 {
+				break
+			}
+			widths[widest]--
+			scaledTotal--
 		}
 	}
 
@@ -541,6 +559,52 @@ func (r *mdRenderer) renderTable(buf *strings.Builder, n *extast.Table, src []by
 		r.renderTableRow(buf, prefix, sep, row, widths, false)
 	}
 	buf.WriteByte('\n')
+}
+
+func (r *mdRenderer) renderStackedTable(buf *strings.Builder, header []string, rows [][]string, indent int) {
+	prefix := strings.Repeat(" ", indent)
+	contentWidth := max(1, r.width-indent)
+	if len(rows) == 0 {
+		for _, cell := range header {
+			writeStackedTableText(buf, prefix, cell, contentWidth, true)
+		}
+		buf.WriteByte('\n')
+		return
+	}
+	for rowIndex, row := range rows {
+		cols := max(len(header), len(row))
+		for i := 0; i < cols; i++ {
+			label := fmt.Sprintf("Column %d", i+1)
+			if i < len(header) && strings.TrimSpace(ansi.Strip(header[i])) != "" {
+				label = header[i]
+			}
+			writeStackedTableText(buf, prefix, label, contentWidth, true)
+			if i < len(row) && strings.TrimSpace(ansi.Strip(row[i])) != "" {
+				valuePrefix := prefix
+				valueWidth := contentWidth
+				if contentWidth > 2 {
+					valuePrefix += "  "
+					valueWidth -= 2
+				}
+				writeStackedTableText(buf, valuePrefix, row[i], valueWidth, false)
+			}
+		}
+		if rowIndex+1 < len(rows) {
+			buf.WriteByte('\n')
+		}
+	}
+	buf.WriteByte('\n')
+}
+
+func writeStackedTableText(buf *strings.Builder, prefix, text string, width int, header bool) {
+	for _, line := range strings.Split(ansi.Wrap(text, max(1, width), ""), "\n") {
+		if header {
+			line = bold(line)
+		}
+		buf.WriteString(prefix)
+		buf.WriteString(line)
+		buf.WriteByte('\n')
+	}
 }
 
 // renderTableRow lays out one logical row across multiple visual rows when

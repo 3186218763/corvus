@@ -76,12 +76,13 @@ func (m chatTUI) renderClearConfirm() string {
 	if m.clearConfirm == nil {
 		return ""
 	}
-	w := max(viewWidth(m.width), 40)
+	w := m.mainManagerWidth()
+	contentWidth := max(w-2, 1)
 	var b strings.Builder
-	b.WriteString(i18n.M.SlashClearPrompt + "\n")
-	b.WriteString(viewMeta("This deletes the current transcript from local history and keeps only the system prompt.") + "\n\n")
+	b.WriteString(viewCompactText(i18n.M.SlashClearPrompt, contentWidth) + "\n")
+	b.WriteString(viewMeta(viewCompactText("This deletes the current transcript from local history and keeps only the system prompt.", contentWidth)) + "\n\n")
 	b.WriteString(selectionRow(m.clearConfirm.confirm == 0, 0, "", "Clear", false) + "\n")
 	b.WriteString(selectionRow(m.clearConfirm.confirm == 1, 1, "", "Cancel", false) + "\n")
-	b.WriteString(selectionFooter(""))
-	return selectionPanel(b.String(), w)
+	b.WriteString(viewCompactText(selectionFooter(""), contentWidth))
+	return selectionPanel(viewFitLines(b.String(), contentWidth), w)
 }

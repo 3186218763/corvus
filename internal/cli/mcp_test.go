@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"corvus/internal/config"
 	"corvus/internal/control"
@@ -266,6 +267,136 @@ func TestRenderMCPManagerListGroupsRuntimeAndConfiguredServers(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("rendered MCP manager list missing %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestMCPManagerFitsNarrowWidth(t *testing.T) {
+	const width = 30
+	p := &mcpManager{snapshot: mcpSnapshot{servers: []mcpServerView{{
+		Name: "managed-search-with-a-long-name", Transport: "stdio", Status: "connected", Tools: 4,
+	}}}}
+	out := p.render(width)
+	for i, line := range strings.Split(out, "\n") {
+		if got := visibleWidth(line); got > width {
+			t.Fatalf("MCP row %d width = %d, want <= %d: %q", i, got, width, ansi.Strip(line))
+		}
+	}
+}
+
+func TestMCPManagerFitsShortTerminalAndShowsSelectedServer(t *testing.T) {
+	servers := make([]mcpServerView, 16)
+	for i := range servers {
+		servers[i] = mcpServerView{
+			Name:      "server-" + string(rune('a'+i)),
+			Transport: "stdio",
+			Status:    "connected",
+			Tools:     1,
+		}
+	}
+	m := newTestChatTUI()
+	m.mcp = &mcpManager{
+		stage:    mcpStageList,
+		sel:      len(servers) - 1,
+		snapshot: mcpSnapshot{servers: servers},
+	}
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) != 14 {
+		t.Fatalf("short MCP frame rows = %d, want 14:\n%s", len(lines), plain)
+	}
+	for i, line := range lines {
+		if got := visibleWidth(line); got > 40 {
+			t.Fatalf("short MCP row %d width = %d, want <= 40: %q", i, got, line)
+		}
+	}
+	if !strings.Contains(plain, "server-p") {
+		t.Fatalf("short MCP frame hides the selected server:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Esc") {
+		t.Fatalf("short MCP frame hides the exit hint:\n%s", plain)
+	}
+}
+
+func TestMCPDetailFitsShortTerminalAndShowsSelectedAction(t *testing.T) {
+	server := mcpServerView{
+		Name:       "project-tools",
+		Transport:  "stdio",
+		Status:     "connected",
+		Configured: true,
+		Tools:      1,
+		HasTools:   true,
+		Command:    "npx",
+		Args:       []string{"-y", "@example/server"},
+	}
+	m := newTestChatTUI()
+	m.mcp = &mcpManager{
+		stage:  mcpStageDetail,
+		name:   server.Name,
+		action: 4,
+		snapshot: mcpSnapshot{
+			configPath: "corvus.toml",
+			servers:    []mcpServerView{server},
+		},
+	}
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) != 14 {
+		t.Fatalf("short MCP detail frame rows = %d, want 14:\n%s", len(lines), plain)
+	}
+	for i, line := range lines {
+		if got := visibleWidth(line); got > 40 {
+			t.Fatalf("short MCP detail row %d width = %d, want <= 40: %q", i, got, line)
+		}
+	}
+	if !strings.Contains(plain, "› e. Remove server") {
+		t.Fatalf("short MCP detail frame hides the selected action:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Esc") {
+		t.Fatalf("short MCP detail frame hides the exit hint:\n%s", plain)
+	}
+}
+
+func TestMCPToolsFitsShortTerminalAndShowsOverflow(t *testing.T) {
+	tools := make([]plugin.ToolInfo, 16)
+	for i := range tools {
+		tools[i] = plugin.ToolInfo{
+			Name:        "tool-" + string(rune('a'+i)),
+			Description: "a tool description that stays within a compact preview",
+		}
+	}
+	server := mcpServerView{Name: "project-tools", Status: "connected", ToolList: tools}
+	m := newTestChatTUI()
+	m.mcp = &mcpManager{
+		stage: mcpStageTools,
+		name:  server.Name,
+		snapshot: mcpSnapshot{
+			servers: []mcpServerView{server},
+		},
+	}
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) != 14 {
+		t.Fatalf("short MCP tools frame rows = %d, want 14:\n%s", len(lines), plain)
+	}
+	for i, line := range lines {
+		if got := visibleWidth(line); got > 40 {
+			t.Fatalf("short MCP tools row %d width = %d, want <= 40: %q", i, got, line)
+		}
+	}
+	if !strings.Contains(plain, "more tools") {
+		t.Fatalf("short MCP tools frame hides the overflow indicator:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Esc") {
+		t.Fatalf("short MCP tools frame hides the exit hint:\n%s", plain)
 	}
 }
 

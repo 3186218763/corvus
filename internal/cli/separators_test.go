@@ -56,6 +56,30 @@ func TestTurnDoneEmitsSeparatorAfterTools(t *testing.T) {
 	}
 }
 
+func TestTurnSeparatorReflowsToAltScreenContentWidth(t *testing.T) {
+	m := newTestChatTUI()
+	m.width = 80
+	m.nativeScrollback = false
+	m.ingestEvent(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "1", Name: "bash", Args: `{"command":"true"}`}})
+	m.ingestEvent(event.Event{Kind: event.ToolResult, Tool: event.Tool{ID: "1", Name: "bash", Output: "ok"}})
+	m.ingestEvent(event.Event{Kind: event.TurnDone})
+
+	m.reflowTranscript(40)
+	found := false
+	for _, block := range m.transcript {
+		plain := ansi.Strip(block)
+		if strings.Trim(plain, "─") == "" && strings.TrimSpace(plain) != "" {
+			found = true
+			if got, want := visibleWidth(plain), transcriptContentWidth(40, false); got != want {
+				t.Fatalf("separator width after resize = %d, want %d: %q", got, want, plain)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("separator was not found after resize")
+	}
+}
+
 func TestTurnDoneNoSeparatorPureChat(t *testing.T) {
 	m := newTestChatTUI()
 	m.width = 60

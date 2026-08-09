@@ -149,6 +149,32 @@ func TestSelectedTextMultiLine(t *testing.T) {
 	}
 }
 
+func TestSelectedTextPreservesExploreTreeFormatting(t *testing.T) {
+	m := newTestChatTUI()
+	m.width = 80
+	contentWidth := transcriptContentWidth(m.width, m.nativeScrollback)
+	card := exploredCard([]exploreLeaf{
+		{Verb: "Fetch", Arg: "https://example.test/one"},
+		{Verb: "Fetch", Arg: "https://example.test/two"},
+	}, contentWidth)
+	m.transcript = []string{card}
+	m.transcriptSources = []transcriptSource{{kind: transcriptSourceFixed}}
+	m.viewport.SetWidth(contentWidth)
+	m.wrappedLines = strings.Split(wrapTranscript(card, contentWidth), "\n")
+	m.sel = selection{
+		active: true,
+		anchor: selPos{line: 0, col: 0},
+		head:   selPos{line: len(m.wrappedLines) - 1, col: contentWidth},
+	}
+
+	want := "  • Explored\n" +
+		"    ├ Fetch https://example.test/one\n" +
+		"    └ Fetch https://example.test/two"
+	if got := m.selectedText(); got != want {
+		t.Fatalf("copied Explore tree = %q, want %q", got, want)
+	}
+}
+
 func TestSelectedTextRestoresMathWithoutReusingRawColumns(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY
@@ -607,25 +633,59 @@ func TestAssistantMarkdownHistoryDropsName(t *testing.T) {
 	}
 }
 
-func TestUserBubbleFullLineBackgroundWhenColorOn(t *testing.T) {
+func TestUserBubbleStaysSingleLineWhenColorOn(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.TrueColor
 	configureCLITheme("dark")
-	// ensure theme has userBubbleBG
+
 	got := renderUserBubble("hello rhythm", 40, false, true)
-	if !strings.Contains(got, bgSGR(activeCLITheme.userBubbleBG)) {
-		t.Fatalf("want userBubbleBG on bubble, got %q", got)
-	}
-	if !strings.Contains(got, completionPadCell) {
-		t.Fatalf("want NBSP pad for full-line bg survival, got %q", got)
+	if strings.Contains(got, bgSGR(activeCLITheme.userBubbleBG)) {
+		t.Fatalf("user bubble must not paint userBubbleBG, got %q", got)
 	}
 	plain := ansi.Strip(got)
 	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
-	if len(lines) < 3 {
-		t.Fatalf("want pad + body + pad, got %d lines: %q", len(lines), plain)
+	if len(lines) != 1 {
+		t.Fatalf("want one user row, got %d lines: %q", len(lines), plain)
 	}
-	if !strings.Contains(lines[1], "›") || !strings.Contains(lines[1], "hello rhythm") {
-		t.Fatalf("body line missing › message: %q", lines[1])
+	if !strings.Contains(lines[0], "›") || !strings.Contains(lines[0], "hello rhythm") {
+		t.Fatalf("body line missing › message: %q", lines[0])
+	}
+}
+
+func TestAltScreenTranscriptSourcesUseContentWidth(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	m := newTestChatTUI()
+	m.nativeScrollback = false
+	contentWidth := transcriptContentWidth(40, m.nativeScrollback)
+	sources := []transcriptSource{
+		{kind: transcriptSourceUser, raw: "short user message"},
+		{kind: transcriptSourceReasoning, raw: strings.Repeat("x", 36), maxLines: 3},
+		{kind: transcriptSourceToolCard, raw: "bash", aux: `{"command":"` + strings.Repeat("x", 50) + `"}`},
+	}
+	for _, source := range sources {
+		rendered := m.renderTranscriptSource(source, 40, markerUserCurrent)
+		for _, line := range strings.Split(ansi.Strip(rendered), "\n") {
+			if got := visibleWidth(line); got > contentWidth {
+				t.Fatalf("%v source row width = %d, want <= %d: %q", source.kind, got, contentWidth, line)
+			}
+		}
+	}
+}
+
+func TestUserBubbleDoesNotPaintFullRowBackground(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+
+	rendered := renderUserBubble("history prompt", 40, false, false)
+	if strings.Contains(rendered, bgSGR(activeCLITheme.userBubbleBG)) {
+		t.Fatalf("user bubble must not paint a full-row background: %q", rendered)
+	}
+	if lines := strings.Split(ansi.Strip(rendered), "\n"); len(lines) != 1 {
+		t.Fatalf("user bubble should occupy one transcript row, got %d: %q", len(lines), rendered)
 	}
 }
 

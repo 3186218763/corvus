@@ -298,6 +298,29 @@ func TestCompletionMenuPadsWithNonBreakingSpaces(t *testing.T) {
 	}
 }
 
+func TestCompletionMenuFitsNarrowWidthWithCompleteFooter(t *testing.T) {
+	m := newTestChatTUI()
+	m.width = 36
+	m.height = 14
+	m.completion.active = true
+	m.completion.kind = compSlash
+	m.completion.items = []compItem{{
+		label: "/a-command-with-a-very-long-name",
+		hint:  "a description that also exceeds the terminal",
+	}}
+
+	lines := strings.Split(strings.TrimRight(m.renderCompletion(), "\n"), "\n")
+	for i, line := range lines {
+		if got := ansi.StringWidth(line); got != m.width {
+			t.Fatalf("narrow completion row %d width = %d, want %d: %q", i, got, m.width, ansi.Strip(line))
+		}
+	}
+	footer := ansi.Strip(lines[len(lines)-1])
+	if !strings.Contains(footer, "Enter") || !strings.Contains(footer, "Esc") {
+		t.Fatalf("narrow completion footer is incomplete: %q", footer)
+	}
+}
+
 // TestTranscriptViewportSizing proves the viewport tracks the terminal size and
 // gets the rows left over after the pinned bottom region (input box + the one
 // footer row = 3 with an empty 2-line composer and no Git or telemetry), and
@@ -1119,6 +1142,102 @@ func TestApprovalChoicesPreserveDecisionSemantics(t *testing.T) {
 	}
 }
 
+func TestApprovalFitsShortTerminalAndKeepsDenyVisible(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 40)
+	m.state = tuiRunning
+	m.pendingApproval = &event.Approval{
+		ID:      "approval",
+		Tool:    "bash",
+		Subject: "git status $(touch /tmp/corvus-dynamic-approval-with-a-long-name)",
+	}
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) != 14 {
+		t.Fatalf("short approval frame rows = %d, want 14:\n%s", len(lines), plain)
+	}
+	for i, line := range lines {
+		if got := visibleWidth(line); got > 40 {
+			t.Fatalf("short approval row %d width = %d, want <= 40: %q", i, got, line)
+		}
+	}
+	for _, want := range []string{"Deny", "Esc"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("short approval frame hides %q:\n%s", want, plain)
+		}
+	}
+}
+
+func TestApprovalFitsShortTerminalWithMultilineSubject(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 40)
+	m.state = tuiRunning
+	m.pendingApproval = &event.Approval{
+		ID:      "approval",
+		Tool:    "bash",
+		Subject: "git status\n&& git diff --name-only\n&& git log --oneline",
+		Reason:  "the command contains multiple shell stages\nthat need explicit approval",
+	}
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) != 14 {
+		t.Fatalf("multiline approval frame rows = %d, want 14:\n%s", len(lines), plain)
+	}
+	for i, line := range lines {
+		if got := visibleWidth(line); got > 40 {
+			t.Fatalf("multiline approval row %d width = %d, want <= 40: %q", i, got, line)
+		}
+	}
+	for _, want := range []string{"Deny", "Esc"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("multiline approval frame hides %q:\n%s", want, plain)
+		}
+	}
+}
+
+func TestApprovalFitsJustAboveCompactHeightThreshold(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 40)
+	m.state = tuiRunning
+	m.pendingApproval = &event.Approval{
+		ID:      "approval",
+		Tool:    "bash",
+		Subject: "git status $(touch /tmp/corvus-dynamic-approval-with-a-long-name)",
+	}
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 17})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) != 17 {
+		t.Fatalf("17-row approval frame rows = %d, want 17:\n%s", len(lines), plain)
+	}
+	for _, want := range []string{"Deny", "Esc"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("17-row approval frame hides %q:\n%s", want, plain)
+		}
+	}
+}
+
+func TestClearConfirmFitsNarrowWidth(t *testing.T) {
+	const width = 30
+	m := newTestChatTUI()
+	m.width = width
+	m.clearConfirm = &clearConfirm{}
+	out := m.renderClearConfirm()
+	for i, line := range strings.Split(out, "\n") {
+		if got := visibleWidth(line); got > width {
+			t.Fatalf("clear-confirm row %d width = %d, want <= %d: %q", i, got, width, ansi.Strip(line))
+		}
+	}
+}
+
 func TestPlanApprovalActionsSynchronizeTUIAndControllerMode(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1471,20 +1590,16 @@ func TestUserBubbleIsLightweightTranscriptLine(t *testing.T) {
 	if got == plain {
 		t.Fatalf("user bubble should use themed foreground color when color is enabled: %q", got)
 	}
-	// Soft full-line wash: userBubbleBG + NBSP pad (not a bordered input box).
-	if !strings.Contains(got, bgSGR(activeCLITheme.userBubbleBG)) {
-		t.Fatalf("user bubble should paint soft full-line bg, got %q", got)
+	if strings.Contains(got, bgSGR(activeCLITheme.userBubbleBG)) {
+		t.Fatalf("user bubble must not paint a full-line background, got %q", got)
 	}
-	if !strings.Contains(got, completionPadCell) {
-		t.Fatalf("user bubble should NBSP-pad for bg survival, got %q", got)
-	}
-	// Body is still a › line (not a multi-field composer chrome).
+	// Body is a single › line rather than a padded transcript card.
 	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
-	if len(lines) < 3 {
-		t.Fatalf("want pad + body + pad, got %d lines: %q", len(lines), plain)
+	if len(lines) != 1 {
+		t.Fatalf("want one user row, got %d lines: %q", len(lines), plain)
 	}
-	if strings.Contains(lines[1], "│") {
-		t.Fatalf("body must not use box borders, got %q", lines[1])
+	if strings.Contains(lines[0], "│") {
+		t.Fatalf("body must not use box borders, got %q", lines[0])
 	}
 }
 
@@ -2892,6 +3007,101 @@ func TestQueueIndicatorHiddenWhenIdle(t *testing.T) {
 
 	if qi := m.renderQueueIndicator(); qi != "" {
 		t.Fatalf("queue indicator should be empty when idle, got %q", qi)
+	}
+}
+
+func TestQueuedFeedbackFrameFitsTerminalHeight(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 40)
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	m = m0.(chatTUI)
+	m.state = tuiRunning
+	m.pendingInterject = []string{"queued feedback"}
+	m0, _ = m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	m = m0.(chatTUI)
+
+	view := ansi.Strip(m.View().Content)
+	if got, want := strings.Count(view, "\n")+1, m.height; got != want {
+		t.Fatalf("queued-feedback frame rows = %d, want %d:\n%s", got, want, view)
+	}
+}
+
+func TestQueuedFeedbackWindowFitsTerminalAndKeepsEditedItemVisible(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 40)
+	m.state = tuiRunning
+	m.pendingInterject = make([]string, 12)
+	for i := range m.pendingInterject {
+		m.pendingInterject[i] = fmt.Sprintf("queued feedback %d", i+1)
+	}
+	m.queueEditCursor = len(m.pendingInterject) - 1
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) != m.height {
+		t.Fatalf("queued window frame rows = %d, want %d:\n%s", len(lines), m.height, plain)
+	}
+	if !strings.Contains(plain, "[12]") || !strings.Contains(plain, "queued feedback 12") {
+		t.Fatalf("queued window hides the edited item:\n%s", plain)
+	}
+	if !strings.Contains(plain, "queued") {
+		t.Fatalf("queued window should retain a queue summary:\n%s", plain)
+	}
+}
+
+func TestQueueIndicatorFitsWideIndexOnNarrowTerminal(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 40)
+	m.state = tuiRunning
+	m.pendingInterject = make([]string, 1000)
+	for i := range m.pendingInterject {
+		m.pendingInterject[i] = strings.Repeat("x", 40)
+	}
+	m.queueEditCursor = len(m.pendingInterject) - 1
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	m = m0.(chatTUI)
+
+	for i, line := range strings.Split(ansi.Strip(m.renderQueueIndicator()), "\n") {
+		if got := visibleWidth(line); got > m.width {
+			t.Fatalf("queue row %d width = %d, want <= %d: %q", i, got, m.width, line)
+		}
+	}
+}
+
+func TestModalPasteKeepsHiddenComposerDraft(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m.pendingApproval = &event.Approval{ID: "approval", Tool: "bash", Subject: "echo hi"}
+	m.input.SetValue("draft")
+
+	m0, _ := m.Update(tea.PasteMsg{Content: "pasted while approval is open"})
+	m = m0.(chatTUI)
+	if got := m.input.Value(); got != "draft" {
+		t.Fatalf("modal paste changed hidden composer draft to %q", got)
+	}
+}
+
+func TestQuickPickerPasteUpdatesItsSearchInsteadOfComposer(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m.quickPick = &quickPicker{
+		kind: quickPickerModel,
+		items: []quickPickerItem{
+			{ID: "one", Label: "one"},
+			{ID: "two", Label: "two"},
+		},
+	}
+	m.input.SetValue("draft")
+
+	m0, _ := m.Update(tea.PasteMsg{Content: "two"})
+	m = m0.(chatTUI)
+	if got := m.input.Value(); got != "draft" {
+		t.Fatalf("quick-picker paste changed hidden composer draft to %q", got)
+	}
+	if got := m.quickPick.query; got != "two" {
+		t.Fatalf("quick-picker query = %q, want pasted text", got)
 	}
 }
 
@@ -4359,7 +4569,7 @@ func TestBottomPanelsRenderOncePerEvent(t *testing.T) {
 	if m.panels.cheatsheet == "" {
 		t.Fatal("open cheatsheet should be cached by the panel render pass")
 	}
-	if !strings.Contains(m.View().Content, i18n.M.CheatsheetSectionNavigation) {
+	if !strings.Contains(m.View().Content, i18n.M.CheatsheetCloseHint) {
 		t.Fatal("View should render the cached cheatsheet without re-rendering")
 	}
 	m.cheatsheetOpen = false
@@ -4467,7 +4677,7 @@ func TestCompletionMenuRendersBelowComposer(t *testing.T) {
 	}
 }
 
-func TestComposerStaysRaisedAfterMenuCloses(t *testing.T) {
+func TestComposerDropsAfterMenuCloses(t *testing.T) {
 	m := completionTestTUI()
 	m0, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = m0.(chatTUI)
@@ -4477,19 +4687,181 @@ func TestComposerStaysRaisedAfterMenuCloses(t *testing.T) {
 	}
 	openRow := promptRow(ansi.Strip(m.View().Content))
 
-	// Cancel the menu (Esc). The raised position must be held.
+	// Cancel the menu (Esc). The composer must reclaim the former menu rows.
 	m0, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = m0.(chatTUI)
 
-	if m.composerRaisedRows != raised {
-		t.Fatalf("composerRaisedRows = %d after cancel, want held %d", m.composerRaisedRows, raised)
+	if m.composerRaisedRows != 0 {
+		t.Fatalf("composerRaisedRows = %d after cancel, want 0", m.composerRaisedRows)
 	}
-	if got := promptRow(ansi.Strip(m.View().Content)); got != openRow {
-		t.Fatalf("input row = %d after cancel, want held at %d:\n%s", got, openRow, m.View().Content)
+	if got := promptRow(ansi.Strip(m.View().Content)); got <= openRow {
+		t.Fatalf("input row = %d after cancel, want below open row %d:\n%s", got, openRow, m.View().Content)
 	}
 	held := strings.TrimRight(ansi.Strip(m.View().Content), "\n")
 	if rows := strings.Count(held, "\n") + 1; rows > 24 {
 		t.Fatalf("held view is %d rows tall, must fit 24-row terminal:\n%s", rows, held)
+	}
+}
+
+func TestCompletionCloseDropsRaisedRowsOnShortTerminal(t *testing.T) {
+	m := completionTestTUI()
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 12})
+	m = m0.(chatTUI)
+	if m.composerRaisedRows == 0 {
+		t.Fatal("open completion should raise the composer")
+	}
+
+	m0, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = m0.(chatTUI)
+	if got := m.composerRaisedRows; got != 0 {
+		t.Fatalf("composerRaisedRows = %d after completion closes, want 0", got)
+	}
+	if got, want := strings.Count(ansi.Strip(m.View().Content), "\n")+1, m.height; got != want {
+		t.Fatalf("closed-completion frame rows = %d, want %d", got, want)
+	}
+}
+
+func TestCompletionOpenFitsShortTerminal(t *testing.T) {
+	m := completionTestTUI()
+	m.completion.items = make([]compItem, maxCompRows)
+	for i := range m.completion.items {
+		m.completion.items[i] = compItem{label: fmt.Sprintf("/item-%d", i+1)}
+	}
+	m.completion.sel = len(m.completion.items) - 1
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 11})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) != m.height {
+		t.Fatalf("open completion frame rows = %d, want %d:\n%s", len(lines), m.height, plain)
+	}
+	if !strings.Contains(plain, "/item-8") {
+		t.Fatalf("open completion frame hides the selected item:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Esc") {
+		t.Fatalf("open completion frame hides the exit hint:\n%s", plain)
+	}
+}
+
+func TestCompletionWithTodoPanelFitsShortTerminal(t *testing.T) {
+	m := completionTestTUI()
+	m.completion.items = make([]compItem, maxCompRows)
+	for i := range m.completion.items {
+		m.completion.items[i] = compItem{label: fmt.Sprintf("/item-%d", i+1)}
+	}
+	m.completion.sel = len(m.completion.items) - 1
+
+	todos := make([]string, todoPanelMaxRows)
+	for i := range todos {
+		todos[i] = fmt.Sprintf(`{"content":"Todo %02d","status":"pending"}`, i+1)
+	}
+	m.todoArgs = `{"todos":[` + strings.Join(todos, ",") + `]}`
+
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if got, want := len(lines), m.height; got != want {
+		t.Fatalf("completion + todo frame rows = %d, want %d:\n%s", got, want, plain)
+	}
+	if !strings.Contains(plain, "/item-8") {
+		t.Fatalf("completion + todo frame hides the selected item:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Esc") {
+		t.Fatalf("completion + todo frame hides the exit hint:\n%s", plain)
+	}
+
+	m0, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = m0.(chatTUI)
+	if m.completion.active {
+		t.Fatal("Esc should close completion while the todo panel remains visible")
+	}
+	if got, want := strings.Count(ansi.Strip(m.View().Content), "\n")+1, m.height; got != want {
+		t.Fatalf("closed completion + todo frame rows = %d, want %d", got, want)
+	}
+}
+
+func TestQueueTodoAndCompletionFitShortTerminal(t *testing.T) {
+	m := completionTestTUI()
+	m.state = tuiRunning
+	m.completion.items = make([]compItem, maxCompRows)
+	for i := range m.completion.items {
+		m.completion.items[i] = compItem{label: fmt.Sprintf("/item-%d", i+1)}
+	}
+	m.completion.sel = len(m.completion.items) - 1
+	m.pendingInterject = make([]string, 12)
+	for i := range m.pendingInterject {
+		m.pendingInterject[i] = fmt.Sprintf("queued feedback %d", i+1)
+	}
+	m.queueEditCursor = len(m.pendingInterject) - 1
+
+	todos := make([]string, todoPanelMaxRows)
+	for i := range todos {
+		todos[i] = fmt.Sprintf(`{"content":"Todo %02d","status":"pending"}`, i+1)
+	}
+	m.todoArgs = `{"todos":[` + strings.Join(todos, ",") + `]}`
+
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if got, want := len(lines), m.height; got != want {
+		t.Fatalf("queue + todo + completion frame rows = %d, want %d:\n%s", got, want, plain)
+	}
+	for _, want := range []string{"[12]", "/item-8", "Esc"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("queue + todo + completion frame hides %q:\n%s", want, plain)
+		}
+	}
+}
+
+func TestQueueTodoAndCompletionDegradeWithinTinyTerminal(t *testing.T) {
+	m := completionTestTUI()
+	m.state = tuiRunning
+	m.completion.items = []compItem{{label: "/selected"}}
+	m.pendingInterject = []string{"queued feedback"}
+	m.todoArgs = `{"todos":[{"content":"Todo","status":"pending"}]}`
+
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 8})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if got, want := len(lines), m.height; got != want {
+		t.Fatalf("tiny queue + todo + completion frame rows = %d, want %d:\n%s", got, want, plain)
+	}
+	for _, want := range []string{"/selected", "Esc"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("tiny frame hides active completion %q:\n%s", want, plain)
+		}
+	}
+	if strings.Contains(plain, "To-dos") {
+		t.Fatalf("tiny frame should collapse the zero-budget todo panel:\n%s", plain)
+	}
+}
+
+func TestLongTodoPanelFitsShortTerminal(t *testing.T) {
+	ctrl := control.New(control.Options{})
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 40)
+	todos := make([]string, todoPanelMaxRows)
+	for i := range todos {
+		todos[i] = fmt.Sprintf(`{"content":"Todo %02d %s","status":"pending"}`, i+1, strings.Repeat("long ", 12))
+	}
+	m.todoArgs = `{"todos":[` + strings.Join(todos, ",") + `]}`
+
+	m0, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
+	m = m0.(chatTUI)
+
+	plain := ansi.Strip(m.View().Content)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if got, want := len(lines), m.height; got != want {
+		t.Fatalf("long todo frame rows = %d, want %d:\n%s", got, want, plain)
+	}
+	if !strings.Contains(plain, "To-dos") {
+		t.Fatalf("long todo panel should retain its summary:\n%s", plain)
 	}
 }
 
@@ -4530,7 +4902,7 @@ func TestComposerDropsToBottomOnSubmit(t *testing.T) {
 	}
 }
 
-func TestComposerHoldsRaiseWithPersistentTodoPanel(t *testing.T) {
+func TestComposerDropsTransientRaiseWithPersistentTodoPanel(t *testing.T) {
 	ctrl := control.New(control.Options{})
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
 	m.width = 80
@@ -4548,12 +4920,12 @@ func TestComposerHoldsRaiseWithPersistentTodoPanel(t *testing.T) {
 	}
 	openRow := promptRow(ansi.Strip(m.View().Content))
 
-	// Cancel the menu; the todo panel stays, but the input must not jump.
+	// Cancel the menu; the todo panel stays, but its completion rows are freed.
 	m0, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = m0.(chatTUI)
 
-	if got := promptRow(ansi.Strip(m.View().Content)); got != openRow {
-		t.Fatalf("input row = %d after cancel with persistent todo panel, want held at %d:\n%s", got, openRow, m.View().Content)
+	if got := promptRow(ansi.Strip(m.View().Content)); got <= openRow {
+		t.Fatalf("input row = %d after cancel with persistent todo panel, want below open row %d:\n%s", got, openRow, m.View().Content)
 	}
 	if !strings.Contains(m.View().Content, "Phase A") {
 		t.Fatalf("todo panel should remain visible after cancel:\n%s", m.View().Content)

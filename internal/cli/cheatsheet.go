@@ -72,25 +72,65 @@ func cheatsheetSections() []cheatsheetSection {
 // renderCheatsheet draws the static keyboard cheatsheet panel at the given
 // terminal width, framed like other bottom pickers (choicePanelStyle).
 func renderCheatsheet(width int) string {
-	w := max(viewWidth(width), 40)
+	return renderCheatsheetRows(width, 0)
+}
+
+func renderCheatsheetRows(width, maxRows int) string {
+	w := max(viewWidth(width), 10)
+	contentWidth := max(w-2, 1)
+	keyWidth := min(16, max(8, contentWidth/3))
 	var b strings.Builder
 	b.WriteString(viewHeader("%s", i18n.M.CheatsheetTitle) + "\n")
 	for _, sec := range cheatsheetSections() {
 		b.WriteString(viewSubhead(sec.title) + "\n")
 		for _, row := range sec.rows {
 			// Pad key column so hints line up; chords stay literal English.
-			fmt.Fprintf(&b, "  %-16s %s\n", row.key, viewMeta(row.hint))
+			key := padRight(viewCompactText(row.key, keyWidth), keyWidth)
+			hint := viewCompactText(row.hint, viewBudget(contentWidth, keyWidth+3))
+			fmt.Fprintf(&b, "  %s %s\n", key, viewMeta(hint))
 		}
 	}
-	b.WriteString(viewHint(i18n.M.CheatsheetCloseHint))
-	return choicePanelStyle.Width(w).Render(strings.TrimRight(b.String(), "\n"))
+	b.WriteString(viewHint(viewCompactText(i18n.M.CheatsheetCloseHint, max(contentWidth-2, 1))))
+	body := strings.TrimRight(b.String(), "\n")
+	if maxRows > 0 {
+		body = compactCheatsheetRows(body, max(maxRows-2, 1))
+	}
+	body = viewFitLines(body, contentWidth)
+	return choicePanelStyle.Width(w).Render(body)
+}
+
+func compactCheatsheetRows(body string, maxContentRows int) string {
+	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
+	if len(lines) <= maxContentRows {
+		return strings.Join(lines, "\n")
+	}
+	footer := lines[len(lines)-1]
+	switch maxContentRows {
+	case 1:
+		return footer
+	case 2:
+		return strings.Join([]string{lines[0], footer}, "\n")
+	case 3:
+		return strings.Join([]string{lines[0], lines[1], footer}, "\n")
+	default:
+		keep := maxContentRows - 2
+		compact := append([]string{}, lines[:keep]...)
+		compact = append(compact, viewMeta("  …"), footer)
+		return strings.Join(compact, "\n")
+	}
 }
 
 func (m chatTUI) renderCheatsheet() string {
 	if !m.cheatsheetOpen {
 		return ""
 	}
-	return renderCheatsheet(m.width)
+	maxRows := 0
+	if m.height > 0 {
+		statusRows := m.computeStatusLineCount(m.width)
+		maxRows = m.height - 1 - m.input.Height() - m.queueIndicatorRows(m.composerFrameWidth()) - statusRows
+		maxRows = max(maxRows, 3)
+	}
+	return renderCheatsheetRows(m.width, maxRows)
 }
 
 // handleCheatsheetKey routes keys while the ? overlay is open. Esc closes;

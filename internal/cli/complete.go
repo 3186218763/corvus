@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"corvus/internal/control"
 	"corvus/internal/fileref"
@@ -598,11 +599,25 @@ const completionPadCell = "\u00a0"
 // or ECH erase sequences; mintty can leave stale CJK glyph cells after those
 // erases. NBSP is visually blank but forces the renderer to overwrite cells.
 func padCompletionLine(s string, w int) string {
+	s = ansi.Truncate(s, w, "…")
 	pad := w - visibleWidth(s)
 	if pad <= 0 {
 		return s
 	}
 	return s + strings.Repeat(completionPadCell, pad)
+}
+
+// completionVisibleItems keeps the popup inside the pinned bottom-frame
+// budget. A short terminal must still reserve one transcript row, the composer,
+// and the status block before choosing how many menu items to show.
+func (m chatTUI) completionVisibleItems() int {
+	if m.height <= 0 {
+		return maxCompRows
+	}
+	rows := m.interactivePanelBudget().completionRows
+	// The footer owns one row. Keep a selection row even on an unusually small
+	// frame so the menu can still be cancelled or accepted.
+	return min(maxCompRows, max(1, rows-1))
 }
 
 // renderCompletion draws the menu below the input box: matching items, windowed
@@ -616,17 +631,18 @@ func (m chatTUI) renderCompletion() string {
 		return ""
 	}
 	items := m.completion.items
+	maxRows := m.completionVisibleItems()
 	start := 0
-	if len(items) > maxCompRows {
-		start = m.completion.sel - maxCompRows/2
+	if len(items) > maxRows {
+		start = m.completion.sel - maxRows/2
 		if start < 0 {
 			start = 0
 		}
-		if start > len(items)-maxCompRows {
-			start = len(items) - maxCompRows
+		if start > len(items)-maxRows {
+			start = len(items) - maxRows
 		}
 	}
-	end := start + maxCompRows
+	end := start + maxRows
 	if end > len(items) {
 		end = len(items)
 	}
@@ -651,6 +667,9 @@ func (m chatTUI) renderCompletion() string {
 	hint := i18n.M.CompHintSlash
 	if m.completion.kind == compAt {
 		hint = i18n.M.CompHintFile
+	}
+	if m.width < 48 || (m.height > 0 && m.height <= 16) {
+		hint = "↑↓ · Enter · Esc"
 	}
 	b.WriteString(padCompletionLine(dim(hint), m.width))
 	return b.String()

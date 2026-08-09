@@ -29,6 +29,25 @@ func TestDiffTabExpansion(t *testing.T) {
 	}
 }
 
+func TestExpandTabsUsesTerminalCellWidth(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "CJK", input: "中\tX", want: "中  X"},
+		{name: "emoji", input: "🙂\tX", want: "🙂  X"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := expandTabs(tc.input); got != tc.want {
+				t.Fatalf("expandTabs(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestRenderNarrowNoPanic guards the width math against tiny terminals.
 func TestRenderNarrowNoPanic(t *testing.T) {
 	defer func(prev colorprofile.Profile) { activeColorProfile = prev }(activeColorProfile)

@@ -9,7 +9,6 @@ import (
 )
 
 const (
-	skillDialogMinRows = 8
 	skillDialogMaxRows = 18
 )
 
@@ -18,25 +17,37 @@ func (m chatTUI) renderSkillPicker() string {
 	if p == nil {
 		return ""
 	}
-	w := max(viewWidth(m.width), 40)
+	w := m.mainManagerWidth()
+	contentWidth := m.mainManagerContentWidth()
+	var body string
 	switch p.mode {
 	case pickerSkills:
-		return managerContentPanelStyle(w).Render(m.renderSkillPickerSkills())
+		body = m.renderSkillPickerSkills()
 	case pickerSources:
-		return managerContentPanelStyle(w).Render(m.renderSkillPickerSources())
+		body = m.renderSkillPickerSources()
 	case pickerSourceSkills:
-		return managerContentPanelStyle(w).Render(m.renderSkillPickerSourceSkills())
+		body = m.renderSkillPickerSourceSkills()
 	case pickerDetail:
-		return managerContentPanelStyle(w).Render(m.renderSkillPickerDetail())
+		body = m.renderSkillPickerDetail()
 	case pickerConfirmDelete:
-		return managerContentPanelStyle(w).Render(m.renderSkillPickerConfirmDelete())
+		body = m.renderSkillPickerConfirmDelete()
+	default:
+		return ""
 	}
-	return ""
+	return managerContentPanelStyle(w).Render(viewFitLines(body, contentWidth))
 }
 
 func (m chatTUI) skillPickerFooterHint() string {
 	if m.skillPick == nil {
 		return ""
+	}
+	if m.width < 48 || (m.height > 0 && m.height <= 16) {
+		switch m.skillPick.mode {
+		case pickerSkills:
+			return "↑↓ · Space · Enter · Esc"
+		default:
+			return "↑↓ · Enter · Esc"
+		}
 	}
 	switch m.skillPick.mode {
 	case pickerSkills:
@@ -56,16 +67,25 @@ func (m chatTUI) skillPickerFooterHint() string {
 
 func (m chatTUI) renderSkillPickerSkills() string {
 	p := m.skillPick
-	w := max(viewWidth(m.width), 40)
+	w := m.mainManagerContentWidth()
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "%s\n", viewHeader("Manage skills"))
 	if summary := skillPickerSummary(p); summary != "" {
-		fmt.Fprintf(&b, "%s\n", viewMeta(summary))
+		fmt.Fprintf(&b, "%s\n", viewMeta(viewCompactText(summary, w)))
 	}
-	b.WriteByte('\n')
-	b.WriteString(renderSkillSearchBox(p.query, p.searchActive, w))
-	b.WriteByte('\n')
+	if m.height > 0 && m.height <= 16 {
+		search := "/ " + i18n.M.SkillPickerSearchPlaceholder
+		if p.searchActive || p.query != "" {
+			search = "/ " + p.query
+		}
+		b.WriteString(viewMeta("  " + viewCompactText(search, max(w-2, 1))))
+		b.WriteByte('\n')
+	} else {
+		b.WriteByte('\n')
+		b.WriteString(renderSkillSearchBox(p.query, p.searchActive, w))
+		b.WriteByte('\n')
+	}
 
 	skills := p.skills
 	if p.searchActive && p.query != "" {
@@ -107,7 +127,7 @@ func (m chatTUI) skillPickerVisibleRows() int {
 	if m.height <= 0 {
 		return skillDialogMaxRows
 	}
-	return min(skillDialogMaxRows, max(skillDialogMinRows, m.height-14))
+	return min(skillDialogMaxRows, max(1, m.height-13))
 }
 
 func skillListWindow(sel, total, limit int) (int, int) {
@@ -153,6 +173,7 @@ func renderSkillSearchBox(query string, active bool, w int) string {
 
 func (m chatTUI) renderSkillPickerSources() string {
 	p := m.skillPick
+	w := m.mainManagerContentWidth()
 	var b strings.Builder
 
 	b.WriteString(accent(i18n.M.SkillPickerSourceTitle))
@@ -163,9 +184,19 @@ func (m chatTUI) renderSkillPickerSources() string {
 	b.WriteByte('\n')
 
 	roots := p.visibleRoots()
-	for i, r := range roots {
-		label := sourceRowLabel(r, m.width)
+	start, end := skillListWindow(p.sourceSel, len(roots), m.skillPickerVisibleRows())
+	if start > 0 {
+		b.WriteString(viewMeta(fmt.Sprintf(i18n.M.SkillPickerMoreAboveFmt, start)))
+		b.WriteByte('\n')
+	}
+	for i := start; i < end; i++ {
+		r := roots[i]
+		label := sourceRowLabel(r, w)
 		b.WriteString(selectionRow(i == p.sourceSel, i, "", label, false))
+		b.WriteByte('\n')
+	}
+	if end < len(roots) {
+		b.WriteString(viewMeta(fmt.Sprintf(i18n.M.SkillPickerMoreBelowFmt, len(roots)-end)))
 		b.WriteByte('\n')
 	}
 
@@ -179,6 +210,7 @@ func (m chatTUI) renderSkillPickerSources() string {
 
 func (m chatTUI) renderSkillPickerSourceSkills() string {
 	p := m.skillPick
+	w := m.mainManagerContentWidth()
 	var b strings.Builder
 	root, ok := p.selectedRoot()
 	if !ok {
@@ -187,7 +219,7 @@ func (m chatTUI) renderSkillPickerSourceSkills() string {
 	}
 	skills := p.selectedRootSkills()
 	b.WriteString(accent(i18n.M.SkillPickerSourceTitle))
-	b.WriteString("  " + dim(viewCompactPath(root.dir, max(8, m.width-18))))
+	b.WriteString("  " + dim(viewCompactPath(root.dir, max(8, w-18))))
 	b.WriteByte('\n')
 	b.WriteByte('\n')
 	if len(skills) == 0 {
@@ -201,7 +233,7 @@ func (m chatTUI) renderSkillPickerSourceSkills() string {
 		b.WriteByte('\n')
 	}
 	for i := start; i < end; i++ {
-		b.WriteString(renderSkillRow(i+1, i == p.sourceSkillSel, skills[i], p.skillEnabled(skills[i].Name), m.width))
+		b.WriteString(renderSkillRow(i+1, i == p.sourceSkillSel, skills[i], p.skillEnabled(skills[i].Name), w))
 		b.WriteByte('\n')
 	}
 	if end < len(skills) {
@@ -213,8 +245,9 @@ func (m chatTUI) renderSkillPickerSourceSkills() string {
 
 func (m chatTUI) renderSkillPickerDetail() string {
 	p := m.skillPick
+	w := m.mainManagerContentWidth()
 	var b strings.Builder
-	b.WriteString(renderSkillDetailHeader(p.detailSkill, m.width))
+	b.WriteString(renderSkillDetailHeader(p.detailSkill, w))
 	b.WriteByte('\n')
 	b.WriteByte('\n')
 	enabled := i18n.M.SkillPickerDisabledLabel
@@ -228,7 +261,7 @@ func (m chatTUI) renderSkillPickerDetail() string {
 		b.WriteString(selectionRow(i == p.detailAction, i, "", action.label, false))
 		b.WriteByte('\n')
 	}
-	if body := renderSkillBodyPreview(p.detailSkill, m.width, 6); body != "" {
+	if body := renderSkillBodyPreview(p.detailSkill, w, 6); body != "" {
 		b.WriteByte('\n')
 		b.WriteString(body)
 	}
@@ -237,12 +270,13 @@ func (m chatTUI) renderSkillPickerDetail() string {
 
 func (m chatTUI) renderSkillPickerConfirmDelete() string {
 	p := m.skillPick
+	w := m.mainManagerContentWidth()
 	var b strings.Builder
 	b.WriteString(accent(fmt.Sprintf(i18n.M.SkillPickerDeleteTitleFmt, p.deleteSkill.Name)))
 	b.WriteByte('\n')
 	path := skillDeleteTargetLabel(p.deleteSkill)
 	if path != "" {
-		b.WriteString(dim("  " + viewCompactPath(path, max(8, m.width-4))))
+		b.WriteString(dim("  " + viewCompactPath(path, max(8, w-4))))
 		b.WriteByte('\n')
 	}
 	b.WriteByte('\n')

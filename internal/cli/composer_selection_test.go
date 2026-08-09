@@ -526,98 +526,46 @@ func TestFailedImagePastePreservesComposerSelection(t *testing.T) {
 	}
 }
 
-func TestComposerFieldPaintsContinuousBackground(t *testing.T) {
+func TestComposerFieldStaysTransparent(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
 	configureCLITheme("dark")
-	bg := composerFieldBackground()
-	if bg == "" {
-		t.Fatal("composerFieldBackground should be non-empty with color on")
-	}
 	view := "\x1b[2m› \x1b[0mhello\x1b[m"
 	got := renderComposerField(view, 12)
-	if !strings.HasPrefix(got, bg) {
-		t.Fatalf("painted field must open with the background SGR: %q", got)
+	if got != view {
+		t.Fatalf("transparent field = %q, want textarea view %q", got, view)
 	}
-	if !strings.Contains(got, "\x1b[0m"+bg) {
-		t.Fatalf("field must re-arm the background after \\x1b[0m: %q", got)
-	}
-	if !strings.Contains(got, "\x1b[m"+bg) {
-		t.Fatalf("field must re-arm the background after \\x1b[m: %q", got)
-	}
-	if !strings.Contains(got, bg+"   ") {
-		t.Fatalf("right padding must be background-armed: %q", got)
-	}
-	if w := visibleWidth(ansi.Strip(got)); w != 12 {
-		t.Fatalf("painted field visible width = %d, want 12: %q", w, got)
-	}
-	// Spec: every painted line ends with a full reset so bg cannot leak downward.
-	if !strings.HasSuffix(got, ansiReset) {
-		t.Fatalf("painted field must end with ansiReset, got tail %q", got[max(0, len(got)-20):])
+	if bg := composerFieldBackground(); bg != "" {
+		t.Fatalf("composer field background = %q, want none", bg)
 	}
 }
 
-func TestComposerFieldClosesBackgroundBeforeNextRow(t *testing.T) {
+func TestComposerFieldDoesNotPaintSurfaceBackground(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
 	configureCLITheme("dark")
-	bg := composerFieldBackground()
-	if bg == "" {
-		t.Fatal("composerFieldBackground should be non-empty with color on")
-	}
 
-	// Short line (pad path) and full-width line (no pad path) both must reset.
-	for _, tc := range []struct {
-		name  string
-		view  string
-		width int
-	}{
-		{name: "short", view: "\x1b[2m› \x1b[0mhi\x1b[m", width: 20},
-		{name: "full", view: strings.Repeat("x", 12), width: 12},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			box := renderComposerField(tc.view, tc.width)
-			// Synthetic first completion row: only foreground SGR (like accent("› ")).
-			menu := "\x1b[38;5;75m› \x1b[0m/compact"
-			joined := box + "\n" + menu
-			// Composer segment (before the newline) must end with full reset.
-			composerPart, _, ok := strings.Cut(joined, "\n")
-			if !ok {
-				t.Fatal("joined must contain a newline between composer and menu")
-			}
-			if !strings.HasSuffix(composerPart, ansiReset) {
-				t.Fatalf("composer line must end with ansiReset before menu, tail=%q",
-					composerPart[max(0, len(composerPart)-40):])
-			}
-			// After the line's trailing reset, the open bg must not be the last SGR.
-			// Stronger check: the last occurrence of bg in composerPart is followed
-			// later by ansiReset (pad path: … reset+bg+spaces+reset).
-			if idx := strings.LastIndex(composerPart, bg); idx >= 0 {
-				if !strings.Contains(composerPart[idx:], ansiReset) {
-					t.Fatalf("last background arm must be closed by ansiReset: %q", composerPart[idx:])
-				}
-			}
-			// Menu line itself does not open with the composer bg SGR.
-			if strings.HasPrefix(menu, bg) {
-				t.Fatal("test setup error: menu should not start with bg")
-			}
-			_ = joined
-		})
+	rendered := renderComposerField("› draft", 20)
+	if strings.Contains(rendered, bgSGR(activeCLITheme.inputBoxBG)) {
+		t.Fatalf("composer must not paint a persistent surface background: %q", rendered)
 	}
+	if got := ansi.Strip(rendered); got != "› draft" {
+		t.Fatalf("composer text changed while removing surface background: %q", got)
+	}
+}
 
-	// Multi-line composer: each physical line ends reset; next line re-opens bg.
-	multi := renderComposerField("line1\nline2", 10)
-	parts := strings.Split(multi, "\n")
-	if len(parts) != 2 {
-		t.Fatalf("want 2 painted lines, got %d: %q", len(parts), multi)
+func TestComposerFieldDoesNotLeakSurfaceIntoNextRow(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+	view := "\x1b[2m› \x1b[0mhi\x1b[m"
+	menu := "\x1b[38;5;75m› \x1b[0m/compact"
+	joined := renderComposerField(view, 20) + "\n" + menu
+	if strings.Contains(joined, bgSGR(activeCLITheme.inputBoxBG)) {
+		t.Fatalf("composer surface leaked into completion row: %q", joined)
 	}
-	for i, p := range parts {
-		if !strings.HasSuffix(p, ansiReset) {
-			t.Fatalf("line %d must end with ansiReset: %q", i, p)
-		}
-		if !strings.HasPrefix(p, bg) {
-			t.Fatalf("line %d must re-open with bg: %q", i, p)
-		}
+	if got := strings.Split(joined, "\n")[1]; got != menu {
+		t.Fatalf("completion row changed by composer renderer: %q", got)
 	}
 }
 
@@ -630,11 +578,8 @@ func TestComposerFieldPreservesSelectionStyle(t *testing.T) {
 	if !strings.Contains(got, "\x1b[7m") {
 		t.Fatalf("selection reverse SGR must survive painting: %q", got)
 	}
-	if !strings.Contains(got, "\x1b[0m"+composerFieldBackground()) {
-		t.Fatalf("background must re-arm after the selection reset: %q", got)
-	}
-	if !strings.HasSuffix(got, ansiReset) {
-		t.Fatalf("selection-preserving paint must still end with ansiReset: %q", got)
+	if got != view {
+		t.Fatalf("transparent composer must preserve exact selection view: %q", got)
 	}
 }
 

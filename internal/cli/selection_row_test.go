@@ -57,3 +57,14 @@ func TestSelectionRowUsesLetters(t *testing.T) {
 		t.Fatalf("must not use numeric labels, got %q", idle)
 	}
 }
+
+func TestSelectionRowWithHintFitsWidthAndKeepsHint(t *testing.T) {
+	const width = 20
+	row := selectionRowWithHint(true, 0, "", strings.Repeat("long approval label ", 3), "n", false, width)
+	if got := visibleWidth(row); got > width {
+		t.Fatalf("selection row width = %d, want <= %d: %q", got, width, ansi.Strip(row))
+	}
+	if !strings.Contains(ansi.Strip(row), "n") {
+		t.Fatalf("selection row lost shortcut hint: %q", ansi.Strip(row))
+	}
+}
