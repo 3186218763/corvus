@@ -29,6 +29,8 @@ type mdRenderer struct {
 	copyMathPrefix string
 	nextCopyMathID int
 	inTable        bool
+	proseEnabled   bool
+	proseBudget    proseHighlightBudget
 }
 
 func newMarkdownRenderer(width int) *mdRenderer {
@@ -255,7 +257,11 @@ func (r *mdRenderer) renderTextBlock(buf *strings.Builder, n *ast.TextBlock, src
 }
 
 func (r *mdRenderer) renderInlineBlock(buf *strings.Builder, n ast.Node, src []byte, indent int, trailingBlank bool) {
+	prevProse := r.proseEnabled
+	r.proseEnabled = true
+	r.proseBudget = newProseHighlightBudget()
 	inline := r.collectInline(n, src)
+	r.proseEnabled = prevProse
 	prefix := strings.Repeat(" ", indent)
 	wrapped := wrapAnsi(inline, r.width-indent)
 	for _, line := range strings.Split(wrapped, "\n") {
@@ -292,7 +298,11 @@ func (r *mdRenderer) renderList(buf *strings.Builder, n *ast.List, src []byte, i
 		// lands next to the bullet either way.
 		inlineHost := inlineCarrier(first)
 		if inlineHost != nil {
+			prevProse := r.proseEnabled
+			r.proseEnabled = true
+			r.proseBudget = newProseHighlightBudget()
 			inline := r.collectInline(inlineHost, src)
+			r.proseEnabled = prevProse
 			wrapped := wrapAnsi(inline, r.width-indent-markerW)
 			lines := strings.Split(wrapped, "\n")
 			buf.WriteString(lines[0] + "\n")
@@ -398,7 +408,12 @@ func (r *mdRenderer) appendInline(b *strings.Builder, n ast.Node, src []byte) {
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		switch v := c.(type) {
 		case *ast.Text:
-			b.Write(v.Segment.Value(src))
+			text := string(v.Segment.Value(src))
+			if r.proseEnabled {
+				b.WriteString(highlightProseText(text, &r.proseBudget))
+			} else {
+				b.WriteString(text)
+			}
 			switch {
 			case v.HardLineBreak():
 				b.WriteByte('\n')

@@ -241,3 +241,49 @@ func TestInlineCodeSpanStillAccentOutsideTable(t *testing.T) {
 		t.Fatalf("inline code outside tables must keep accent:\n%s", got)
 	}
 }
+
+func TestMarkdownProseKeywordsSkipCodeSpansAndFences(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+	r := newMarkdownRenderer(80)
+	got := r.Render("The renderer passed; use `renderer` here.\n\n```go\nrenderer()\n```")
+	secondaryEsc := fgSGR(activeCLITheme.secondary)
+	accentEsc := fgSGR(activeCLITheme.accent)
+	if count := strings.Count(got, secondaryEsc+"renderer"); count != 1 {
+		t.Fatalf("prose should color 'renderer' once, got %d: %q", count, got)
+	}
+	if !strings.Contains(got, accentEsc+"renderer") {
+		t.Fatalf("inline code should retain accent styling: %q", got)
+	}
+}
+
+func TestMarkdownProseKeywordBudgetResetsPerParagraph(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+	r := newMarkdownRenderer(80)
+	got := r.Render("renderer parser cache API TUI model tool.\n\nrenderer is ready.")
+	secondaryEsc := fgSGR(activeCLITheme.secondary)
+	if count := strings.Count(got, secondaryEsc+"renderer"); count != 2 {
+		t.Fatalf("each paragraph should get a fresh budget, got renderer-colored=%d: %q", count, got)
+	}
+}
+
+func TestMarkdownProseHighlightDoesNotChangeWidthOrCopyText(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+	r := newMarkdownRenderer(18)
+	input := "renderer 通过 internal/cli/md.go"
+	view := r.Render(input)
+	for _, line := range strings.Split(strings.TrimRight(view, "\n"), "\n") {
+		if got := visibleWidth(line); got > 18 {
+			t.Fatalf("line width = %d > 18: %q", got, ansi.Strip(line))
+		}
+	}
+	copy := r.RenderCopy(input, "copy")
+	if ansi.Strip(copy) != ansi.Strip(view) {
+		t.Fatalf("copy/render visible text differ:\ncopy: %q\nview: %q", ansi.Strip(copy), ansi.Strip(view))
+	}
+}
