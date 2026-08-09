@@ -203,6 +203,38 @@ func TestExploredCardMaxLeaves(t *testing.T) {
 	}
 }
 
+func TestToolCardSemanticVerbColors(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.ANSI256
+	configureCLITheme("dark")
+	cases := []struct {
+		name, args string
+		color      cliColor
+		label      string
+	}{
+		{"read", `{"path":"theme.go"}`, activeCLITheme.info, "Explored"},
+		{"edit", `{"path":"theme.go"}`, activeCLITheme.success, "Edited"},
+		{"run", `{"command":"go test ./internal/cli"}`, activeCLITheme.warn, "Ran"},
+		{"mcp", `{"capability_id":"browser"}`, activeCLITheme.secondary, "MCP"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := toolCard(map[string]string{
+				"read": "read_file", "edit": "edit_file", "run": "bash", "mcp": "use_capability",
+			}[tc.name], tc.args, 80)
+			if !strings.Contains(ansi.Strip(got), tc.label) {
+				t.Fatalf("missing %q in %q", tc.label, ansi.Strip(got))
+			}
+			if !strings.Contains(got, fgSGR(tc.color)+tc.label) {
+				t.Fatalf("%q is not colored with %v: %q", tc.label, tc.color, got)
+			}
+			if strings.Contains(got, "\x1b[48;") {
+				t.Fatalf("argument text must not receive a background SGR: %q", got)
+			}
+		})
+	}
+}
+
 func TestIsExploreCoalesceTool(t *testing.T) {
 	for _, name := range []string{"read_file", "ls", "glob", "grep", "web_fetch", "web_search"} {
 		if !isExploreCoalesceTool(name) {

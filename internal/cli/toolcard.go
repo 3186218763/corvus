@@ -137,6 +137,24 @@ func isWriteTool(name string) bool {
 	return toolCategory[name] == "write"
 }
 
+// toolVerbColor maps a tool's semantic action to its card-verb color: read
+// tools are info, writes success, bash warn, and coordination/background
+// tools secondary. Unknown tools stay muted so args read as neutral.
+func toolVerbColor(name string) cliColor {
+	switch {
+	case name == "bash":
+		return activeCLITheme.warn
+	case isExploreCoalesceTool(name):
+		return activeCLITheme.info
+	case isWriteTool(name):
+		return activeCLITheme.success
+	case name == "task" || name == "use_capability" || toolCategory[name] == "proc":
+		return activeCLITheme.secondary
+	default:
+		return activeCLITheme.muted
+	}
+}
+
 // toolDisplayName returns the card verb for a tool.
 func toolDisplayName(name string) string {
 	if _, short, ok := tool.SplitMCPName(name); ok {
@@ -229,7 +247,7 @@ func exploredCard(leaves []exploreLeaf, width int) string {
 	if width < 8 {
 		width = 8
 	}
-	head := "  " + toolBullet() + " " + bold("Explored")
+	head := "  " + toolBullet() + " " + bold(themeFg(activeCLITheme.info, "Explored"))
 	if len(leaves) == 0 {
 		return head
 	}
@@ -341,7 +359,7 @@ func toolCard(name, args string, width int) string {
 	// MCP / other: • Verb arg
 	label := toolDisplayName(name)
 	arg := toolArg(name, args)
-	head := "  " + toolBullet() + " " + bold(label)
+	head := "  " + toolBullet() + " " + bold(themeFg(toolVerbColor(name), label))
 	if arg == "" {
 		return head
 	}
@@ -352,12 +370,12 @@ func toolCard(name, args string, width int) string {
 // editedCard renders "  • Edited path".
 func editedCard(name, args string, width int) string {
 	path := toolArg(name, args)
-	head := "  " + toolBullet() + " " + bold("Edited")
+	head := "  " + toolBullet() + " " + bold(themeFg(toolVerbColor(name), "Edited"))
 	if path == "" {
 		// Fall back to display name for non-path writes (e.g. delete_symbol).
 		label := toolDisplayName(name)
 		if label != "Edited" {
-			head = "  " + toolBullet() + " " + bold(label)
+			head = "  " + toolBullet() + " " + bold(themeFg(toolVerbColor(name), label))
 		}
 		return head
 	}
@@ -377,12 +395,12 @@ func bashToolCard(name, args string, width int) string {
 	cmd := strings.TrimSpace(toolArg(name, args))
 	label := "Ran"
 	if cmd == "" {
-		return "  " + toolBullet() + " " + bold(label)
+		return "  " + toolBullet() + " " + bold(themeFg(activeCLITheme.warn, label))
 	}
 	lines := strings.Split(cmd, "\n")
 	headW := width - 4 - len([]rune(label)) - 1 // "  • Ran "
 	first := highlightBash(clampPlain(lines[0], max(headW, 4)))
-	head := "  " + toolBullet() + " " + bold(label) + " " + first
+	head := "  " + toolBullet() + " " + bold(themeFg(activeCLITheme.warn, label)) + " " + first
 	if len(lines) == 1 {
 		return head
 	}
