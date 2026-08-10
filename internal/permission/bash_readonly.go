@@ -78,10 +78,36 @@ func hasUnsafePrefixArgs(base, subcmd string, args []string) bool {
 		switch subcmd {
 		case "diff", "show", "log":
 			return hasAnyArg(args, "--output") || hasArgWithPrefix(args, "--output=")
+		case "tag":
+			// git tag lists by default, but create/delete/annotate/sign/force
+			// mutate .git/refs/tags. Only list-mode invocations are read-only.
+			if hasAnyArg(args, "-a", "-s", "-d", "-f", "-m", "-F", "-u", "-e") {
+				return true
+			}
+			if hasAnyArg(args, "-l", "--list", "--contains", "--merged",
+				"--no-merged", "--points-at", "--sort", "--format", "--column",
+				"--no-column", "--reference", "--ignore-case") {
+				return false
+			}
+			for _, arg := range args {
+				if !strings.HasPrefix(arg, "-") {
+					return true // a positional argument creates a tag
+				}
+			}
+			return false
+		case "reflog":
+			// git reflog shows by default; expire/delete prune .git/logs.
+			return len(args) > 0 && (args[0] == "expire" || args[0] == "delete")
 		}
 	case "go":
 		if subcmd == "env" {
 			return hasAnyArg(args, "-w", "-u")
+		}
+	case "npm":
+		if subcmd == "audit" {
+			// npm audit is read-only; npm audit fix rewrites
+			// package-lock.json and node_modules.
+			return len(args) > 0 && !strings.HasPrefix(args[0], "-")
 		}
 	}
 	return false
