@@ -1480,6 +1480,60 @@ func TestRunClaudePermissionRequestJSONAllow(t *testing.T) {
 	}
 }
 
+func TestRunClaudePermissionRequestProjectAllowIgnored(t *testing.T) {
+	hooks := []ResolvedHook{
+		{HookConfig: HookConfig{Command: "guard", PayloadFormat: "claude"}, Event: PermissionRequest, Scope: ScopeProject},
+	}
+	allowJSON := `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}`
+	rep := Run(context.Background(), Payload{Event: PermissionRequest, ToolName: "bash"}, hooks,
+		func(_ context.Context, in SpawnInput) SpawnResult { return SpawnResult{ExitCode: 0, Stdout: allowJSON} })
+	if rep.Blocked {
+		t.Fatal("an allow decision must not block")
+	}
+	if rep.Allowed {
+		t.Fatal("project-scoped hook allow must not auto-approve on the user's behalf")
+	}
+	if !rep.AllowedFromProject {
+		t.Fatal("project-scoped hook allow should be recorded as AllowedFromProject")
+	}
+}
+
+func TestRunClaudePermissionRequestProjectDenyStillBlocks(t *testing.T) {
+	hooks := []ResolvedHook{
+		{HookConfig: HookConfig{Command: "guard", PayloadFormat: "claude"}, Event: PermissionRequest, Scope: ScopeProject},
+	}
+	denyJSON := `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny"}}}`
+	rep := Run(context.Background(), Payload{Event: PermissionRequest, ToolName: "bash"}, hooks,
+		func(_ context.Context, in SpawnInput) SpawnResult { return SpawnResult{ExitCode: 0, Stdout: denyJSON} })
+	if !rep.Blocked {
+		t.Fatal("project-scoped hook deny must still block")
+	}
+}
+
+func TestRunClaudePermissionRequestProjectExit2StillBlocks(t *testing.T) {
+	hooks := []ResolvedHook{
+		{HookConfig: HookConfig{Command: "guard", PayloadFormat: "claude"}, Event: PermissionRequest, Scope: ScopeProject},
+	}
+	rep := Run(context.Background(), Payload{Event: PermissionRequest, ToolName: "bash"}, hooks,
+		func(_ context.Context, in SpawnInput) SpawnResult { return SpawnResult{ExitCode: 2} })
+	if !rep.Blocked {
+		t.Fatal("project-scoped Claude hook exiting 2 must still block")
+	}
+}
+
+func TestRunClaudePermissionRequestNonProjectAllowWinsOverProject(t *testing.T) {
+	allowJSON := `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}`
+	hooks := []ResolvedHook{
+		{HookConfig: HookConfig{Command: "project-guard", PayloadFormat: "claude"}, Event: PermissionRequest, Scope: ScopeProject},
+		{HookConfig: HookConfig{Command: "global-guard", PayloadFormat: "claude"}, Event: PermissionRequest, Scope: ScopeGlobal},
+	}
+	rep := Run(context.Background(), Payload{Event: PermissionRequest, ToolName: "bash"}, hooks,
+		func(_ context.Context, in SpawnInput) SpawnResult { return SpawnResult{ExitCode: 0, Stdout: allowJSON} })
+	if !rep.Allowed {
+		t.Fatal("a non-project hook's explicit allow must win over a project hook's ignored allow")
+	}
+}
+
 func TestRunHonorsUserPromptSubmitTopLevelDeny(t *testing.T) {
 	hooks := []ResolvedHook{
 		{HookConfig: HookConfig{Command: "guard", PayloadFormat: "claude"}, Event: UserPromptSubmit},

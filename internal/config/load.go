@@ -26,8 +26,9 @@ func Load() (*Config, error) {
 // LoadForRoot builds the configuration with project files resolved from root
 // instead of the current working directory. When root is "" or ".", it behaves
 // like Load(). This is the workspace-aware entry point: desktop tabs use it so
-// each project's corvus.toml + .mcp.json are resolved independently without
-// changing the process cwd, while provider keys stay rooted in Corvus home.
+// each project's .corvus/config.toml + .mcp.json are resolved independently
+// without changing the process cwd, while provider keys stay rooted in
+// Corvus home.
 //
 // Note: LoadForRoot may rewrite legacy MCP `tier` lines on disk (see
 // mergeRuntimeTOMLFileSnapshot). Callers that must not mutate config files should use
@@ -44,7 +45,7 @@ func LoadForRootReadOnly(root string) (*Config, error) {
 }
 
 // LoadUserConfigReadOnly loads only the trusted user-global config. It never
-// reads project corvus.toml files and never performs on-disk migrations.
+// reads project .corvus/config.toml files and never performs on-disk migrations.
 // Host-owned features that may execute a configured binary should use this
 // instead of LoadForRoot so an untrusted checkout cannot choose the process.
 func LoadUserConfigReadOnly() (*Config, error) {
@@ -58,6 +59,7 @@ func LoadUserConfigReadOnly() (*Config, error) {
 			cfg.systemPromptFileSource = promptFileSourceUser
 		}
 	}
+	fillPartialProvidersFromDefaults(cfg)
 	normalizeConfigForEdit(cfg)
 	return cfg, nil
 }
@@ -69,16 +71,12 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	cfg.setExpansionEnv(expansionEnv)
 	cfg.CredentialsStore = credentialsStoreMode()
 
-	projectTOML := "corvus.toml"
-	if root != "." {
-		projectTOML = filepath.Join(root, "corvus.toml")
-	}
 	if primary := userConfigPath(); primary != "" {
 		if _, err := resolveConfigAccessPath(primary, true); err != nil {
 			return nil, err
 		}
 	}
-	if _, err := resolveConfigAccessPath(projectTOML, false); err != nil {
+	if _, err := resolveConfigAccessPath(ProjectConfigPathForRoot(root), false); err != nil {
 		return nil, err
 	}
 
@@ -127,6 +125,7 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	globalSecrets := cfg.Secrets
 	globalPricingCurrency := cfg.UI.Currency
 
+	projectTOML := ProjectConfigPathForRoot(root)
 	tomlSources = append(tomlSources, projectTOML)
 	projectMeta, err := mergeTOML(cfg, projectTOML)
 	if err != nil {
@@ -143,7 +142,7 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 		cfg.systemPromptFileSource = promptFileSourceProject
 	}
 	// Secret protection is a user-global security control: a cloned repo's
-	// corvus.toml must not be able to flip on the workflow-breaking env/path
+	// project .corvus/config.toml must not be able to flip on the workflow-breaking env/path
 	// protections.
 	cfg.Secrets = globalSecrets
 	// Pricing currency is a user-level regional preference. A repository must
@@ -151,7 +150,7 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	cfg.UI.Currency = globalPricingCurrency
 	// TOML decoding replaces [[plugins]] wholesale, so cfg.Plugins now holds
 	// only the last file's. Re-merge by name across all sources (later wins) so a
-	// project corvus.toml doesn't drop the global config's MCP servers.
+	// project .corvus/config.toml doesn't drop the global config's MCP servers.
 	// mergeTOMLPlugins only reads files; it does not run on-disk migrations.
 	plugins, err := mergeTOMLPlugins(tomlSources)
 	if err != nil {
@@ -166,6 +165,7 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 		cfg.providerSources = providerSources
 		cfg.shadowedProjectProviders = shadowedProjectProviders
 	}
+	fillPartialProvidersFromDefaults(cfg)
 	if access, ok, err := mergeTOMLProviderAccess(tomlSources); err != nil {
 		cfg.addLoadWarning(fmt.Sprintf("provider access configuration could not be merged (%v)", err))
 	} else if ok {
@@ -174,7 +174,7 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 
 	// Claude Code's .mcp.json (project root) is read last and merged into
 	// [[plugins]], so a server configured for Claude works here unchanged.
-	// Project corvus.toml wins on a name collision; project .mcp.json wins
+	// Project .corvus/config.toml wins on a name collision; project .mcp.json wins
 	// over a same-name user-global entry (see mergeMCPJSON).
 	mcpFile := mcpJSONFile
 	if root != "." {
@@ -267,9 +267,9 @@ func cloneStringMap(in map[string]string) map[string]string {
 }
 
 // restoreUnresolvableProjectDefaultModel falls back to the user/global
-// default_model when a project corvus.toml overrides it with a reference no
+// default_model when a project .corvus/config.toml overrides it with a reference no
 // configured provider serves (#4218). Pre-v1.11 persistence paths (e.g. the
-// "always allow" writer) full-rendered ./corvus.toml and pinned the built-in
+// "always allow" writer) full-rendered .corvus/config.toml and pinned the built-in
 // default_model ("deepseek-flash") into it; once the user's [[providers]]
 // replaced the built-in presets, that stale name resolved to nothing and boot
 // hard-failed in every launch from that folder. In-memory only — the project
@@ -490,13 +490,23 @@ func mergeTOMLProviders(paths []string) ([]ProviderEntry, map[string]providerSou
 		for _, p := range f.Providers {
 			normalizeProviderEffortFields(&p)
 			key := providerMergeKey(p)
+			prio := providerSourcePriority(source)
 			if i, ok := index[key]; ok {
-				if sources[key] == providerSourceProject && source == providerSourceUser {
+				switch {
+				case prio > providerSourcePriority(sources[key]):
+					// A user entry wins wholesale, but a partial entry (one that
+					// only overrides, e.g., api_key) keeps the project entry's
+					// missing fields so a home .corvus key-only override works.
 					shadowedProject = append(shadowedProject, merged[i])
-					merged[i] = p
+					merged[i] = fillProviderEntryFrom(p, merged[i])
 					sources[key] = source
-				} else if sources[key] == providerSourceUser && source == providerSourceProject {
+				case prio < providerSourcePriority(sources[key]):
 					shadowedProject = append(shadowedProject, p)
+					// The user entry already wins, but a partial user entry
+					// (e.g. api_key only) keeps the project entry's fields.
+					if strings.TrimSpace(merged[i].BaseURL) == "" {
+						merged[i] = fillProviderEntryFrom(merged[i], p)
+					}
 				}
 				continue
 			} else {
@@ -509,11 +519,95 @@ func mergeTOMLProviders(paths []string) ([]ProviderEntry, map[string]providerSou
 	return merged, sources, shadowedProject, saw, nil
 }
 
+// fillProviderEntryFrom copies non-empty fields of base onto entry so a partial
+// provider override (for example an api_key-only entry in ~/.corvus/config.toml)
+// stays usable without repeating the full provider definition. Fields already
+// set on entry are never overwritten.
+func fillProviderEntryFrom(entry, base ProviderEntry) ProviderEntry {
+	if strings.TrimSpace(entry.Name) == "" {
+		entry.Name = base.Name
+	}
+	if strings.TrimSpace(entry.Kind) == "" {
+		entry.Kind = base.Kind
+	}
+	if strings.TrimSpace(entry.BaseURL) == "" {
+		entry.BaseURL = base.BaseURL
+	}
+	if strings.TrimSpace(entry.ChatURL) == "" {
+		entry.ChatURL = base.ChatURL
+	}
+	if strings.TrimSpace(entry.Model) == "" {
+		entry.Model = base.Model
+	}
+	if len(entry.Models) == 0 {
+		entry.Models = base.Models
+	}
+	if strings.TrimSpace(entry.Default) == "" {
+		entry.Default = base.Default
+	}
+	if strings.TrimSpace(entry.ModelsURL) == "" {
+		entry.ModelsURL = base.ModelsURL
+	}
+	if strings.TrimSpace(entry.APIKeyEnv) == "" {
+		entry.APIKeyEnv = base.APIKeyEnv
+	}
+	if strings.TrimSpace(entry.BalanceURL) == "" {
+		entry.BalanceURL = base.BalanceURL
+	}
+	if entry.ContextWindow == 0 {
+		entry.ContextWindow = base.ContextWindow
+	}
+	if entry.Price == nil {
+		entry.Price = base.Price
+	}
+	if strings.TrimSpace(entry.PresetID) == "" {
+		entry.PresetID = base.PresetID
+	}
+	if entry.PresetVersion == 0 {
+		entry.PresetVersion = base.PresetVersion
+	}
+	return entry
+}
+
+// fillPartialProvidersFromDefaults fills partial provider entries from the
+// built-in defaults of the same name, so an api_key-only entry can target a
+// built-in provider (e.g. deepseek-flash) without re-declaring its endpoint.
+func fillPartialProvidersFromDefaults(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	defaults := Default().Providers
+	for i := range cfg.Providers {
+		p := &cfg.Providers[i]
+		if strings.TrimSpace(p.BaseURL) != "" {
+			continue
+		}
+		for _, d := range defaults {
+			if d.Name != p.Name {
+				continue
+			}
+			*p = fillProviderEntryFrom(*p, d)
+			break
+		}
+	}
+}
+
 func providerSourceForPath(path string) providerSourceScope {
 	if isUserConfigPath(path) {
 		return providerSourceUser
 	}
 	return providerSourceProject
+}
+
+// providerSourcePriority orders config sources for same-name provider entries:
+// the user's config first, then the project .corvus/config.toml.
+func providerSourcePriority(scope providerSourceScope) int {
+	switch scope {
+	case providerSourceUser:
+		return 2
+	default:
+		return 1
+	}
 }
 
 func providerMergeKey(p ProviderEntry) string {
@@ -844,11 +938,7 @@ func MigrateLegacyAgentStepLimitsForRoot(root string) (bool, error) {
 	if userPath := userConfigLoadPath(); userPath != "" {
 		paths = append(paths, userPath)
 	}
-	projectPath := "corvus.toml"
-	if root != "." {
-		projectPath = filepath.Join(root, "corvus.toml")
-	}
-	paths = append(paths, projectPath)
+	paths = append(paths, ProjectConfigPathForRoot(root))
 
 	changedAny := false
 	seen := make(map[string]struct{}, len(paths))
@@ -889,11 +979,7 @@ func MigrateLegacyRedactToolOutputForRoot(root string) (bool, error) {
 	if userPath := userConfigLoadPath(); userPath != "" {
 		paths = append(paths, userPath)
 	}
-	projectPath := "corvus.toml"
-	if root != "." {
-		projectPath = filepath.Join(root, "corvus.toml")
-	}
-	paths = append(paths, projectPath)
+	paths = append(paths, ProjectConfigPathForRoot(root))
 
 	changedAny := false
 	seen := make(map[string]struct{}, len(paths))
@@ -931,11 +1017,7 @@ func MigrateLegacyMemoryCompilerForRoot(root string) (bool, error) {
 	if userPath := userConfigLoadPath(); userPath != "" {
 		paths = append(paths, userPath)
 	}
-	projectPath := "corvus.toml"
-	if root != "." {
-		projectPath = filepath.Join(root, "corvus.toml")
-	}
-	paths = append(paths, projectPath)
+	paths = append(paths, ProjectConfigPathForRoot(root))
 
 	changedAny := false
 	seen := make(map[string]struct{}, len(paths))
@@ -1543,7 +1625,7 @@ func normalizeLegacyMimoCustomProviders(c *Config) bool {
 }
 
 // NormalizeLegacyMimoCustomProvidersForRefs appends custom OpenAI-compatible
-// MiMo providers needed by legacy refs that live outside corvus.toml, such as
+// MiMo providers needed by legacy refs that live outside .corvus/config.toml, such as
 // restored desktop tab state.
 func NormalizeLegacyMimoCustomProvidersForRefs(c *Config, refs ...string) bool {
 	return normalizeLegacyMimoCustomProvidersForRefs(c, refs...)

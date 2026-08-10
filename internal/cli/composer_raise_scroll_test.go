@@ -22,9 +22,9 @@ func TestComposerDropsRaiseWhenModalCloses(t *testing.T) {
 	m.composerRaisedRows = 6
 	// Open skills (hides composer).
 	m.skillPick = &skillPicker{
-		mode:   pickerSkills,
-		skills: []skill.Skill{{Name: "demo", Description: "d"}},
-		enabled: map[string]bool{"demo": true},
+		mode:            pickerSkills,
+		skills:          []skill.Skill{{Name: "demo", Description: "d"}},
+		enabled:         map[string]bool{"demo": true},
 		originalEnabled: map[string]bool{"demo": true},
 	}
 	if !m.hideComposer() {

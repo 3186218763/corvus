@@ -10,7 +10,7 @@ import (
 
 func TestLoadForEdit(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "corvus.toml")
+	path := filepath.Join(dir, ".corvus", "config.toml")
 	custom := `default_model = "custom"
 [[providers]]
 name = "custom"
@@ -19,6 +19,9 @@ base_url = "https://x"
 model = "m"
 api_key_env = "X_KEY"
 `
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(custom), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -41,6 +44,9 @@ api_key_env = "X_KEY"
 
 func TestMergeTOMLUIProviderAccessPreservesExplicitEmpty(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "corvus.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte("[ui]\nprovider_access = []\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +90,7 @@ api_key_env = "LOCAL_KEY"
 
 func TestLoadForEditNormalizesLegacyMCPTiersWithoutWriting(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "corvus.toml")
+	path := filepath.Join(dir, ".corvus", "config.toml")
 	body := `
 [[plugins]]
 name = "playwright"
@@ -97,6 +103,9 @@ kind = "openai"
 base_url = "https://x"
 model = "m"
 `
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +154,7 @@ func TestLoadForEditDoesNotBindEditedConfigRootCredentials(t *testing.T) {
 	project := t.TempDir()
 	launch := t.TempDir()
 	home := t.TempDir()
-	path := filepath.Join(project, "corvus.toml")
+	path := filepath.Join(project, ".corvus", "config.toml")
 	body := `default_model = "custom/m"
 [[providers]]
 name = "custom"
@@ -154,6 +163,9 @@ base_url = "https://example.invalid/v1"
 model = "m"
 api_key_env = "PROJECT_ONLY_KEY"
 `
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}

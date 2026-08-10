@@ -121,7 +121,6 @@ func (o *MutationObserver) RegisterWriter(id, kind string, turn int) error {
 		return nil
 	}
 	o.reg.mu.Lock()
-	defer o.reg.mu.Unlock()
 	if o.reg.writers == nil {
 		o.reg.writers = map[string]ActiveWriter{}
 	}
@@ -129,17 +128,40 @@ func (o *MutationObserver) RegisterWriter(id, kind string, turn int) error {
 		o.reg.barrierHeld = map[string]bool{}
 	}
 	if o.reg.barrierHeld[id] {
+		o.reg.mu.Unlock()
 		return nil
 	}
 	o.reg.writers[id] = ActiveWriter{ID: id, Turn: turn, StartedAt: time.Now(), Kind: kind}
 	snap := o.snapshotWritersLocked()
+	// Release reg.mu before the barrier wait: EnterWrite can block behind a
+	// rewind commit's exclusive hold, and holding reg.mu across it would freeze
+	// UnregisterWriter/ActiveWriters for the whole commit (which includes slow
+	// file I/O). The writer is already visible in the snapshot so readers see
+	// it as active while the claim waits.
+	o.reg.mu.Unlock()
+
+	var err error
 	if o.store != nil {
 		o.store.SetActiveWriters(snap)
-		if err := o.store.Barrier().EnterWrite(); err != nil {
-			delete(o.reg.writers, id)
+		err = o.store.Barrier().EnterWrite()
+	}
+
+	o.reg.mu.Lock()
+	defer o.reg.mu.Unlock()
+	if err != nil {
+		delete(o.reg.writers, id)
+		if o.store != nil {
 			o.store.SetActiveWriters(o.snapshotWritersLocked())
-			return fmt.Errorf("register background writer: %w", err)
 		}
+		return fmt.Errorf("register background writer: %w", err)
+	}
+	if o.reg.barrierHeld[id] {
+		// A concurrent RegisterWriter for the same id claimed the barrier while
+		// we waited; drop our duplicate hold to keep the barrier count balanced.
+		if o.store != nil {
+			o.store.Barrier().ExitWrite()
+		}
+		return nil
 	}
 	o.reg.barrierHeld[id] = true
 	return nil

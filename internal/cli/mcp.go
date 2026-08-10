@@ -1,17 +1,13 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"corvus/internal/boot"
 	"corvus/internal/config"
-	"corvus/internal/plugin"
 )
 
 // mcp.go holds parsing and connection helpers for the in-chat `/mcp` workflow.
@@ -302,37 +298,6 @@ func tokenizeArgs(s string) []string {
 		out = append(out, cur.String())
 	}
 	return out
-}
-
-var mcpProbeForInstall = probeMCPReadiness
-
-func probeMCPReadiness(entry config.PluginEntry) (plugin.MCPInstallResult, error) {
-	entry.Source = config.MCPSourceUserConfig
-	workspace, err := os.Getwd()
-	if err != nil {
-		workspace = ""
-	}
-	specs := boot.PluginSpecsForRootWithOptions([]config.PluginEntry{entry}, workspace, boot.PluginSpecOptions{
-		DefaultCallTimeout: 30 * time.Second,
-		ConfigSource:       string(config.MCPSourceUserConfig),
-		StateHome:          config.CorvusHomeDir(),
-		Network:            true,
-	})
-	if len(specs) != 1 {
-		err := fmt.Errorf("could not build MCP launch specification")
-		return plugin.InstallResultForError(entry.Name, err), err
-	}
-	host := plugin.NewHost()
-	defer host.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
-	return host.InstallAndConnect(ctx, specs[0])
-}
-
-func persistInstalledMCP(workspace string, entry config.PluginEntry) error {
-	entry.Source = config.MCPSourceUserConfig
-	_, err := config.InstallUserPluginForRoot(workspace, entry, entry.ShouldAutoStart())
-	return err
 }
 
 func mcpCLIWorkspaceRoot() string {

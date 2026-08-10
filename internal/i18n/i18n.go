@@ -421,7 +421,7 @@ type Messages struct {
 	SelectProvidersLabel     string // multi-select label
 	EnterAPIKeysHeader       string // header before the per-env-var prompts
 	MissingKeyIntro          string // shown when re-running the key step on a configured setup
-	WroteFileFmt             string // "Wrote %s" — used for corvus.toml and .env both
+	WroteFileFmt             string // "Wrote %s" — used for .corvus/config.toml and .env both
 	SetupComplete            string // success line at end of init
 	SetupCancelled           string // shown when the user aborts the wizard
 	ConfirmReconfigureFmt    string // "%s already exists. Reconfigure and overwrite?"
@@ -471,7 +471,7 @@ type Messages struct {
 	NoModelsAvailableFmt       string // "%s: no models available, skipping"
 	CustomFetchEmpty           string // "/models returned an empty list — falling back to manual entry"
 	AnthropicFetchEmpty        string // "/models returned an empty list — Anthropic-compatible providers usually don't expose one, falling back to manual entry"
-	SkipStaleCustomEntryFmt    string // "skipping stale %q entry from corvus.toml (pointing at %s) — please remove it"
+	SkipStaleCustomEntryFmt    string // "skipping stale %q entry from .corvus/config.toml (pointing at %s) — please remove it"
 	APIKeyAlreadySetFmt        string // "reusing existing value for %s"
 	APIKeyResetPromptFmt       string // "Re-enter %s?"
 	InvalidAPIKeyEnvFmt        string // "%q is not a valid API Key variable name..."

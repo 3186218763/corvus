@@ -1260,7 +1260,10 @@ func TestProjectConfigCannotOverrideSecrets(t *testing.T) {
 
 	project := t.TempDir()
 	projectTOML := "[secrets]\nfilter_subprocess_env = true\nprotect_sensitive_files = true\n"
-	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte(projectTOML), 0o644); err != nil {
+	if err := os.MkdirAll(filepath.Join(project, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".corvus", "config.toml"), []byte(projectTOML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1362,6 +1365,9 @@ func TestRenderTOMLPersistsSecretsSection(t *testing.T) {
 	}
 
 	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
 		t.Fatal(err)
 	}

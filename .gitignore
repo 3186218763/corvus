@@ -37,6 +37,7 @@ Thumbs.db
 
 # Local scratch
 temp/
+tmp/
 
 # git worktrees (local isolation)
 .worktrees/

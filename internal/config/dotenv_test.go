@@ -224,6 +224,9 @@ func TestProjectDotEnvUsesDotenvSyntax(t *testing.T) {
 
 func TestDotEnvFileWarningsReportDuplicateKeysWithoutValues(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte("TOKEN=secret-one\nOTHER=ok\nexport TOKEN='secret two'\nOTHER=last\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -249,6 +252,9 @@ func TestDotEnvFileWarningsReportDuplicateKeysWithoutValues(t *testing.T) {
 
 func TestDotEnvFileFilteredPreservesProjectScopeRules(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte("PLUGIN_TOKEN=project\nCORVUS_HOME=blocked\nHOME=blocked\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +405,10 @@ func TestLoadForRootResolvesProviderCredentialsOverInheritedEnv(t *testing.T) {
 	if err := os.WriteFile(cred, []byte(key+"=from_credentials\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte(`
+	if err := os.MkdirAll(filepath.Join(project, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".corvus", "config.toml"), []byte(`
 default_model = "custom/m"
 [[providers]]
 name = "custom"
@@ -419,7 +428,7 @@ api_key_env = "`+key+`"
 	if !ok {
 		t.Fatalf("provider missing: %+v", cfg.Providers)
 	}
-	if got := provider.APIKey(); got != "from_credentials" {
+	if got := provider.EffectiveAPIKey(); got != "from_credentials" {
 		t.Fatalf("provider API key = %q, want credentials value", got)
 	}
 	if got := os.Getenv(key); got != "from_credentials" {
@@ -452,7 +461,10 @@ func TestLoadForRootPrefersProjectProviderEnvOverCredentialsAndInheritedEnv(t *t
 	if err := os.WriteFile(filepath.Join(project, ".env"), []byte(key+"=from_project\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte(`
+	if err := os.MkdirAll(filepath.Join(project, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".corvus", "config.toml"), []byte(`
 default_model = "custom/m"
 [[providers]]
 name = "custom"
@@ -472,7 +484,7 @@ api_key_env = "`+key+`"
 	if !ok {
 		t.Fatalf("provider missing: %+v", cfg.Providers)
 	}
-	if got := provider.APIKey(); got != "from_project" {
+	if got := provider.EffectiveAPIKey(); got != "from_project" {
 		t.Fatalf("provider API key = %q, want project .env over credentials", got)
 	}
 	if got := provider.APIKeySourceLabel(); got != "project .env" {
@@ -903,7 +915,10 @@ func TestProjectConfigCannotOverrideCredentialStoreMode(t *testing.T) {
 	if err := os.WriteFile(UserConfigPath(), []byte(`credentials_store = "file"`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte(`credentials_store = "keyring"`), 0o644); err != nil {
+	if err := os.MkdirAll(filepath.Join(project, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".corvus", "config.toml"), []byte(`credentials_store = "keyring"`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

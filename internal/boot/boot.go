@@ -9,6 +9,7 @@
 package boot
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -20,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/term"
 
 	"corvus/internal/agent"
 	"corvus/internal/capability"
@@ -118,8 +121,18 @@ type Options struct {
 	StatsSource string
 	// ExtraPlugins are session-scoped MCP servers supplied by a host transport
 	// (for example ACP session/new). They are connected eagerly for this
-	// controller but are not persisted to corvus.toml.
+	// controller but are not persisted to .corvus/config.toml.
 	ExtraPlugins []plugin.Spec
+	// MCPLaunchApprover decides whether a repository-declared (project-scoped)
+	// MCP server may be connected during Build. It is invoked once per server
+	// per boot when no durable exact-identity launch grant exists yet; approval
+	// is persisted by plugin.AuthorizeProjectSpecLaunch so unchanged servers
+	// start silently on later sessions. A denial (or error) records a failure
+	// marked RequiresLaunchApproval and the server is never started. When nil,
+	// Build uses a fail-closed default: prompts on an interactive stdin and
+	// denies in non-interactive (headless/CI) environments. User-config and
+	// plugin-package MCP servers never reach this callback.
+	MCPLaunchApprover func(ctx context.Context, spec plugin.Spec) (bool, error)
 	// TokenMode selects the session's runtime profile. Empty/full/balanced preserves
 	// the normal capability surface. "economy" keeps the core coding tools visible
 	// and moves optional sources behind connect_tool_source. "delivery" keeps the
@@ -180,6 +193,90 @@ func recoveryHeadlessMode(opts Options) bool {
 	return strings.TrimSpace(opts.HeadlessApprovalMode) != ""
 }
 
+// defaultMCPLaunchApprover is the fail-closed approval fallback used when
+// Options.MCPLaunchApprover is nil. Build runs before any interactive frontend
+// takes over the terminal (stdin is still in cooked mode), so a one-line
+// prompt on os.Stdout and a single y/N answer on os.Stdin is safe. Non-TTY
+// stdin (headless runs, CI, servers) denies without starting anything.
+func defaultMCPLaunchApprover(ctx context.Context, spec plugin.Spec) (bool, error) {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return false, nil
+	}
+	fmt.Fprintf(os.Stdout, "\nProject MCP server %q wants to start:\n  %s\nAuthorize? [y/N] ", spec.Name, mcpLaunchSummary(spec))
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && strings.TrimSpace(line) == "" {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+// mcpLaunchSummary renders one line describing what approving the server would
+// start or connect to: the transport plus command/args (stdio) or URL
+// (http/sse).
+func mcpLaunchSummary(spec plugin.Spec) string {
+	transport := strings.ToLower(strings.TrimSpace(spec.Type))
+	if transport == "" {
+		transport = "stdio"
+	}
+	switch transport {
+	case "http", "sse":
+		return fmt.Sprintf("%s %s", transport, spec.URL)
+	default:
+		if len(spec.Args) == 0 {
+			return fmt.Sprintf("stdio %s", spec.Command)
+		}
+		return fmt.Sprintf("stdio %s %s", spec.Command, strings.Join(spec.Args, " "))
+	}
+}
+
+// resolveEagerMCPLaunchApproval gates one eagerly connected MCP spec behind the
+// project launch-approval contract. A spec that does not require approval (or
+// already carries a durable exact-identity grant) passes through untouched.
+// Otherwise the approver (injected via Options.MCPLaunchApprover, or the
+// fail-closed default) decides: approval is persisted with
+// plugin.AuthorizeProjectSpecLaunch and the re-resolved authorized spec is
+// returned; a denial or error records a RequiresLaunchApproval failure on the
+// host and returns ok=false so the caller never starts the process or opens a
+// network connection.
+func resolveEagerMCPLaunchApproval(ctx context.Context, host *plugin.Host, approver func(context.Context, plugin.Spec) (bool, error), s plugin.Spec) (plugin.Spec, bool) {
+	if !s.RequireLaunchApproval {
+		return s, true
+	}
+	resolved := plugin.ResolveStoredAuthorization(ctx, s)
+	if resolved.ServerAuthorized() {
+		return resolved, true
+	}
+	if approver == nil {
+		approver = defaultMCPLaunchApprover
+	}
+	approved, err := approver(ctx, resolved)
+	if err != nil {
+		host.RecordFailure(resolved, err)
+		return resolved, false
+	}
+	if !approved {
+		host.RecordFailure(resolved, plugin.NewLaunchApprovalError(resolved.Name, false))
+		return resolved, false
+	}
+	if err := plugin.AuthorizeProjectSpecLaunch(ctx, resolved); err != nil {
+		host.RecordFailure(resolved, err)
+		return resolved, false
+	}
+	// Re-resolve so the freshly recorded grant marks the spec Authorized before
+	// the caller connects; start() re-verifies the exact identity anyway.
+	resolved = plugin.ResolveStoredAuthorization(ctx, resolved)
+	if !resolved.ServerAuthorized() {
+		host.RecordFailure(resolved, plugin.NewLaunchApprovalError(resolved.Name, false))
+		return resolved, false
+	}
+	return resolved, true
+}
+
 // Build loads config, resolves the model(s), and returns a Controller wrapping a
 // single Agent, or a two-model Coordinator when agent.planner_model is set. The
 // returned controller owns plugin subprocesses; call Close (via Controller.Close)
@@ -209,7 +306,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	// Arm the credential-protection layers from the user-global [secrets]
 	// section before any tool, hook, or plugin subprocess can spawn. Package
 	// globals are correct here because [secrets] is user-global (project
-	// corvus.toml cannot override it), so concurrent workspaces agree.
+	// project .corvus/config.toml cannot override it), so concurrent workspaces agree.
 	secrets.SetFilterSubprocessEnv(cfg.Secrets.FilterSubprocessEnv)
 	secrets.SetProtectSensitiveFiles(cfg.Secrets.ProtectSensitiveFiles)
 	secrets.RegisterCredentialEnvKeys(cfg.CredentialEnvNames())
@@ -313,14 +410,14 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	migration.MigrateLegacyMemorySources(sink)
 	migration.MigrateLegacySessionSources(sink)
 	if ignored := cfg.IgnoredProjectDefaultModel(); ignored != "" {
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Ignored the project config's default_model.", Detail: fmt.Sprintf("./corvus.toml sets default_model = %q but no configured provider serves it; using %q from your user config instead. Edit or remove that default_model line to silence this notice.", ignored, cfg.DefaultModel)})
+		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Ignored the project config's default_model.", Detail: fmt.Sprintf("project .corvus/config.toml sets default_model = %q but no configured provider serves it; using %q from your user config instead. Edit or remove that default_model line to silence this notice.", ignored, cfg.DefaultModel)})
 	}
 
 	// A resolvable model whose API key env is unset would otherwise build fine
 	// (RequireKey is false so the UI stays reachable) and then fail silently on the
 	// first request, showing as an empty/dead model. Surface the cause up front.
-	if !opts.RequireKey && entry.RequiresAPIKey() && entry.APIKey() == "" {
-		sink.Emit(event.Event{Kind: event.Notice, Text: "Selected model is missing its API key.", Detail: fmt.Sprintf("model %q is selected but its API key %s is not set — requests will fail until you set it", modelName, entry.APIKeyEnv)})
+	if !opts.RequireKey && entry.RequiresAPIKey() && entry.EffectiveAPIKey() == "" {
+		sink.Emit(event.Event{Kind: event.Notice, Text: "Selected model is missing its API key.", Detail: fmt.Sprintf("model %q is selected but its API key is not set — add api_key to its [[providers]] entry in .corvus/config.toml (user config first), or set env %s for the legacy api_key_env path", modelName, entry.APIKeyEnv)})
 	}
 	var workspaceLease *workspacelease.Owner
 	jobOptions := []jobs.Option{
@@ -631,6 +728,15 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 					continue
 				}
 			}
+			// Project-scoped MCP servers (repo config / .mcp.json) must not
+			// start or connect until the user authorizes the exact identity;
+			// a denial records a RequiresLaunchApproval failure and skips the
+			// connection entirely.
+			resolved, ok := resolveEagerMCPLaunchApproval(ctx, pluginHost, opts.MCPLaunchApprover, s)
+			if !ok {
+				continue
+			}
+			s = resolved
 			addCtx, addCancel := context.WithTimeout(ctx, 5*time.Second)
 			tools, err := pluginHost.EnsureConnectedWithLifecycle(ctx, addCtx, s, 0)
 			addCancel()
@@ -1697,7 +1803,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		Memory:                mem,
 		Cleanup:               cleanup,
 		BalanceURL:            entry.BalanceURL,
-		BalanceKey:            entry.APIKey(),
+		BalanceKey:            entry.EffectiveAPIKey(),
 		BalanceClient:         balanceClient,
 		Jobs:                  jm,
 		WorkspaceLease:        workspaceLease,
@@ -1879,11 +1985,11 @@ func rememberPermissionRule(workspaceRoot, rule string) control.RememberResult {
 func rememberPermissionConfigPath(workspaceRoot string) string {
 	workspaceRoot = strings.TrimSpace(workspaceRoot)
 	if workspaceRoot != "" {
-		return filepath.Join(workspaceRoot, "corvus.toml")
+		return config.ProjectConfigPathForRoot(workspaceRoot)
 	}
 	path := config.SourcePath()
 	if path == "" {
-		path = "corvus.toml" // match Config.Save() fallback
+		path = config.ProjectConfigPathForRoot(".") // match Config.Save() fallback
 	}
 	return path
 }
@@ -2270,7 +2376,7 @@ func NewProviderWithProxy(e *config.ProviderEntry, proxy netclient.ProxySpec) (p
 		Name:    e.Name,
 		BaseURL: e.BaseURL,
 		Model:   e.Model,
-		APIKey:  e.APIKey(),
+		APIKey:  e.EffectiveAPIKey(),
 		// Pass the key's env var so auth failures can name where to fix it, plus
 		// provider-kind-specific knobs. EffectiveEffort applies a configured
 		// default_effort when the user has not explicitly selected /effort.
@@ -2423,6 +2529,12 @@ func pluginSpecFromEntryWithOptions(e config.PluginEntry, workspaceRoot string, 
 	if configSource == "" {
 		configSource = opts.ConfigSource
 	}
+	// Repository-declared MCP servers (project config / project .mcp.json) are
+	// untrusted project code: they must not start or connect until the user
+	// explicitly authorizes the exact command/endpoint (persisted via
+	// plugin.AuthorizeProjectSpecLaunch). User-level config and installed
+	// plugin packages are the user's own explicit installs and stay authorized.
+	projectScoped := e.Source.ProjectScoped()
 	spec := plugin.ApplyKnownOverrides(plugin.Spec{
 		Name:                  e.Name,
 		Package:               strings.TrimSpace(opts.PackageOwners[e.Name]),
@@ -2440,9 +2552,10 @@ func pluginSpecFromEntryWithOptions(e config.PluginEntry, workspaceRoot string, 
 		WorkspaceRoot:         strings.TrimSpace(workspaceRoot),
 		LaunchManager:         opts.LaunchManager,
 		ConfigSource:          configSource,
-		Authorized:            e.Source.UserAuthorized(),
+		Authorized:            e.Source.UserAuthorized() && !projectScoped,
+		RequireLaunchApproval: projectScoped,
 	}, workspaceRoot)
-	if e.Source.ProjectScoped() && strings.TrimSpace(spec.Dir) == "" {
+	if projectScoped && strings.TrimSpace(spec.Dir) == "" {
 		spec.Dir = workspaceRoot
 	}
 	applyMCPIsolation(&spec, workspaceRoot, opts)

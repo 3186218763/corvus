@@ -192,11 +192,6 @@ func TestMigrateMCPToUserConfigOnUpgradeCollectsKnownSources(t *testing.T) {
 			"global": {"command": "legacy-should-not-win"}
 		}
 	}`)
-	writeLegacy(t, filepath.Join(filepath.Dir(dest), "corvus.toml"), `
-[[plugins]]
-name = "legacy-toml"
-command = "legacy-toml-bin"
-`)
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +203,10 @@ command = "global-bin"
 		t.Fatal(err)
 	}
 	projectTOML := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectTOML, "corvus.toml"), []byte(`
+	if err := os.MkdirAll(filepath.Join(projectTOML, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectTOML, ".corvus", "config.toml"), []byte(`
 [[plugins]]
 name = "project-toml"
 command = "project-toml-bin"
@@ -232,8 +230,8 @@ command = "project-should-not-win"
 	if err != nil {
 		t.Fatalf("MigrateMCPToUserConfigOnUpgrade: %v", err)
 	}
-	if res == nil || res.Added != 5 {
-		t.Fatalf("migration result = %+v, want 5 added", res)
+	if res == nil || res.Added != 4 {
+		t.Fatalf("migration result = %+v, want 4 added", res)
 	}
 	cfg := LoadForEdit(dest)
 	byName := map[string]PluginEntry{}
@@ -243,7 +241,6 @@ command = "project-should-not-win"
 	for name, command := range map[string]string{
 		"global":        "global-bin",
 		"disabled-json": "disabled-json-bin",
-		"legacy-toml":   "legacy-toml-bin",
 		"legacy-json":   "legacy-json-bin",
 		"project-toml":  "project-toml-bin",
 		"project-json":  "project-json-bin",
@@ -260,7 +257,10 @@ command = "project-should-not-win"
 	}
 
 	lateProject := t.TempDir()
-	if err := os.WriteFile(filepath.Join(lateProject, "corvus.toml"), []byte(`
+	if err := os.MkdirAll(filepath.Join(lateProject, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(lateProject, ".corvus", "config.toml"), []byte(`
 [[plugins]]
 name = "late"
 command = "late-bin"
@@ -385,7 +385,10 @@ func TestMigrateMCPToUserConfigOnUpgradePreservesConfigVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	project := t.TempDir()
-	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte(`
+	if err := os.MkdirAll(filepath.Join(project, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".corvus", "config.toml"), []byte(`
 [[plugins]]
 name = "project"
 command = "project-bin"
@@ -406,90 +409,6 @@ command = "project-bin"
 	}
 	if !strings.Contains(string(got), "config_version = 1") {
 		t.Fatalf("MCP migration should not advance config_version:\n%s", got)
-	}
-}
-
-func TestMigrateImportsLegacyV1TOMLBeforeJSON(t *testing.T) {
-	srcJSON, dest, _ := legacyHome(t)
-	legacyTOML := filepath.Join(filepath.Dir(dest), "corvus.toml")
-	if err := os.MkdirAll(filepath.Dir(legacyTOML), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(legacyTOML, []byte(`
-default_model = "deepseek-flash"
-language = "en"
-
-[ui]
-theme = "light"
-theme_style = "glacier"
-close_behavior = "quit"
-
-[[plugins]]
-name = "legacy-v1"
-command = "legacy-bin"
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	writeLegacy(t, srcJSON, `{"apiKey":"sk-json-should-not-win"}`)
-
-	res, err := MigrateLegacyIfNeeded()
-	if err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	if res == nil || res.From != legacyTOML {
-		t.Fatalf("expected v1 TOML migration, got %+v", res)
-	}
-
-	got, err := os.ReadFile(dest)
-	if err != nil {
-		t.Fatalf("read migrated config: %v", err)
-	}
-	text := string(got)
-	for _, want := range []string{`config_version = 5`, `[ui]`, `theme = "light"`, `theme_style = "glacier"`, `name    = "legacy-v1"`} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("migrated TOML missing %q:\n%s", want, text)
-		}
-	}
-	if _, err := os.Stat(UserCredentialsPath()); !os.IsNotExist(err) {
-		t.Fatalf("v1 TOML migration should not import lower-priority JSON key, credentials stat err=%v", err)
-	}
-}
-
-func TestMigrateImportsLegacyV1HomeTOMLBeforeJSON(t *testing.T) {
-	srcJSON, dest, home := legacyHome(t)
-	legacyTOML := filepath.Join(home, ".corvus", "corvus.toml")
-	if err := os.MkdirAll(filepath.Dir(legacyTOML), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(legacyTOML, []byte(`
-default_model = "deepseek-flash"
-
-[[plugins]]
-name = "legacy-home-v1"
-command = "legacy-home-bin"
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	writeLegacy(t, srcJSON, `{"apiKey":"sk-json-should-not-win","mcpServers":{"json":{"command":"json-bin"}}}`)
-
-	res, err := MigrateLegacyIfNeeded()
-	if err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	if res == nil || res.From != legacyTOML {
-		t.Fatalf("expected home v1 TOML migration, got %+v", res)
-	}
-
-	got, err := os.ReadFile(dest)
-	if err != nil {
-		t.Fatalf("read migrated config: %v", err)
-	}
-	text := string(got)
-	if !strings.Contains(text, `name    = "legacy-home-v1"`) {
-		t.Fatalf("home v1 plugin was not migrated:\n%s", text)
-	}
-	if strings.Contains(text, `name    = "json"`) {
-		t.Fatalf("lower-priority v0.5 JSON should not be merged when v1 TOML exists:\n%s", text)
 	}
 }
 
@@ -700,7 +619,10 @@ func TestMigrateLegacyCredentialsUsesWorkspaceRootForKeyring(t *testing.T) {
 	if err := os.WriteFile(dest, []byte(`default_model = "deepseek-flash/deepseek-chat"`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte(`
+	if err := os.MkdirAll(filepath.Join(project, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".corvus", "config.toml"), []byte(`
 default_model = "custom/m"
 [[providers]]
 name = "custom"

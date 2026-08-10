@@ -39,8 +39,12 @@ func TestConnectToolSourceMCPConnectRunsWithoutLock(t *testing.T) {
 	tsc.mcp = func(context.Context, string) (string, error) {
 		free := make(chan struct{})
 		go func() {
-			tsc.mu.Lock()
-			tsc.mu.Unlock() //nolint:staticcheck // probe: lock must be immediately acquirable
+			if !tsc.mu.TryLock() {
+				t.Error("t.mu still held while the MCP connect callback was running")
+				close(free)
+				return
+			}
+			tsc.mu.Unlock()
 			close(free)
 		}()
 		select {

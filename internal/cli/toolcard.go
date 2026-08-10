@@ -100,17 +100,8 @@ func toolCategoryColor(name string) cliColor {
 // toolBullet is the default dim Codex marker for tool/agent rows.
 func toolBullet() string { return dim("•") }
 
-// toolBulletOK is a green success marker (completed Ran).
-func toolBulletOK() string { return themeFg(activeCLITheme.success, bold("•")) }
-
 // toolBulletErr is a red failure marker.
 func toolBulletErr() string { return themeFg(activeCLITheme.danger, bold("•")) }
-
-// toolDot is kept for call sites that still want a bullet; always dim •.
-func toolDot(name string) string {
-	_ = name
-	return toolBullet()
-}
 
 var toolCategory = map[string]string{
 	"read_file": "read", "ls": "read", "glob": "read", "grep": "read",
@@ -315,7 +306,7 @@ func encodeExploreLeaves(leaves []exploreLeaf) string {
 	}
 	rows := make([]row, len(leaves))
 	for i, leaf := range leaves {
-		rows[i] = row{Verb: leaf.Verb, Arg: leaf.Arg}
+		rows[i] = row(leaf)
 	}
 	b, err := json.Marshal(map[string]any{"leaves": rows})
 	if err != nil {
@@ -436,11 +427,6 @@ func renderToolCardCollapsed(name, args, output string, width int, ok bool, dura
 		card += "\n" + line
 	}
 	return card
-}
-
-// renderToolCardExpanded renders the tool card plus full output under └.
-func renderToolCardExpanded(name, args, output string, width int) string {
-	return renderToolCardExpandedWithOutcome(name, args, output, width, true, 0)
 }
 
 func renderToolCardExpandedWithOutcome(name, args, output string, width int, ok bool, durationMs int64) string {

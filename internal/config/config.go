@@ -1,7 +1,10 @@
 // Package config loads Corvus's runtime configuration from TOML. Resolution order:
-// flag > project ./corvus.toml > user config.toml (in the OS user-config dir) > built-in defaults.
-// Secrets come from the environment via api_key_env and are never stored in
-// config files.
+// flag > project .corvus/config.toml > user config.toml (in Corvus home,
+// ~/.corvus) > built-in defaults.
+// API keys are set directly with api_key on a [[providers]] entry; the user's
+// ~/.corvus/config.toml wins over the project .corvus/config.toml. The legacy
+// api_key_env indirection (project .env, then Corvus's credential store) is
+// still honored when api_key is not set.
 package config
 
 import (
@@ -148,7 +151,7 @@ func (c *Config) IgnoredLegacyAgentStepLimits() bool {
 	return c != nil && c.ignoredLegacyStepLimits
 }
 
-// IgnoredProjectDefaultModel returns the project corvus.toml default_model
+// IgnoredProjectDefaultModel returns the project .corvus/config.toml default_model
 // that LoadForRoot ignored because no configured provider serves it (see
 // restoreUnresolvableProjectDefaultModel), or "" when none was ignored.
 func (c *Config) IgnoredProjectDefaultModel() string {
@@ -159,7 +162,7 @@ func (c *Config) IgnoredProjectDefaultModel() string {
 }
 
 // SecretsConfig controls the credential protection layers. It is a user-global
-// setting: project corvus.toml values are ignored (see LoadForRoot), so a
+// setting: project .corvus/config.toml values are ignored (see LoadForRoot), so a
 // cloned repository cannot silently opt the user into workflow-breaking
 // protections.
 type SecretsConfig struct {
@@ -747,6 +750,7 @@ type ProviderEntry struct {
 	Models        []string          `toml:"models"`     // a vendor's model list (one base_url/key, many models)
 	ModelsURL     string            `toml:"models_url"` // auto-fetch models from this URL on startup
 	Default       string            `toml:"default"`    // default model when Models is set (else Models[0])
+	APIKey        string            `toml:"api_key"`    // direct key in config.toml; preferred over api_key_env
 	APIKeyEnv     string            `toml:"api_key_env"`
 	PresetID      string            `toml:"preset_id"`      // curated preset identity; UI-only metadata, not sent to model providers.
 	PresetVersion int               `toml:"preset_version"` // curated preset schema version for future migrations.
@@ -1154,7 +1158,7 @@ func (s MCPConfigSource) ProjectScoped() bool {
 // static Headers. String fields support ${VAR} / ${VAR:-default} expansion so
 // secrets (bearer tokens, keys) come from the environment, not the file. The
 // fields mirror Claude Code's mcpServers spec, so entries can come from either
-// corvus.toml's [[plugins]] or a project-root .mcp.json (see loadMCPJSON).
+// .corvus/config.toml's [[plugins]] or a project-root .mcp.json (see loadMCPJSON).
 type PluginEntry struct {
 	Name    string            `toml:"name"`
 	Type    string            `toml:"type"` // "stdio" (default) | "http" | "sse"
@@ -1476,15 +1480,19 @@ func (c *Config) resolveNewSessionChatModel(providerAllowed func(string) bool, p
 	return "", false, false
 }
 
-// APIKey resolves the entry's API key from its api_key_env.
-// Prefer the value resolved at load time; otherwise fall back to project .env
-// (cwd) then Corvus's persistent credentials store.
-func (e *ProviderEntry) APIKey() string {
+// EffectiveAPIKey resolves the entry's API key. A key configured directly via api_key in
+// .corvus/config.toml (user config first, then project) wins; otherwise the
+// value resolved at load time from the legacy api_key_env path is returned,
+// falling back to project .env (cwd) then Corvus's persistent credentials store.
+func (e *ProviderEntry) EffectiveAPIKey() string {
 	if e == nil {
 		return ""
 	}
 	if e.resolvedAPIKey != "" {
 		return e.resolvedAPIKey
+	}
+	if v := strings.TrimSpace(e.APIKey); v != "" {
+		return v
 	}
 	if e.APIKeyEnv == "" {
 		return ""
@@ -1513,17 +1521,23 @@ func (e *ProviderEntry) ResolveAPIKeyFromProcessEnvForProbe() {
 }
 
 func (e *ProviderEntry) APIKeySourceLabel() string {
-	if e == nil || strings.TrimSpace(e.APIKeyEnv) == "" {
+	if e == nil {
 		return ""
 	}
 	if e.resolvedAPIKey != "" {
 		return credentialSourceLabel(e.resolvedSource)
 	}
+	if v := strings.TrimSpace(e.APIKey); v != "" {
+		return credentialSourceLabel(CredentialSource{Kind: CredentialSourceConfigFile})
+	}
+	if strings.TrimSpace(e.APIKeyEnv) == "" {
+		return ""
+	}
 	return ResolveCredentialForRootGlobalFirst(".", e.APIKeyEnv).Source.Label
 }
 
 // RequiresAPIKey reports whether this provider should be hidden/validated when
-// its configured api_key_env is empty. A blank api_key_env means the provider is
+// neither api_key nor api_key_env is set. A blank pair means the provider is
 // intentionally no-auth. Local OpenAI-compatible gateways often keep a legacy
 // api_key_env in config even though they accept unauthenticated requests, so
 // loopback/private endpoints are also allowed to run without a resolved key.
@@ -1531,7 +1545,7 @@ func (e *ProviderEntry) RequiresAPIKey() bool {
 	if e == nil {
 		return false
 	}
-	if strings.TrimSpace(e.APIKeyEnv) == "" {
+	if strings.TrimSpace(e.APIKeyEnv) == "" && strings.TrimSpace(e.APIKey) == "" {
 		return providerBaseURLRequiresAPIKey(e.BaseURL)
 	}
 	return !providerBaseURLAllowsMissingAPIKey(e.BaseURL)
@@ -1566,7 +1580,7 @@ func providerBaseURLAllowsMissingAPIKey(raw string) bool {
 // require an API key are configured by definition; providers that name an env var
 // require that variable to resolve unless their endpoint is local/private.
 func (e *ProviderEntry) Configured() bool {
-	return e != nil && (!e.RequiresAPIKey() || e.APIKey() != "")
+	return e != nil && (!e.RequiresAPIKey() || e.EffectiveAPIKey() != "")
 }
 
 // ResolveSystemPrompt returns the system prompt, reading system_prompt_file if set.
@@ -1685,8 +1699,11 @@ func (c *Config) Validate(model string) error {
 	if strings.TrimSpace(e.APIKeyEnv) != "" && !IsValidCredentialKey(e.APIKeyEnv) {
 		return fmt.Errorf("provider %q: api_key_env %q is invalid; use letters, numbers, and underscores, not a model name", model, e.APIKeyEnv)
 	}
-	if e.RequiresAPIKey() && e.APIKey() == "" {
-		return fmt.Errorf("provider %q: missing env %s", model, e.APIKeyEnv)
+	if e.RequiresAPIKey() && e.EffectiveAPIKey() == "" {
+		if strings.TrimSpace(e.APIKeyEnv) != "" {
+			return fmt.Errorf("provider %q: missing API key (set api_key in .corvus/config.toml or provide env %s)", model, e.APIKeyEnv)
+		}
+		return fmt.Errorf("provider %q: missing API key (set api_key in .corvus/config.toml)", model)
 	}
 	return nil
 }

@@ -49,7 +49,7 @@ func (c *Controller) ResolveRecovery(id string, action agent.RecoveryAction, fee
 	gate := c.recoveryGate
 	c.mu.Unlock()
 	if gate == nil {
-		return fmt.Errorf("Auto Guard is not active")
+		return fmt.Errorf("auto guard is not active")
 	}
 	// Host hard-caps free-text feedback; empty revise is filled by the gate.
 	// Clip on a UTF-8 boundary so multi-byte runes are never split.

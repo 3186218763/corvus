@@ -1035,7 +1035,10 @@ api_key_env = "USER_DEEPSEEK_KEY"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte(`
+	if err := os.MkdirAll(filepath.Join(root, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".corvus", "config.toml"), []byte(`
 [[providers]]
 name = "deepseek-flash"
 kind = "openai"
@@ -1084,7 +1087,10 @@ api_key_env = "GLOBAL_SHARED_KEY"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte(`
+	if err := os.MkdirAll(filepath.Join(root, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".corvus", "config.toml"), []byte(`
 [[providers]]
 name = "shared"
 kind = "openai"
@@ -1133,7 +1139,10 @@ temperature = 0.4
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte(`
+	if err := os.MkdirAll(filepath.Join(root, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".corvus", "config.toml"), []byte(`
 default_model = "deepseek-pro"
 
 [agent]
@@ -1168,7 +1177,7 @@ temperature = 0.8
 	if cfg.DefaultModel != "deepseek-pro" {
 		t.Fatalf("default_model = %q, want project config to keep overriding unrelated fields", cfg.DefaultModel)
 	}
-	for _, path := range []string{userPath, filepath.Join(root, "corvus.toml")} {
+	for _, path := range []string{userPath, filepath.Join(root, ".corvus", "config.toml")} {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
@@ -1199,7 +1208,10 @@ filter_subprocess_env = true
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(root, "corvus.toml")
+	projectPath := filepath.Join(root, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte(`[secrets]
 redact_tool_output = false
 protect_sensitive_files = true
@@ -1260,7 +1272,10 @@ temperature = 0.4
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(root, "corvus.toml")
+	projectPath := filepath.Join(root, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte(`[agent]
 memory_compiler = { enabled = false }
 reasoning_language = "zh"
@@ -1484,12 +1499,15 @@ func TestStripTOMLKeyLinesPreservesMultilineStrings(t *testing.T) {
 func TestLoadForRootReadOnlyIgnoresDeprecatedAgentStepLimitsWithoutRewriting(t *testing.T) {
 	isolateUserConfigHome(t)
 	root := t.TempDir()
-	path := filepath.Join(root, "corvus.toml")
+	path := filepath.Join(root, ".corvus", "config.toml")
 	original := []byte(`
 [agent]
 max_steps = 3
 planner_max_steps = 4
 `)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, original, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1530,7 +1548,10 @@ api_key_env = "GLOBAL_SHARED_KEY"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(root, "corvus.toml")
+	projectPath := filepath.Join(root, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte(`
 [[providers]]
 name = "shared"
@@ -1581,7 +1602,10 @@ api_key_env = "GLOBAL_KEY"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(root, "corvus.toml")
+	projectPath := filepath.Join(root, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte(`
 config_version = 2
 default_model = "project-local/project-model"
@@ -1624,6 +1648,9 @@ api_key_env = "PROJECT_KEY"
 
 func TestSaveToExistingProjectPersistsTopLevelDelta(t *testing.T) {
 	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte("[permissions]\nallow = [\"Bash(go test:*)\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1659,6 +1686,9 @@ func TestSaveToExistingProjectPersistsTopLevelDelta(t *testing.T) {
 
 func TestSaveToExistingProjectPersistsProviderAccessWithoutReplacingUISection(t *testing.T) {
 	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte("[permissions]\nallow = [\"Bash(go test:*)\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1881,7 +1911,7 @@ func TestProviderEntriesConfigEqualIgnoresRuntimeState(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := cfg.Provider("relay")
-	if got.APIKey() != "old-secret" || got.Headers["X-Replayed"] != "yes" || got.persistedOfficialCurrency != "USD" {
+	if got.EffectiveAPIKey() != "old-secret" || got.Headers["X-Replayed"] != "yes" || got.persistedOfficialCurrency != "USD" {
 		t.Fatalf("runtime-preserving upsert = %+v", got)
 	}
 	updated.APIKeyEnv = "NEW_RELAY_API_KEY"
@@ -1961,6 +1991,9 @@ func TestSaveToNewProjectKeepsPluginSourcesSeparate(t *testing.T) {
 
 func TestSaveToExistingProjectKeepsPluginSourcesSeparate(t *testing.T) {
 	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte("# keep\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1985,6 +2018,9 @@ func TestSaveToExistingProjectKeepsPluginSourcesSeparate(t *testing.T) {
 
 func TestSaveToExistingProjectRemovesPluginDeltaWithOnlyForeignSources(t *testing.T) {
 	projectPath := filepath.Join(t.TempDir(), "corvus.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte("[[plugins]]\nname = \"old\"\ncommand = \"old-mcp\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -2096,7 +2132,10 @@ func TestSaveForRootDoesNotWriteUserAgentSettingsIntoProjectConfig(t *testing.T)
 	if err := os.WriteFile(userPath, []byte("[agent]\ntemperature = 0.42\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(root, "corvus.toml")
+	projectPath := filepath.Join(root, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte("[permissions]\nallow = [\"Bash(go test:*)\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -2544,7 +2583,7 @@ func TestSaveToProjectSymlinkOutsideRootFailsWithoutReadingOrReplacing(t *testin
 	project := t.TempDir()
 	outside := t.TempDir()
 	target := filepath.Join(outside, "target.toml")
-	link := filepath.Join(project, "corvus.toml")
+	link := filepath.Join(project, ".corvus", "config.toml")
 	const sentinel = "private_token = \"must-not-be-copied\"\n"
 	if err := os.WriteFile(target, []byte(sentinel), 0o600); err != nil {
 		t.Fatal(err)
@@ -2580,15 +2619,15 @@ func TestSaveToProjectSymlinkOutsideRootFailsWithoutReadingOrReplacing(t *testin
 func TestProjectConfigSymlinkWithinRootLoadsAndSavesTarget(t *testing.T) {
 	project := t.TempDir()
 	targetDir := filepath.Join(project, "config")
-	target := filepath.Join(targetDir, "corvus.toml")
-	link := filepath.Join(project, "corvus.toml")
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+	target := filepath.Join(targetDir, ".corvus", "config.toml")
+	link := filepath.Join(project, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(target, []byte("default_model = \"deepseek-pro\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(filepath.Join("config", "corvus.toml"), link); err != nil {
+	if err := os.Symlink(filepath.Join("config", ".corvus", "config.toml"), link); err != nil {
 		t.Skipf("symlinks are unavailable: %v", err)
 	}
 
@@ -2621,7 +2660,7 @@ func TestProjectConfigSymlinkWithinRootLoadsAndSavesTarget(t *testing.T) {
 
 func TestBrokenProjectConfigSymlinkFailsLoadAndSave(t *testing.T) {
 	project := t.TempDir()
-	link := filepath.Join(project, "corvus.toml")
+	link := filepath.Join(project, ".corvus", "config.toml")
 	if err := os.Symlink(filepath.Join("missing", "corvus.toml"), link); err != nil {
 		t.Skipf("symlinks are unavailable: %v", err)
 	}

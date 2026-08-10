@@ -9,6 +9,9 @@ import (
 func writeProjectDefaultTestConfig(t *testing.T, dir, name, body string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +37,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 `)
 
 	project := t.TempDir()
-	writeProjectDefaultTestConfig(t, project, "corvus.toml", `default_model = "deepseek-flash"
+	writeProjectDefaultTestConfig(t, project, filepath.Join(".corvus", "config.toml"), `default_model = "deepseek-flash"
 
 [permissions]
 allow = ["Bash(go test*)"]
@@ -77,7 +80,7 @@ model       = "local-model"
 `)
 
 	project := t.TempDir()
-	writeProjectDefaultTestConfig(t, project, "corvus.toml", `default_model = "local"
+	writeProjectDefaultTestConfig(t, project, filepath.Join(".corvus", "config.toml"), `default_model = "local"
 `)
 
 	cfg, err := LoadForRoot(project)
@@ -108,7 +111,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 `)
 
 	project := t.TempDir()
-	writeProjectDefaultTestConfig(t, project, "corvus.toml", `default_model = "gone"
+	writeProjectDefaultTestConfig(t, project, filepath.Join(".corvus", "config.toml"), `default_model = "gone"
 `)
 
 	cfg, err := LoadForRoot(project)
@@ -132,7 +135,7 @@ func TestLoadForRoot_NoUserConfigKeepsBrokenProjectDefaultModel(t *testing.T) {
 	t.Setenv("CORVUS_HOME", home)
 
 	project := t.TempDir()
-	writeProjectDefaultTestConfig(t, project, "corvus.toml", `default_model = "legacy-missing"
+	writeProjectDefaultTestConfig(t, project, filepath.Join(".corvus", "config.toml"), `default_model = "legacy-missing"
 
 [[providers]]
 name        = "deepseek-flash"

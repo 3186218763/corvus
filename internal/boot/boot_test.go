@@ -26,6 +26,7 @@ import (
 	"corvus/internal/config"
 	"corvus/internal/control"
 	"corvus/internal/event"
+	"corvus/internal/mcplaunch"
 	"corvus/internal/memory"
 	"corvus/internal/netclient"
 	"corvus/internal/plugin"
@@ -99,7 +100,7 @@ func TestBuildFoldsProjectMemoryIntoSystemPrompt(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -144,7 +145,7 @@ func TestBuildRunsCleanupPendingReconciler(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -207,7 +208,7 @@ func TestBuildRegistersUsableHistoryAndMemoryRetrievalTools(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -481,7 +482,7 @@ func TestBuildSubagentSkillFailedContinuationPersistsTranscript(t *testing.T) {
 	registerBootSubagentTestProvider()
 	prov := &bootSubagentTestProvider{}
 	setBootSubagentTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -540,7 +541,7 @@ func TestBuildSubagentStoreHonorsSessionDirOverride(t *testing.T) {
 	registerBootSubagentTestProvider()
 	prov := &bootSubagentTestProvider{}
 	setBootSubagentTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -587,7 +588,7 @@ func TestBuildSubagentSkillUsesLiveReasoningLanguage(t *testing.T) {
 	registerBootSubagentTestProvider()
 	prov := &bootSubagentTestProvider{}
 	setBootSubagentTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -630,7 +631,7 @@ func TestBuildUsesConfiguredLanguageForResponsePreference(t *testing.T) {
 	registerBootSubagentTestProvider()
 	prov := &bootSubagentTestProvider{}
 	setBootSubagentTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 language = "en"
 
@@ -672,7 +673,7 @@ func TestBuildReviewSubagentSkillEnforcesReadOnlyBash(t *testing.T) {
 	registerBootSubagentTestProvider()
 	prov := &bootSubagentTestProvider{}
 	setBootSubagentTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -758,7 +759,7 @@ func TestBuildRunSkillSubagentRegistryHonorsReadOnlyFlag(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -938,7 +939,7 @@ func TestBuildHeadlessRunRunsTaskSubagentWithoutSessionPath(t *testing.T) {
 	registerHeadlessTaskTestProvider()
 	prov := &headlessTaskTestProvider{}
 	setHeadlessTaskTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -1062,7 +1063,7 @@ func TestBuildHeadlessApprovalModePropagatesToTaskSubagentGate(t *testing.T) {
 		registerHeadlessTaskWriteTestProvider()
 		prov := &headlessTaskWriteTestProvider{}
 		setHeadlessTaskWriteTestProvider(t, prov)
-		writeFile(t, dir, "corvus.toml", `
+		writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -1128,7 +1129,7 @@ api_key_env = "CORVUS_TEST_KEY_UNSET"
 	}
 
 	dir := robustTempDir(t)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -1188,7 +1189,7 @@ func TestBuildInteractiveApprovalModeSwitchPropagatesToTaskSubagentGate(t *testi
 	registerHeadlessTaskWriteTestProvider()
 	prov := &headlessTaskWriteTestProvider{}
 	setHeadlessTaskWriteTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -1577,7 +1578,7 @@ func TestBuildHonorsSessionDirOverride(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [[providers]]
@@ -1609,7 +1610,7 @@ func TestBuildDiscoversSkills(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -1682,7 +1683,7 @@ func TestBuildKeepsPluginSkillModelNameBareAndSlashNameQualified(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("CORVUS_HOME", corvusHome)
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -1751,7 +1752,7 @@ func TestBuildTokenFullMatchesDefaultRequestPrefix(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -1792,7 +1793,7 @@ func TestBuildTokenBalancedAliasMatchesDefaultRequestPrefix(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -1836,7 +1837,7 @@ func TestBuildTokenDeliveryKeepsFullSurfaceAndAddsStableContract(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -1907,7 +1908,7 @@ name = "planner"
 kind = "boot-token-profile-test"
 model = "planner-model"`
 		}
-		writeFile(t, dir, "corvus.toml", fmt.Sprintf(`
+		writeFile(t, dir, filepath.Join(".corvus", "config.toml"), fmt.Sprintf(`
 default_model = "executor"
 
 [agent]
@@ -1959,7 +1960,7 @@ func TestBuildInjectsEnvironmentBlockByDefaultAndEconomy(t *testing.T) {
 			isolateConfigHome(t)
 			dir := robustTempDir(t)
 			t.Chdir(dir)
-			writeFile(t, dir, "corvus.toml", `
+			writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -1987,7 +1988,7 @@ func TestBuildSkipsEnvironmentBlockWhenDisabled(t *testing.T) {
 	isolateConfigHome(t)
 	dir := robustTempDir(t)
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [environment]
@@ -2022,7 +2023,7 @@ func TestBuildDoesNotExecuteWorkspaceEnvironmentOverride(t *testing.T) {
 	if err := os.WriteFile(toolPath, []byte(body), 0o755); err != nil {
 		t.Fatalf("write fake tool: %v", err)
 	}
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [environment.tools]
@@ -2058,7 +2059,7 @@ func TestBootToolContractMatchesProviderVisibleSurface(t *testing.T) {
 			isolateConfigHome(t)
 			dir := robustTempDir(t)
 			t.Chdir(dir)
-			writeFile(t, dir, "corvus.toml", `
+			writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -2202,7 +2203,7 @@ func TestBuildTokenEconomyStartsWithLeanToolSurface(t *testing.T) {
 	registerBootTokenProfileTestProvider()
 	prov := testutil.NewMock("token-economy", testutil.Turn{Text: "done"})
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -2300,7 +2301,7 @@ func TestBuildTokenEconomyConnectsOptionalSourcesOnDemand(t *testing.T) {
 				testutil.Turn{Text: "done"},
 			)
 			setBootTokenProfileTestProvider(t, prov)
-			writeFile(t, dir, "corvus.toml", `
+			writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -2361,7 +2362,7 @@ func TestBuildTokenEconomyBuiltinSourcesHonorEnabledTools(t *testing.T) {
 				testutil.Turn{Text: "done"},
 			)
 			setBootTokenProfileTestProvider(t, prov)
-			writeFile(t, dir, "corvus.toml", fmt.Sprintf(`
+			writeFile(t, dir, filepath.Join(".corvus", "config.toml"), fmt.Sprintf(`
 default_model = "test-model"
 
 [tools]
@@ -2414,7 +2415,7 @@ func TestBuildTokenEconomyExplicitOnDemandAllowlistDoesNotEnableAllBuiltins(t *t
 		testutil.Turn{Text: "done"},
 	)
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [tools]
@@ -2462,7 +2463,7 @@ func TestBuildTokenEconomyConnectsWebFetchOnDemand(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -2507,7 +2508,7 @@ func TestBuildTokenEconomyPlanModeCanConnectWebFetch(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -2559,7 +2560,7 @@ func TestBuildTokenEconomyPlanModeCanConnectReadOnlyTask(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -2630,7 +2631,7 @@ func TestBuildTokenEconomyPlanModeCanConnectReadOnlySkill(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -2715,7 +2716,7 @@ func TestBuildTokenEconomyPlanModeCanConnectInstalledMCPSource(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -2778,7 +2779,7 @@ func TestBuildTokenEconomyPlanModeUsesInstalledMCPReaderHint(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -2872,7 +2873,7 @@ func TestBuildTokenEconomyPlanModeCanLoadSourcesBeforePermissionedUse(t *testing
 				testutil.Turn{Text: "done"},
 			)
 			setBootTokenProfileTestProvider(t, prov)
-			writeFile(t, dir, "corvus.toml", `
+			writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -2940,7 +2941,7 @@ func TestBuildTokenEconomyPlanModeConnectsWorkflowPlanningSubset(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -3009,7 +3010,7 @@ func TestBuildLegacyPlanModeReadOnlyCommandsDoesNotEmitGateWarning(t *testing.T)
 	registerBootTokenProfileTestProvider()
 	prov := testutil.NewMock("plan-mode-read-only-commands", testutil.Turn{Text: "done"})
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -3055,7 +3056,7 @@ func TestBuildTokenEconomyWebFetchConnectorHonorsDisabledBuiltin(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [tools]
@@ -3109,7 +3110,7 @@ func TestBuildTokenEconomyConnectsSkillsOnDemand(t *testing.T) {
 		testutil.Turn{Text: "done"},
 	)
 	setBootTokenProfileTestProvider(t, prov)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -3178,7 +3179,7 @@ func TestBuildOmitsDisabledSkillsFromPromptAndRuntimeList(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -3231,7 +3232,7 @@ func TestBuildOmitsExcludedSkillRootsFromPromptAndRuntimeList(t *testing.T) {
 	excluded := filepath.Join(home, ".agents", "skills")
 	writeFile(t, home, ".corvus/skills/keep.md", "---\ndescription: keep\n---\nplaybook")
 	writeFile(t, home, ".agents/skills/noisy.md", "---\ndescription: noisy\n---\nplaybook")
-	writeFile(t, dir, "corvus.toml", fmt.Sprintf(`
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), fmt.Sprintf(`
 default_model = "test-model"
 
 [agent]
@@ -3278,7 +3279,7 @@ func TestBuildWithoutMemoryLeavesPromptUnchanged(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -3324,7 +3325,7 @@ func TestBuildAddsCurrentWorkspaceToSystemPrompt(t *testing.T) {
 	projectA := robustTempDir(t)
 	projectB := robustTempDir(t)
 	for _, dir := range []string{projectA, projectB} {
-		writeFile(t, dir, "corvus.toml", `
+		writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -3387,7 +3388,7 @@ func TestCurrentWorkspacePromptLineEscapesControlCharacters(t *testing.T) {
 func TestBuildLanguagePolicyIsAppended(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -3416,7 +3417,7 @@ api_key_env = "CORVUS_TEST_KEY_UNSET"
 func TestBuildAppendsUserDecisionPolicyToCustomSystemPrompt(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -3503,11 +3504,11 @@ func TestRememberPermissionRuleUsesWorkspaceRoot(t *testing.T) {
 	cwd := robustTempDir(t)
 	workspace := robustTempDir(t)
 	t.Chdir(cwd)
-	writeFile(t, cwd, "corvus.toml", `
+	writeFile(t, cwd, filepath.Join(".corvus", "config.toml"), `
 [permissions]
 allow = ["Bash(cwd*)"]
 `)
-	writeFile(t, workspace, "corvus.toml", `
+	writeFile(t, workspace, filepath.Join(".corvus", "config.toml"), `
 [permissions]
 allow = ["Bash(workspace*)"]
 `)
@@ -3515,11 +3516,11 @@ allow = ["Bash(workspace*)"]
 	const rule = "Bash(go test ./...)"
 	rememberPermissionRule(workspace, rule)
 
-	cwdCfg := config.LoadForEdit(filepath.Join(cwd, "corvus.toml"))
+	cwdCfg := config.LoadForEdit(filepath.Join(cwd, ".corvus", "config.toml"))
 	if hasPermissionRule(cwdCfg.Permissions.Allow, rule) {
 		t.Fatalf("remembered rule was written to cwd config: %v", cwdCfg.Permissions.Allow)
 	}
-	workspaceCfg := config.LoadForEdit(filepath.Join(workspace, "corvus.toml"))
+	workspaceCfg := config.LoadForEdit(filepath.Join(workspace, ".corvus", "config.toml"))
 	if !hasPermissionRule(workspaceCfg.Permissions.Allow, rule) {
 		t.Fatalf("remembered rule missing from workspace config: %v", workspaceCfg.Permissions.Allow)
 	}
@@ -3527,7 +3528,7 @@ allow = ["Bash(workspace*)"]
 
 func TestRememberPermissionRulePreservesPermissionPolicyAndComments(t *testing.T) {
 	workspace := robustTempDir(t)
-	writeFile(t, workspace, "corvus.toml", `
+	writeFile(t, workspace, filepath.Join(".corvus", "config.toml"), `
 [permissions]
 # Keep this rationale with the policy.
 mode = "deny"
@@ -3546,7 +3547,7 @@ legacy_preference = "keep"
 		t.Fatalf("remember result = %+v, want saved without error", result)
 	}
 
-	path := filepath.Join(workspace, "corvus.toml")
+	path := filepath.Join(workspace, ".corvus", "config.toml")
 	got := config.LoadForEdit(path)
 	if got.Permissions.Mode != "deny" {
 		t.Errorf("permissions.mode = %q, want deny", got.Permissions.Mode)
@@ -3582,7 +3583,7 @@ legacy_preference = "keep"
 
 func TestRememberPermissionRuleIgnoresTOMLExampleInMultilineSystemPrompt(t *testing.T) {
 	workspace := robustTempDir(t)
-	writeFile(t, workspace, "corvus.toml", `[agent]
+	writeFile(t, workspace, filepath.Join(".corvus", "config.toml"), `[agent]
 system_prompt = """
 Example only:
 [permissions]
@@ -3601,7 +3602,7 @@ deny = ["Bash(rm:*)"]
 		t.Fatalf("remember result = %+v, want saved without error", result)
 	}
 
-	path := filepath.Join(workspace, "corvus.toml")
+	path := filepath.Join(workspace, ".corvus", "config.toml")
 	got, err := config.LoadForEditReadOnlyStrict(path)
 	if err != nil {
 		t.Fatalf("updated config does not parse: %v", err)
@@ -3616,8 +3617,11 @@ deny = ["Bash(rm:*)"]
 
 func TestRememberPermissionRuleRejectsMalformedConfigWithoutWriting(t *testing.T) {
 	workspace := robustTempDir(t)
-	path := filepath.Join(workspace, "corvus.toml")
+	path := filepath.Join(workspace, ".corvus", "config.toml")
 	original := []byte("[permissions]\nmode = \"deny\"\nallow = [\n")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, original, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -3637,7 +3641,7 @@ func TestRememberPermissionRuleRejectsMalformedConfigWithoutWriting(t *testing.T
 
 func TestRememberPermissionRuleSerializesConcurrentWriters(t *testing.T) {
 	workspace := robustTempDir(t)
-	writeFile(t, workspace, "corvus.toml", "[permissions]\nallow = []\n")
+	writeFile(t, workspace, filepath.Join(".corvus", "config.toml"), "[permissions]\nallow = []\n")
 
 	const writers = 32
 	start := make(chan struct{})
@@ -3660,7 +3664,7 @@ func TestRememberPermissionRuleSerializesConcurrentWriters(t *testing.T) {
 		}
 	}
 
-	got := config.LoadForEdit(filepath.Join(workspace, "corvus.toml"))
+	got := config.LoadForEdit(filepath.Join(workspace, ".corvus", "config.toml"))
 	for i := 0; i < writers; i++ {
 		rule := fmt.Sprintf("Edit(file-%02d)", i)
 		if !hasPermissionRule(got.Permissions.Allow, rule) {
@@ -3671,7 +3675,7 @@ func TestRememberPermissionRuleSerializesConcurrentWriters(t *testing.T) {
 
 func TestRememberPermissionRuleSerializesCrossProcessWriters(t *testing.T) {
 	workspace := robustTempDir(t)
-	writeFile(t, workspace, "corvus.toml", "[permissions]\nallow = []\n")
+	writeFile(t, workspace, filepath.Join(".corvus", "config.toml"), "[permissions]\nallow = []\n")
 	readyDir := robustTempDir(t)
 	startPath := filepath.Join(readyDir, "start")
 
@@ -3725,7 +3729,7 @@ func TestRememberPermissionRuleSerializesCrossProcessWriters(t *testing.T) {
 		}
 	}
 
-	got := config.LoadForEdit(filepath.Join(workspace, "corvus.toml"))
+	got := config.LoadForEdit(filepath.Join(workspace, ".corvus", "config.toml"))
 	for worker := 0; worker < workers; worker++ {
 		for n := 0; n < rulesPerWorker; n++ {
 			rule := fmt.Sprintf("Edit(process-%d-file-%02d)", worker, n)
@@ -3790,7 +3794,7 @@ allow = ["Bash(user)"]
 
 	const rule = "Edit(src/app.go)"
 	res := rememberPermissionRule(workspace, rule)
-	if !res.Saved || res.Path != filepath.Join(workspace, "corvus.toml") {
+	if !res.Saved || res.Path != filepath.Join(workspace, ".corvus", "config.toml") {
 		t.Fatalf("remember result = %+v, want saved to workspace config", res)
 	}
 
@@ -3798,7 +3802,7 @@ allow = ["Bash(user)"]
 	if hasPermissionRule(userCfg.Permissions.Allow, rule) {
 		t.Fatalf("workspace rule was written to user config: %v", userCfg.Permissions.Allow)
 	}
-	workspaceCfg := config.LoadForEdit(filepath.Join(workspace, "corvus.toml"))
+	workspaceCfg := config.LoadForEdit(filepath.Join(workspace, ".corvus", "config.toml"))
 	if !hasPermissionRule(workspaceCfg.Permissions.Allow, rule) {
 		t.Fatalf("workspace rule missing from project config: %v", workspaceCfg.Permissions.Allow)
 	}
@@ -3829,14 +3833,14 @@ allow = ["Bash(user*)"]
 	if !hasPermissionRule(userCfg.Permissions.Allow, rule) {
 		t.Fatalf("empty root should remember into SourcePath config: %v", userCfg.Permissions.Allow)
 	}
-	if _, err := os.Stat(filepath.Join(cwd, "corvus.toml")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(cwd, ".corvus", "config.toml")); !os.IsNotExist(err) {
 		t.Fatalf("empty root should not create cwd config when SourcePath exists, err=%v", err)
 	}
 }
 
 func TestRememberPermissionRuleSkipsRuleCoveredByExistingAllow(t *testing.T) {
 	workspace := robustTempDir(t)
-	writeFile(t, workspace, "corvus.toml", `
+	writeFile(t, workspace, filepath.Join(".corvus", "config.toml"), `
 [permissions]
 allow = ["Bash(go test:*)"]
 `)
@@ -3845,7 +3849,7 @@ allow = ["Bash(go test:*)"]
 	if res.Saved || res.CoveredBy != "Bash(go test:*)" {
 		t.Fatalf("remember result = %+v, want already covered", res)
 	}
-	cfg := config.LoadForEdit(filepath.Join(workspace, "corvus.toml"))
+	cfg := config.LoadForEdit(filepath.Join(workspace, ".corvus", "config.toml"))
 	if len(cfg.Permissions.Allow) != 1 || cfg.Permissions.Allow[0] != "Bash(go test:*)" {
 		t.Fatalf("allow rules = %v, want only existing prefix", cfg.Permissions.Allow)
 	}
@@ -3853,7 +3857,7 @@ allow = ["Bash(go test:*)"]
 
 func TestRememberDynamicBashLiteralIsNotCoveredByBroadRule(t *testing.T) {
 	workspace := robustTempDir(t)
-	writeFile(t, workspace, "corvus.toml", `
+	writeFile(t, workspace, filepath.Join(".corvus", "config.toml"), `
 [permissions]
 allow = ["Bash(git*)"]
 `)
@@ -3863,7 +3867,7 @@ allow = ["Bash(git*)"]
 	if !res.Saved || res.CoveredBy != "" || res.Err != nil {
 		t.Fatalf("remember dynamic literal = %+v, want newly saved rule", res)
 	}
-	cfg := config.LoadForEdit(filepath.Join(workspace, "corvus.toml"))
+	cfg := config.LoadForEdit(filepath.Join(workspace, ".corvus", "config.toml"))
 	if !hasPermissionRule(cfg.Permissions.Allow, "Bash(git*)") || !hasPermissionRule(cfg.Permissions.Allow, literal) {
 		t.Fatalf("allow rules = %v, want broad rule and dynamic literal", cfg.Permissions.Allow)
 	}
@@ -3872,7 +3876,7 @@ allow = ["Bash(git*)"]
 	if res.Saved || res.CoveredBy != literal || res.Err != nil {
 		t.Fatalf("remember duplicate dynamic literal = %+v, want exact deduplication", res)
 	}
-	cfg = config.LoadForEdit(filepath.Join(workspace, "corvus.toml"))
+	cfg = config.LoadForEdit(filepath.Join(workspace, ".corvus", "config.toml"))
 	count := 0
 	for _, rule := range cfg.Permissions.Allow {
 		if rule == literal {
@@ -3886,7 +3890,7 @@ allow = ["Bash(git*)"]
 
 func TestRememberPermissionRulePrunesNarrowRulesWhenSavingBroaderRule(t *testing.T) {
 	workspace := robustTempDir(t)
-	writeFile(t, workspace, "corvus.toml", `
+	writeFile(t, workspace, filepath.Join(".corvus", "config.toml"), `
 [permissions]
 allow = ["Bash(go test ./...)", "Bash(go build ./...)"]
 `)
@@ -3895,7 +3899,7 @@ allow = ["Bash(go test ./...)", "Bash(go build ./...)"]
 	if !res.Saved || res.CoveredBy != "" {
 		t.Fatalf("remember result = %+v, want saved broader rule", res)
 	}
-	cfg := config.LoadForEdit(filepath.Join(workspace, "corvus.toml"))
+	cfg := config.LoadForEdit(filepath.Join(workspace, ".corvus", "config.toml"))
 	if hasPermissionRule(cfg.Permissions.Allow, "Bash(go test ./...)") {
 		t.Fatalf("narrow go test rule should be pruned: %v", cfg.Permissions.Allow)
 	}
@@ -3914,25 +3918,25 @@ func TestRememberPlanModeReadOnlyCommandUsesWorkspaceRoot(t *testing.T) {
 	cwd := robustTempDir(t)
 	workspace := robustTempDir(t)
 	t.Chdir(cwd)
-	writeFile(t, cwd, "corvus.toml", `
+	writeFile(t, cwd, filepath.Join(".corvus", "config.toml"), `
 [agent]
 plan_mode_read_only_commands = ["cwd query"]
 `)
-	writeFile(t, workspace, "corvus.toml", `
+	writeFile(t, workspace, filepath.Join(".corvus", "config.toml"), `
 [agent]
 plan_mode_read_only_commands = ["workspace query"]
 `)
 
 	res := rememberPlanModeReadOnlyCommand(workspace, "gh issue view")
-	if !res.Saved || res.Path != filepath.Join(workspace, "corvus.toml") {
+	if !res.Saved || res.Path != filepath.Join(workspace, ".corvus", "config.toml") {
 		t.Fatalf("remember result = %+v, want saved to workspace config", res)
 	}
 
-	cwdCfg := config.LoadForEdit(filepath.Join(cwd, "corvus.toml"))
+	cwdCfg := config.LoadForEdit(filepath.Join(cwd, ".corvus", "config.toml"))
 	if hasPlanModeReadOnlyCommand(cwdCfg.Agent.PlanModeReadOnlyCommands, "gh issue view") {
 		t.Fatalf("remembered command was written to cwd config: %v", cwdCfg.Agent.PlanModeReadOnlyCommands)
 	}
-	workspaceCfg := config.LoadForEdit(filepath.Join(workspace, "corvus.toml"))
+	workspaceCfg := config.LoadForEdit(filepath.Join(workspace, ".corvus", "config.toml"))
 	if !hasPlanModeReadOnlyCommand(workspaceCfg.Agent.PlanModeReadOnlyCommands, "gh issue view") {
 		t.Fatalf("remembered command missing from workspace config: %v", workspaceCfg.Agent.PlanModeReadOnlyCommands)
 	}
@@ -3940,7 +3944,7 @@ plan_mode_read_only_commands = ["workspace query"]
 
 func TestRememberPlanModeReadOnlyCommandSkipsCoveredPrefix(t *testing.T) {
 	workspace := robustTempDir(t)
-	writeFile(t, workspace, "corvus.toml", `
+	writeFile(t, workspace, filepath.Join(".corvus", "config.toml"), `
 [agent]
 plan_mode_read_only_commands = ["gh issue view"]
 `)
@@ -3949,7 +3953,7 @@ plan_mode_read_only_commands = ["gh issue view"]
 	if res.Saved || res.CoveredBy != "gh issue view" {
 		t.Fatalf("remember result = %+v, want already covered", res)
 	}
-	cfg := config.LoadForEdit(filepath.Join(workspace, "corvus.toml"))
+	cfg := config.LoadForEdit(filepath.Join(workspace, ".corvus", "config.toml"))
 	if len(cfg.Agent.PlanModeReadOnlyCommands) != 1 || cfg.Agent.PlanModeReadOnlyCommands[0] != "gh issue view" {
 		t.Fatalf("plan-mode read-only commands = %v, want only existing prefix", cfg.Agent.PlanModeReadOnlyCommands)
 	}
@@ -3989,7 +3993,7 @@ func TestBuildMigratesLegacyConfigEndToEnd(t *testing.T) {
 	t.Chdir(proj)
 	// Project config merges over the migrated user config without dropping the
 	// migrated plugins.
-	writeFile(t, proj, "corvus.toml", "")
+	writeFile(t, proj, filepath.Join(".corvus", "config.toml"), "")
 	writeFile(t, filepath.Join(home, ".corvus"), "config.json",
 		`{"apiKey":"sk-e2e","lang":"zh","mcpServers":{"fs":{"command":"npx","args":["-y","server-fs"]}}}`)
 	writeFile(t, filepath.Join(home, ".corvus", "sessions"), "chat-1.events.jsonl",
@@ -4058,8 +4062,8 @@ func TestBuildMigratesDeprecatedAgentStepLimitsWithOneNotice(t *testing.T) {
 	home := isolateConfigHome(t)
 	t.Setenv("CORVUS_HOME", filepath.Join(home, "corvus-home"))
 	project := robustTempDir(t)
-	configPath := filepath.Join(project, "corvus.toml")
-	writeFile(t, project, "corvus.toml", `
+	configPath := filepath.Join(project, ".corvus", "config.toml")
+	writeFile(t, project, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -4123,8 +4127,8 @@ func TestBuildMigratesDeprecatedRedactToolOutputWithOneNotice(t *testing.T) {
 	home := isolateConfigHome(t)
 	t.Setenv("CORVUS_HOME", filepath.Join(home, "corvus-home"))
 	project := robustTempDir(t)
-	configPath := filepath.Join(project, "corvus.toml")
-	writeFile(t, project, "corvus.toml", `
+	configPath := filepath.Join(project, ".corvus", "config.toml")
+	writeFile(t, project, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [secrets]
@@ -4191,7 +4195,7 @@ func TestBuildMigratesLegacySessionsFromConfigSessionDir(t *testing.T) {
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
 
 	proj := robustTempDir(t)
-	writeFile(t, proj, "corvus.toml", "")
+	writeFile(t, proj, filepath.Join(".corvus", "config.toml"), "")
 
 	legacyConfig := config.LegacyUserConfigPath()
 	if legacyConfig == "" {
@@ -4254,7 +4258,7 @@ func TestBuildSkipsLegacySessionMigrationWhenIsolated(t *testing.T) {
 	t.Setenv("CORVUS_HOME", corvusHome)
 
 	proj := robustTempDir(t)
-	writeFile(t, proj, "corvus.toml", "[codegraph]\nenabled = false\n")
+	writeFile(t, proj, filepath.Join(".corvus", "config.toml"), "[codegraph]\nenabled = false\n")
 
 	legacyRoot := filepath.Join(xdg, "corvus")
 	writeFile(t, filepath.Join(legacyRoot, "sessions"), "xdg-flat.events.jsonl",
@@ -4371,8 +4375,8 @@ func TestPluginSpecsMapMCPSourceDefaults(t *testing.T) {
 		{name: "user config", source: config.MCPSourceUserConfig, wantAuthorized: true},
 		{name: "legacy user config", source: config.MCPSourceLegacyUser, wantAuthorized: true},
 		{name: "plugin package", source: config.MCPSourcePluginPackage, wantAuthorized: true},
-		{name: "project config", source: config.MCPSourceProjectConfig, wantAuthorized: true},
-		{name: "project mcp json", source: config.MCPSourceProjectMCPJSON, wantAuthorized: true},
+		{name: "project config", source: config.MCPSourceProjectConfig, wantApproval: true},
+		{name: "project mcp json", source: config.MCPSourceProjectMCPJSON, wantApproval: true},
 		{name: "unknown"},
 	}
 
@@ -4496,7 +4500,7 @@ func TestBuildMigratesLegacyEagerTierToBackground(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -4527,7 +4531,7 @@ tier = "eager"
 	if len(failures) != 1 || failures[0].Name != "legacy-eager" {
 		t.Fatalf("failures = %+v, want background startup failure for migrated legacy eager plugin", failures)
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, "corvus.toml"))
+	raw, err := os.ReadFile(filepath.Join(dir, ".corvus", "config.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -4541,7 +4545,7 @@ func TestBuildMigratesLegacyLazyTierToBackground(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -4572,7 +4576,7 @@ tier = "lazy"
 	if len(failures) != 1 || failures[0].Name != "legacy-lazy" {
 		t.Fatalf("failures = %+v, want background startup failure for migrated legacy lazy plugin", failures)
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, "corvus.toml"))
+	raw, err := os.ReadFile(filepath.Join(dir, ".corvus", "config.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -4591,7 +4595,7 @@ func TestBuildDefaultsToNearestGitRoot(t *testing.T) {
 	if err := os.MkdirAll(subdir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, root, "corvus.toml", `
+	writeFile(t, root, filepath.Join(".corvus", "config.toml"), `
 default_model = "root-model"
 
 [agent]
@@ -4734,7 +4738,7 @@ func TestBuildAdditionalDirsAllowWriterAndPreserveToolSchemas(t *testing.T) {
 	root := robustTempDir(t)
 	extra := t.TempDir()
 	t.Chdir(root)
-	writeFile(t, root, "corvus.toml", `
+	writeFile(t, root, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -4808,7 +4812,7 @@ func TestBuildAdditionalDirsReachSandboxedBashWriteRoots(t *testing.T) {
 	root := robustTempDir(t)
 	extra := t.TempDir()
 	t.Chdir(root)
-	writeFile(t, root, "corvus.toml", `
+	writeFile(t, root, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -4861,7 +4865,7 @@ func TestBuildMigratesLegacyEagerBeforeStatsDemotion(t *testing.T) {
 		}
 	}
 
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
@@ -4977,6 +4981,201 @@ func TestBuildExtraPluginProbeKeepsSessionProcessAlive(t *testing.T) {
 	}
 	if out != "echo: after-probe" {
 		t.Fatalf("Execute result = %q, want %q", out, "echo: after-probe")
+	}
+}
+
+// TestBuildProjectMCPDeniedApprovalDoesNotStart pins the fail-closed launch
+// gate: a project-scoped MCP that the approver denies must never be connected,
+// and the host records a RequiresLaunchApproval failure that the /mcp panel
+// renders as awaiting authorization.
+func TestBuildProjectMCPDeniedApprovalDoesNotStart(t *testing.T) {
+	isolateConfigHome(t)
+	workspace := robustTempDir(t)
+	t.Chdir(workspace)
+	approvals := 0
+	ctrl, err := Build(context.Background(), Options{
+		SessionDir: filepath.Join(t.TempDir(), "sessions"),
+		Sink:       event.Discard,
+		MCPLaunchApprover: func(_ context.Context, _ plugin.Spec) (bool, error) {
+			approvals++
+			return false, nil
+		},
+		ExtraPlugins: []plugin.Spec{{
+			Name:                  "proj-denied",
+			Command:               os.Args[0],
+			Args:                  []string{"-test.run=TestHelperProcess", "--"},
+			Env:                   map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
+			LaunchManager:         mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), workspace),
+			ConfigSource:          "project_config",
+			RequireLaunchApproval: true,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+
+	if approvals != 1 {
+		t.Fatalf("approver calls = %d, want 1", approvals)
+	}
+	if len(ctrl.Host().Servers()) != 0 {
+		t.Fatalf("denied project MCP connected: %+v", ctrl.Host().Servers())
+	}
+	if _, err := ctrl.Host().ToolsFor(context.Background(), "proj-denied"); err == nil {
+		t.Fatal("denied project MCP unexpectedly exposed tools")
+	}
+	found := false
+	for _, f := range ctrl.Host().Failures() {
+		if f.Name == "proj-denied" && f.RequiresLaunchApproval {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("Host.Failures() = %+v, want RequiresLaunchApproval entry for proj-denied", ctrl.Host().Failures())
+	}
+}
+
+// TestBuildProjectMCPApprovalConnectsAndPersists pins the approve-once flow:
+// approval records a durable exact-identity grant (AuthorizeProjectSpecLaunch)
+// so the server connects, and rebuilding the same spec starts it again without
+// prompting.
+func TestBuildProjectMCPApprovalConnectsAndPersists(t *testing.T) {
+	isolateConfigHome(t)
+	workspace := robustTempDir(t)
+	t.Chdir(workspace)
+	stateDir := filepath.Join(t.TempDir(), mcplaunch.StateFilename)
+	approvals := 0
+	spec := func() plugin.Spec {
+		return plugin.Spec{
+			Name:                  "proj-approved",
+			Command:               os.Args[0],
+			Args:                  []string{"-test.run=TestHelperProcess", "--"},
+			Env:                   map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
+			LaunchManager:         mcplaunch.NewManager(stateDir, workspace),
+			ConfigSource:          "project_config",
+			RequireLaunchApproval: true,
+		}
+	}
+	build := func() *control.Controller {
+		t.Helper()
+		ctrl, err := Build(context.Background(), Options{
+			SessionDir: filepath.Join(t.TempDir(), "sessions"),
+			Sink:       event.Discard,
+			MCPLaunchApprover: func(_ context.Context, _ plugin.Spec) (bool, error) {
+				approvals++
+				return true, nil
+			},
+			ExtraPlugins: []plugin.Spec{spec()},
+		})
+		if err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		return ctrl
+	}
+
+	ctrl := build()
+	if approvals != 1 {
+		t.Fatalf("first build approver calls = %d, want 1", approvals)
+	}
+	if len(ctrl.Host().Servers()) != 1 || ctrl.Host().Servers()[0].Name != "proj-approved" {
+		t.Fatalf("approved project MCP not connected: %+v", ctrl.Host().Servers())
+	}
+	ctrl.Close()
+
+	ctrl2 := build()
+	if approvals != 1 {
+		t.Fatalf("second build approver calls = %d, want 1 (grant persisted)", approvals)
+	}
+	if len(ctrl2.Host().Servers()) != 1 || ctrl2.Host().Servers()[0].Name != "proj-approved" {
+		t.Fatalf("approved project MCP not connected on rebuild: %+v", ctrl2.Host().Servers())
+	}
+	ctrl2.Close()
+}
+
+// TestBuildProjectMCPConfigChangeRequiresReapproval pins the exact-identity
+// contract: after an approval, changing the server's args invalidates the
+// grant and the approver must be consulted again.
+func TestBuildProjectMCPConfigChangeRequiresReapproval(t *testing.T) {
+	isolateConfigHome(t)
+	workspace := robustTempDir(t)
+	t.Chdir(workspace)
+	stateDir := filepath.Join(t.TempDir(), mcplaunch.StateFilename)
+	approvals := 0
+	specWith := func(marker string) plugin.Spec {
+		return plugin.Spec{
+			Name:                  "proj-changing",
+			Command:               os.Args[0],
+			Args:                  []string{"-test.run=TestHelperProcess", "--", marker},
+			Env:                   map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
+			LaunchManager:         mcplaunch.NewManager(stateDir, workspace),
+			ConfigSource:          "project_config",
+			RequireLaunchApproval: true,
+		}
+	}
+	build := func(spec plugin.Spec) *control.Controller {
+		t.Helper()
+		ctrl, err := Build(context.Background(), Options{
+			SessionDir: filepath.Join(t.TempDir(), "sessions"),
+			Sink:       event.Discard,
+			MCPLaunchApprover: func(_ context.Context, _ plugin.Spec) (bool, error) {
+				approvals++
+				return true, nil
+			},
+			ExtraPlugins: []plugin.Spec{spec},
+		})
+		if err != nil {
+			t.Fatalf("Build: %v", err)
+		}
+		return ctrl
+	}
+
+	ctrl := build(specWith("v1"))
+	if approvals != 1 {
+		t.Fatalf("first identity approver calls = %d, want 1", approvals)
+	}
+	ctrl.Close()
+
+	ctrl2 := build(specWith("v2"))
+	if approvals != 2 {
+		t.Fatalf("changed identity approver calls = %d, want 2 (re-approval required)", approvals)
+	}
+	if len(ctrl2.Host().Servers()) != 1 || ctrl2.Host().Servers()[0].Name != "proj-changing" {
+		t.Fatalf("re-approved project MCP not connected: %+v", ctrl2.Host().Servers())
+	}
+	ctrl2.Close()
+}
+
+// TestBuildNonProjectMCPDoesNotTriggerApprover pins that user-config /
+// plugin-package / host-session MCP servers never reach the launch approver.
+func TestBuildNonProjectMCPDoesNotTriggerApprover(t *testing.T) {
+	isolateConfigHome(t)
+	workspace := robustTempDir(t)
+	t.Chdir(workspace)
+	approvals := 0
+	ctrl, err := Build(context.Background(), Options{
+		SessionDir: filepath.Join(t.TempDir(), "sessions"),
+		Sink:       event.Discard,
+		MCPLaunchApprover: func(_ context.Context, _ plugin.Spec) (bool, error) {
+			approvals++
+			return false, nil
+		},
+		ExtraPlugins: []plugin.Spec{{
+			Name:    "acp-session",
+			Command: os.Args[0],
+			Args:    []string{"-test.run=TestHelperProcess", "--"},
+			Env:     map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+
+	if approvals != 0 {
+		t.Fatalf("approver calls = %d, want 0 for non-project MCP", approvals)
+	}
+	if len(ctrl.Host().Servers()) != 1 || ctrl.Host().Servers()[0].Name != "acp-session" {
+		t.Fatalf("non-project MCP not connected: %+v", ctrl.Host().Servers())
 	}
 }
 

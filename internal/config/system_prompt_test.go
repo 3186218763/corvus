@@ -103,7 +103,10 @@ func TestResolveSystemPromptProjectCannotReadCorvusHome(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, ".env"), []byte(secret), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte("[agent]\nsystem_prompt_file = \".env\"\n"), 0o600); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".corvus", "config.toml"), []byte("[agent]\nsystem_prompt_file = \".env\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -131,7 +134,10 @@ func TestMergeFileSnapshotKeepsProjectPromptSourceAtomic(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, ".env"), []byte(secret), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	projectConfig := filepath.Join(root, "corvus.toml")
+	projectConfig := filepath.Join(root, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(projectConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectConfig, []byte("[agent]\nsystem_prompt_file = \".env\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +219,10 @@ func TestResolveSystemPromptProjectPathStaysInWorkspace(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "prompts", "system.md"), []byte("home prompt"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte("[agent]\nsystem_prompt_file = \"prompts/system.md\"\n"), 0o600); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".corvus", "config.toml"), []byte("[agent]\nsystem_prompt_file = \"prompts/system.md\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "prompts", "system.md"), []byte("workspace prompt"), 0o600); err != nil {
@@ -246,7 +255,10 @@ func TestResolveSystemPromptRejectsProjectPathEscapes(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			root := t.TempDir()
 			outside := test.path(root)
-			if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte(fmt.Sprintf("[agent]\nsystem_prompt_file = %q\n", outside)), 0o600); err != nil {
+			if err := os.MkdirAll(filepath.Join(root, ".corvus"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, ".corvus", "config.toml"), []byte(fmt.Sprintf("[agent]\nsystem_prompt_file = %q\n", outside)), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			cfg, err := LoadForRootReadOnly(root)
@@ -274,7 +286,10 @@ func TestResolveSystemPromptRejectsProjectSymlinkEscape(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(root, "prompts", "system.md")); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte("[agent]\nsystem_prompt_file = \"prompts/system.md\"\n"), 0o600); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".corvus", "config.toml"), []byte("[agent]\nsystem_prompt_file = \"prompts/system.md\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := LoadForRootReadOnly(root)

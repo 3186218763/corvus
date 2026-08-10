@@ -21,8 +21,8 @@ func TestLoadCorvusGuide(t *testing.T) {
 	if sk.RunAs != "inline" {
 		t.Fatalf("runAs = %q, want inline", sk.RunAs)
 	}
-	if !strings.Contains(sk.Body, "corvus doctor capabilities") {
-		t.Fatal("body should recommend doctor capabilities")
+	if !strings.Contains(sk.Body, "corvus --help") {
+		t.Fatal("body should recommend real diagnostics via corvus --help")
 	}
 	if strings.Contains(strings.ToLower(sk.Frontmatter["auto-use"]), "require") {
 		t.Fatal("guide must not set auto-use require")

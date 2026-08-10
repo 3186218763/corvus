@@ -166,6 +166,9 @@ func TestMCPJSONCallTimeoutsRoundTrip(t *testing.T) {
 
 func TestMCPJSONUpdateRemovesRetiredApprovalFieldsAndPreservesUnknownFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), mcpJSONFile)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(`{
   "mcpServers": {
     "admin": {
@@ -360,7 +363,10 @@ func TestLoadMergesMCPJSON(t *testing.T) {
 name = "shared"
 command = "local-bin"
 `
-	if err := os.WriteFile("corvus.toml", []byte(toml), 0o644); err != nil {
+	if err := os.MkdirAll(".corvus", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(".corvus", "config.toml"), []byte(toml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	mcp := `{ "mcpServers": {
@@ -410,7 +416,10 @@ func TestLoadMergesPluginsAcrossTOMLSources(t *testing.T) {
 	if err := os.WriteFile(gpath, []byte("[[plugins]]\nname = \"globalmcp\"\ncommand = \"global-bin\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile("corvus.toml", []byte("[[plugins]]\nname = \"projectmcp\"\ncommand = \"project-bin\"\n"), 0o644); err != nil {
+	if err := os.MkdirAll(".corvus", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(".corvus", "config.toml"), []byte("[[plugins]]\nname = \"projectmcp\"\ncommand = \"project-bin\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -462,7 +471,10 @@ command = "global-mcp"
 		t.Fatalf("global + .mcp.json effective entry = %+v, want project .mcp.json", entry)
 	}
 
-	if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte(`
+	if err := os.MkdirAll(filepath.Join(root, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".corvus", "config.toml"), []byte(`
 [[plugins]]
 name = "shared"
 command = "project-corvus-mcp"
@@ -492,7 +504,10 @@ command = "global-old"
 `), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(root, "corvus.toml")
+	projectPath := filepath.Join(root, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte(`
 [[plugins]]
 name = "project"
@@ -541,7 +556,10 @@ command = "global-mcp"
 `), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(root, "corvus.toml")
+	projectPath := filepath.Join(root, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte(`
 [[plugins]]
 name = "shared"
@@ -592,7 +610,10 @@ func TestLoadNormalizesTOMLPastedCommandLine(t *testing.T) {
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
 	t.Chdir(t.TempDir())
 
-	if err := os.WriteFile("corvus.toml", []byte("[[plugins]]\nname = \"playwright\"\ncommand = \"npx -y @playwright/mcp\"\n"), 0o644); err != nil {
+	if err := os.MkdirAll(".corvus", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(".corvus", "config.toml"), []byte("[[plugins]]\nname = \"playwright\"\ncommand = \"npx -y @playwright/mcp\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := Load()
@@ -714,7 +735,10 @@ func TestClearPluginAuthenticationInSourcePrefersTOML(t *testing.T) {
 	t.Setenv("AppData", filepath.Join(root, "AppData"))
 	t.Chdir(t.TempDir())
 
-	if err := os.WriteFile("corvus.toml", []byte(`[[plugins]]
+	if err := os.MkdirAll(".corvus", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(".corvus", "config.toml"), []byte(`[[plugins]]
 name = "dida"
 type = "http"
 url = "https://corvus.example/mcp?access_token=toml"
@@ -741,14 +765,14 @@ Authorization = "Bearer ${TOML_TOKEN}"
 	if !changed {
 		t.Fatal("ClearPluginAuthenticationInSource should report changed")
 	}
-	if source != "corvus.toml" {
-		t.Fatalf("source = %q, want corvus.toml", source)
+	if source != filepath.Join(".corvus", "config.toml") {
+		t.Fatalf("source = %q, want .corvus/config.toml", source)
 	}
 	if updated.URL != "https://corvus.example/mcp" {
 		t.Fatalf("updated URL = %q", updated.URL)
 	}
 
-	projectRaw, err := os.ReadFile("corvus.toml")
+	projectRaw, err := os.ReadFile(filepath.Join(".corvus", "config.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -778,7 +802,10 @@ name = "dida"
 type = "http"
 url = "https://example.test/mcp?access_token=%s&workspace=main"
 `, token)
-		if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte(raw), 0o644); err != nil {
+		if err := os.MkdirAll(filepath.Join(root, ".corvus"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, ".corvus", "config.toml"), []byte(raw), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -793,10 +820,10 @@ url = "https://example.test/mcp?access_token=%s&workspace=main"
 	if !changed || updated.URL != "https://example.test/mcp?workspace=main" {
 		t.Fatalf("updated = %+v, changed = %v", updated, changed)
 	}
-	if want := filepath.Join(rootA, "corvus.toml"); !samePath(source, want) {
+	if want := filepath.Join(rootA, ".corvus", "config.toml"); !samePath(source, want) {
 		t.Fatalf("source = %q, want %q", source, want)
 	}
-	rootBRaw, err := os.ReadFile(filepath.Join(rootB, "corvus.toml"))
+	rootBRaw, err := os.ReadFile(filepath.Join(rootB, ".corvus", "config.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -898,7 +925,10 @@ func TestRemovePluginFromSourcesForRootRemovesEveryWritableDeclaration(t *testin
 	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{userConfig, filepath.Join(root, "corvus.toml")} {
+	if err := os.MkdirAll(filepath.Join(root, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{userConfig, filepath.Join(root, ".corvus", "config.toml")} {
 		if err := os.WriteFile(path, []byte(`
 [[plugins]]
 name = "duplicate"
@@ -924,7 +954,7 @@ command = "duplicate-mcp"
 	if !removed {
 		t.Fatal("RemovePluginFromSourcesForRoot reported no removal")
 	}
-	for _, path := range []string{userConfig, filepath.Join(root, "corvus.toml")} {
+	for _, path := range []string{userConfig, filepath.Join(root, ".corvus", "config.toml")} {
 		for _, p := range LoadForEdit(path).Plugins {
 			if p.Name == "duplicate" {
 				t.Fatalf("duplicate MCP survived in %s: %+v", path, p)
@@ -1219,7 +1249,10 @@ func TestRemoveEffectivePluginLocksAllCompetingSources(t *testing.T) {
 	// The project file does not currently define "shared", but it can become the
 	// higher-priority owner at any time. Holding its cross-process lock must stop
 	// effective-source selection before the user declaration is removed.
-	projectPath := filepath.Join(root, "corvus.toml")
+	projectPath := filepath.Join(root, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte("# project config\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1248,7 +1281,7 @@ func TestRemoveEffectivePluginLocksAllCompetingSources(t *testing.T) {
 func TestRemovePluginFromSourcesRejectsBrokenConfigSymlink(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("CORVUS_HOME", filepath.Join(root, "home"))
-	link := filepath.Join(root, "corvus.toml")
+	link := filepath.Join(root, ".corvus", "config.toml")
 	if err := os.Symlink(filepath.Join(root, "missing.toml"), link); err != nil {
 		t.Skipf("symlinks are unavailable: %v", err)
 	}
@@ -1266,8 +1299,11 @@ func TestRemovePluginFromSourcesRejectsBrokenConfigSymlink(t *testing.T) {
 
 func TestUpsertPluginInProjectSourceRequiresProjectFileLock(t *testing.T) {
 	root := t.TempDir()
-	path := filepath.Join(root, "corvus.toml")
+	path := filepath.Join(root, ".corvus", "config.toml")
 	const original = "# project config\n"
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}

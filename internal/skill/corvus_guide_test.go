@@ -22,8 +22,8 @@ func TestCorvusGuideBuiltinRegistered(t *testing.T) {
 	if sk.Description == "" {
 		t.Fatal("description required for index line")
 	}
-	if !strings.Contains(sk.Body, "doctor capabilities") {
-		t.Fatal("body missing doctor capabilities guidance")
+	if !strings.Contains(sk.Body, "corvus --help") {
+		t.Fatal("body missing CLI help guidance")
 	}
 }
 

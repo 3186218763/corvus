@@ -27,7 +27,7 @@ func RenderTOML(c *Config) string {
 
 // RenderTOMLForScope renders an annotated TOML file for a specific persistence
 // target. User configs can carry account-level preferences; project
-// corvus.toml stays focused on project behavior and excludes user-level
+// .corvus/config.toml stays focused on project behavior and excludes user-level
 // preferences such as pricing currency.
 func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	if c == nil {
@@ -45,9 +45,9 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	var b strings.Builder
 
 	b.WriteString("# Corvus configuration.\n")
-	fmt.Fprintf(&b, "# Resolution order: flag > ./corvus.toml > %s > built-in defaults.\n", userConfigDisplayPath())
-	b.WriteString("# Fields marked user/global only are not overridden by ./corvus.toml.\n")
-	b.WriteString("# Secrets are named via api_key_env and stored in Corvus's global .env; never put keys here.\n\n")
+	fmt.Fprintf(&b, "# Resolution order: flag > project .corvus/config.toml > %s > built-in defaults.\n", userConfigDisplayPath())
+	b.WriteString("# API keys: set api_key on a [[providers]] entry; the user config above wins over the project config.\n")
+	b.WriteString("# (Legacy api_key_env still works: keys live in Corvus's global .env instead.)\n\n")
 
 	fmt.Fprintf(&b, "config_version = %d   # schema marker for diagnostics; old versions may ignore it\n", configVersion(c))
 	fmt.Fprintf(&b, "default_model = %q\n", c.DefaultModel)
@@ -263,7 +263,11 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 			if p.ModelsURL != "" {
 				fmt.Fprintf(&b, "models_url  = %q   # auto-fetch models from this URL on startup\n", p.ModelsURL)
 			}
-			fmt.Fprintf(&b, "api_key_env = %q\n", p.APIKeyEnv)
+			if p.APIKey != "" {
+				fmt.Fprintf(&b, "api_key     = %q\n", p.APIKey)
+			} else {
+				fmt.Fprintf(&b, "api_key_env = %q\n", p.APIKeyEnv)
+			}
 			if p.PresetID != "" {
 				fmt.Fprintf(&b, "preset_id   = %q   # curated preset identity; settings UI uses it to avoid duplicate installs\n", p.PresetID)
 			}
@@ -271,7 +275,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 				fmt.Fprintf(&b, "preset_version = %d\n", p.PresetVersion)
 			}
 			if len(p.Headers) > 0 {
-				fmt.Fprintf(&b, "headers     = %s   # extra static request headers; keep secrets in api_key_env\n", renderStringMap(p.Headers))
+				fmt.Fprintf(&b, "headers     = %s   # extra static request headers; keep secrets in api_key\n", renderStringMap(p.Headers))
 			}
 			if len(p.ExtraBody) > 0 {
 				fmt.Fprintf(&b, "extra_body  = %s   # extra top-level JSON request body fields for compatible gateways\n", renderAnyMap(p.ExtraBody))
@@ -453,7 +457,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	// user's saved toggles survive config rewrites (WriteFile re-renders the
 	// whole file from the struct).
 	if scope != RenderScopeProject {
-		b.WriteString("[secrets]   # credential protection; user/global only, ./corvus.toml cannot override\n")
+		b.WriteString("[secrets]   # credential protection; user/global only, project config cannot override\n")
 		if c.Secrets.FilterSubprocessEnv {
 			b.WriteString("filter_subprocess_env = true   # strip credential-named env vars from tool/hook/LSP/MCP subprocesses\n")
 		} else {
@@ -756,7 +760,11 @@ func RenderTOMLProjectDelta(c *Config) string {
 			if p.ModelsURL != "" {
 				fmt.Fprintf(&b, "models_url  = %q\n", p.ModelsURL)
 			}
-			fmt.Fprintf(&b, "api_key_env = %q\n", p.APIKeyEnv)
+			if p.APIKey != "" {
+				fmt.Fprintf(&b, "api_key     = %q\n", p.APIKey)
+			} else {
+				fmt.Fprintf(&b, "api_key_env = %q\n", p.APIKeyEnv)
+			}
 			if p.PresetID != "" {
 				fmt.Fprintf(&b, "preset_id   = %q\n", p.PresetID)
 			}

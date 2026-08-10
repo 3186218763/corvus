@@ -125,7 +125,14 @@ func TestLoadCCSwitchLegacyConfigPrefersCorvusFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadCCSwitchLegacyConfig: %v", err)
 	}
-	if len(got) != 2 || got[0].Name != "legacy" || got[1].Name != "corvus-on" {
+	if len(got) != 2 {
+		t.Fatalf("entries = %+v, want legacy fallback and explicit Corvus enablement", got)
+	}
+	names := map[string]bool{}
+	for _, e := range got {
+		names[e.Name] = true
+	}
+	if !names["legacy"] || !names["corvus-on"] {
 		t.Fatalf("entries = %+v, want legacy fallback and explicit Corvus enablement", got)
 	}
 }

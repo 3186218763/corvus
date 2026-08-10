@@ -30,21 +30,6 @@ type commandFlagError struct {
 func (e *commandFlagError) Error() string { return e.err.Error() }
 func (e *commandFlagError) Unwrap() error { return e.err }
 
-// commandHelpRequested reports explicit help flags in the positional prefix a
-// command validates before constructing its FlagSet. Once parsing starts, the
-// FlagSet's ErrHelp path remains the source of truth.
-func commandHelpRequested(args []string, positionalPrefix int) bool {
-	if positionalPrefix > len(args) {
-		positionalPrefix = len(args)
-	}
-	for _, arg := range args[:positionalPrefix] {
-		if arg == "-h" || arg == "--help" {
-			return true
-		}
-	}
-	return false
-}
-
 func parseCommandFlagSet(fs commandFlagSet, args []string) error {
 	output := fs.Output()
 	var parseOutput bytes.Buffer

@@ -1207,7 +1207,10 @@ func TestLoadForRootKeepsPricingRegionUserGlobal(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[ui]\ncurrency = \"USD\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte("[ui]\ncurrency = \"CNY\"\n"), 0o644); err != nil {
+	if err := os.MkdirAll(filepath.Join(project, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".corvus", "config.toml"), []byte("[ui]\ncurrency = \"CNY\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

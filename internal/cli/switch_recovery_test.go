@@ -393,8 +393,20 @@ func TestCompactDoneKeepsLeaseOnRecoveryPathAfterSnapshotConflict(t *testing.T) 
 		t.Fatalf("seed active lease: %v", err)
 	}
 
-	next, _ := m.Update(compactDoneMsg{})
+	// compactDoneMsg now snapshots asynchronously (like /compact): run the
+	// returned tea.Cmd and deliver its message, mirroring the production
+	// bubbletea loop.
+	next, cmd := m.Update(compactDoneMsg{})
 	m = next.(chatTUI)
+	if cmd != nil {
+		if msg := cmd(); msg != nil {
+			next, cmd = m.Update(msg)
+			m = next.(chatTUI)
+		}
+	}
+	if cmd != nil {
+		t.Fatal("unexpected leftover command after compact snapshot")
+	}
 
 	recoveryPath := m.ctrl.SessionPath()
 	if recoveryPath == "" || recoveryPath == active || !strings.Contains(filepath.Base(recoveryPath), "-recovery-") {

@@ -1,6 +1,6 @@
 ---
 name: corvus-guide
-description: "Troubleshoot and configure Corvus capabilities: Skills (project/custom/global/builtin priority, discovery dirs), Commands (override order, /dir:file naming), Hooks (11 events, automatic project loading, matchers, timeouts), MCP (corvus.toml + .mcp.json + plugin packages, auto_start), plugin packages (native/Codex/Claude manifests), and AGENTS.md / instruction docs. Use when the user asks how to configure, debug missing skills/commands/hooks/MCP/plugins, or diagnose capability loading."
+description: "Troubleshoot and configure Corvus capabilities: Skills (project/custom/global/builtin priority, discovery dirs), Commands (override order, /dir:file naming), Hooks (11 events, automatic project loading, matchers, timeouts), MCP (.corvus/config.toml + .mcp.json + plugin packages, auto_start), plugin packages (native/Codex/Claude manifests), and AGENTS.md / instruction docs. Use when the user asks how to configure, debug missing skills/commands/hooks/MCP/plugins, or diagnose capability loading."
 runAs: inline
 ---
 
@@ -10,21 +10,33 @@ This skill is **inlined**. Prefer evidence over guessing.
 
 ## First action
 
-1. Run a **static** capability report (no network, no MCP subprocesses):
+The CLI ships no `doctor`/`setup` subcommands — only `help`/`version` plus the
+session flags listed by `corvus --help`. Gather evidence directly from the
+files the TUI reads:
+
+1. Show session flags and startup behavior:
 
 ```bash
-corvus doctor capabilities --json
+corvus --help
 ```
 
-2. Only if the user **explicitly** allows starting third-party MCP servers (may network and pass configured env/headers), run live probe:
+2. Inside the TUI, list session commands:
 
-```bash
-corvus doctor capabilities --live --timeout 5s --json
+```text
+/help
 ```
 
-3. On desktop, open **Settings → Diagnostics** for the same report model. The desktop "include current session runtime" toggle only **reads** the active tab Host (connected/failed/deferred/disabled); it does **not** start MCP.
+3. Read the config and skill files that drive capability loading (no network,
+   no MCP subprocesses): `.corvus/config.toml` (project) and
+   `~/.corvus/config.toml` (user-global), plus the skill/command roots under
+   `<workspace>/{.corvus,.agents,.agent,.claude}/` and `<Corvus home>/`.
 
-Do not invent auto-fixes. Surface stable issue codes, sources, and remediations from the report.
+4. On desktop, open **Settings → Diagnostics** for a runtime report. The
+   desktop "include current session runtime" toggle only **reads** the active
+   tab Host (connected/failed/deferred/disabled); it does **not** start MCP.
+
+Do not invent auto-fixes. Base conclusions on what is actually configured:
+config files, skill/command/hook files on disk, and `/help` output.
 
 ---
 
@@ -47,7 +59,8 @@ Discovery conventions: `.corvus`, `.agents`, `.agent`, `.claude` (see `config.Co
 
 | Entry | How |
 | --- | --- |
-| CLI | `corvus doctor capabilities` → Skills section |
+| Config | Read `[skills]` in `.corvus/config.toml` and `~/.corvus/config.toml` (disabled_skills, paths) |
+| Files | Inspect `<workspace>/{.corvus,.agents,.agent,.claude}/skills/` and `<Corvus home>/skills` |
 | Desktop | Settings → Skills; Settings → Diagnostics |
 | Agent | `/skill` list, `/corvus-guide`, `run_skill` |
 
@@ -62,9 +75,9 @@ Discovery conventions: `.corvus`, `.agents`, `.agent`, `.claude` (see `config.Co
 
 ### Ordered triage
 
-1. `corvus doctor capabilities --json` → Skills
+1. Read `[skills]` from `.corvus/config.toml` and `~/.corvus/config.toml`
 2. Confirm name not in `disabled_skills`
-3. Confirm winner Path/Scope; if shadowed, inspect lower-priority roots
+3. Confirm winner Path/Scope from the discovery dirs; if shadowed, inspect lower-priority roots
 4. Missing description: skill may load but index placeholder is weak — add `description:`
 5. Reopen session / Refresh Skills after config changes
 
@@ -80,7 +93,7 @@ Name from path: `git/commit.md` → `/git:commit` (slashes → `:`).
 
 ### Checks
 
-CLI/Desktop Diagnostics → Commands; invoke `/name` in chat.
+Invoke `/name` in chat; inspect `commands/` roots on disk; on desktop, Settings → Commands / Diagnostics → Commands.
 
 ### Symptom → cause → fix
 
@@ -141,8 +154,8 @@ Env/header values may contain secrets — diagnostics list **keys only**.
 
 | Mode | Behavior |
 | --- | --- |
-| Static doctor | Config validity, command path / URL shape, start intent — **no** subprocess |
-| CLI `--live` | Isolated Host via `boot.PluginSpecsForRoot` + `plugin.Start`; auto-start only; concurrency 4; always Close |
+| Static review | Read `[[plugins]]` in `.corvus/config.toml` + `.mcp.json`: TOML validity, command path / URL shape, start intent — **no** subprocess |
+| TUI session | Host via `boot.PluginSpecsForRoot` + `plugin.Start`; auto-start only; concurrency 4; always Close |
 | Desktop runtime | Read active tab Host only |
 
 ### Symptom → cause → fix
@@ -170,7 +183,8 @@ Unmapped Claude-only features may appear as compatibility warnings — Corvus do
 
 ### Checks
 
-`corvus plugin doctor <name>`, Settings → Plugins, Diagnostics → Plugins.
+Settings → Plugins, Diagnostics → Plugins; inspect `<Corvus home>/plugin-packages.json`
+and the manifest files on disk.
 
 ### Symptom → cause → fix
 

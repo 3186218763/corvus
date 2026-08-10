@@ -1,3 +1,4 @@
+# 趋势监控，CI 不阻断；新代码复杂度门槛由 code review 把关。
 # Report-only complexity monitor for internal/agent production code.
 # Uses funlen + cyclop with generous thresholds so existing code does not
 # generate a flood of noise. issues-exit-code is forced to 0 by the CI step so

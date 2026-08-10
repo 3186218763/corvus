@@ -9,7 +9,6 @@ import (
 	"corvus/internal/config"
 	"corvus/internal/control"
 	"corvus/internal/event"
-	fileencoding "corvus/internal/fileutil/encoding"
 	"corvus/internal/i18n"
 	"corvus/internal/provider"
 	"corvus/internal/provider/openai"
@@ -22,8 +21,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -104,24 +101,6 @@ func migrateMCPConfigForCLIWorkspace() {
 			fmt.Fprintln(os.Stderr, "warning: MCP config migration failed:", err)
 		}
 	}
-}
-
-func configureCLIThemeFromConfig() {
-	if cfg, err := config.Load(); err == nil {
-		configureCLIThemeWithStyle(cfg.UITheme(), cfg.UIThemeStyle())
-		cliCursorShape = cfg.UICursorShape()
-	} else {
-		configureCLITheme("auto")
-		cliCursorShape = "block"
-	}
-}
-
-func configureCLIThemeFromConfigForTTYOutput() {
-	if isTTY(os.Stdout) {
-		withTerminalProbe(configureCLIThemeFromConfig)
-		return
-	}
-	configureCLIThemeFromConfig()
 }
 
 func setupProfile(ctx context.Context, modelName string, maxStepsOverride int, requireKey bool, sink event.Sink, profile string, workspaceRoot string) (*control.Controller, error) {
@@ -639,7 +618,7 @@ func defaultConfigTarget() string {
 	if p := config.UserConfigPath(); p != "" {
 		return p
 	}
-	return "corvus.toml"
+	return config.ProjectConfigPathForRoot(".")
 }
 
 func defaultEnvTarget() string {
@@ -734,38 +713,6 @@ func selectLanguage() (string, error) {
 	return tags[idx], nil
 }
 
-func familyStaticModels(providers []config.ProviderEntry, idxs []int) []string {
-	var out []string
-	seen := map[string]bool{}
-	for _, i := range idxs {
-		for _, m := range providers[i].ModelList() {
-			if m != "" && !seen[m] {
-				seen[m] = true
-				out = append(out, m)
-			}
-		}
-	}
-	return out
-}
-
-func fetchOrFallback(probe *config.ProviderEntry, famName string) []string {
-	static := probe.ModelList()
-	if probe.BaseURL == "" {
-		return static
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	models, err := probe.FetchModels(ctx)
-	if err != nil || len(models) == 0 {
-		if len(static) > 0 {
-			fmt.Fprintf(os.Stderr, "  %s\n", dim(fmt.Sprintf(i18n.M.FetchModelsUsingPresetsFmt, famName)))
-		}
-		return static
-	}
-	fmt.Printf("  %s\n", green(fmt.Sprintf(i18n.M.FetchModelsSuccessFmt, len(models), famName)))
-	return models
-}
-
 func fetchModelListCompat(ctx context.Context, baseURL, apiKey string) ([]string, error) {
 	candidates, err := config.BuildModelFetchURLs(baseURL, "")
 	if err != nil {
@@ -792,44 +739,6 @@ func fetchModelListCompat(ctx context.Context, baseURL, apiKey string) ([]string
 	return nil, nil
 }
 
-func buildFamilyEntries(probe config.ProviderEntry, members []config.ProviderEntry, selected []string) []config.ProviderEntry {
-	tmpl := map[string]config.ProviderEntry{probe.Name: probe}
-	ownerName := map[string]string{}
-	for _, m := range members {
-		tmpl[m.Name] = m
-		for _, id := range m.ModelList() {
-			ownerName[id] = m.Name
-		}
-	}
-	var order []string
-	groups := map[string][]string{}
-	for _, sm := range selected {
-		name, ok := ownerName[sm]
-		if !ok {
-			name = probe.Name
-		}
-		if _, seen := groups[name]; !seen {
-			order = append(order, name)
-		}
-		groups[name] = append(groups[name], sm)
-	}
-	out := make([]config.ProviderEntry, 0, len(order))
-	for _, name := range order {
-		out = append(out, buildFamilyEntry(tmpl[name], groups[name]))
-	}
-	return out
-}
-
-func buildFamilyEntry(probe config.ProviderEntry, selected []string) config.ProviderEntry {
-	entry := probe
-	entry.Models = selected
-	entry.Model = selected[0]
-	if entry.Default == "" || !containsString(selected, entry.Default) {
-		entry.Default = selected[0]
-	}
-	return entry
-}
-
 func containsString(xs []string, v string) bool {
 	for _, x := range xs {
 		if x == v {
@@ -837,21 +746,6 @@ func containsString(xs []string, v string) bool {
 		}
 	}
 	return false
-}
-
-func filterStaleCustomEntries(providers []config.ProviderEntry) (kept, dropped []config.ProviderEntry) {
-	for _, p := range providers {
-		if p.Name == "custom" && p.Kind == "openai" {
-			dropped = append(dropped, p)
-			continue
-		}
-		if p.Name == "anthropic" && p.Kind == "anthropic" {
-			dropped = append(dropped, p)
-			continue
-		}
-		kept = append(kept, p)
-	}
-	return
 }
 
 func providerSlug(kind, baseURL string) string {
@@ -944,21 +838,6 @@ func fnv1a32Hex(s string) string {
 		hash *= 0x01000193
 	}
 	return fmt.Sprintf("%08x", hash)
-}
-
-type providerFamily struct {
-	key  string
-	name string
-	desc string
-}
-
-func familyOf(name string) providerFamily {
-	switch {
-	case strings.HasPrefix(name, "deepseek"):
-		return providerFamily{key: "deepseek", name: "DeepSeek", desc: "fast & cheap, plus a stronger Pro SKU"}
-	default:
-		return providerFamily{key: name, name: name}
-	}
 }
 
 type providerPromptResult struct {
@@ -1158,110 +1037,6 @@ func promptAnthropicProviderFromURL() (providerPromptResult, error) {
 	return newProviderPromptResult([]config.ProviderEntry{entry}, keyEnv, apiKey), nil
 }
 
-func groupByFamily(providers []config.ProviderEntry) ([]string, map[string][]int, map[string]providerFamily) {
-	var order []string
-	members := map[string][]int{}
-	info := map[string]providerFamily{}
-	for i, p := range providers {
-		f := familyOf(p.Name)
-		if _, seen := members[f.key]; !seen {
-			order = append(order, f.key)
-			info[f.key] = f
-		}
-		members[f.key] = append(members[f.key], i)
-	}
-	return order, members, info
-}
-
-func withBuiltinFamilies(providers []config.ProviderEntry) []config.ProviderEntry {
-	return withBuiltinFamiliesForLanguage(providers, "")
-}
-
-func withBuiltinFamiliesForLanguage(providers []config.ProviderEntry, pricingLanguage string) []config.ProviderEntry {
-	haveName := map[string]bool{}
-	for _, p := range providers {
-		haveName[p.Name] = true
-	}
-	defaults := config.Default()
-	defaults.Language = pricingLanguage
-	defaults.ApplyDeepSeekOfficialDefaultPricing()
-	for _, bp := range defaults.Providers {
-		if !haveName[bp.Name] {
-			providers = append(providers, bp)
-		}
-	}
-	return providers
-}
-
-func providersWithMissingKeys(cfg *config.Config) []config.ProviderEntry {
-	if cfg == nil {
-		return nil
-	}
-	refs := []string{
-		cfg.DefaultModel,
-		cfg.Agent.PlannerModel,
-		cfg.Agent.SubagentModel,
-	}
-	if len(cfg.Agent.SubagentModels) > 0 {
-		keys := make([]string, 0, len(cfg.Agent.SubagentModels))
-		for key := range cfg.Agent.SubagentModels {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			refs = append(refs, cfg.Agent.SubagentModels[key])
-		}
-	}
-
-	var out []config.ProviderEntry
-	seen := map[string]bool{}
-	for _, ref := range refs {
-		ref = strings.TrimSpace(ref)
-		if ref == "" {
-			continue
-		}
-		p, ok := cfg.ResolveModel(ref)
-		if !ok || p.APIKeyEnv == "" || os.Getenv(p.APIKeyEnv) != "" || seen[p.APIKeyEnv] {
-			continue
-		}
-		seen[p.APIKeyEnv] = true
-		out = append(out, *p)
-	}
-	return out
-}
-
-func configureKeys(selected []config.ProviderEntry, r io.Reader, w io.Writer) []string {
-	in := bufio.NewScanner(r)
-	fmt.Fprintln(w, "\n"+i18n.M.EnterAPIKeysHeader)
-
-	seen := map[string]bool{}
-	var envLines []string
-	for _, p := range selected {
-		if p.APIKeyEnv == "" || seen[p.APIKeyEnv] {
-			continue
-		}
-		seen[p.APIKeyEnv] = true
-
-		if cur := os.Getenv(p.APIKeyEnv); cur != "" {
-			reset := ask(in, w, "  "+fmt.Sprintf(i18n.M.APIKeyResetPromptFmt, p.APIKeyEnv), "y/N")
-			if reset == "y" || reset == "Y" {
-				if key := ask(in, w, "  "+p.APIKeyEnv, ""); key != "" {
-					envLines = append(envLines, p.APIKeyEnv+"="+key)
-					continue
-				}
-			}
-			fmt.Fprintf(w, "  %s %s\n", green("✓"), fmt.Sprintf(i18n.M.APIKeyAlreadySetFmt, p.APIKeyEnv))
-			envLines = append(envLines, p.APIKeyEnv+"="+cur)
-			continue
-		}
-
-		if key := ask(in, w, "  "+p.APIKeyEnv, ""); key != "" {
-			envLines = append(envLines, p.APIKeyEnv+"="+key)
-		}
-	}
-	return envLines
-}
-
 func ask(in *bufio.Scanner, w io.Writer, label, def string) string {
 	if def != "" {
 		fmt.Fprintf(w, "%s [%s]: ", label, def)
@@ -1283,60 +1058,4 @@ func isInteractive() bool {
 
 func isTTY(f *os.File) bool {
 	return term.IsTerminal(int(f.Fd()))
-}
-
-func appendEnv(path string, lines []string) error {
-	target := map[string]bool{}
-	for _, l := range lines {
-		if k, _, ok := strings.Cut(l, "="); ok {
-			target[strings.TrimSpace(k)] = true
-		}
-	}
-
-	var kept []string
-	if data, err := fileencoding.ReadFileUTF8(path); err == nil {
-		for _, raw := range strings.Split(string(data), "\n") {
-			trimmed := strings.TrimSpace(raw)
-			check := strings.TrimPrefix(trimmed, "export ")
-			if k, _, ok := strings.Cut(check, "="); ok && target[strings.TrimSpace(k)] {
-				continue
-			}
-			kept = append(kept, raw)
-		}
-		// strings.Split on a string ending with \n leaves a trailing empty
-		// element; trim it so we don't grow a blank line on every rewrite.
-		if n := len(kept); n > 0 && kept[n-1] == "" {
-			kept = kept[:n-1]
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-
-	var b strings.Builder
-	for _, l := range kept {
-		b.WriteString(l)
-		b.WriteByte('\n')
-	}
-	for _, l := range lines {
-		b.WriteString(l)
-		b.WriteByte('\n')
-		if k, v, ok := strings.Cut(l, "="); ok {
-			os.Setenv(strings.TrimSpace(k), v)
-		}
-	}
-	if dir := filepath.Dir(path); dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
-	}
-	return os.WriteFile(path, []byte(b.String()), 0o600)
-}
-
-func readStdin() string {
-	stat, err := os.Stdin.Stat()
-	if err != nil || stat.Mode()&os.ModeCharDevice != 0 {
-		return ""
-	}
-	data, _ := io.ReadAll(os.Stdin)
-	return strings.TrimSpace(string(data))
 }

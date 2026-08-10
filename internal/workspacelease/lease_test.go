@@ -452,3 +452,105 @@ func TestCrossProcessLeaseBlocksAndCrashReleases(t *testing.T) {
 	}
 	o.EndRun()
 }
+
+// A background job whose completion is never observed must not hold the write
+// lease forever: the retain grace releases it and counts the leak.
+func TestRetainUntilReleasesAfterGraceWhenDoneNeverCloses(t *testing.T) {
+	owner, err := New(t.TempDir(), t.TempDir(), nil, WithRetainGrace(50*time.Millisecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner.BeginRun()
+	if err := owner.AcquireWrite(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	neverDone := make(chan struct{}) // never closed
+	owner.RetainUntil(neverDone)
+	owner.EndRun()
+	if st := owner.State(); !st.Acquired {
+		t.Fatal("lease not acquired after BeginRun/AcquireWrite")
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for owner.State().Acquired {
+		if time.Now().After(deadline) {
+			t.Fatal("lease still held after retain grace despite done never closing")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := owner.LeakedRetentions(); got != 1 {
+		t.Fatalf("leaked retentions = %d, want 1", got)
+	}
+}
+
+// AcquireWrite must give up after the configured timeout instead of waiting
+// forever for a lease held by another session.
+func TestAcquireWriteTimesOutWhenLeaseHeld(t *testing.T) {
+	root := t.TempDir()
+	locks := t.TempDir()
+	holder, err := New(root, locks, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder.BeginRun()
+	if err := holder.AcquireWrite(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	waiter, err := New(root, locks, nil, WithAcquireTimeout(100*time.Millisecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	err = waiter.AcquireWrite(context.Background())
+	if err == nil {
+		t.Fatal("AcquireWrite succeeded while the lease was held")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("AcquireWrite = %v, want context.DeadlineExceeded", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("AcquireWrite took %v to time out, want well under 5s", elapsed)
+	}
+	if st := waiter.State(); st.Acquired {
+		t.Fatal("timed-out waiter still reports the lease as acquired")
+	}
+}
+
+// AcquireWrite without a timeout must keep waiting while the lease is held,
+// then succeed once the holder releases it (regression guard for the default
+// timeout not breaking cooperative handoff).
+func TestAcquireWriteWaitsUntilReleaseWithNoTimeout(t *testing.T) {
+	root := t.TempDir()
+	locks := t.TempDir()
+	holder, err := New(root, locks, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	holder.BeginRun()
+	if err := holder.AcquireWrite(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	waiter, err := New(root, locks, nil, WithAcquireTimeout(0)) // legacy: wait forever
+	if err != nil {
+		t.Fatal(err)
+	}
+	acquired := make(chan error, 1)
+	go func() { acquired <- waiter.AcquireWrite(context.Background()) }()
+
+	select {
+	case err := <-acquired:
+		t.Fatalf("AcquireWrite returned while the lease was held: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	holder.EndRun()
+	select {
+	case err := <-acquired:
+		if err != nil {
+			t.Fatalf("AcquireWrite after release = %v, want nil", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("AcquireWrite did not complete after the holder released")
+	}
+}

@@ -92,7 +92,10 @@ func TestLoadForRootIsolatesBrokenProjectConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	project := t.TempDir()
-	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte("[broken\n"), 0o600); err != nil {
+	if err := os.MkdirAll(filepath.Join(project, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".corvus", "config.toml"), []byte("[broken\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := LoadForRoot(project)
@@ -115,7 +118,10 @@ func TestLoadForRootTypeErrorDoesNotPartiallyApplyProjectConfig(t *testing.T) {
 	}
 	project := t.TempDir()
 	body := "default_model = \"project-model\"\n[ui]\nshow_reasoning = \"not-a-bool\"\n"
-	if err := os.WriteFile(filepath.Join(project, "corvus.toml"), []byte(body), 0o600); err != nil {
+	if err := os.MkdirAll(filepath.Join(project, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".corvus", "config.toml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := LoadForRoot(project)

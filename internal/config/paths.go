@@ -362,7 +362,7 @@ func WorkspaceLeaseDir() string {
 
 // RepairMutationLockDir stores target-path repair locks in the OS-user cache.
 // It deliberately ignores Corvus home/cache overrides: isolated instances
-// can still repair the same project corvus.toml, so their locks must converge.
+// can still repair the same project .corvus/config.toml, so their locks must converge.
 func RepairMutationLockDir() string {
 	dir := osUserCacheDir()
 	if strings.TrimSpace(dir) == "" {
@@ -620,16 +620,19 @@ func SourcePath() string {
 	return SourcePathForRoot(".")
 }
 
+// ProjectConfigPathForRoot returns the project config file for root:
+// <root>/.corvus/config.toml.
+func ProjectConfigPathForRoot(root string) string {
+	root = resolveRoot(root)
+	return filepath.Join(root, ".corvus", "config.toml")
+}
+
 // SourcePathForRoot returns the highest-priority config file that exists under
 // root, or "" if none. Equivalent to SourcePath() when root is ".".
 func SourcePathForRoot(root string) string {
 	root = resolveRoot(root)
-	projectTOML := "corvus.toml"
-	if root != "." {
-		projectTOML = filepath.Join(root, "corvus.toml")
-	}
-	if _, err := os.Stat(projectTOML); err == nil {
-		return projectTOML
+	if _, err := os.Stat(ProjectConfigPathForRoot(root)); err == nil {
+		return ProjectConfigPathForRoot(root)
 	}
 	if uc := userConfigLoadPath(); uc != "" {
 		if _, err := os.Stat(uc); err == nil {

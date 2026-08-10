@@ -2774,7 +2774,10 @@ func TestAddMCPServerAuthorizesExplicitUserAddBeforeConnecting(t *testing.T) {
 func TestAddMCPServerWritesGlobalConfigWithoutShadowingProject(t *testing.T) {
 	isolateControlConfigHome(t)
 	workspace := t.TempDir()
-	projectPath := filepath.Join(workspace, "corvus.toml")
+	projectPath := filepath.Join(workspace, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte(`
 [[plugins]]
 name = "project-only"
@@ -2837,7 +2840,10 @@ command = "project-only"
 func TestAddMCPServerRejectsProjectNameCollision(t *testing.T) {
 	isolateControlConfigHome(t)
 	workspace := t.TempDir()
-	if err := os.WriteFile(filepath.Join(workspace, "corvus.toml"), []byte(`
+	if err := os.MkdirAll(filepath.Join(workspace, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace, ".corvus", "config.toml"), []byte(`
 [[plugins]]
 name = "shared"
 command = "project-shared"
@@ -2894,7 +2900,10 @@ func TestConnectConfiguredProjectMCPIsTrustedByDefault(t *testing.T) {
 		})
 	}))
 	defer server.Close()
-	if err := os.WriteFile(filepath.Join(workspace, "corvus.toml"), []byte(fmt.Sprintf(`
+	if err := os.MkdirAll(filepath.Join(workspace, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace, ".corvus", "config.toml"), []byte(fmt.Sprintf(`
 [[plugins]]
 name = "project-docs"
 type = "http"
@@ -3070,7 +3079,10 @@ func TestRemoveMCPServerRemovesUnconnectedLazyPlaceholder(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData", "Roaming"))
 	t.Chdir(dir)
-	if err := os.WriteFile("corvus.toml", []byte(`
+	if err := os.MkdirAll(".corvus", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(".corvus", "config.toml"), []byte(`
 [[plugins]]
 name = "mock"
 command = "mock-mcp"
@@ -3113,7 +3125,10 @@ func TestConfiguredMCPNamesUseControllerWorkspaceInsteadOfProcessCWD(t *testing.
 	workspace := t.TempDir()
 	other := t.TempDir()
 	t.Chdir(other)
-	if err := os.WriteFile(filepath.Join(workspace, "corvus.toml"), []byte(`
+	if err := os.MkdirAll(filepath.Join(workspace, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace, ".corvus", "config.toml"), []byte(`
 [[plugins]]
 name = "workspace-mcp"
 command = "workspace-mcp"
@@ -3968,7 +3983,7 @@ func TestApprovalPersistentBashPrefixRememberRule(t *testing.T) {
 		}),
 		OnRemember: func(rule string) RememberResult {
 			remembered = rule
-			return RememberResult{Rule: rule, Path: "corvus.toml", Saved: true}
+			return RememberResult{Rule: rule, Path: filepath.Join(".corvus", "config.toml"), Saved: true}
 		},
 	})
 	go func() {
@@ -3982,7 +3997,7 @@ func TestApprovalPersistentBashPrefixRememberRule(t *testing.T) {
 	if remembered != "Bash(go test:*)" {
 		t.Fatalf("remembered rule = %q, want Bash(go test:*)", remembered)
 	}
-	if len(notices) != 1 || !strings.Contains(notices[0], "Bash(go test:*)") || !strings.Contains(notices[0], "corvus.toml") {
+	if len(notices) != 1 || !strings.Contains(notices[0], "Bash(go test:*)") || !strings.Contains(notices[0], ".corvus/config.toml") {
 		t.Fatalf("notices = %v, want saved rule notice", notices)
 	}
 }
@@ -4002,7 +4017,7 @@ func TestApprovalPersistenceFailureKeepsSessionGrant(t *testing.T) {
 			}
 		}),
 		OnRemember: func(rule string) RememberResult {
-			return RememberResult{Rule: rule, Path: "corvus.toml", Err: errors.New("disk unavailable")}
+			return RememberResult{Rule: rule, Path: filepath.Join(".corvus", "config.toml"), Err: errors.New("disk unavailable")}
 		},
 	})
 	go func() {
@@ -4042,7 +4057,7 @@ func TestPlanModeReadOnlyTrustApprovalPersistsBashCommandTrust(t *testing.T) {
 		}),
 		OnRememberPlanModeReadOnlyCommand: func(prefix string) PlanModeReadOnlyCommandTrustResult {
 			rememberedPrefix = prefix
-			return PlanModeReadOnlyCommandTrustResult{Prefix: prefix, Path: "corvus.toml", Saved: true}
+			return PlanModeReadOnlyCommandTrustResult{Prefix: prefix, Path: filepath.Join(".corvus", "config.toml"), Saved: true}
 		},
 	})
 

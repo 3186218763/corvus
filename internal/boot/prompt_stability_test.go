@@ -2,6 +2,7 @@ package boot
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -20,7 +21,7 @@ func TestBuildComposesByteStableSystemPrompt(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]

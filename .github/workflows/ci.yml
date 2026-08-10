@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build-vet-test (Go ${{ matrix.go-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ["1.25", "1.26"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: gofmt
+        run: |
+          files=$(gofmt -l .)
+          if [ -n "$files" ]; then
+            echo "gofmt required on:"
+            echo "$files"
+            exit 1
+          fi
+      - name: Test
+        run: go test ./... -timeout 20m
+      - name: Race (core packages)
+        run: go test -race -timeout 20m ./internal/agent/... ./internal/control/... ./internal/jobs/... ./internal/event/... ./internal/checkpoint/... ./internal/workspacelease/... ./internal/hook/... ./internal/plugin/...
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: golangci-lint (gate, .golangci.yml)
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12
+      - name: golangci-lint (complexity report, never blocks)
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12
+          args: --config=.golangci-agent-complexity.yml --issues-exit-code=0

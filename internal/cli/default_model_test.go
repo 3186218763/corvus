@@ -162,7 +162,10 @@ func TestResolveServeModelUsesGlobalChatFallback(t *testing.T) {
 	if err := cfg.SaveTo(config.UserConfigPath()); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile("corvus.toml", []byte(`
+	if err := os.MkdirAll(".corvus", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(".corvus", "config.toml"), []byte(`
 default_model = "project/project-chat"
 
 [[providers]]

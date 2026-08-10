@@ -11,10 +11,15 @@ go build -o corvus ./cmd/corvus
 
 ## Configure
 
-Copy the example configuration, then set a provider API key. Resolution order is
-project `.env` first, then Corvus's credentials store (`corvus setup` /
-user config dir). The first TUI launch can also guide provider setup when no
-usable model is configured.
+Configuration lives in `.corvus/config.toml`:
+
+- User/global: `~/.corvus/config.toml` (highest priority)
+- Project: `<project root>/.corvus/config.toml` (the old `./corvus.toml` layout was removed)
+
+Set the API key directly with `api_key` on a `[[providers]]` entry (see
+`corvus.example.toml`) instead of environment variables; the user
+`~/.corvus/config.toml` wins over the project config. The first TUI launch can
+also guide provider setup when no usable model is configured.
 
 ```sh
 corvus

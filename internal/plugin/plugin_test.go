@@ -1574,6 +1574,61 @@ func TestAuthorizeSpecLaunchRecordsInstallConsentWithoutStartingServer(t *testin
 	}
 }
 
+// TestNewLaunchApprovalErrorMarksFailureRequiresApproval pins the exported
+// constructor boot uses to record a declined (or unaskable) project MCP: the
+// recorded failure must surface RequiresLaunchApproval=true to the /mcp panel,
+// and the error stays compatible with errors.As-based detection when wrapped.
+func TestNewLaunchApprovalErrorMarksFailureRequiresApproval(t *testing.T) {
+	host := NewHost()
+	defer host.Close()
+	spec := Spec{Name: "declined", Command: "server", ConfigSource: "project_config", RequireLaunchApproval: true}
+	host.RecordFailure(spec, NewLaunchApprovalError(spec.Name, false))
+	failures := host.Failures()
+	if len(failures) != 1 || failures[0].Name != "declined" || !failures[0].RequiresLaunchApproval {
+		t.Fatalf("failures = %+v, want RequiresLaunchApproval entry for declined", failures)
+	}
+	if !strings.Contains(failures[0].Error, "authorizes") {
+		t.Fatalf("failure error = %q, want launch-approval wording", failures[0].Error)
+	}
+	if err := NewLaunchApprovalError("x", true); !strings.Contains(err.Error(), "changed") {
+		t.Fatalf("changed launch-approval error = %v, want changed wording", err)
+	}
+	if !requiresLaunchApproval(fmt.Errorf("persist: %w", NewLaunchApprovalError("x", false))) {
+		t.Fatal("wrapped NewLaunchApprovalError must be detected by requiresLaunchApproval")
+	}
+}
+
+// TestAuthorizeProjectSpecLaunchRequiresReapprovalAfterConfigChange pins the
+// exact-identity contract: after approval, changing the server's args
+// invalidates the grant and the changed identity reports unauthorized+changed.
+func TestAuthorizeProjectSpecLaunchRequiresReapprovalAfterConfigChange(t *testing.T) {
+	manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), "/workspace")
+	spec := Spec{
+		Name: "changing", Command: os.Args[0], Args: []string{"-test.run=TestHelperProcess", "--", "v1"},
+		LaunchManager: manager, ConfigSource: "project_config", RequireLaunchApproval: true,
+	}
+	ctx := context.Background()
+	if err := AuthorizeProjectSpecLaunch(ctx, spec); err != nil {
+		t.Fatalf("AuthorizeProjectSpecLaunch: %v", err)
+	}
+	if resolved := ResolveStoredAuthorization(ctx, spec); !resolved.ServerAuthorized() {
+		t.Fatal("exact-identity grant should authorize the unchanged server")
+	}
+	changed := spec
+	changed.Args = []string{"-test.run=TestHelperProcess", "--", "v2"}
+	if resolved := ResolveStoredAuthorization(ctx, changed); resolved.ServerAuthorized() {
+		t.Fatal("changed command/args must not inherit the old grant")
+	}
+	identity, err := projectLaunchIdentityDigest(ctx, changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorized, changedFlag, err := manager.LaunchAuthorized(changed.Name, changed.ConfigSource, identity)
+	if err != nil || authorized || !changedFlag {
+		t.Fatalf("changed identity launch check = (authorized=%v changed=%v err=%v), want unauthorized+changed", authorized, changedFlag, err)
+	}
+}
+
 func TestAuthorizeSpecLaunchDoesNotAddPersistentTransportRestrictions(t *testing.T) {
 	manager := mcplaunch.NewManager(filepath.Join(t.TempDir(), mcplaunch.StateFilename), "/workspace")
 	spec := Spec{

@@ -42,7 +42,10 @@ auto_start = false
 	writeConfig := func(root, token string) {
 		t.Helper()
 		raw := minimalTestModelTOML + strings.ReplaceAll(pluginConfig, "TOKEN", token)
-		if err := os.WriteFile(filepath.Join(root, "corvus.toml"), []byte(raw), 0o644); err != nil {
+		if err := os.MkdirAll(filepath.Join(root, ".corvus"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, ".corvus", "config.toml"), []byte(raw), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -60,7 +63,7 @@ auto_start = false
 	model := chatTUI{ctrl: ctrl, pendingCommit: &pending}
 	model.clearMCPAuthentication(mcpServerView{Name: "dida"})
 
-	controllerRaw, err := os.ReadFile(filepath.Join(controllerRoot, "corvus.toml"))
+	controllerRaw, err := os.ReadFile(filepath.Join(controllerRoot, ".corvus", "config.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +71,7 @@ auto_start = false
 		!strings.Contains(string(controllerRaw), "workspace=main") {
 		t.Fatalf("controller config authentication was not cleared:\n%s", controllerRaw)
 	}
-	cwdRaw, err := os.ReadFile(filepath.Join(cwdRoot, "corvus.toml"))
+	cwdRaw, err := os.ReadFile(filepath.Join(cwdRoot, ".corvus", "config.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}

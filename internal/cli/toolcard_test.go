@@ -41,7 +41,7 @@ func TestBashToolCardHighlightsAndContinues(t *testing.T) {
 func TestRenderToolOutputPreviewCapsFiveLines(t *testing.T) {
 	var b strings.Builder
 	for i := 0; i < 10; i++ {
-		b.WriteString(fmt.Sprintf("line-%d\n", i))
+		fmt.Fprintf(&b, "line-%d\n", i)
 	}
 	block := renderToolOutputPreview(b.String(), 80, 5)
 	plain := ansi.Strip(block)

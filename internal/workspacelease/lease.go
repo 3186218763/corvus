@@ -11,15 +11,27 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 const retryInterval = 75 * time.Millisecond
+
+// DefaultRetainGrace bounds how long RetainUntil keeps the write lease for a
+// background job that never reports completion. When it fires, the hold is
+// released and the leak is counted and logged; the job itself keeps running.
+const DefaultRetainGrace = 5 * time.Minute
+
+// DefaultAcquireTimeout bounds how long AcquireWrite waits for the write lease
+// before failing. It is a conservative safety net for a peer session that
+// wedged while holding the lock; healthy acquisitions complete in milliseconds.
+const DefaultAcquireTimeout = 10 * time.Minute
 
 var errHeld = errors.New("workspace write lease is held")
 
@@ -30,10 +42,38 @@ type WaitNotice func()
 // Owner is one Delivery session's re-entrant workspace lease. One Owner may be
 // shared by the root agent and all of its subagents. Different sessions must
 // use different Owners, even when they share a workspace.
+// Option configures an Owner.
+type Option func(*Owner)
+
+// WithRetainGrace bounds how long RetainUntil keeps an acquired lease for a
+// background job whose completion is never observed. A non-positive value
+// waits forever (legacy behavior). Defaults to DefaultRetainGrace.
+func WithRetainGrace(d time.Duration) Option {
+	return func(o *Owner) {
+		if d > 0 {
+			o.retainGrace = d
+		}
+	}
+}
+
+// WithAcquireTimeout bounds how long AcquireWrite waits for the write lease.
+// A non-positive value waits forever (legacy behavior). Defaults to
+// DefaultAcquireTimeout.
+func WithAcquireTimeout(d time.Duration) Option {
+	return func(o *Owner) {
+		if d > 0 {
+			o.acquireTimeout = d
+		}
+	}
+}
+
 type Owner struct {
 	lockPath string
 	onWait   WaitNotice
 	local    *localLock
+
+	retainGrace    time.Duration
+	acquireTimeout time.Duration
 
 	mu            sync.Mutex
 	activeRuns    int
@@ -43,6 +83,9 @@ type Owner struct {
 	waiting       bool
 	acquireDone   chan struct{}
 	releaseSystem func()
+	// leaked counts RetainUntil holds released by the grace timer instead of
+	// the job's completion.
+	leaked atomic.Uint64
 }
 
 // State is a sanitized process-local snapshot used by Desktop to explain a
@@ -74,7 +117,7 @@ var localRegistry = struct {
 // New returns a Delivery-session lease owner for workspaceRoot. lockDir must be
 // shared by Corvus processes for cross-process protection; it is kept outside
 // the workspace so acquiring a lease never dirties user files.
-func New(workspaceRoot, lockDir string, onWait WaitNotice) (*Owner, error) {
+func New(workspaceRoot, lockDir string, onWait WaitNotice, opts ...Option) (*Owner, error) {
 	canonical, err := CanonicalWorkspace(workspaceRoot)
 	if err != nil {
 		return nil, err
@@ -98,11 +141,19 @@ func New(workspaceRoot, lockDir string, onWait WaitNotice) (*Owner, error) {
 	}
 	localRegistry.Unlock()
 
-	return &Owner{
-		lockPath: filepath.Join(lockDir, key+".lock"),
-		onWait:   onWait,
-		local:    local,
-	}, nil
+	o := &Owner{
+		lockPath:       filepath.Join(lockDir, key+".lock"),
+		onWait:         onWait,
+		local:          local,
+		retainGrace:    DefaultRetainGrace,
+		acquireTimeout: DefaultAcquireTimeout,
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(o)
+		}
+	}
+	return o, nil
 }
 
 // CanonicalWorkspace returns the stable identity used to key a workspace. It
@@ -189,6 +240,11 @@ func (o *Owner) AcquireWrite(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if o.acquireTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, o.acquireTimeout)
+		defer cancel()
+	}
 	for {
 		o.mu.Lock()
 		if o.acquired {
@@ -243,7 +299,25 @@ func (o *Owner) RetainUntil(done <-chan struct{}) {
 	o.background++
 	o.mu.Unlock()
 	go func() {
-		<-done
+		var timer *time.Timer
+		var timeout <-chan time.Time
+		if o.retainGrace > 0 {
+			timer = time.NewTimer(o.retainGrace)
+			timeout = timer.C
+		}
+		select {
+		case <-done:
+			if timer != nil {
+				timer.Stop()
+			}
+		case <-timeout:
+			// The job never reported completion. Release the lease hold anyway
+			// (bounded by retainGrace) and count the leak so operators can see
+			// background jobs that outlive their lease.
+			o.leaked.Add(1)
+			slog.Warn("workspace lease: background job exceeded retain grace; releasing lease hold",
+				"grace", o.retainGrace)
+		}
 		o.mu.Lock()
 		if o.background > 0 {
 			o.background--
@@ -254,6 +328,15 @@ func (o *Owner) RetainUntil(done <-chan struct{}) {
 			release()
 		}
 	}()
+}
+
+// LeakedRetentions reports how many RetainUntil holds were released by the
+// grace timer because the retaining background job never reported completion.
+func (o *Owner) LeakedRetentions() uint64 {
+	if o == nil {
+		return 0
+	}
+	return o.leaked.Load()
 }
 
 func (o *Owner) releaseIfIdleLocked() func() {

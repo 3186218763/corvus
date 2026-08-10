@@ -15,7 +15,7 @@ var English = Messages{
 	NoKey:           "no key",
 	Ready:           "ready",
 	GetStarted:      "Get started",
-	StepScaffold:    "scaffold corvus.toml",
+	StepScaffold:    "scaffold .corvus/config.toml",
 	StepSetKey:      "set API key",
 
 	StepChatDesc: "interactive session",
@@ -152,7 +152,7 @@ var English = Messages{
 
 	OutputStyleNone:           "no output styles available",
 	OutputStyleHeader:         "output styles:",
-	OutputStyleHint:           "set agent.output_style in corvus.toml to apply one (takes effect next session)",
+	OutputStyleHint:           "set agent.output_style in .corvus/config.toml to apply one (takes effect next session)",
 	ThemeHeader:               "themes:",
 	ThemeHint:                 "switch with /theme <auto|light|dark|style>; the input box tint follows the terminal background detected at startup",
 	ThemeChangedFmt:           "theme switched to %s / %s",
@@ -230,7 +230,7 @@ var English = Messages{
 	SkillPickerStatusNotDir:      "not-directory",
 	SkillPickerStatusUnreadable:  "unreadable",
 	SlashPromptEmpty:             "the MCP prompt returned no content to send",
-	SlashMCPNone:                 "no MCP servers configured — add a [[plugins]] entry in corvus.toml",
+	SlashMCPNone:                 "no MCP servers configured — add a [[plugins]] entry in .corvus/config.toml",
 	CtrlCQuitHint:                "press Ctrl+C again to quit",
 	CompHintSlash:                "↑/↓ move · Tab/Enter select · Esc close",
 	CompHintFile:                 "↑/↓ move · Tab/Enter open folder or pick file · Esc close",
@@ -325,7 +325,7 @@ var English = Messages{
 	ListHooksHeaderFmt:  "hooks (%d active)",
 	ListHooksNone:       "hooks: none active — configure in .corvus/settings.json (project) or <Corvus home>/settings.json (global)",
 	ListMcpHeader:       "mcp servers",
-	ListMcpNone:         "mcp: no servers connected — add one in corvus.toml ([[plugins]]) or a project .mcp.json",
+	ListMcpNone:         "mcp: no servers connected — add one in .corvus/config.toml ([[plugins]]) or a project .mcp.json",
 
 	MemoryNone:                "memory: none — add with “/remember <note>” or create CORVUS.md in the project root",
 	MemoryLoaded:              "memory loaded:",
@@ -381,7 +381,7 @@ var English = Messages{
 
 	SelectProvidersLabel:     "Select providers to enable",
 	EnterAPIKeysHeader:       "Enter API keys (Enter to skip and set later):",
-	MissingKeyIntro:          "corvus.toml is ready — just an API key away.",
+	MissingKeyIntro:          ".corvus/config.toml is ready — just an API key away.",
 	WroteFileFmt:             "Wrote %s",
 	SetupComplete:            "Setup complete.",
 	SetupCancelled:           "setup cancelled.",
@@ -432,7 +432,7 @@ var English = Messages{
 	NoModelsAvailableFmt:       "%s: no models available, skipping",
 	CustomFetchEmpty:           "/models returned an empty list — falling back to manual entry",
 	AnthropicFetchEmpty:        "/models returned an empty list — Anthropic-compatible providers usually don't expose one, falling back to manual entry",
-	SkipStaleCustomEntryFmt:    "skipping stale %q entry from corvus.toml (pointing at %s) — please remove it from [[providers]]",
+	SkipStaleCustomEntryFmt:    "skipping stale %q entry from .corvus/config.toml (pointing at %s) — please remove it from [[providers]]",
 	APIKeyAlreadySetFmt:        "reusing existing value for %s",
 	APIKeyResetPromptFmt:       "Re-enter %s?",
 	InvalidAPIKeyEnvFmt:        "%q is not a valid API Key variable name. Use letters, numbers, and underscores (for example, MY_PROVIDER_API_KEY); do not enter a model name.",
@@ -506,6 +506,7 @@ Starts the interactive terminal UI. Type /help in the TUI to list commands.
 Options:
   --model NAME
   --profile economy|balanced|delivery
+  --max-steps N
   --continue, -c
   --resume[=QUERY], -r[=QUERY]
   --copy
@@ -514,7 +515,7 @@ Options:
   --effort LEVEL
   --permission-mode MODE
   --add-dir PATH
-  --allowed-tools RULES
+  --allowed-tools RULES, --allowedTools
   --help, -h
   --version, -v`,
 }

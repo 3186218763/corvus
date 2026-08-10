@@ -66,6 +66,7 @@ var ErrTurnRunning = errors.New("turn already running")
 var (
 	errTurnRunningRotation = errors.New("cannot start a new session while a turn is running")
 	errRotationInProgress  = errors.New("cannot start a new session while another session change is in progress")
+	errControllerClosed    = errors.New("controller is closed")
 )
 
 // errNoSessionPath is returned by snapshot when a session has content to persist
@@ -210,8 +211,15 @@ type Controller struct {
 
 	// mu guards the run state; every critical section under it is short and
 	// non-blocking.
-	mu        sync.Mutex
-	cancel    context.CancelFunc
+	mu     sync.Mutex
+	cancel context.CancelFunc
+	// bgCtx/bgCancel own the background slash-command goroutines launched by
+	// submitCommandOrTurn (/compact /new /clear). Close cancels them and waits
+	// (bgWG) so a late /new cannot swap the session or /compact cannot rewrite
+	// the snapshot after teardown has released the session lease.
+	bgCtx     context.Context
+	bgCancel  context.CancelFunc
+	bgWG      sync.WaitGroup
 	running   bool
 	finishing bool // TurnDone is still being delivered; park a replacement turn
 	canceling bool
@@ -487,6 +495,7 @@ func New(opts Options) *Controller {
 	if pluginCtx == nil {
 		pluginCtx = context.Background()
 	}
+	bgCtx, bgCancel := context.WithCancel(context.Background())
 	runtimeProfile := opts.RuntimeProfile
 	if runtimeProfile == "" {
 		runtimeProfile = capability.ProfileBalanced
@@ -495,6 +504,8 @@ func New(opts Options) *Controller {
 		opts.Hooks.SetSessionID(agent.BranchID(opts.SessionPath))
 	}
 	c := &Controller{
+		bgCtx:                             bgCtx,
+		bgCancel:                          bgCancel,
 		runner:                            opts.Runner,
 		executor:                          opts.Executor,
 		guardianSess:                      opts.Guardian,
@@ -1175,35 +1186,45 @@ func (c *Controller) submitCommandOrTurn(trimmed, input, display string, scopedR
 			return c.runEditedGoalLoopWithRawDisplay(ctx, input, raw, display, editedOriginal)
 		}
 	}
+	// Background slash commands (/compact /new /clear) run under the
+	// controller's background context and are tracked by bgWG so Close can
+	// cancel them and wait for the goroutines to unwind: a /new arriving after
+	// Close must not swap the session or fire session hooks, and a /compact
+	// must not rewrite the snapshot once the session lease has been released.
 	switch {
 	case trimmed == "/compact" || strings.HasPrefix(trimmed, "/compact "):
 		focus := strings.TrimSpace(strings.TrimPrefix(trimmed, "/compact"))
-		go func() {
-			if err := c.Compact(context.Background(), focus); err != nil {
+		c.launchBackgroundCommand(func() {
+			if err := c.Compact(c.bgCtx, focus); err != nil {
 				c.notice("compaction failed: " + err.Error())
-			} else {
-				c.notice("compacted")
-				if err := c.SnapshotRewrite(); err != nil {
-					slog.Warn("controller: snapshot after compact", "err", err)
-				}
+				return
 			}
-		}()
+			c.notice("compacted")
+			if c.isClosed() {
+				// Teardown released the session lease; writing the snapshot now
+				// would resurrect the transcript after Close.
+				return
+			}
+			if err := c.SnapshotRewrite(); err != nil {
+				slog.Warn("controller: snapshot after compact", "err", err)
+			}
+		})
 	case trimmed == "/new":
-		go func() {
+		c.launchBackgroundCommand(func() {
 			if err := c.NewSession(); err != nil {
 				c.notice("new session failed: " + err.Error())
 			} else {
 				c.notice("new session")
 			}
-		}()
+		})
 	case trimmed == "/clear":
-		go func() {
+		c.launchBackgroundCommand(func() {
 			if err := c.ClearSession(); err != nil {
 				c.notice("clear context failed: " + err.Error())
 			} else {
 				c.notice("context cleared")
 			}
-		}()
+		})
 	case strings.HasPrefix(trimmed, "/mcp__"):
 		c.runGuarded(func(ctx context.Context) error {
 			sent, found, err := c.MCPPrompt(ctx, trimmed)
@@ -1760,6 +1781,9 @@ func (c *Controller) Running() bool {
 func (c *Controller) beginRotation() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.closed {
+		return errControllerClosed
+	}
 	if c.running || c.finishing {
 		return errTurnRunningRotation
 	}
@@ -1768,6 +1792,31 @@ func (c *Controller) beginRotation() error {
 	}
 	c.rotating = true
 	return nil
+}
+
+// isClosed reports whether the controller has been torn down.
+func (c *Controller) isClosed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
+}
+
+// launchBackgroundCommand runs body on a tracked background goroutine unless
+// the controller is already closed. The closed check and the WaitGroup Add are
+// atomic under c.mu, so a Submit racing Close can never Add to bgWG while
+// Close is waiting on it (WaitGroup misuse).
+func (c *Controller) launchBackgroundCommand(body func()) {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return
+	}
+	c.bgWG.Add(1)
+	c.mu.Unlock()
+	go func() {
+		defer c.bgWG.Done()
+		body()
+	}()
 }
 
 func (c *Controller) endRotation() {
@@ -4760,7 +4809,7 @@ func (c *Controller) AddMCPServer(e config.PluginEntry) (int, error) {
 
 // ConnectMCPServer connects an MCP server entry for this session without writing
 // it to config. Desktop owns config placement so it can keep user-level settings
-// out of project corvus.toml while preserving the CLI AddMCPServer semantics.
+// out of project .corvus/config.toml while preserving the CLI AddMCPServer semantics.
 func (c *Controller) ConnectMCPServer(e config.PluginEntry) (int, error) {
 	return c.connectMCPServer(e)
 }
@@ -5181,7 +5230,34 @@ func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
 		if c.cleanup != nil {
 			c.cleanup()
 		}
+		if c.bgCancel != nil {
+			// Cancel in-flight background slash commands so their sessions ops
+			// fail fast at beginRotation and the summarizer unwinds.
+			c.bgCancel()
+		}
 	})
+	// Wait for the background command goroutines so a late /new /compact /clear
+	// cannot mutate the session after Close returned (and after the session
+	// lease has been released by the caller).
+	c.waitForBackgroundCommands()
+}
+
+// bgCommandGrace bounds Close's wait for in-flight background slash commands.
+// Commands observe cancellation promptly; the bound only fires when one ignores
+// it. Kept as a package variable so tests can shrink it.
+var bgCommandGrace = 15 * time.Second
+
+func (c *Controller) waitForBackgroundCommands() {
+	done := make(chan struct{})
+	go func() {
+		c.bgWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(bgCommandGrace):
+		slog.Warn("controller: background slash commands did not exit within grace", "grace", bgCommandGrace)
+	}
 }
 
 // Jobs returns the still-running background jobs for the status bar (nil when

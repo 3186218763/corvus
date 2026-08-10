@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"regexp"
 	"strings"
 	"unicode"
 
@@ -522,24 +521,11 @@ func (m chatTUI) renderDetachedComposerInput() string {
 	return display.View()
 }
 
-// sgrResetRe matches the reset codes the textarea/prompt styling emits
-// ("\x1b[0m" and "\x1b[m"). Color-setting SGRs are deliberately not matched so
-// selection backgrounds survive painting.
-var sgrResetRe = regexp.MustCompile(`\x1b\[0?m`)
-
 // composerFieldBackground intentionally returns no surface fill. A persistent
 // full-row wash made the composer read as a cement-grey card across terminals;
 // the focused cursor and mode badge already identify the editable region.
 func composerFieldBackground() string {
 	return ""
-}
-
-// rearmFieldBackground re-issues the field background after every reset code
-// inside a rendered line so no textarea SGR leaves a hollow cell.
-func rearmFieldBackground(s, bg string) string {
-	return sgrResetRe.ReplaceAllStringFunc(s, func(m string) string {
-		return m + bg
-	})
 }
 
 // renderComposerField leaves the textarea transparent. The former full-width

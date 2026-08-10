@@ -639,7 +639,7 @@ func (c *Config) ClearPluginAuthentication(name string) (PluginEntry, bool, erro
 // ClearPluginAuthenticationInSource clears auth material in the file that actually
 // owns the MCP server. Load() merges user/project TOML and project .mcp.json into
 // one Config, so callers must not mutate that merged view and Save() it back: a
-// .mcp.json-only server would otherwise be serialized into corvus.toml or the
+// .mcp.json-only server would otherwise be serialized into .corvus/config.toml or the
 // user config. Source priority mirrors Load(): project TOML, user TOML, then the
 // project .mcp.json entry if TOML did not define that server.
 func ClearPluginAuthenticationInSource(name string) (PluginEntry, bool, string, error) {
@@ -648,14 +648,13 @@ func ClearPluginAuthenticationInSource(name string) (PluginEntry, bool, string, 
 
 // ClearPluginAuthenticationInSourceForRoot clears auth material in the source
 // that owns name for the supplied workspace. The root is explicit so a desktop
-// action cannot drift to another project's corvus.toml or .mcp.json after the
+// action cannot drift to another project's .corvus/config.toml or .mcp.json after the
 // user switches tabs while the action is waiting on a lifecycle lock.
 func ClearPluginAuthenticationInSourceForRoot(root, name string) (PluginEntry, bool, string, error) {
 	resolvedRoot := resolveRoot(root)
-	projectTOML := "corvus.toml"
+	projectTOML := ProjectConfigPathForRoot(resolvedRoot)
 	projectMCPJSON := mcpJSONFile
 	if resolvedRoot != "." {
-		projectTOML = filepath.Join(resolvedRoot, "corvus.toml")
 		projectMCPJSON = filepath.Join(resolvedRoot, mcpJSONFile)
 	}
 	lockPaths := append([]string{}, userConfigCandidatePaths()...)
@@ -702,10 +701,7 @@ func ClearPluginAuthenticationInSourceForRoot(root, name string) (PluginEntry, b
 }
 
 func pluginTOMLSourcePathForRoot(root, name string) string {
-	projectTOML := "corvus.toml"
-	if resolved := resolveRoot(root); resolved != "." {
-		projectTOML = filepath.Join(resolved, "corvus.toml")
-	}
+	projectTOML := ProjectConfigPathForRoot(resolveRoot(root))
 	paths := append([]string{projectTOML}, userConfigCandidatePaths()...)
 	for _, path := range paths {
 		if strings.TrimSpace(path) == "" {
@@ -727,10 +723,9 @@ func pluginTOMLSourcePathForRoot(root, name string) string {
 // the highest priority.
 func MCPConfigPathForEntry(root string, entry PluginEntry) string {
 	resolvedRoot := resolveRoot(root)
-	projectTOML := "corvus.toml"
+	projectTOML := ProjectConfigPathForRoot(resolvedRoot)
 	projectMCPJSON := mcpJSONFile
 	if resolvedRoot != "." {
-		projectTOML = filepath.Join(resolvedRoot, "corvus.toml")
 		projectMCPJSON = filepath.Join(resolvedRoot, mcpJSONFile)
 	}
 	switch entry.Source {
@@ -956,10 +951,9 @@ func RemovePluginFromEffectiveSourceForRoot(root, name string) (PluginEntry, boo
 // of a now-shadowed source.
 func mcpConfigSourcePathsForRoot(root string) []string {
 	resolvedRoot := resolveRoot(root)
-	projectTOML := "corvus.toml"
+	projectTOML := ProjectConfigPathForRoot(resolvedRoot)
 	projectMCPJSON := mcpJSONFile
 	if resolvedRoot != "." {
-		projectTOML = filepath.Join(resolvedRoot, "corvus.toml")
 		projectMCPJSON = filepath.Join(resolvedRoot, mcpJSONFile)
 	}
 	paths := append([]string{}, userConfigCandidatePaths()...)
@@ -1161,10 +1155,7 @@ func RemovePluginFromSourcesForRoot(root, name string) (bool, error) {
 
 	userPaths := userConfigCandidatePaths()
 	resolvedRoot := resolveRoot(root)
-	projectTOML := "corvus.toml"
-	if resolvedRoot != "." {
-		projectTOML = filepath.Join(resolvedRoot, "corvus.toml")
-	}
+	projectTOML := ProjectConfigPathForRoot(resolvedRoot)
 	isUserPath := false
 	for _, path := range userPaths {
 		if samePath(path, projectTOML) {
@@ -1272,10 +1263,10 @@ func validatePlugin(e PluginEntry) error {
 
 // SaveTo writes the configuration to path as annotated TOML, atomically: it
 // writes a sibling temp file then renames, so a crash mid-write can't leave a
-// half-written corvus.toml that fails to parse on next load. Parent directories
+// half-written .corvus/config.toml that fails to parse on next load. Parent directories
 // are created as needed.
 //
-// For project configs (./corvus.toml) the write is incremental: only sections
+// For project configs (.corvus/config.toml) the write is incremental: only sections
 // and fields that differ from built-in defaults are written, so the file never
 // accumulates fields that override the user's global config. User configs still
 // write the full annotated template since they are the user's own settings store.
@@ -2101,25 +2092,22 @@ func IsUserConfigPath(path string) bool {
 }
 
 // Save writes the configuration back to the file it was loaded from
-// (SourcePath), or to ./corvus.toml when none exists yet — the conventional
+// (SourcePath), or to .corvus/config.toml when none exists yet — the conventional
 // project-local target a fresh GUI session would create.
 func (c *Config) Save() error {
 	path := SourcePath()
 	if path == "" {
-		path = "corvus.toml"
+		path = ProjectConfigPathForRoot(".")
 	}
 	return c.SaveTo(path)
 }
 
 // SaveForRoot saves root's project config when it exists, falling back to the
-// user's global config when root has no corvus.toml. Existing project files
+// user's global config when root has no project config. Existing project files
 // are edited from their own TOML only, never from a runtime user+project merge.
 func (c *Config) SaveForRoot(root string) error {
 	root = resolveRoot(root)
-	projectTOML := "corvus.toml"
-	if root != "." {
-		projectTOML = filepath.Join(root, "corvus.toml")
-	}
+	projectTOML := ProjectConfigPathForRoot(root)
 	if _, err := os.Stat(projectTOML); err == nil {
 		projectCfg := LoadForEditWithoutCredentials(projectTOML)
 		return projectCfg.SaveTo(projectTOML)

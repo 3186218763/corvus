@@ -20,7 +20,10 @@ func writeVisionTestConfig(t *testing.T, root string) {
 		Models:       []string{"text-only", "vision-pro"},
 		VisionModels: []string{"vision-pro"},
 	}}
-	if err := cfg.SaveTo(filepath.Join(root, "corvus.toml")); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SaveTo(filepath.Join(root, ".corvus", "config.toml")); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
 }
@@ -110,7 +113,10 @@ func TestControllerInputImagesSkipsModelImagesWhenSelectedModelIsTextOnly(t *tes
 		Models:       []string{"text-only", "vision-pro"},
 		VisionModels: []string{"vision-pro"},
 	}}
-	if err := cfg.SaveTo(filepath.Join(workspace, "corvus.toml")); err != nil {
+	if err := os.MkdirAll(filepath.Join(workspace, ".corvus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SaveTo(filepath.Join(workspace, ".corvus", "config.toml")); err != nil {
 		t.Fatalf("save workspace config: %v", err)
 	}
 	path := filepath.Join(workspace, "diagram.png")

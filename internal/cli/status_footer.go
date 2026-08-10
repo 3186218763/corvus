@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	statusFooterIndent   = "  "
-	statusFooterGroupGap = 2
+	statusFooterIndent = "  "
 )
 
 func footerLabel(label string) string {
@@ -198,41 +197,6 @@ func renderContextStatusGroups(used, window int, ratio float64) []string {
 	}
 }
 
-// statusTelemetryGroups returns optional session metrics for the legacy data
-// band. Default density chrome no longer mounts CTX/jobs permanently (see
-// statusRightGroup); custom statusline still owns this path when configured.
-func (m chatTUI) statusTelemetryGroups() []string {
-	if m.statuslineCmd != "" && m.statuslineOut != "" {
-		return []string{m.statuslineOut}
-	}
-	// Jobs still surface when non-zero — actionable, not ambient metrics.
-	if m.ctrl != nil {
-		if jt := m.jobsTag(); jt != "" {
-			return []string{footerMetric(i18n.M.ChatStatusJobsLabel, footerInfo(ansi.Strip(jt)))}
-		}
-	}
-	return nil
-}
-
-func layoutStatusSides(left, right string, width int) string {
-	switch {
-	case right == "":
-		return wrapStatusGroups(left, width)
-	case left == "":
-		return rightAlignStatusGroup(right, width)
-	}
-	leftWidth := visibleWidth(left)
-	rightWidth := visibleWidth(right)
-	if leftWidth+statusFooterGroupGap+rightWidth <= width {
-		return left + strings.Repeat(" ", width-leftWidth-rightWidth) + right
-	}
-	// Once the two semantic halves no longer fit, switch layout deliberately:
-	// interaction groups wrap only at their separators, while model/work owns a
-	// new left-aligned row. This avoids the floating right-side orphan seen when
-	// a terminal crosses the medium-width breakpoint.
-	return wrapStatusGroups(left, width) + "\n" + statusFooterIndent + right
-}
-
 func wrapStatusGroups(line string, width int) string {
 	if width <= 0 || line == "" || visibleWidth(line) <= width {
 		return line
@@ -255,16 +219,6 @@ func wrapStatusGroups(line string, width int) string {
 	}
 	rows = append(rows, wrapStatusLine(current, width))
 	return strings.Join(rows, "\n")
-}
-
-func rightAlignStatusGroup(group string, width int) string {
-	if group == "" {
-		return ""
-	}
-	if visibleWidth(group) <= width {
-		return strings.Repeat(" ", width-visibleWidth(group)) + group
-	}
-	return wrapStatusLine(group, width)
 }
 
 // abbrevHome shortens a path under the user's home directory to "~".
@@ -339,18 +293,6 @@ func (m chatTUI) renderStatusBlock(primary string, width int) string {
 		width = 1
 	}
 	return layoutSingleStatusLine(primary, m.statusRightGroup(width), width)
-}
-
-// layoutDataBand packs the lean default telemetry groups (or custom statusline
-// output) left-to-right by semantic group. Git/balance/cache are not rendered
-// here; /status hosts that detail.
-func (m chatTUI) layoutDataBand(width int) string {
-	return packStatusGroups(m.statusTelemetryGroups(), width)
-}
-
-// layoutGitTelemetry is retained as a thin alias for older call sites/tests.
-func (m chatTUI) layoutGitTelemetry(width int) string {
-	return m.layoutDataBand(width)
 }
 
 func packStatusGroups(groups []string, width int) string {

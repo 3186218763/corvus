@@ -1,21 +1,38 @@
-﻿# Corvus TUI configuration template.
-# Copy to corvus.toml for local use. API keys go in .env.
+# corvus.example.toml —— 最小可用配置示例
+# 用法：复制为 <项目根>/.corvus/config.toml（项目级）或 ~/.corvus/config.toml（本机全局），
+# 然后按需修改。本文件只是示例，不会被程序读取；真实密钥请勿提交到仓库。
+#
+# 层级优先级（高 → 低）：
+#   flag（命令行参数） > 项目 .corvus/config.toml > ~/.corvus/config.toml > 内置默认值
+# 注意：[[providers]] 按 name 合并，同一名称的 provider 条目中，
+#   ~/.corvus/config.toml 优先于项目 .corvus/config.toml（例如在 ~/.corvus 里
+#   只写 api_key 即可覆盖项目里的同名 provider 密钥，无需重复完整定义）。
+# API key 直接写在条目的 api_key 字段（也可用旧的 api_key_env 从环境变量注入，
+# 但 api_key 优先）。
 
-default_model = "deepseek"
-# language = "zh"
+# 默认模型：格式为 "provider/model"；也可以只写 provider 名（取其 default 模型）
+# 或裸模型名（取第一个列出该模型的 provider）。
+default_model = "deepseek/deepseek-chat"
 
 [ui]
+# 界面主题：auto | dark | light（空 = 自动）
 theme = "auto"
 
 [agent]
-temperature = 0.0
+# 会话默认温度（0.0–2.0；省略则使用供应商默认值）
+temperature = 0.2
 
+# 供应商条目。kind 是协议类型（如 openai / anthropic / responses）；
+# OpenAI 兼容网关通常用 "openai"。
 [[providers]]
-name = "deepseek"
-kind = "openai"
-base_url = "https://api.deepseek.com"
-models = ["deepseek-v4-flash", "deepseek-v4-pro"]
-default = "deepseek-v4-flash"
-api_key_env = "DEEPSEEK_API_KEY"
-context_window = 1000000
-effort = "high"
+name = "deepseek"                      # 供应商名称（default_model 与 /provider 切换用）
+kind = "openai"                        # 协议类型
+base_url = "https://api.deepseek.com"  # OpenAI 兼容网关地址
+models = ["deepseek-chat", "deepseek-reasoner"]  # 该供应商可用的模型列表
+default = "deepseek-chat"              # 默认模型；省略时取 models[0]
+api_key = "sk-..."                     # API key 占位符：替换为真实密钥，请勿提交
+
+# 其他可选字段（示例中无需全部填写）：
+# context_window = 65536    # 上下文窗口大小（token）
+# effort = "medium"         # 思考力度（low | medium | high，取决于模型/供应商支持）
+# api_key_env = "DEEPSEEK_API_KEY"  # 从环境变量注入密钥；api_key 优先于 api_key_env

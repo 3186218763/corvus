@@ -14,7 +14,7 @@ func TestBuildMissingSystemPromptFileFallsBackToInlinePrompt(t *testing.T) {
 	isolateConfigHome(t)
 	root := robustTempDir(t)
 	t.Setenv("CORVUS_HOME", robustTempDir(t))
-	writeFile(t, root, "corvus.toml", systemPromptFileTestConfig("prompts/missing.md"))
+	writeFile(t, root, filepath.Join(".corvus", "config.toml"), systemPromptFileTestConfig("prompts/missing.md"))
 
 	var notices []event.Event
 	ctrl, err := Build(context.Background(), Options{
@@ -44,7 +44,7 @@ func TestBuildNonMissingSystemPromptReadFailureStaysFatal(t *testing.T) {
 	isolateConfigHome(t)
 	root := robustTempDir(t)
 	t.Setenv("CORVUS_HOME", robustTempDir(t))
-	writeFile(t, root, "corvus.toml", systemPromptFileTestConfig("prompts"))
+	writeFile(t, root, filepath.Join(".corvus", "config.toml"), systemPromptFileTestConfig("prompts"))
 	if err := os.MkdirAll(filepath.Join(root, "prompts"), 0o755); err != nil {
 		t.Fatal(err)
 	}

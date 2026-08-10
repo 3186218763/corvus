@@ -2,6 +2,7 @@ package boot
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestBuildUnknownModelErrorIsActionable(t *testing.T) {
 	t.Setenv("CORVUS_HOME", t.TempDir())
 	dir := robustTempDir(t)
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "legacy-missing"
 
 [[providers]]
@@ -61,7 +62,7 @@ api_key_env = "CORVUS_TEST_KEY_UNSET"
 
 	dir := robustTempDir(t)
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "deepseek-flash"
 `)
 
@@ -92,7 +93,7 @@ default_model = "deepseek-flash"
 func TestBuildMigratesLegacyBareMimoModelOverride(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "deepseek-flash"
 
 [[providers]]
@@ -120,7 +121,7 @@ func TestBuildNoticesMissingAPIKey(t *testing.T) {
 	const keyEnv = "CORVUS_MISSING_KEY_FOR_TEST"
 	dir := robustTempDir(t)
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "x"
 
 [[providers]]
@@ -160,7 +161,7 @@ func TestBuildDoesNotNoticeMissingAPIKeyForNoAuthLoopback(t *testing.T) {
 	dir := robustTempDir(t)
 	t.Chdir(dir)
 	t.Setenv(keyEnv, "")
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "local/model-a"
 
 [[providers]]
@@ -210,7 +211,7 @@ func TestBuildKeylessDefaultFallsBackToConfiguredProvider(t *testing.T) {
 
 	dir := robustTempDir(t)
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "deepseek/deepseek-v4-flash"
 
 [[providers]]
@@ -262,7 +263,7 @@ func TestBuildExplicitKeylessModelStillFails(t *testing.T) {
 
 	dir := robustTempDir(t)
 	t.Chdir(dir)
-	writeFile(t, dir, "corvus.toml", `
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "minimax/MiniMax-M3"
 
 [[providers]]

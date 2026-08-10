@@ -142,7 +142,7 @@ func writeTUIImageCapabilityConfig(t *testing.T, root string) {
 		Models:       []string{"text-only", "vision-pro"},
 		VisionModels: []string{"vision-pro"},
 	}}
-	if err := cfg.SaveTo(filepath.Join(root, "corvus.toml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(root, ".corvus", "config.toml")); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
 }
@@ -1314,7 +1314,7 @@ func TestPlanChangeApprovalStartsWithoutSelection(t *testing.T) {
 		t.Fatalf("plan approval selection = %d, want no default", m.approvalSelection)
 	}
 	banner := ansi.Strip(m.renderApprovalBanner())
-	if strings.Contains(banner, "›") || strings.Contains(banner, "›") {
+	if strings.Contains(banner, "›") {
 		t.Fatalf("plan approval banner preselected a choice:\n%s", banner)
 	}
 
@@ -2555,8 +2555,16 @@ func TestReasoningLanguageCommandPersistsAndUpdatesController(t *testing.T) {
 }
 
 func TestReasoningLanguageCommandWritesUserConfigNotProjectConfig(t *testing.T) {
-	isolateUserConfig(t)
-	projectPath := filepath.Join(mustGetwd(t), "corvus.toml")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CORVUS_CREDENTIALS_STORE", "file")
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
+	t.Chdir(t.TempDir())
+	projectPath := filepath.Join(mustGetwd(t), ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatalf("mkdir project config: %v", err)
+	}
 	if err := os.WriteFile(projectPath, []byte("[agent]\nreasoning_language = \"en\"\n"), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
@@ -2734,7 +2742,7 @@ func TestLanguageCommandAutoClearsLowerPriorityUserOverride(t *testing.T) {
 		t.Fatalf("save user config: %v", err)
 	}
 	projectCfg := config.Default()
-	if err := projectCfg.SaveTo("corvus.toml"); err != nil {
+	if err := projectCfg.SaveTo(filepath.Join(".corvus", "config.toml")); err != nil {
 		t.Fatalf("save project config: %v", err)
 	}
 

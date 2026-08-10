@@ -220,7 +220,7 @@ func pluginEntryFromMCPSpec(name string, s mcpServerSpec) PluginEntry {
 }
 
 // mergeMCPJSON appends servers from .mcp.json that the TOML config did not
-// already declare. corvus.toml's [[plugins]] win on a name collision: it is the
+// already declare. .corvus/config.toml's [[plugins]] win on a name collision: it is the
 // Corvus-specific, more explicit of the two, so it overrides the shared,
 // checked-in .mcp.json rather than the other way round.
 func (c *Config) mergeMCPJSON(entries []PluginEntry) {
@@ -231,7 +231,7 @@ func (c *Config) mergeMCPJSON(entries []PluginEntry) {
 	for _, e := range entries {
 		if i, exists := index[e.Name]; exists {
 			// Project configuration always wins over user-global configuration.
-			// Within one project, corvus.toml remains more specific than the
+			// Within one project, .corvus/config.toml remains more specific than the
 			// Claude-compatible .mcp.json file.
 			if e.Source == MCPSourceProjectMCPJSON && !c.Plugins[i].Source.ProjectScoped() {
 				c.Plugins[i] = e

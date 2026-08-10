@@ -30,6 +30,7 @@ const (
 	CredentialSourceCredentials = "credentials"
 	CredentialSourceHomeEnv     = "home_env"
 	CredentialSourceLegacy      = "legacy_credentials"
+	CredentialSourceConfigFile  = "config_file"
 )
 
 type CredentialSource struct {
@@ -145,19 +146,15 @@ func credentialEnvNamesForRoot(root string) []string {
 	root = resolveRoot(root)
 	cfg := Default()
 
-	projectTOML := "corvus.toml"
-	if root != "." {
-		projectTOML = filepath.Join(root, "corvus.toml")
-	}
 	if uc := userConfigLoadPath(); uc != "" {
 		_ = mergeFile(cfg, uc)
 	}
-	_ = mergeFile(cfg, projectTOML)
+	_ = mergeFile(cfg, ProjectConfigPathForRoot(root))
 	var tomlSources []string
 	if uc := userConfigLoadPath(); uc != "" {
 		tomlSources = append(tomlSources, uc)
 	}
-	tomlSources = append(tomlSources, projectTOML)
+	tomlSources = append(tomlSources, ProjectConfigPathForRoot(root))
 	if providers, _, _, ok, err := mergeTOMLProviders(tomlSources); err == nil && ok {
 		cfg.Providers = providers
 	}
@@ -222,6 +219,19 @@ func resolveProviderCredentialWithResolver(entry *ProviderEntry, resolver *Crede
 	if entry == nil {
 		return
 	}
+	// A key set directly with api_key in a config file wins. The user's
+	// ~/.corvus/config.toml is consulted before the project .corvus/config.toml
+	// (then the project .corvus/config.toml), so the local machine always wins.
+	if value, source, ok := configFileAPIKeyForProvider(resolverRoot(resolver), entry.Name); ok {
+		entry.resolvedAPIKey = value
+		entry.resolvedSource = source
+		return
+	}
+	if v := strings.TrimSpace(entry.APIKey); v != "" {
+		entry.resolvedAPIKey = v
+		entry.resolvedSource = CredentialSource{Kind: CredentialSourceConfigFile}
+		return
+	}
 	key := strings.TrimSpace(entry.APIKeyEnv)
 	if key == "" {
 		entry.resolvedAPIKey = ""
@@ -239,6 +249,51 @@ func resolveProviderCredentialWithResolver(entry *ProviderEntry, resolver *Crede
 	}
 	entry.resolvedAPIKey = res.Value
 	entry.resolvedSource = res.Source
+}
+
+// resolverRoot returns the workspace root a resolver is scoped to, or ".".
+func resolverRoot(resolver *CredentialResolver) string {
+	if resolver == nil {
+		return "."
+	}
+	return resolver.root
+}
+
+// configFileAPIKeyForProvider returns the api_key configured directly for
+// provider name in the user/project config files. Priority: the user's
+// ~/.corvus/config.toml first, then the project .corvus/config.toml — the
+// local machine wins over the project.
+func configFileAPIKeyForProvider(root, name string) (string, CredentialSource, bool) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", CredentialSource{}, false
+	}
+	var paths []string
+	if uc := userConfigLoadPath(); uc != "" {
+		paths = append(paths, uc)
+	}
+	paths = append(paths, ProjectConfigPathForRoot(root))
+	seen := map[string]bool{}
+	for _, path := range paths {
+		path = strings.TrimSpace(path)
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		var f Config
+		if _, err := decodeTOMLFile(path, &f); err != nil {
+			continue
+		}
+		for _, p := range f.Providers {
+			if strings.TrimSpace(p.Name) != name {
+				continue
+			}
+			if value := strings.TrimSpace(p.APIKey); value != "" {
+				return value, CredentialSource{Kind: CredentialSourceConfigFile, Path: path, Label: "config.toml"}, true
+			}
+		}
+	}
+	return "", CredentialSource{}, false
 }
 
 func (e *ProviderEntry) ResolveAPIKeyForRoot(root string) {
@@ -473,6 +528,8 @@ func credentialSourceLabel(source CredentialSource) string {
 		return "legacy Corvus credentials"
 	case CredentialSourceEnvironment:
 		return "environment variable"
+	case CredentialSourceConfigFile:
+		return "config.toml"
 	default:
 		return ""
 	}

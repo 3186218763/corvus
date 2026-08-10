@@ -14,7 +14,7 @@ import (
 // (live server connections), the tool Registry the executor reads each turn, and
 // the session-scoped context a hot-added stdio server binds its subprocess to.
 // Like approvalManager it holds the live plumbing behind its own lock, off c.mu —
-// the Controller keeps the config-facing orchestration (persisting corvus.toml
+// the Controller keeps the config-facing orchestration (persisting .corvus/config.toml
 // on add/remove, building specs from entries).
 //
 // mu guards the lazy host creation and host-pointer reads. The registry is

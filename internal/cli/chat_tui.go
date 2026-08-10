@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -456,6 +457,14 @@ const resetMouseTracking = ansi.ResetModeMouseX10 +
 // already drawn from the CompactionDone event; this only surfaces a failure and
 // snapshots on success.
 type compactDoneMsg struct{ err error }
+
+// compactSnapshotMsg reports that the post-compaction session snapshot write
+// finished, so the lease follow-up can run in Update.
+type compactSnapshotMsg struct{}
+
+// newSessionDoneMsg reports that an async /new rotation returned. The
+// post-rotation UI updates run in Update so the model is only touched there.
+type newSessionDoneMsg struct{ err error }
 
 // tuiShutdownMsg asks the live TUI model to persist its current controller and
 // quit. It is injected from the signal handler so shutdown does not snapshot a
@@ -1857,10 +1866,28 @@ func (m chatTUI) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case compactDoneMsg:
 		if msg.err != nil {
 			m.notice(fmt.Sprintf("%s: %v", i18n.M.SlashCompactFailed, msg.err))
-		} else {
-			_ = m.ctrl.Snapshot()
-			m.followSessionLease()
+			return m, nil
 		}
+		// The session file write can block on disk; keep it off the Update loop.
+		return m, func() tea.Msg {
+			_ = m.ctrl.Snapshot()
+			return compactSnapshotMsg{}
+		}
+
+	case compactSnapshotMsg:
+		m.followSessionLease()
+		return m, nil
+
+	case newSessionDoneMsg:
+		if msg.err != nil {
+			m.notice(fmt.Sprintf("%s: %v", i18n.M.SlashNewFailed, msg.err))
+			return m, nil
+		}
+		// Native scrollback keeps the old transcript; mark the fork with a fresh banner.
+		m.followSessionLease()
+		m.resetFreshContextView(false)
+		m.notice(i18n.M.SlashNewDone)
+		return m, nil
 
 	case tuiShutdownMsg:
 		if m.ctrl != nil {
@@ -2559,30 +2586,6 @@ const reasoningViewMax = 4096
 // reasoningTailLines caps how many trailing visual lines the live block shows.
 const reasoningTailLines = 12
 
-// streamReasoning appends a chunk and rewrites the live reasoning block from a
-// bounded trailing view (mirrors streamToolOutput), so the chain of thought is
-// visible while the model works without re-rendering the whole thing per token.
-func (m *chatTUI) streamReasoning(chunk string) {
-	m.reasoning.WriteString(chunk) // full text retained for verbose mode
-	if m.reasoningTextIdx < 0 {
-		return
-	}
-	m.reasoningView = append(m.reasoningView, chunk...)
-	if len(m.reasoningView) > reasoningViewMax {
-		drop := len(m.reasoningView) - reasoningViewMax
-		for drop < len(m.reasoningView) && !utf8.RuneStart(m.reasoningView[drop]) {
-			drop++
-		}
-		m.reasoningView = m.reasoningView[:copy(m.reasoningView, m.reasoningView[drop:])]
-	}
-	raw := string(m.reasoningView)
-	contentWidth := transcriptContentWidth(m.width, m.nativeScrollback)
-	m.setTranscriptBlock(m.reasoningTextIdx, reasoningBlock(raw, contentWidth, reasoningTailLines), transcriptSource{
-		kind: transcriptSourceReasoning, raw: raw, maxLines: reasoningTailLines,
-	})
-	m.transcriptDirty = true
-}
-
 // reasoningBlock renders raw thinking text as dim, width-wrapped lines under a
 // "⎿" connector that ties the block to the "▎ thinking…" marker above it. A
 // positive maxLines keeps only the trailing visual lines (the live view); 0
@@ -2782,10 +2785,6 @@ func (m *chatTUI) toggleShellOutput() {
 	m.shellTranscriptIdx[lastID] = lastIdx
 	m.setLiveBlock(lastIdx, m.renderTranscriptSource(src, m.width, markerNone))
 }
-
-// toolWorkingFrames is the braille spinner cycled once per second on the
-// "⎿ working · Ns" line of a tool that hasn't streamed output yet.
-var toolWorkingFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 // beginToolRunning arms streaming state for a just-dispatched tool without
 // painting a transcript "working…" wall (Codex keeps progress ambient above
@@ -4100,7 +4099,7 @@ func (m *chatTUI) toggleVerboseReasoning(notify bool) {
 		_ = m.cfg.SetShowReasoning(m.showReasoning)
 		path := config.SourcePath()
 		if path == "" {
-			path = "corvus.toml"
+			path = config.ProjectConfigPathForRoot(".")
 		}
 		saveErr = config.EditConfigFile(path, func(cfg *config.Config) error {
 			return cfg.SetShowReasoning(m.showReasoning)
@@ -4315,7 +4314,7 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		case planApprovalTool:
 			// No longer a tool, but guard anyway: the plan is the assistant's reply.
 		default:
-			if e.Tool.FileDiff.Diff != "" {
+			if e.Tool.Diff != "" {
 				// One reflowable source (not fixed-width commitLine rows): bars
 				// re-render at the live transcript width so narrow / non-fullscreen
 				// viewports never lipgloss-wrap mid-background.
@@ -4543,14 +4542,10 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 		return func() tea.Msg { return compactDoneMsg{err: m.ctrl.Compact(context.Background(), focus)} }
 	case "/new":
 		m.echoLocalCommand(input)
-		if err := m.ctrl.NewSession(); err != nil {
-			m.notice(fmt.Sprintf("%s: %v", i18n.M.SlashNewFailed, err))
-			return nil
-		}
-		m.followSessionLease()
-		// Native scrollback keeps the old transcript; mark the fork with a fresh banner.
-		m.resetFreshContextView(false)
-		m.notice(i18n.M.SlashNewDone)
+		// NewSession snapshots the old transcript and swaps the live session;
+		// run it off the Update loop like /compact so the TUI never freezes on
+		// the disk write.
+		return func() tea.Msg { return newSessionDoneMsg{err: m.ctrl.NewSession()} }
 	case "/clear":
 		m.echoLocalCommand(input)
 		m.clearConfirm = &clearConfirm{confirm: 1}
@@ -5280,20 +5275,6 @@ func renderUserBubble(line string, width int, planMode bool, current bool) strin
 	return body
 }
 
-// paintUserBubbleRow draws one soft-bg row: background from the first cell,
-// content (already styled), then NBSP pad so cell-diff redraws cannot erase the
-// wash with EL/ECH — same survival strategy as diffBar.
-func paintUserBubbleRow(content string, width int, bg string) string {
-	pad := width - visibleWidth(content)
-	if pad < 0 {
-		pad = 0
-	}
-	if content != "" {
-		content = reapplyBG(content, bg)
-	}
-	return bg + content + strings.Repeat(completionPadCell, pad) + ansiReset
-}
-
 var cliImageRefRe = regexp.MustCompile(`(?:^|\s)@\.corvus/attachments/clipboard-\d{8}-\d{6}\.\d+(?:-(?:\d{6}|[a-f0-9]{8}))?\.(?:png|jpg|jpeg|gif|webp)`)
 
 func displayLineForImageRefs(line string) string {
@@ -5307,9 +5288,35 @@ func displayLineForImageRefs(line string) string {
 
 // eventSink is the event.Sink the agent emits to in TUI mode. Each event
 // becomes an agentEventMsg. The channel is generously buffered so streaming
-// bursts don't back-pressure the agent goroutine.
+// bursts don't back-pressure the agent goroutine. Ordinary events are shed
+// (and counted) when the channel is full so a stalled render loop cannot
+// freeze the emitting turn or, through the shared synchronized sink, unrelated
+// emitters such as background-job notices. ApprovalRequest/AskRequest are
+// always delivered: the run loop blocks on the frontend's answer, so dropping
+// one would hang the turn.
 type eventSink struct {
-	ch chan<- event.Event
+	ch      chan<- event.Event
+	dropped atomic.Uint64
 }
 
-func (s *eventSink) Emit(e event.Event) { s.ch <- e }
+func (s *eventSink) Emit(e event.Event) {
+	switch e.Kind {
+	case event.ApprovalRequest, event.AskRequest:
+		s.ch <- e // reliable: a dropped prompt would wedge the turn forever
+	default:
+		select {
+		case s.ch <- e:
+		default:
+			s.dropped.Add(1)
+		}
+	}
+}
+
+// DroppedEvents reports how many ordinary events were shed because the TUI
+// event channel was full.
+func (s *eventSink) DroppedEvents() uint64 {
+	if s == nil {
+		return 0
+	}
+	return s.dropped.Load()
+}

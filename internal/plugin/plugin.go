@@ -722,6 +722,14 @@ type launchApprovalError struct {
 	changed bool
 }
 
+// NewLaunchApprovalError builds the launch-approval-required error that Host
+// failures map to RequiresLaunchApproval=true. boot uses it to record a
+// project-provided MCP server that was denied (or could not be asked) at the
+// startup approval gate, so the /mcp panel shows it as awaiting authorization.
+func NewLaunchApprovalError(server string, changed bool) error {
+	return &launchApprovalError{server: server, changed: changed}
+}
+
 func (e *launchApprovalError) Error() string {
 	if e.changed {
 		return fmt.Sprintf("project-provided MCP server %q changed; blocked before process or network startup and requires explicit re-authorization", e.server)

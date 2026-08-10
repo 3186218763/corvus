@@ -11,8 +11,13 @@ go build -o corvus ./cmd/corvus
 
 ## 配置与启动
 
-根据 `corvus.example.toml` 配置模型供应商，并设置对应的 API Key。
-密钥优先级：项目 `.env` > Corvus 凭据存储（`corvus setup` / 用户配置目录）。
+配置统一放在 `.corvus/config.toml`：
+
+- 本机全局：`~/.corvus/config.toml`（优先级最高）
+- 项目级：`<项目根>/.corvus/config.toml`（旧版 `./corvus.toml` 已移除）
+
+API key 直接写在供应商条目的 `api_key` 字段（参考 `corvus.example.toml`），
+不再走环境变量；本机 `~/.corvus/config.toml` 里的 `api_key` 优先于项目配置。
 没有可用模型配置时，首次启动 TUI 会提供供应商配置引导。
 
 ```sh

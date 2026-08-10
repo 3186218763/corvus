@@ -378,8 +378,13 @@ func (m *Manager) startInvalid(parentSession, kind, label string, validationErr 
 	m.jobs[key] = j
 	m.order = append(m.order, key)
 	m.mu.Unlock()
+	// Queue the drain note BEFORE publishing the terminal status so an observed
+	// terminal job implies the note is already queued (same invariant as the
+	// StartForSession run goroutine). The closing Notice is emitted after the
+	// status is published so a stalled sink can never delay job completion.
+	emit, ev := m.queueCompletion(parentSession, id, kind, label, Failed, validationErr)
 	close(j.done)
-	m.recordCompletion(parentSession, id, kind, label, Failed, validationErr)
+	m.emitCompletion(emit, ev)
 	return j
 }
 
@@ -493,13 +498,16 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 			j.noteArtifactErr("metadata: " + metaErr.Error())
 		}
 		j.mu.Unlock()
-		// Queue the drain note (and emit the closing Notice) BEFORE publishing the
-		// terminal status. Wait(nil)/resolve only block on Running jobs, so if the
-		// status flipped to terminal before the note was queued, a Wait could observe
-		// completion, skip j.done, and DrainCompletedNote would race ahead of the
-		// bookkeeping (the TestDrainMultiple -race flake). Recording first makes an
-		// observed terminal status imply the note is already queued.
-		m.recordCompletion(parentSession, id, kind, label, st, err)
+		// Queue the drain note BEFORE publishing the terminal status.
+		// Wait(nil)/resolve only block on Running jobs, so if the status flipped
+		// to terminal before the note was queued, a Wait could observe completion,
+		// skip j.done, and DrainCompletedNote would race ahead of the bookkeeping
+		// (the TestDrainMultiple -race flake). Queueing first makes an observed
+		// terminal status imply the note is already queued. The closing Notice is
+		// emitted AFTER close(j.done) (emitCompletion below) so a stalled sink
+		// cannot delay job completion or WaitForSession: a turn's wait tool
+		// (bgjobs.go, no timeout) must never hang on a blocked event consumer.
+		emit, ev := m.queueCompletion(parentSession, id, kind, label, st, err)
 
 		j.mu.Lock()
 		if j.status != Killed { // a concurrent Kill already published Killed — keep it
@@ -511,6 +519,7 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 		}
 		j.mu.Unlock()
 		close(j.done)
+		m.emitCompletion(emit, ev)
 	}()
 	return j
 }
@@ -745,9 +754,13 @@ func (m *Manager) monitorStalled(parentSession string, j *Job) {
 	}
 }
 
-// recordCompletion queues the finished-job summary for DrainCompletedNote and
-// emits a closing Notice (warn for a failure, info otherwise).
-func (m *Manager) recordCompletion(parentSession, id, kind, label string, st Status, err error) {
+// queueCompletion queues the finished-job summary for DrainCompletedNote and
+// computes the closing Notice (warn for a failure, info otherwise). It must run
+// before the job's terminal status is published so an observed terminal status
+// implies the note is already queued. The returned notice is emitted by
+// emitCompletion AFTER the status is published, so a stalled sink can never
+// delay close(j.done) or WaitForSession.
+func (m *Manager) queueCompletion(parentSession, id, kind, label string, st Status, err error) (bool, event.Event) {
 	tag := id
 	if label != "" {
 		tag = fmt.Sprintf("%s (%s)", id, label)
@@ -757,7 +770,7 @@ func (m *Manager) recordCompletion(parentSession, id, kind, label string, st Sta
 	m.mu.Lock()
 	if parentSession != "" && m.destroying[parentSession] {
 		m.mu.Unlock()
-		return
+		return false, event.Event{}
 	}
 	m.completed = append(m.completed, completion{
 		sessionID: parentSession,
@@ -776,8 +789,15 @@ func (m *Manager) recordCompletion(parentSession, id, kind, label string, st Sta
 	case Killed:
 		text = fmt.Sprintf("background %s killed: %s", kind, id)
 	}
+	return shouldEmit, event.Event{Kind: event.Notice, Level: level, Text: text, Detail: detail}
+}
+
+// emitCompletion publishes the closing Notice computed by queueCompletion. It
+// runs only after the terminal status (close(j.done)) is published, so a
+// blocked sink delays neither completion nor WaitForSession.
+func (m *Manager) emitCompletion(shouldEmit bool, ev event.Event) {
 	if shouldEmit {
-		m.sink.Emit(event.Event{Kind: event.Notice, Level: level, Text: text, Detail: detail})
+		m.sink.Emit(ev)
 	}
 }
 

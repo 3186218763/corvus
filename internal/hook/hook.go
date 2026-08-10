@@ -1,14 +1,19 @@
 // Package hook runs user-configured shell-command hooks around the agent loop:
 // PreToolUse / PostToolUse fire around each tool call, PermissionRequest fires
 // before a tool approval prompt is shown, UserPromptSubmit before a turn, Stop
-// after it. Hooks come from settings.json — a project
-// (.corvus/settings.json, only when the project is trusted) and a global
-// (<Corvus home>/settings.json) file. A hook's exit
-// code is its verdict: 0 = pass, 2 = block (only on the gating events), other =
-// warn. The payload is delivered as JSON on stdin; output is captured (capped)
-// and surfaced to the user. This package only loads, matches, and runs hooks;
-// the agent and controller decide what a block means (see internal/agent,
-// internal/control).
+// after it. Hooks come from settings.json — a project (.corvus/settings.json)
+// and a global (<Corvus home>/settings.json) file, plus installed plugin
+// packages. A hook's exit code is its verdict: 0 = pass, 2 = block (only on the
+// gating events), other = warn. The payload is delivered as JSON on stdin;
+// output is captured (capped) and surfaced to the user.
+//
+// Trust semantics: project hooks are repository-controlled code, so they may
+// deny/block (the safe direction) but never answer a permission dialog on the
+// user's behalf — a Claude-format PermissionRequest "allow" from a
+// project-scoped hook is ignored and the normal approval prompt still shows.
+// Global and plugin-package hooks keep the full Claude permission contract.
+// This package only loads, matches, and runs hooks; the agent and controller
+// decide what a block means (see internal/agent, internal/control).
 package hook
 
 import (
@@ -932,10 +937,17 @@ type Report struct {
 	Event    Event
 	Outcomes []Outcome
 	Blocked  bool // at least one outcome blocked (only meaningful on gating events)
-	// Allowed is set when a Claude-imported PermissionRequest hook returned an
-	// explicit JSON "allow" decision on exit 0 (see claudeJSONAllow) — the
-	// caller should treat this as an auto-approval instead of prompting.
+	// Allowed is set when a trusted (global or plugin-package) Claude-imported
+	// PermissionRequest hook returned an explicit JSON "allow" decision on exit
+	// 0 (see claudeJSONAllow) — the caller should treat this as an
+	// auto-approval instead of prompting.
 	Allowed bool
+	// AllowedFromProject records that a project-scoped Claude-imported
+	// PermissionRequest hook emitted an explicit JSON "allow" decision. The
+	// decision is deliberately not honored: repository-controlled project hooks
+	// can deny/block but cannot auto-approve on the user's behalf, so the
+	// caller treats it as no opinion and shows the normal prompt.
+	AllowedFromProject bool
 }
 
 // HookOutput is the parsed, model-facing part of a successful hook stdout.
@@ -1173,7 +1185,15 @@ func Run(ctx context.Context, payload Payload, hooks []ResolvedHook, spawner Spa
 					r.Stdout = reason
 				}
 			} else if claudeJSONAllow(event, r.Stdout) {
-				report.Allowed = true
+				if h.Scope == ScopeProject {
+					// Project hooks may deny/block but must not answer
+					// permission dialogs on the user's behalf. An "allow" from
+					// repository-controlled code is treated as no opinion so
+					// the normal approval prompt still shows.
+					report.AllowedFromProject = true
+				} else {
+					report.Allowed = true
+				}
 			}
 		}
 		report.Outcomes = append(report.Outcomes, Outcome{

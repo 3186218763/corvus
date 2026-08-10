@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"math"
 	"time"
 
 	"charm.land/bubbletea/v2"
@@ -55,6 +54,6 @@ func (s *smoothScroll) offsetAt(now time.Time) (offset int, done bool) {
 	if t >= 1 {
 		return s.to, true
 	}
-	eased := 1 - math.Pow(1-t, 3)
+	eased := 1 - (1-t)*(1-t)*(1-t)
 	return s.from + int(float64(s.to-s.from)*eased), false
 }

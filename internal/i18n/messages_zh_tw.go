@@ -16,7 +16,7 @@ var ChineseTraditional = Messages{
 	NoKey:           "未設定 key",
 	Ready:           "已就緒",
 	GetStarted:      "開始使用",
-	StepScaffold:    "生成 corvus.toml",
+	StepScaffold:    "生成 .corvus/config.toml",
 	StepSetKey:      "設定 API key",
 
 	StepChatDesc: "互動式會話",
@@ -147,7 +147,7 @@ var ChineseTraditional = Messages{
 
 	OutputStyleNone:           "沒有可用的輸出風格",
 	OutputStyleHeader:         "輸出風格：",
-	OutputStyleHint:           "在 corvus.toml 設定 agent.output_style 即可啟用（下次會話生效）",
+	OutputStyleHint:           "在 .corvus/config.toml 設定 agent.output_style 即可啟用（下次會話生效）",
 	ThemeHeader:               "主題：",
 	ThemeHint:                 "使用 /theme <auto|light|dark|style> 切換；啟動探測到終端背景時，輸入框底色隨之自動調整",
 	ThemeChangedFmt:           "已切換主題為 %s / %s",
@@ -221,7 +221,7 @@ var ChineseTraditional = Messages{
 	SkillPickerStatusNotDir:      "非目錄",
 	SkillPickerStatusUnreadable:  "無權限",
 	SlashPromptEmpty:             "該 MCP prompt 沒有返回可傳送的內容",
-	SlashMCPNone:                 "沒有設定 MCP 伺服器 — 在 corvus.toml 加一個 [[plugins]] 條目",
+	SlashMCPNone:                 "沒有設定 MCP 伺服器 — 在 .corvus/config.toml 加一個 [[plugins]] 條目",
 	CtrlCQuitHint:                "再按一次 Ctrl+C 退出",
 	CompHintSlash:                "↑/↓ 移動 · Tab/Enter 選中 · Esc 關閉",
 	CompHintFile:                 "↑/↓ 移動 · Tab/Enter 進入資料夾或選中檔案 · Esc 關閉",
@@ -310,7 +310,7 @@ var ChineseTraditional = Messages{
 	ListHooksHeaderFmt:  "hooks（生效 %d 個）",
 	ListHooksNone:       "無生效 hooks — 在 .corvus/settings.json（專案）或 <Corvus home>/settings.json（全域）設定",
 	ListMcpHeader:       "MCP 伺服器",
-	ListMcpNone:         "未連線 MCP 伺服器 — 在 corvus.toml（[[plugins]]）或專案 .mcp.json 中新增",
+	ListMcpNone:         "未連線 MCP 伺服器 — 在 .corvus/config.toml（[[plugins]]）或專案 .mcp.json 中新增",
 
 	MemoryNone:                "還沒有載入任何記憶 — 輸入 “/remember 內容” 可快速記錄，也可以在專案根目錄建立 CORVUS.md",
 	MemoryLoaded:              "當前已載入的記憶：",
@@ -362,7 +362,7 @@ var ChineseTraditional = Messages{
 
 	SelectProvidersLabel:     "選擇要啟用的 provider",
 	EnterAPIKeysHeader:       "輸入 API key（Enter 跳過、稍後再設）：",
-	MissingKeyIntro:          "corvus.toml 已設定好 — 只差一個 API key 就可以開始。",
+	MissingKeyIntro:          ".corvus/config.toml 已設定好 — 只差一個 API key 就可以開始。",
 	WroteFileFmt:             "已寫入 %s",
 	SetupComplete:            "設定完成。",
 	SetupCancelled:           "設定已取消。",
@@ -413,7 +413,7 @@ var ChineseTraditional = Messages{
 	NoModelsAvailableFmt:       "%s: 沒有可用模型，跳過",
 	CustomFetchEmpty:           "/models 返回為空，回退到手動輸入",
 	AnthropicFetchEmpty:        "/models 返回為空 — Anthropic 相容服務通常不提供此端點，回退到手動輸入",
-	SkipStaleCustomEntryFmt:    "跳過 corvus.toml 裡的舊 %q 條目（指向 %s）— 請手動從 [[providers]] 裡刪除",
+	SkipStaleCustomEntryFmt:    "跳過 .corvus/config.toml 裡的舊 %q 條目（指向 %s）— 請手動從 [[providers]] 裡刪除",
 	APIKeyAlreadySetFmt:        "復用已設定的 %s",
 	APIKeyResetPromptFmt:       "重新輸入 %s？",
 	InvalidAPIKeyEnvFmt:        "%q 不是有效的 API Key 變數名稱。只能使用字母、數字和底線（例如 MY_PROVIDER_API_KEY）；請勿在此填寫模型名稱。",
@@ -475,6 +475,7 @@ var ChineseTraditional = Messages{
 選項：
   --model NAME
   --profile economy|balanced|delivery
+  --max-steps N
   --continue, -c
   --resume[=QUERY], -r[=QUERY]
   --copy
@@ -483,7 +484,7 @@ var ChineseTraditional = Messages{
   --effort LEVEL
   --permission-mode MODE
   --add-dir PATH
-  --allowed-tools RULES
+  --allowed-tools RULES, --allowedTools
   --help, -h
   --version, -v
 
@@ -493,7 +494,7 @@ var ChineseTraditional = Messages{
   corvus --resume provider-config
 
 設定：
-  優先順序：flag > ./corvus.toml > <Corvus home>/config.toml > 內建預設值
+  優先順序：flag > ./.corvus/config.toml > <Corvus home>/config.toml > 內建預設值
   金鑰透過 api_key_env 注入（如 DEEPSEEK_API_KEY）：優先專案 .env，其次 Corvus 憑證儲存。
   首次啟動 TUI 可引導設定；也可參考 corvus.example.toml。
 `,

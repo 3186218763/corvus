@@ -27,7 +27,7 @@ func (e *ProviderEntry) FetchModels(ctx context.Context) ([]string, error) {
 	if e.BaseURL == "" {
 		return nil, fmt.Errorf("fetch models: provider %q has no base_url", e.Name)
 	}
-	key := e.APIKey()
+	key := e.EffectiveAPIKey()
 	if e.RequiresAPIKey() && key == "" {
 		return nil, fmt.Errorf("fetch models: provider %q has no API key (set %s in .env)", e.Name, e.APIKeyEnv)
 	}

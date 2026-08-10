@@ -16,7 +16,7 @@ var Chinese = Messages{
 	NoKey:           "未设置 key",
 	Ready:           "已就绪",
 	GetStarted:      "开始使用",
-	StepScaffold:    "生成 corvus.toml",
+	StepScaffold:    "生成 .corvus/config.toml",
 	StepSetKey:      "设置 API key",
 
 	StepChatDesc: "交互式会话",
@@ -153,7 +153,7 @@ var Chinese = Messages{
 
 	OutputStyleNone:           "没有可用的输出风格",
 	OutputStyleHeader:         "输出风格：",
-	OutputStyleHint:           "在 corvus.toml 设置 agent.output_style 即可启用（下次会话生效）",
+	OutputStyleHint:           "在 .corvus/config.toml 设置 agent.output_style 即可启用（下次会话生效）",
 	ThemeHeader:               "主题：",
 	ThemeHint:                 "使用 /theme <auto|light|dark|style> 切换；启动探测到终端背景时，输入框底色随之自动调整",
 	ThemeChangedFmt:           "已切换主题为 %s / %s",
@@ -231,7 +231,7 @@ var Chinese = Messages{
 	SkillPickerStatusNotDir:      "非目录",
 	SkillPickerStatusUnreadable:  "无权限",
 	SlashPromptEmpty:             "该 MCP prompt 没有返回可发送的内容",
-	SlashMCPNone:                 "没有配置 MCP 服务器 — 在 corvus.toml 加一个 [[plugins]] 条目",
+	SlashMCPNone:                 "没有配置 MCP 服务器 — 在 .corvus/config.toml 加一个 [[plugins]] 条目",
 	CtrlCQuitHint:                "再按一次 Ctrl+C 退出",
 	CompHintSlash:                "↑/↓ 移动 · Tab/Enter 选中 · Esc 关闭",
 	CompHintFile:                 "↑/↓ 移动 · Tab/Enter 进入文件夹或选中文件 · Esc 关闭",
@@ -326,7 +326,7 @@ var Chinese = Messages{
 	ListHooksHeaderFmt:  "hooks（生效 %d 个）",
 	ListHooksNone:       "无生效 hooks — 在 .corvus/settings.json（项目）或 <Corvus home>/settings.json（全局）配置",
 	ListMcpHeader:       "MCP 服务器",
-	ListMcpNone:         "未连接 MCP 服务器 — 在 corvus.toml（[[plugins]]）或项目 .mcp.json 中添加",
+	ListMcpNone:         "未连接 MCP 服务器 — 在 .corvus/config.toml（[[plugins]]）或项目 .mcp.json 中添加",
 
 	MemoryNone:                "还没有加载任何记忆 — 输入 “/remember 内容” 可快速记录，也可以在项目根目录创建 CORVUS.md",
 	MemoryLoaded:              "当前已加载的记忆：",
@@ -382,7 +382,7 @@ var Chinese = Messages{
 
 	SelectProvidersLabel:     "选择要启用的 provider",
 	EnterAPIKeysHeader:       "输入 API key（回车跳过、稍后再设）：",
-	MissingKeyIntro:          "corvus.toml 已配置好 — 只差一个 API key 就可以开始。",
+	MissingKeyIntro:          ".corvus/config.toml 已配置好 — 只差一个 API key 就可以开始。",
 	WroteFileFmt:             "已写入 %s",
 	SetupComplete:            "设置完成。",
 	SetupCancelled:           "设置已取消。",
@@ -433,7 +433,7 @@ var Chinese = Messages{
 	NoModelsAvailableFmt:       "%s: 没有可用模型，跳过",
 	CustomFetchEmpty:           "/models 返回为空，回退到手动输入",
 	AnthropicFetchEmpty:        "/models 返回为空 — Anthropic 兼容服务通常不提供此端点，回退到手动输入",
-	SkipStaleCustomEntryFmt:    "跳过 corvus.toml 里的旧 %q 条目（指向 %s）— 请手动从 [[providers]] 里删除",
+	SkipStaleCustomEntryFmt:    "跳过 .corvus/config.toml 里的旧 %q 条目（指向 %s）— 请手动从 [[providers]] 里删除",
 	APIKeyAlreadySetFmt:        "复用已设置的 %s",
 	APIKeyResetPromptFmt:       "重新输入 %s？",
 	InvalidAPIKeyEnvFmt:        "%q 不是有效的 API Key 变量名。只能使用字母、数字和下划线（例如 MY_PROVIDER_API_KEY）；这里不要填写模型名。",
@@ -507,6 +507,7 @@ var Chinese = Messages{
 选项：
   --model NAME
   --profile economy|balanced|delivery
+  --max-steps N
   --continue, -c
   --resume[=QUERY], -r[=QUERY]
   --copy
@@ -515,7 +516,7 @@ var Chinese = Messages{
   --effort LEVEL
   --permission-mode MODE
   --add-dir PATH
-  --allowed-tools RULES
+  --allowed-tools RULES, --allowedTools
   --help, -h
   --version, -v
 
@@ -525,8 +526,8 @@ var Chinese = Messages{
   corvus --resume provider-config
 
 配置：
-  优先级：flag > ./corvus.toml > <Corvus home>/config.toml > 内置默认值
-  密钥通过 api_key_env 注入（如 DEEPSEEK_API_KEY）：优先项目 .env，其次 Corvus 凭据存储。
-  首次启动 TUI 可引导配置；也可参考 corvus.example.toml。
+  优先级：flag > 项目 .corvus/config.toml > <Corvus home>/config.toml > 内置默认值
+  API key 直接写在 [[providers]] 的 api_key 字段（本机 ~/.corvus/config.toml 优先于项目 .corvus/config.toml）。
+  也可参考 corvus.example.toml。
 `,
 }

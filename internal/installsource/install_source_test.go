@@ -131,7 +131,7 @@ func TestApplyLocalSkillRootRegistersPath(t *testing.T) {
 	if resp.PlanID == "" {
 		t.Error("PlanID should be populated on apply")
 	}
-	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
+	cfg := config.LoadForEdit(config.ProjectConfigPathForRoot(project))
 	if len(cfg.Skills.Paths) != 1 || cfg.Skills.Paths[0] != root {
 		t.Fatalf("skills.paths = %v, want %q", cfg.Skills.Paths, root)
 	}
@@ -661,7 +661,7 @@ func TestPlanProjectMCPJSONDefaultsProject(t *testing.T) {
 	if !resp.OK || len(resp.Actions) != 1 {
 		t.Fatalf("response = %+v", resp)
 	}
-	wantPath := filepath.Join(project, "corvus.toml")
+	wantPath := filepath.Join(project, ".corvus", "config.toml")
 	if resp.Scope != "project" || resp.Actions[0].Scope != "project" || resp.Actions[0].ConfigPath != wantPath {
 		t.Fatalf("project .mcp.json scope/path = response %q action %q path %q, want project %q", resp.Scope, resp.Actions[0].Scope, resp.Actions[0].ConfigPath, wantPath)
 	}
@@ -825,7 +825,7 @@ func TestApplyRemoteMCPURLConnectsAndPersists(t *testing.T) {
 	if resp.Actions[0].RiskLevel != RiskHigh {
 		t.Errorf("auth headers should produce RiskHigh, got %q", resp.Actions[0].RiskLevel)
 	}
-	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
+	cfg := config.LoadForEdit(config.ProjectConfigPathForRoot(project))
 	if len(cfg.Plugins) != 1 || cfg.Plugins[0].Headers["Authorization"] != "Bearer ${TOKEN}" {
 		t.Fatalf("plugins = %+v", cfg.Plugins)
 	}
@@ -858,7 +858,7 @@ func TestApplyRemoteMCPURLDefaultsGlobal(t *testing.T) {
 	if len(stub.connected) != 1 || stub.connected[0].Source != config.MCPSourceUserConfig {
 		t.Fatalf("global install live source = %+v, want source %q", stub.connected, config.MCPSourceUserConfig)
 	}
-	projectCfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
+	projectCfg := config.LoadForEdit(filepath.Join(project, ".corvus", "config.toml"))
 	if _, ok := findPlugin(projectCfg.Plugins, "global-default"); ok {
 		t.Fatalf("project config should not receive default-global MCP: %+v", projectCfg.Plugins)
 	}
@@ -868,11 +868,11 @@ func TestApplyMCPRejectsDuplicateByDefault(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
 	// Seed an existing entry the same way the first install would have.
-	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, ".corvus", "config.toml"))
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: "dup", Command: "x"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.SaveTo(filepath.Join(project, "corvus.toml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(project, ".corvus", "config.toml")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -898,11 +898,11 @@ func TestApplyMCPRejectsDuplicateByDefault(t *testing.T) {
 func TestApplyMCPReplaceOverwritesExisting(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
-	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, ".corvus", "config.toml"))
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: "editable", Command: "old"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.SaveTo(filepath.Join(project, "corvus.toml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(project, ".corvus", "config.toml")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -921,7 +921,7 @@ func TestApplyMCPReplaceOverwritesExisting(t *testing.T) {
 	if !resp.OK {
 		t.Fatalf("response = %+v", resp)
 	}
-	reloaded := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
+	reloaded := config.LoadForEdit(filepath.Join(project, ".corvus", "config.toml"))
 	if reloaded.Plugins[0].Command != "" || reloaded.Plugins[0].URL != "https://mcp.example.com/mcp" {
 		t.Errorf("replace did not update entry: %+v", reloaded.Plugins[0])
 	}
@@ -930,11 +930,11 @@ func TestApplyMCPReplaceOverwritesExisting(t *testing.T) {
 func TestApplyMCPReplaceDisconnectsLiveServerBeforeConnect(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
-	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, ".corvus", "config.toml"))
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: "live", Command: "old"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.SaveTo(filepath.Join(project, "corvus.toml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(project, ".corvus", "config.toml")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -983,7 +983,10 @@ func TestApplyMCPReplaceDisconnectsLiveServerBeforeConnect(t *testing.T) {
 func TestApplyMCPRollsBackOnSaveFailure(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
-	configPath := filepath.Join(project, "corvus.toml")
+	configPath := filepath.Join(project, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(configPath, []byte("# valid before connect\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1048,7 +1051,7 @@ func TestApplyConnectFailureDoesNotPersist(t *testing.T) {
 	if resp.OK {
 		t.Fatalf("expected connect failure, got %+v", resp)
 	}
-	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, ".corvus", "config.toml"))
 	if len(cfg.Plugins) != 0 {
 		t.Errorf("no plugin should be persisted on connect failure, got %+v", cfg.Plugins)
 	}
@@ -1441,7 +1444,7 @@ func TestUninstallRemovesRegisteredSkillRootByContainedSkillName(t *testing.T) {
 	if resp.Actions[0].SkillCount != 2 {
 		t.Errorf("SkillCount = %d, want 2", resp.Actions[0].SkillCount)
 	}
-	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, ".corvus", "config.toml"))
 	if len(cfg.Skills.Paths) != 0 {
 		t.Fatalf("skills.paths should be empty after root uninstall, got %v", cfg.Skills.Paths)
 	}
@@ -1450,11 +1453,11 @@ func TestUninstallRemovesRegisteredSkillRootByContainedSkillName(t *testing.T) {
 func TestUninstallRemovesMCPAndDisconnects(t *testing.T) {
 	project := t.TempDir()
 	home := t.TempDir()
-	cfg := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
+	cfg := config.LoadForEdit(filepath.Join(project, ".corvus", "config.toml"))
 	if err := cfg.UpsertPlugin(config.PluginEntry{Name: "ed", Type: "http", URL: "https://mcp.example.com/mcp"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.SaveTo(filepath.Join(project, "corvus.toml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(project, ".corvus", "config.toml")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1479,7 +1482,7 @@ func TestUninstallRemovesMCPAndDisconnects(t *testing.T) {
 	if disconnects.Load() != 1 {
 		t.Errorf("OnDisconnect should fire once, got %d", disconnects.Load())
 	}
-	reloaded := config.LoadForEdit(filepath.Join(project, "corvus.toml"))
+	reloaded := config.LoadForEdit(filepath.Join(project, ".corvus", "config.toml"))
 	if len(reloaded.Plugins) != 0 {
 		t.Errorf("plugin should be removed, got %+v", reloaded.Plugins)
 	}
@@ -1641,7 +1644,7 @@ func TestPlanIDIncludesActionDetails(t *testing.T) {
 		Scope:  "project",
 		Mode:   "auto",
 	}
-	a := action{Kind: "mcp", Action: "install_mcp_server", Name: "same", URL: "https://mcp.one.example/mcp", Transport: "http", ConfigPath: "/repo/corvus.toml"}
+	a := action{Kind: "mcp", Action: "install_mcp_server", Name: "same", URL: "https://mcp.one.example/mcp", Transport: "http", ConfigPath: "/repo/.corvus/config.toml"}
 	b := a
 	b.URL = "https://mcp.two.example/mcp"
 	if computePlanID(req, []action{a}) == computePlanID(req, []action{b}) {

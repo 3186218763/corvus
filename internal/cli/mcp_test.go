@@ -414,7 +414,10 @@ func TestBuildMCPSnapshotUsesControllerWorkspaceAndPerServerConfigPaths(t *testi
 	if err := userCfg.SaveTo(userPath); err != nil {
 		t.Fatal(err)
 	}
-	projectPath := filepath.Join(workspace, "corvus.toml")
+	projectPath := filepath.Join(workspace, ".corvus", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte(`
 [[plugins]]
 name = "project-only"
@@ -524,7 +527,7 @@ func TestRenderMCPManagerProjectServerIsReadyWithoutInstallAction(t *testing.T) 
 	got := p.renderDetail(120)
 	for _, want := range []string{
 		"connected",
-		"current project corvus.toml",
+		"current project .corvus/config.toml",
 		"View tools",
 		"Disable for this session",
 	} {
@@ -900,7 +903,7 @@ func TestApplyMCPModeDropsLegacyTier(t *testing.T) {
 	isolateUserConfig(t)
 	cfg := config.Default()
 	cfg.Plugins = []config.PluginEntry{{Name: "github", Command: "npx", Args: []string{"server"}, Tier: "lazy"}}
-	if err := cfg.SaveTo("corvus.toml"); err != nil {
+	if err := cfg.SaveTo(filepath.Join(".corvus", "config.toml")); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
 
@@ -921,7 +924,7 @@ func TestApplyMCPModeDropsLegacyTier(t *testing.T) {
 	if len(loaded.Plugins) != 1 || loaded.Plugins[0].Tier != "" {
 		t.Fatalf("tier should be migrated away, plugins=%+v", loaded.Plugins)
 	}
-	raw, err := os.ReadFile("corvus.toml")
+	raw, err := os.ReadFile(filepath.Join(".corvus", "config.toml"))
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}
@@ -935,7 +938,7 @@ func TestApplyMCPModeRecordsPluginConnectFailure(t *testing.T) {
 	t.Setenv("PATH", "")
 	cfg := config.Default()
 	cfg.Plugins = []config.PluginEntry{{Name: "broken", Command: "definitely-missing-corvus-mcp", Tier: "background"}}
-	if err := cfg.SaveTo("corvus.toml"); err != nil {
+	if err := cfg.SaveTo(filepath.Join(".corvus", "config.toml")); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
 

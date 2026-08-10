@@ -68,7 +68,10 @@ func TestSetupProfilePinsExplicitDirOverGitRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, dir := range []string{repo, sub} {
-		if err := os.WriteFile(filepath.Join(dir, "corvus.toml"), []byte(minimalTestModelTOML), 0o644); err != nil {
+		if err := os.MkdirAll(filepath.Join(dir, ".corvus"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".corvus", "config.toml"), []byte(minimalTestModelTOML), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

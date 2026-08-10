@@ -371,6 +371,8 @@ func RedactMessage(m provider.Message) provider.Message {
 
 // RedactMessages returns a redacted copy of msgs. The input slice and its
 // messages are never mutated.
+//
+//nolint:unused // RedactMessages 计划用于归档/导出路径的脱敏（见安全报告 D2）
 func RedactMessages(msgs []provider.Message) []provider.Message {
 	out := make([]provider.Message, len(msgs))
 	for i, m := range msgs {

@@ -226,6 +226,80 @@ func TestRunnerPermissionRequestClaudeDecisions(t *testing.T) {
 	}
 }
 
+func TestRunnerPermissionRequestProjectScopeCannotAllow(t *testing.T) {
+	projectHooks := []ResolvedHook{{
+		HookConfig: HookConfig{Command: "guard", PayloadFormat: "claude"}, Event: PermissionRequest, Scope: ScopeProject,
+	}}
+	spawnerReturning := func(stdout string) Spawner {
+		return func(_ context.Context, in SpawnInput) SpawnResult { return SpawnResult{ExitCode: 0, Stdout: stdout} }
+	}
+
+	allowJSON := `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}`
+	r := NewRunner(projectHooks, "/tmp", spawnerReturning(allowJSON), nil)
+	decision, _ := r.PermissionRequest(context.Background(), "bash", "go test", nil)
+	if decision != nil {
+		t.Fatalf("project-scoped allow must be ignored (normal prompt), got decision=%v", *decision)
+	}
+
+	denyJSON := `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny"}}}`
+	r = NewRunner(projectHooks, "/tmp", spawnerReturning(denyJSON), nil)
+	decision, _ = r.PermissionRequest(context.Background(), "bash", "rm -rf /", nil)
+	if decision == nil || *decision != false {
+		t.Fatalf("project-scoped deny decision = %v, want false", decision)
+	}
+}
+
+func TestRunnerPermissionRequestTrustedScopeAllowStillAllows(t *testing.T) {
+	allowJSON := `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}`
+	for _, scope := range []Scope{ScopeGlobal, ScopePlugin} {
+		hooks := []ResolvedHook{{
+			HookConfig: HookConfig{Command: "guard", PayloadFormat: "claude"}, Event: PermissionRequest, Scope: scope,
+		}}
+		r := NewRunner(hooks, "/tmp", func(_ context.Context, in SpawnInput) SpawnResult {
+			return SpawnResult{ExitCode: 0, Stdout: allowJSON}
+		}, nil)
+		decision, _ := r.PermissionRequest(context.Background(), "bash", "go test", nil)
+		if decision == nil || *decision != true {
+			t.Fatalf("scope %s allow decision = %v, want true", scope, decision)
+		}
+	}
+}
+
+func TestRunnerPermissionRequestMixedScopeAllows(t *testing.T) {
+	allowJSON := `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}`
+	project := ResolvedHook{
+		HookConfig: HookConfig{Command: "project-guard", PayloadFormat: "claude"}, Event: PermissionRequest, Scope: ScopeProject,
+	}
+	global := ResolvedHook{
+		HookConfig: HookConfig{Command: "global-guard", PayloadFormat: "claude"}, Event: PermissionRequest, Scope: ScopeGlobal,
+	}
+	empty := ResolvedHook{
+		HookConfig: HookConfig{Command: "quiet-guard", PayloadFormat: "claude"}, Event: PermissionRequest,
+	}
+	spawner := func(allowCmd string) Spawner {
+		return func(_ context.Context, in SpawnInput) SpawnResult {
+			if in.Command == allowCmd {
+				return SpawnResult{ExitCode: 0, Stdout: allowJSON}
+			}
+			return SpawnResult{ExitCode: 0}
+		}
+	}
+
+	// Project allow (ignored) + global allow → allow wins.
+	r := NewRunner([]ResolvedHook{project, global}, "/tmp", spawner("global-guard"), nil)
+	decision, _ := r.PermissionRequest(context.Background(), "bash", "go test", nil)
+	if decision == nil || *decision != true {
+		t.Fatalf("project+global allow decision = %v, want true", decision)
+	}
+
+	// Project allow (ignored) + global no opinion → nil (normal prompt).
+	r = NewRunner([]ResolvedHook{project, empty}, "/tmp", spawner("project-guard"), nil)
+	decision, _ = r.PermissionRequest(context.Background(), "bash", "go test", nil)
+	if decision != nil {
+		t.Fatalf("project allow + no-opinion decision = %v, want nil", *decision)
+	}
+}
+
 // --- Runner.PromptSubmit ---
 
 func TestRunnerPromptSubmitBlock(t *testing.T) {

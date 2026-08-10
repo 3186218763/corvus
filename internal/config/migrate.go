@@ -248,7 +248,7 @@ func migrateMCPToUserConfig(projectRoots []string) (*MCPGlobalMigrationResult, e
 		addEntries(loadPluginEntriesFromTOML(path))
 	}
 	for _, root := range normalizedMCPMigrationRoots(projectRoots) {
-		addEntries(loadPluginEntriesFromTOML(filepath.Join(root, "corvus.toml")))
+		addEntries(loadPluginEntriesFromTOML(ProjectConfigPathForRoot(root)))
 		if entries, err := loadMCPJSON(filepath.Join(root, mcpJSONFile)); err == nil {
 			addEntries(entries)
 		}
@@ -450,11 +450,6 @@ func legacyTOMLPaths(dest, home string) []string {
 	}
 	for _, legacy := range legacyXDGConfigPaths() {
 		add(legacy)
-		add(filepath.Join(filepath.Dir(legacy), "corvus.toml"))
-	}
-	add(filepath.Join(filepath.Dir(dest), "corvus.toml"))
-	if home != "" {
-		add(filepath.Join(home, ".corvus", "corvus.toml"))
 	}
 	return paths
 }
