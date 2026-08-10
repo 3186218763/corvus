@@ -36,6 +36,27 @@ TUI environment variables:
   only for terminals that strand stale rows under the cell-diff renderer
   (disables smooth scroll).
 
+## MCP server
+
+`cmd/corvus-mcp-server` exposes Corvus's built-in tools to MCP hosts (IDEs,
+editors, and other Model Context Protocol clients) over the stdio transport
+(newline-delimited JSON-RPC 2.0, protocol version 2024-11-05). Point an MCP
+client at the binary with:
+
+```sh
+go build -o corvus-mcp-server ./cmd/corvus-mcp-server
+# MCP client command:
+corvus-mcp-server --dir /path/to/project
+```
+
+Flags: `--dir` (workspace root; defaults to the current directory), `--allow-write`
+(register the writer tools and a workspace-confined `bash`; every call still goes
+through the permission policy), `--permission-mode dontAsk|ask|auto|yolo`
+(default `dontAsk`), `--version`, `--help`. The default tool set is read-only and
+fail-closed: read/list/search tools bound to the workspace plus SSRF-guarded
+`web_fetch`. `ask` degrades to `dontAsk` in this headless server (no interactive
+approver), and deny rules always win, including in `yolo` mode.
+
 ## Development
 
 ```sh

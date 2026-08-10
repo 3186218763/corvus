@@ -22,6 +22,7 @@ import (
 
 	fileencoding "corvus/internal/fileutil/encoding"
 	"corvus/internal/netclient"
+	"corvus/internal/netpolicy"
 	"corvus/internal/provider"
 )
 
@@ -44,23 +45,24 @@ func SkillNameKey(name string) string {
 
 // Config is Corvus's runtime configuration.
 type Config struct {
-	ConfigVersion    int               `toml:"config_version"`
-	DefaultModel     string            `toml:"default_model"`
-	Language         string            `toml:"language"` // ui/model language tag (e.g. "zh"); empty = auto-detect from $LANG / $CORVUS_LANG
-	CredentialsStore string            `toml:"credentials_store"`
-	UI               UIConfig          `toml:"ui"`
-	Agent            AgentConfig       `toml:"agent"`
-	Providers        []ProviderEntry   `toml:"providers"`
-	Tools            ToolsConfig       `toml:"tools"`
-	Permissions      PermissionsConfig `toml:"permissions"`
-	Sandbox          SandboxConfig     `toml:"sandbox"`
-	Network          NetworkConfig     `toml:"network"`
-	Environment      EnvironmentConfig `toml:"environment"`
-	Plugins          []PluginEntry     `toml:"plugins"`
-	Skills           SkillsConfig      `toml:"skills"`
-	Statusline       StatuslineConfig  `toml:"statusline"`
-	LSP              LSPConfig         `toml:"lsp"`
-	Secrets          SecretsConfig     `toml:"secrets"`
+	ConfigVersion    int                 `toml:"config_version"`
+	DefaultModel     string              `toml:"default_model"`
+	Language         string              `toml:"language"` // ui/model language tag (e.g. "zh"); empty = auto-detect from $LANG / $CORVUS_LANG
+	CredentialsStore string              `toml:"credentials_store"`
+	UI               UIConfig            `toml:"ui"`
+	Agent            AgentConfig         `toml:"agent"`
+	Providers        []ProviderEntry     `toml:"providers"`
+	Tools            ToolsConfig         `toml:"tools"`
+	Permissions      PermissionsConfig   `toml:"permissions"`
+	Sandbox          SandboxConfig       `toml:"sandbox"`
+	Network          NetworkConfig       `toml:"network"`
+	NetworkPolicy    NetworkPolicyConfig `toml:"network_policy"`
+	Environment      EnvironmentConfig   `toml:"environment"`
+	Plugins          []PluginEntry       `toml:"plugins"`
+	Skills           SkillsConfig        `toml:"skills"`
+	Statusline       StatuslineConfig    `toml:"statusline"`
+	LSP              LSPConfig           `toml:"lsp"`
+	Secrets          SecretsConfig       `toml:"secrets"`
 
 	systemPromptFileSource     promptFileSource
 	providerSources            map[string]providerSourceScope
@@ -445,6 +447,58 @@ func (c *Config) directProxyHosts() []string {
 // NetworkProxyMode normalizes network.proxy_mode to a known value.
 func (c *Config) NetworkProxyMode() string {
 	return netclient.NormalizeMode(c.Network.ProxyMode)
+}
+
+// NetworkPolicyConfig declares the egress policy for outbound tools such as
+// web_fetch (and the bash URL guard), layered over the coarse [sandbox]
+// network switch. Rules are hostname globs matched against the URL's bare
+// hostname: "example.com" matches exactly that host, "*.example.com" matches
+// one level of subdomains, "**.example.com" any depth, and IP literals match
+// exactly. Deny rules win over allow rules; Default is the decision when no
+// rule matches ("allow" | "deny" | "ask"; default "allow", the fail-open
+// status quo — the deny list is the explicit exfiltration guard). An "ask"
+// default has no approval UI in this environment and resolves to allow,
+// mirroring the permission package's nil-approver behaviour.
+type NetworkPolicyConfig struct {
+	Allow   []string `toml:"allow"`
+	Deny    []string `toml:"deny"`
+	Default string   `toml:"default"` // "allow" (default) | "deny" | "ask"
+}
+
+// NetPolicy compiles the [network_policy] section into the decision policy
+// used by web_fetch and the bash URL guard. An empty default falls back to
+// "allow" so an absent section keeps today's unconfined behaviour; blank rule
+// entries are dropped. Invalid default values or malformed rules return an
+// error so boot can refuse to start with a policy that silently matches
+// nothing.
+func (c *Config) NetPolicy() (netpolicy.Policy, error) {
+	np := c.NetworkPolicy
+	def := netpolicy.Allow
+	switch strings.ToLower(strings.TrimSpace(np.Default)) {
+	case "", "allow":
+	case "deny":
+		def = netpolicy.Deny
+	case "ask":
+		def = netpolicy.Ask
+	default:
+		return netpolicy.Policy{}, fmt.Errorf("network_policy.default %q is invalid; use \"allow\", \"deny\", or \"ask\"", np.Default)
+	}
+	p := netpolicy.New(nonBlank(np.Allow), nonBlank(np.Deny), def)
+	if err := p.Validate(); err != nil {
+		return netpolicy.Policy{}, err
+	}
+	return p, nil
+}
+
+// nonBlank returns the non-empty, trimmed entries of ss.
+func nonBlank(ss []string) []string {
+	var out []string
+	for _, s := range ss {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // SkillsConfig configures skill discovery. Paths adds extra "custom"-scope skill
@@ -1303,8 +1357,9 @@ func Default() *Config {
 		Sandbox: SandboxConfig{Network: true},
 		// LSP tools on by default, but dormant until a language server is on PATH;
 		// a missing server yields an install hint rather than an error.
-		LSP:     LSPConfig{Enabled: true},
-		Network: NetworkConfig{ProxyMode: netclient.ModeAuto},
+		LSP:           LSPConfig{Enabled: true},
+		Network:       NetworkConfig{ProxyMode: netclient.ModeAuto},
+		NetworkPolicy: NetworkPolicyConfig{Default: "allow"},
 		Providers: []ProviderEntry{
 			{Name: "deepseek-flash", Kind: "openai", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", APIKeyEnv: "DEEPSEEK_API_KEY", BalanceURL: "https://api.deepseek.com/user/balance", ContextWindow: 1_000_000, Price: deepSeekV4FlashPriceUSD()},
 			{Name: "deepseek-pro", Kind: "openai", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-pro", APIKeyEnv: "DEEPSEEK_API_KEY", BalanceURL: "https://api.deepseek.com/user/balance", ContextWindow: 1_000_000, Price: deepSeekV4ProPriceUSD()},

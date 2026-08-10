@@ -1,0 +1,167 @@
+// Command corvus-mcp-server exposes Corvus's built-in tools to MCP hosts
+// (IDEs, editors, and other Model Context Protocol clients) over the stdio
+// transport: newline-delimited JSON-RPC 2.0, one message per line. An IDE
+// spawns this binary and speaks the 2024-11-05 protocol to it.
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"corvus/internal/config"
+	"corvus/internal/i18n"
+	"corvus/internal/mcpserver"
+	"corvus/internal/permission"
+	"corvus/internal/sandbox"
+	"corvus/internal/tool"
+	"corvus/internal/tool/builtin"
+)
+
+func main() {
+	if err := run(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, "corvus-mcp-server:", err)
+		os.Exit(1)
+	}
+}
+
+func run(args []string) error {
+	fs := flag.NewFlagSet("corvus-mcp-server", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	dir := fs.String("dir", "", "workspace root the tools operate on (default: current directory)")
+	allowWrite := fs.Bool("allow-write", false,
+		"register the writer tools (write_file, edit_file, multi_edit, move_file, notebook_edit, delete_range, delete_symbol, bash); every call still goes through the permission policy")
+	permissionMode := fs.String("permission-mode", "dontAsk",
+		"policy fallback for calls not covered by a rule: dontAsk (default, fail closed), ask (headless: same as dontAsk), auto, or yolo")
+	showVersion := fs.Bool("version", false, "print the version and exit")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return err
+	}
+	if *showVersion {
+		fmt.Printf("%s %s\n", mcpserver.ServerName, mcpserver.ServerVersion)
+		return nil
+	}
+	if fs.NArg() > 0 {
+		return fmt.Errorf("unexpected arguments: %s", strings.Join(fs.Args(), " "))
+	}
+
+	root, err := resolveRoot(*dir)
+	if err != nil {
+		return err
+	}
+
+	// Project config is read only (no legacy migrations on disk). A broken
+	// config fails startup loudly, matching the rest of Corvus.
+	cfg, err := config.LoadForRootReadOnly(root)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	i18n.DetectLanguage(cfg.Language)
+
+	tools := buildTools(cfg, root, *allowWrite)
+	policyMode, err := mapPermissionMode(*permissionMode)
+	if err != nil {
+		return err
+	}
+	policy := permission.New(policyMode, cfg.Permissions.Allow, cfg.Permissions.Ask, cfg.Permissions.Deny)
+
+	// The process runs until stdin closes (the MCP client owns the lifetime).
+	return mcpserver.New(tools, policy).Serve(context.Background(), os.Stdin, os.Stdout)
+}
+
+func resolveRoot(dir string) (string, error) {
+	root := strings.TrimSpace(dir)
+	if root == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("resolve working directory: %w", err)
+		}
+		root = cwd
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve --dir: %w", err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", fmt.Errorf("--dir %s: %w", abs, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("--dir %s: not a directory", abs)
+	}
+	return abs, nil
+}
+
+// buildTools assembles the served tool set. The default set is read-only
+// (fail closed): read/list/search tools bound to the workspace root plus the
+// SSRF-guarded web_fetch with the configured proxy. With allowWrite the
+// writer tools and a workspace-confined bash are added, but every call still
+// passes through policy.Decide (Ask and Deny decisions refuse the call).
+func buildTools(cfg *config.Config, root string, allowWrite bool) []tool.Tool {
+	proxySpec := cfg.NetworkProxySpec()
+	writeRoots := cfg.WriteRootsForRoot(root)
+	guard := builtin.NewSessionDataGuard(config.MemoryUserDir(), cfg.AllowWriteRoots())
+	search := builtin.ResolveSearch(cfg.Tools.Search.Engine, cfg.Tools.Search.RgPath, os.Stderr)
+	ws := builtin.Workspace{
+		Dir:             root,
+		WriteRoots:      writeRoots,
+		ForbidReadRoots: cfg.Sandbox.ForbidRead,
+		Bash: sandbox.Spec{
+			Mode:            cfg.BashMode(),
+			WriteRoots:      writeRoots,
+			ForbidReadRoots: cfg.Sandbox.ForbidRead,
+			Network:         cfg.Sandbox.Network,
+		},
+		BashTimeout:  time.Duration(cfg.BashTimeoutSeconds()) * time.Second,
+		Search:       search,
+		ProxySpec:    proxySpec,
+		SessionGuard: guard,
+	}
+	// readOnlyServed is the default fail-closed tool set. Session-coupled
+	// tools (complete_step, todo_write, bash_output, wait, kill_shell) report
+	// ReadOnly but do nothing useful without a live controller session, so
+	// they are excluded from the MCP surface.
+	readOnlyServed := []string{"read_file", "ls", "glob", "grep", "code_index"}
+	all := ws.Tools(readOnlyServed...)
+	tools := make([]tool.Tool, 0, len(all)+2)
+	tools = append(tools, all...)
+	// Workspace already binds web_fetch to the configured proxy; the explicit
+	// ConfineWebFetch guarantees the read-only set never falls back to the
+	// unconfined init-registered instance even if the Workspace set changes.
+	// New() deduplicates by name, keeping the Workspace-bound instance.
+	tools = append(tools, builtin.ConfineWebFetch(proxySpec))
+	if allowWrite {
+		// Workspace tools include bash bound to the workspace sandbox spec;
+		// the extra ConfineBash is the explicit failsafe layer (deduplicated
+		// by New(), the Workspace instance wins).
+		tools = append(tools, all...)
+		tools = append(tools, builtin.ConfineBash(ws.Bash, guard, ws.BashTimeout))
+	}
+	return tools
+}
+
+// mapPermissionMode translates the CLI-style approval flag into the writer
+// fallback mode permission.New understands. The mapping mirrors the CLI's
+// headless gate: dontAsk and ask both fail closed in this server (there is no
+// interactive approver, so Ask decisions are refused), while auto and yolo
+// map to Allow. Deny rules still win in every mode.
+func mapPermissionMode(mode string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "dontask", "dont-ask", "dont_ask":
+		return "deny", nil
+	case "ask":
+		return "ask", nil
+	case "auto", "yolo":
+		return "allow", nil
+	default:
+		return "", fmt.Errorf("unknown --permission-mode %q (want dontAsk, ask, auto, or yolo)", mode)
+	}
+}

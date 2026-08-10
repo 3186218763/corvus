@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"corvus/internal/netclient"
+	"corvus/internal/netpolicy"
 	"corvus/internal/sandbox"
 	"corvus/internal/tool"
 )
@@ -33,8 +34,12 @@ type Workspace struct {
 	BashTimeout     time.Duration
 	Search          SearchSpec
 	ProxySpec       netclient.ProxySpec
-	ReadPaths       *PathResolver
-	SessionGuard    SessionDataGuard
+	// NetPolicy gates outbound URLs (web_fetch fetch and bash curl/wget
+	// arguments) against the [network_policy] allow/deny rules; the zero
+	// policy is unconfined.
+	NetPolicy    netpolicy.Policy
+	ReadPaths    *PathResolver
+	SessionGuard SessionDataGuard
 	// ManagedConfig names the Corvus-owned config files the file-writers may
 	// touch outside WriteRoots after a fresh per-write human approval (see
 	// ManagedConfigPaths). The zero value disables the escape hatch.
@@ -70,11 +75,11 @@ func (w Workspace) Tools(enabled ...string) []tool.Tool {
 		"delete_range":  deleteRange{workDir: w.Dir, roots: roots, guard: w.SessionGuard, managed: w.ManagedConfig},
 		"delete_symbol": deleteSymbol{workDir: w.Dir, roots: roots, guard: w.SessionGuard, managed: w.ManagedConfig},
 		"code_index":    codeIndex{workDir: w.Dir, forbidRoots: forbidRoots},
-		"bash":          bash{workDir: w.Dir, sb: w.Bash, timeout: w.BashTimeout, guard: w.SessionGuard, terminal: w.Terminal},
+		"bash":          bash{workDir: w.Dir, sb: w.Bash, timeout: w.BashTimeout, guard: w.SessionGuard, terminal: w.Terminal, netPolicy: w.NetPolicy},
 		"ls":            listDir{workDir: w.Dir, paths: w.ReadPaths, forbidRoots: forbidRoots},
 		"glob":          globTool{workDir: w.Dir, paths: w.ReadPaths, forbidRoots: forbidRoots},
 		"grep":          grepTool{workDir: w.Dir, paths: w.ReadPaths, rg: w.Search.RgPath, forbidRoots: forbidRoots, sb: w.Bash},
-		"web_fetch":     webFetch{proxySpec: w.ProxySpec},
+		"web_fetch":     webFetch{proxySpec: w.ProxySpec, policy: w.NetPolicy},
 	}
 	all := tool.Builtins()
 	if len(enabled) == 0 {

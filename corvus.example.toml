@@ -22,6 +22,14 @@ theme = "auto"
 # 会话默认温度（0.0–2.0；省略则使用供应商默认值）
 temperature = 0.2
 
+[network_policy]
+# 出口网络策略（web_fetch 与 bash 内可识别的 curl/wget 等命令）：
+# 规则为主机名 glob：example.com 精确、*.example.com 一层子域、**.example.com 任意深度；
+# deny 优先于 allow；default = allow（保持现状放行）| deny（fail-closed）| ask（无审批 UI 时回退 allow）。
+default = "allow"
+# allow   = ["docs.example.com"]
+# deny    = ["*.internal.corp", "10.0.0.0"]
+
 # 供应商条目。kind 是协议类型（如 openai / anthropic / responses）；
 # OpenAI 兼容网关通常用 "openai"。
 [[providers]]

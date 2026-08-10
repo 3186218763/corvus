@@ -138,6 +138,21 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		}
 		b.WriteString("\n")
 	}
+	if shouldRenderNetworkPolicy(c, defaults, scope) {
+		b.WriteString("[network_policy]\n")
+		if len(c.NetworkPolicy.Allow) > 0 {
+			fmt.Fprintf(&b, "allow   = %s   # hostname globs always permitted; * = one label, ** = any depth\n", renderStringArray(c.NetworkPolicy.Allow))
+		} else {
+			b.WriteString("# allow   = [\"docs.example.com\", \"**.github.com\"]   # hostname globs always permitted\n")
+		}
+		if len(c.NetworkPolicy.Deny) > 0 {
+			fmt.Fprintf(&b, "deny    = %s   # hostname globs always refused; wins over allow\n", renderStringArray(c.NetworkPolicy.Deny))
+		} else {
+			b.WriteString("# deny    = [\"*.internal.corp\", \"10.0.0.0\"]   # hostname globs always refused; wins over allow\n")
+		}
+		fmt.Fprintf(&b, "default = %q   # allow (open) | deny (closed) | ask (no approval UI: falls back to allow)\n", c.NetworkPolicy.Default)
+		b.WriteString("\n")
+	}
 	if shouldRenderEnvironment(c, defaults, scope) {
 		renderEnvironmentConfig(&b, c.Environment)
 	}
@@ -1056,6 +1071,13 @@ func shouldRenderNetwork(c, defaults *Config, scope RenderScope) bool {
 		return true
 	}
 	return !reflect.DeepEqual(c.Network, defaults.Network)
+}
+
+func shouldRenderNetworkPolicy(c, defaults *Config, scope RenderScope) bool {
+	if scope != RenderScopeProject {
+		return true
+	}
+	return !reflect.DeepEqual(c.NetworkPolicy, defaults.NetworkPolicy)
 }
 
 func shouldRenderEnvironment(c, defaults *Config, scope RenderScope) bool {

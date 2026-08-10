@@ -19,6 +19,7 @@ import (
 
 	"corvus/internal/i18n"
 	"corvus/internal/jobs"
+	"corvus/internal/netpolicy"
 	"corvus/internal/proc"
 	"corvus/internal/sandbox"
 	"corvus/internal/secrets"
@@ -87,6 +88,10 @@ type bash struct {
 	// enforcing — a host terminal cannot honor the confinement configuration —
 	// and never for background jobs, which need the local job manager.
 	terminal TerminalRunner
+	// netPolicy, when it has rules, refuses commands whose recognizable
+	// outbound-URL arguments hit a deny rule (see denyNetworkEgressURLs). The
+	// zero policy is a no-op, so unbound instances keep today's behaviour.
+	netPolicy netpolicy.Policy
 }
 
 type bashParams struct {
@@ -158,6 +163,11 @@ func (b bash) Execute(ctx context.Context, args json.RawMessage) (string, error)
 	}
 	if p.Command == "" {
 		return "", fmt.Errorf("command is required")
+	}
+	// Network egress guard runs before every execution path (host terminal,
+	// sandboxed, or background) and before any shell is spawned.
+	if err := b.denyNetworkEgressURLs(p.Command); err != nil {
+		return "", err
 	}
 
 	sh := b.resolved()

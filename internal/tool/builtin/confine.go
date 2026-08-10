@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"corvus/internal/netclient"
+	"corvus/internal/netpolicy"
 	"corvus/internal/sandbox"
 	"corvus/internal/secrets"
 	"corvus/internal/tool"
@@ -19,13 +20,30 @@ import (
 // the unconfined instance registered at init. When the spec enforces, bash runs
 // each command through the sandbox (see package sandbox). guard appends a
 // warning to command output when the command references Corvus's own session
-// stores (see SessionDataGuard).
+// stores (see SessionDataGuard). The URL egress guard is off; use
+// ConfineBashWithNetPolicy to arm it.
 func ConfineBash(spec sandbox.Spec, guard SessionDataGuard, timeout ...time.Duration) tool.Tool {
 	shell := spec.Shell
 	if shell.Path == "" {
 		shell = sandbox.ResolveShell("", "", nil)
 	}
 	b := bash{sb: spec, shell: shell, guard: guard}
+	if len(timeout) > 0 {
+		b.timeout = timeout[0]
+	}
+	return b
+}
+
+// ConfineBashWithNetPolicy is ConfineBash with the network egress guard armed:
+// commands whose recognizable outbound-URL arguments (curl/wget, PowerShell
+// web cmdlets) hit a policy deny rule are refused before anything runs (see
+// denyNetworkEgressURLs). The zero policy is a no-op.
+func ConfineBashWithNetPolicy(spec sandbox.Spec, guard SessionDataGuard, policy netpolicy.Policy, timeout ...time.Duration) tool.Tool {
+	shell := spec.Shell
+	if shell.Path == "" {
+		shell = sandbox.ResolveShell("", "", nil)
+	}
+	b := bash{sb: spec, shell: shell, guard: guard, netPolicy: policy}
 	if len(timeout) > 0 {
 		b.timeout = timeout[0]
 	}
@@ -59,9 +77,15 @@ func RebindBashWriteRoots(tl tool.Tool, roots []string) (tool.Tool, bool) {
 }
 
 // ConfineWebFetch returns the web_fetch built-in bound to Corvus proxy
-// settings while preserving its SSRF-guarded dialer.
-func ConfineWebFetch(proxySpec netclient.ProxySpec) tool.Tool {
-	return webFetch{proxySpec: proxySpec}
+// settings while preserving its SSRF-guarded dialer. An optional network
+// egress policy (see internal/netpolicy) gates which URLs may be fetched; the
+// zero policy keeps today's unconfined behaviour.
+func ConfineWebFetch(proxySpec netclient.ProxySpec, policy ...netpolicy.Policy) tool.Tool {
+	var p netpolicy.Policy
+	if len(policy) > 0 {
+		p = policy[0]
+	}
+	return webFetch{proxySpec: proxySpec, policy: p}
 }
 
 // ConfineWriters returns the file-writing built-ins (write_file, edit_file,

@@ -29,6 +29,7 @@ import (
 	"corvus/internal/mcplaunch"
 	"corvus/internal/memory"
 	"corvus/internal/netclient"
+	"corvus/internal/netpolicy"
 	"corvus/internal/plugin"
 	"corvus/internal/pluginpkg"
 	"corvus/internal/provider"
@@ -3157,7 +3158,7 @@ model = "x"
 func TestAddBuiltinsWithWorkspaceRootKeepsSessionTools(t *testing.T) {
 	reg := tool.NewRegistry()
 	var stderr bytes.Buffer
-	addBuiltins(reg, nil, []string{robustTempDir(t)}, sandbox.Spec{}, 120*time.Second, builtin.SearchSpec{}, &stderr, robustTempDir(t), netclient.ProxySpec{}, nil, nil, builtin.SessionDataGuard{}, builtin.ManagedConfigPaths{}, nil, nil)
+	addBuiltins(reg, nil, []string{robustTempDir(t)}, sandbox.Spec{}, 120*time.Second, builtin.SearchSpec{}, &stderr, robustTempDir(t), netclient.ProxySpec{}, netpolicy.Policy{}, nil, nil, builtin.SessionDataGuard{}, builtin.ManagedConfigPaths{}, nil, nil)
 	for _, name := range []string{
 		"todo_write",
 		"complete_step",

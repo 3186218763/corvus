@@ -20,6 +20,7 @@ import (
 	"golang.org/x/net/proxy"
 
 	"corvus/internal/netclient"
+	"corvus/internal/netpolicy"
 	"corvus/internal/tool"
 )
 
@@ -27,6 +28,10 @@ func init() { tool.RegisterBuiltin(webFetch{}) }
 
 type webFetch struct {
 	proxySpec netclient.ProxySpec
+	// policy decides whether a URL may be fetched (see internal/netpolicy).
+	// The zero value has no rules and a Default of Allow — today's unconfined
+	// behaviour, so unbound instances keep working.
+	policy netpolicy.Policy
 }
 
 const (
@@ -257,6 +262,18 @@ func (wf webFetch) Execute(ctx context.Context, args json.RawMessage) (string, e
 	u, err := url.Parse(p.URL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 		return "", fmt.Errorf("url must be an absolute http(s) address")
+	}
+
+	// Network policy (internal/netpolicy): an explicit deny rule always wins;
+	// an allow rule beats Default=deny; with no match the Default applies. An
+	// Ask default has no approval UI in this environment and resolves to
+	// Allow, mirroring the permission package's nil-approver behaviour — so
+	// the only branch that refuses here is Deny.
+	if decision, rule := wf.policy.Decide(p.URL); decision == netpolicy.Deny {
+		if rule == "" {
+			return "", fmt.Errorf("network policy denied %s: no rule matched and default is deny", p.URL)
+		}
+		return "", fmt.Errorf("network policy denied %s: matched deny rule %q", p.URL, rule)
 	}
 
 	reqCtx, cancel := context.WithTimeout(ctx, webFetchTimeout)
