@@ -66,7 +66,7 @@ func (r *LocalProviderResolver) Resolve(selection provider.Selection) (provider.
 	if selection.Effort != nil {
 		entry.Effort = *selection.Effort
 	}
-	return NewProviderWithProxy(entry, r.proxy)
+	return NewProviderWithProxy(entry, r.proxy, r.cfg.WebSearch.Enabled())
 }
 
 func resolveProvider(opts Options, cfg *config.Config, proxy netclient.ProxySpec, selection provider.Selection) (provider.Provider, error) {

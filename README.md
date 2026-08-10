@@ -36,6 +36,18 @@ TUI environment variables:
   only for terminals that strand stale rows under the cell-diff renderer
   (disables smooth scroll).
 
+## Web search & tool discovery
+
+- `tool_search` is always available: the model can search the currently
+  registered tools (built-ins plus connected MCP tools) by keyword instead of
+  guessing a name.
+- `web_search` is an opt-in local tool that queries a search backend you
+  configure under `[web_search]` in `.corvus/config.toml` (engines:
+  `searxng` with `base_url`, or `brave`/`tavily` with `api_key`; see
+  `corvus.example.toml`). It works with every provider kind and obeys
+  `[network_policy]` deny rules. When enabled, the provider-side server
+  `web_search` toggle is suppressed so the model sees a single tool.
+
 ## MCP server
 
 `cmd/corvus-mcp-server` exposes Corvus's built-in tools to MCP hosts (IDEs,

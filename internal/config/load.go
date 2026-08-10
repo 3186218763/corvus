@@ -213,6 +213,7 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	backfillDeepSeekOfficialPrices(cfg)
 	normalizeEffortConfig(cfg)
 	backfillDeepSeekPro(cfg)
+	normalizeWebSearch(cfg)
 	if userDefaultModelExplicit {
 		restoreUnresolvableProjectDefaultModel(cfg, userDefaultModel)
 	}
@@ -812,6 +813,7 @@ func normalizeConfigForEdit(cfg *Config) bool {
 	applyDeepSeekOfficialDefaultPricing(cfg)
 	backfillDeepSeekOfficialPrices(cfg)
 	normalizeEffortConfig(cfg)
+	changed = normalizeWebSearch(cfg) || changed
 	return changed
 }
 

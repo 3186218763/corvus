@@ -238,7 +238,7 @@ func buildController(ctx context.Context, opts Options, cfg *config.Config, root
 		}
 		if recoveryModel != "" {
 			if re, ok := cfg.ResolveModel(recoveryModel); ok {
-				if rProv, err := NewProviderWithProxy(re, proxySpec); err == nil {
+				if rProv, err := NewProviderWithProxy(re, proxySpec, cfg.WebSearch.Enabled()); err == nil {
 					ctrlOpts.RecoveryReviewer = recovery.NewSessionWithSink(rProv, re.Price, modelRefFromEntry(re), sink)
 				} else {
 					slog.Warn("recovery reviewer provider construction failed — rule-only recovery", "model", recoveryModel, "err", err)

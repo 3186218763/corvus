@@ -2176,6 +2176,7 @@ func defaultFullBootToolNames() []string {
 		"slash_command",
 		"task",
 		"todo_write",
+		"tool_search",
 		"wait",
 		"web_fetch",
 		"write_file",
@@ -2191,6 +2192,7 @@ func economyBootToolNames() []string {
 		"edit_file",
 		"kill_shell",
 		"read_file",
+		"tool_search",
 		"wait",
 		"write_file",
 	}
@@ -2242,6 +2244,7 @@ command = "corvus-missing-mockmcp"
 		"edit_file",
 		"kill_shell",
 		"read_file",
+		"tool_search",
 		"wait",
 		"write_file",
 	}
@@ -3158,7 +3161,7 @@ model = "x"
 func TestAddBuiltinsWithWorkspaceRootKeepsSessionTools(t *testing.T) {
 	reg := tool.NewRegistry()
 	var stderr bytes.Buffer
-	addBuiltins(reg, nil, []string{robustTempDir(t)}, sandbox.Spec{}, 120*time.Second, builtin.SearchSpec{}, &stderr, robustTempDir(t), netclient.ProxySpec{}, netpolicy.Policy{}, nil, nil, builtin.SessionDataGuard{}, builtin.ManagedConfigPaths{}, nil, nil)
+	addBuiltins(reg, nil, nil, []string{robustTempDir(t)}, sandbox.Spec{}, 120*time.Second, builtin.SearchSpec{}, &stderr, robustTempDir(t), netclient.ProxySpec{}, netpolicy.Policy{}, nil, nil, builtin.SessionDataGuard{}, builtin.ManagedConfigPaths{}, nil, nil)
 	for _, name := range []string{
 		"todo_write",
 		"complete_step",

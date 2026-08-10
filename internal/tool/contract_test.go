@@ -48,8 +48,10 @@ var acceptsDefaultSnip = map[string]bool{
 	"move_file":     true,
 	"multi_edit":    true,
 	"notebook_edit": true,
+	"tool_search":   true,
 	"todo_write":    true,
 	"wait":          true,
+	"web_search":    true,
 	"write_file":    true,
 }
 

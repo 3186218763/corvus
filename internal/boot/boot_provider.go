@@ -100,9 +100,16 @@ func NewProvider(e *config.ProviderEntry) (provider.Provider, error) {
 // NewProviderWithProxy builds a provider.Provider with the configured ordinary
 // network proxy settings.
 
+// serverWebSearchSuppressed reports whether a local [web_search] engine is
+// active and therefore the provider-side server web_search tool must not be
+// emitted (the model would otherwise see two "web_search" tools).
+func serverWebSearchSuppressed(flag []bool) bool {
+	return len(flag) > 0 && flag[0]
+}
+
 // NewProviderWithProxy builds a provider.Provider with the configured ordinary
 // network proxy settings.
-func NewProviderWithProxy(e *config.ProviderEntry, proxy netclient.ProxySpec) (provider.Provider, error) {
+func NewProviderWithProxy(e *config.ProviderEntry, proxy netclient.ProxySpec, suppressServerWebSearch ...bool) (provider.Provider, error) {
 	return provider.New(e.Kind, provider.Config{
 		Name:    e.Name,
 		BaseURL: e.BaseURL,
@@ -127,7 +134,7 @@ func NewProviderWithProxy(e *config.ProviderEntry, proxy netclient.ProxySpec) (p
 			"vision":                config.EffectiveVision(e),
 			"vision_model_explicit": config.ExplicitModelVision(e),
 			"vision_detail":         e.VisionDetail,
-			"web_search":            e.WebSearch,
+			"web_search":            e.WebSearch && !serverWebSearchSuppressed(suppressServerWebSearch),
 			"mode":                  e.ResponsesMode,
 			// Keep nil as nil so the responses provider can vendor-detect its
 			// default instead of accidentally treating every endpoint as stateful.

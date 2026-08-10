@@ -57,6 +57,7 @@ type Config struct {
 	Sandbox          SandboxConfig       `toml:"sandbox"`
 	Network          NetworkConfig       `toml:"network"`
 	NetworkPolicy    NetworkPolicyConfig `toml:"network_policy"`
+	WebSearch        WebSearchConfig     `toml:"web_search"`
 	Environment      EnvironmentConfig   `toml:"environment"`
 	Plugins          []PluginEntry       `toml:"plugins"`
 	Skills           SkillsConfig        `toml:"skills"`
@@ -1076,6 +1077,25 @@ func clonePricing(p *provider.Pricing) *provider.Pricing {
 }
 
 // ToolsConfig selects which built-in tools are enabled. Empty means all of them.
+// WebSearchConfig configures the local web_search built-in tool. The tool
+// queries a search backend directly (independent of the provider), so it works
+// with every provider kind. Engine is one of searxng, brave, or tavily; an
+// empty engine disables the tool. Brave and tavily require APIKey; searxng
+// requires BaseURL (a self-hosted instance, e.g. https://search.example.com).
+// When a local engine is configured, provider-side server web_search toggles
+// are suppressed so the model sees a single "web_search" tool.
+type WebSearchConfig struct {
+	Engine     string `toml:"engine"`
+	BaseURL    string `toml:"base_url"`
+	APIKey     string `toml:"api_key"`
+	MaxResults int    `toml:"max_results"`
+}
+
+// Enabled reports whether the local web_search tool is configured.
+func (w WebSearchConfig) Enabled() bool {
+	return strings.TrimSpace(w.Engine) != ""
+}
+
 type ToolsConfig struct {
 	Enabled                  []string             `toml:"enabled"`
 	BashTimeoutSeconds       *int                 `toml:"bash_timeout_seconds"`

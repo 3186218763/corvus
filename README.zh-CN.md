@@ -53,6 +53,16 @@ TUI 环境变量：
 - `CORVUS_TUI_SCROLL_REPAINT=1` — 每次滚动时启用旧式全屏重绘；仅用于 cell-diff
   渲染器下会残留陈旧行的终端（会禁用平滑滚动）。
 
+## 联网搜索与工具发现
+
+- `tool_search` 始终可用：模型可以按关键词搜索当前已注册的工具（内置工具 +
+  已连接的 MCP 工具），不必靠猜名字。
+- `web_search` 是可选本地工具，通过 `.corvus/config.toml` 的 `[web_search]`
+  配置后端（`searxng` 需 `base_url`；`brave`/`tavily` 需 `api_key`，见
+  `corvus.example.toml`）。它对所有 provider 生效，并遵守 `[network_policy]`
+  的 deny 规则；启用后会自动关闭 provider 侧的 server-side web_search，
+  避免出现两个同名工具。
+
 ## 开发
 
 ```sh

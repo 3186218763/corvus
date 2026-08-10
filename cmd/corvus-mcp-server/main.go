@@ -17,6 +17,7 @@ import (
 	"corvus/internal/config"
 	"corvus/internal/i18n"
 	"corvus/internal/mcpserver"
+	"corvus/internal/netclient"
 	"corvus/internal/permission"
 	"corvus/internal/sandbox"
 	"corvus/internal/tool"
@@ -66,7 +67,10 @@ func run(args []string) error {
 	}
 	i18n.DetectLanguage(cfg.Language)
 
-	tools := buildTools(cfg, root, *allowWrite)
+	tools, err := buildTools(cfg, root, *allowWrite)
+	if err != nil {
+		return err
+	}
 	policyMode, err := mapPermissionMode(*permissionMode)
 	if err != nil {
 		return err
@@ -105,7 +109,7 @@ func resolveRoot(dir string) (string, error) {
 // SSRF-guarded web_fetch with the configured proxy. With allowWrite the
 // writer tools and a workspace-confined bash are added, but every call still
 // passes through policy.Decide (Ask and Deny decisions refuse the call).
-func buildTools(cfg *config.Config, root string, allowWrite bool) []tool.Tool {
+func buildTools(cfg *config.Config, root string, allowWrite bool) ([]tool.Tool, error) {
 	proxySpec := cfg.NetworkProxySpec()
 	writeRoots := cfg.WriteRootsForRoot(root)
 	guard := builtin.NewSessionDataGuard(config.MemoryUserDir(), cfg.AllowWriteRoots())
@@ -138,6 +142,29 @@ func buildTools(cfg *config.Config, root string, allowWrite bool) []tool.Tool {
 	// unconfined init-registered instance even if the Workspace set changes.
 	// New() deduplicates by name, keeping the Workspace-bound instance.
 	tools = append(tools, builtin.ConfineWebFetch(proxySpec))
+	// tool_search discovers the served surface on demand; web_search joins it
+	// when a [web_search] engine is configured. Both are read-only and fit the
+	// fail-closed MCP toolset.
+	tools = append(tools, builtin.NewToolSearchTool(toolSearchSnapshot(tools)))
+	if cfg.WebSearch.Enabled() {
+		netPolicy, err := cfg.NetPolicy()
+		if err != nil {
+			return nil, fmt.Errorf("web_search: %w", err)
+		}
+		client, err := netclient.NewHTTPClient(proxySpec, netclient.TransportOptions{
+			DialTimeout:           15 * time.Second,
+			TLSHandshakeTimeout:   15 * time.Second,
+			ResponseHeaderTimeout: 15 * time.Second,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("web_search: network client: %w", err)
+		}
+		wsTool, err := builtin.NewWebSearchTool(cfg.WebSearch.Engine, cfg.WebSearch.BaseURL, cfg.WebSearch.APIKey, cfg.WebSearch.MaxResults, client, netPolicy)
+		if err != nil {
+			return nil, fmt.Errorf("web_search: %w", err)
+		}
+		tools = append(tools, wsTool)
+	}
 	if allowWrite {
 		// Workspace tools include bash bound to the workspace sandbox spec;
 		// the extra ConfineBash is the explicit failsafe layer (deduplicated
@@ -145,7 +172,24 @@ func buildTools(cfg *config.Config, root string, allowWrite bool) []tool.Tool {
 		tools = append(tools, all...)
 		tools = append(tools, builtin.ConfineBash(ws.Bash, guard, ws.BashTimeout))
 	}
-	return tools
+	return tools, nil
+}
+
+// toolSearchSnapshot builds the registry-contract snapshot tool_search searches
+// over from a concrete tool slice (the MCP server has no live registry).
+func toolSearchSnapshot(tools []tool.Tool) func() []tool.ContractEntry {
+	return func() []tool.ContractEntry {
+		entries := make([]tool.ContractEntry, 0, len(tools))
+		for _, t := range tools {
+			entries = append(entries, tool.ContractEntry{
+				Name:        t.Name(),
+				Description: t.Description(),
+				ReadOnly:    t.ReadOnly(),
+				Schema:      t.Schema(),
+			})
+		}
+		return entries
+	}
 }
 
 // mapPermissionMode translates the CLI-style approval flag into the writer

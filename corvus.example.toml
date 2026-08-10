@@ -30,6 +30,16 @@ default = "allow"
 # allow   = ["docs.example.com"]
 # deny    = ["*.internal.corp", "10.0.0.0"]
 
+[web_search]
+# 本地 web_search 工具（模型可直接调用，与 provider 无关）。
+# engine: searxng（自建实例，需 base_url）| brave | tavily（需 api_key）。
+# 留空 = 不注册 web_search 工具。配置后会自动关闭 provider 侧的
+# server-side web_search，避免同一名字出现两个工具。
+# engine = "searxng"
+# base_url = "https://search.example.com"   # searxng 实例地址（自动补 /search）
+# api_key = "..."                           # brave / tavily 的 API key
+# max_results = 8                           # 每次最多返回条数（1–20，默认 8）
+
 # 供应商条目。kind 是协议类型（如 openai / anthropic / responses）；
 # OpenAI 兼容网关通常用 "openai"。
 [[providers]]

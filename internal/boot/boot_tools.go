@@ -102,8 +102,12 @@ func buildToolRegistry(cfg *config.Config, opts Options, root string, stderr io.
 	// An explicit Economy allowlist can contain only on-demand tools, leaving no
 	// startup built-ins. Do not pass that filtered empty slice to addBuiltins,
 	// where an empty list intentionally means "all built-ins".
+	webSearchTool, err := buildWebSearchTool(cfg, proxySpec, netPolicy)
+	if err != nil {
+		return nil, err
+	}
 	if !tokenEconomy || len(cfg.Tools.Enabled) == 0 || len(enabledBuiltins) > 0 {
-		addBuiltins(reg, enabledBuiltins, writeRoots, bashSpec, bashTimeout, searchSpec, stderr, root, proxySpec, netPolicy, forbidReadRoots, readPathResolver, sessionGuard, managedConfig, opts.FileOverlay, opts.TerminalRunner)
+		addBuiltins(reg, enabledBuiltins, webSearchTool, writeRoots, bashSpec, bashTimeout, searchSpec, stderr, root, proxySpec, netPolicy, forbidReadRoots, readPathResolver, sessionGuard, managedConfig, opts.FileOverlay, opts.TerminalRunner)
 	}
 	// Use the caller-supplied shared host when set, so controllers for the same
 	// workspace root reuse running MCP processes (e.g. one CodeGraph daemon
@@ -796,24 +800,37 @@ func buildToolSourceConnector(ctx context.Context, opts Options, cfg *config.Con
 // and makes bash warn when a command references them. managedConfig names the
 // Corvus-owned config files writable outside writeRoots after a fresh
 // per-write human approval.
-func addBuiltins(reg *tool.Registry, enabled, writeRoots []string, bashSpec sandbox.Spec, bashTimeout time.Duration, searchSpec builtin.SearchSpec, stderr io.Writer, workDir string, proxySpec netclient.ProxySpec, netPolicy netpolicy.Policy, forbidReadRoots []string, readPathResolver *builtin.PathResolver, sessionGuard builtin.SessionDataGuard, managedConfig builtin.ManagedConfigPaths, overlay builtin.FileOverlay, terminal builtin.TerminalRunner) {
+func addBuiltins(reg *tool.Registry, enabled []string, webSearchTool tool.Tool, writeRoots []string, bashSpec sandbox.Spec, bashTimeout time.Duration, searchSpec builtin.SearchSpec, stderr io.Writer, workDir string, proxySpec netclient.ProxySpec, netPolicy netpolicy.Policy, forbidReadRoots []string, readPathResolver *builtin.PathResolver, sessionGuard builtin.SessionDataGuard, managedConfig builtin.ManagedConfigPaths, overlay builtin.FileOverlay, terminal builtin.TerminalRunner) {
 	// If a workspace directory is set, use workspace-bound tools that resolve
 	// paths relative to that directory. Otherwise fall back to the process-cwd
 	// compile-time builtins.
 	if workDir != "" {
 		ws := builtin.Workspace{Dir: workDir, WriteRoots: writeRoots, ForbidReadRoots: forbidReadRoots, Bash: bashSpec, BashTimeout: bashTimeout, Search: searchSpec, ProxySpec: proxySpec, NetPolicy: netPolicy, ReadPaths: readPathResolver, SessionGuard: sessionGuard, ManagedConfig: managedConfig, FileOverlay: overlay, Terminal: terminal}
 		for _, t := range ws.Tools(enabled...) {
+			if t.Name() == "web_search" {
+				continue
+			}
 			reg.Add(t)
 		}
+		addBuiltinsDynamic(reg, webSearchTool)
 		return
 	}
 
 	if len(enabled) == 0 {
 		for _, t := range tool.Builtins() {
+			if t.Name() == "web_search" {
+				continue
+			}
 			reg.Add(t)
 		}
 	} else {
 		for _, name := range enabled {
+			if name == "web_search" {
+				if webSearchTool == nil {
+					fmt.Fprintf(stderr, "warning: web_search is disabled: no [web_search] engine configured\n")
+				}
+				continue
+			}
 			if t, ok := tool.LookupBuiltin(name); ok {
 				reg.Add(t)
 			} else {
@@ -835,6 +852,18 @@ func addBuiltins(reg *tool.Registry, enabled, writeRoots []string, bashSpec sand
 			reg.Add(t)
 		}
 	}
+	addBuiltinsDynamic(reg, webSearchTool)
+}
+
+// addBuiltinsDynamic binds the registry-dependent and configuration-gated
+// built-ins: tool_search (always, bound to the live registry contract) and
+// web_search (only when a [web_search] engine is configured). Both replace the
+// bare init instances added above, preserving registry order.
+func addBuiltinsDynamic(reg *tool.Registry, webSearchTool tool.Tool) {
+	if webSearchTool != nil {
+		reg.Add(webSearchTool)
+	}
+	reg.Add(builtin.NewToolSearchTool(reg.ContractEntries))
 }
 
 func builtinToolEnabled(enabled []string, name string) bool {
