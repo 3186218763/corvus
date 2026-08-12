@@ -457,7 +457,7 @@ func (s *Store) CaptureBefore(path string, opts CaptureBeforeOpts) {
 	if opts.Source == "" {
 		opts.Source = CaptureBeforeMutation
 	}
-	fp, gap, _ := CapturePath(path, CaptureOptions{
+	fp, gap, err := CapturePath(path, CaptureOptions{
 		WorkspaceRoot: s.root,
 		ReadContent:   true,
 	})
@@ -467,6 +467,17 @@ func (s *Store) CaptureBefore(path string, opts CaptureBeforeOpts) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cur == nil || s.seen[pathKey] {
+		return
+	}
+	if gap != nil && err != nil {
+		// The preimage was NOT captured (oversized, unreadable, hardlink,
+		// symlink escape). Never fabricate a restorable snapshot from empty
+		// content: a rewind would publish a 0-byte file over the user's data
+		// and the empty-string digest would defeat the missing-payload
+		// precheck. The coverage gap recorded above already downgrades the
+		// rewind to confirmation-required and leaves the file untouched.
+		// Not marking the path seen lets a later successful capture of the
+		// same path record real content.
 		return
 	}
 	s.seen[pathKey] = true

@@ -101,7 +101,10 @@ func (m chatTUI) modeTagText() string {
 	case goalMode:
 		return "Goal"
 	default:
-		return "Auto"
+		// The controller's default posture is Ask (each tool call asks); a
+		// fallthrough would mislabel it "Auto" and mislead the user about
+		// whether tool calls are being auto-approved.
+		return "Ask"
 	}
 }
 

@@ -1064,15 +1064,25 @@ func TestBuildHeadlessApprovalModePropagatesToTaskSubagentGate(t *testing.T) {
 		registerHeadlessTaskWriteTestProvider()
 		prov := &headlessTaskWriteTestProvider{}
 		setHeadlessTaskWriteTestProvider(t, prov)
+		// Permission rules are a user-global security control: a project
+		// .corvus/config.toml must not be able to weaken them, so the ask rule
+		// lives in the user config.
+		userCfg := config.UserConfigPath()
+		if err := os.MkdirAll(filepath.Dir(userCfg), 0o755); err != nil {
+			t.Fatalf("mkdir user config: %v", err)
+		}
+		if err := os.WriteFile(userCfg, []byte(`
+[permissions]
+mode = "ask"
+ask = ["write_file"]
+`), 0o644); err != nil {
+			t.Fatalf("write user config: %v", err)
+		}
 		writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
 system_prompt = "BASE"
-
-[permissions]
-mode = "ask"
-ask = ["write_file"]
 
 [[providers]]
 name = "test-model"
@@ -1190,15 +1200,24 @@ func TestBuildInteractiveApprovalModeSwitchPropagatesToTaskSubagentGate(t *testi
 	registerHeadlessTaskWriteTestProvider()
 	prov := &headlessTaskWriteTestProvider{}
 	setHeadlessTaskWriteTestProvider(t, prov)
+	// Permission rules are a user-global security control; the ask rule lives
+	// in the user config (project .corvus/config.toml cannot weaken it).
+	userCfg := config.UserConfigPath()
+	if err := os.MkdirAll(filepath.Dir(userCfg), 0o755); err != nil {
+		t.Fatalf("mkdir user config: %v", err)
+	}
+	if err := os.WriteFile(userCfg, []byte(`
+[permissions]
+mode = "ask"
+ask = ["write_file"]
+`), 0o644); err != nil {
+		t.Fatalf("write user config: %v", err)
+	}
 	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
 default_model = "test-model"
 
 [agent]
 system_prompt = "BASE"
-
-[permissions]
-mode = "ask"
-ask = ["write_file"]
 
 [[providers]]
 name = "test-model"

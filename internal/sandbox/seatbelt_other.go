@@ -28,7 +28,9 @@ func usableBwrap() (string, bool) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	err = exec.CommandContext(ctx, bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--", "true").Run()
+	// The probe must exercise the same isolation flags the real sandbox uses;
+	// a host that refuses pid/user namespaces cannot run our sandbox profile.
+	err = exec.CommandContext(ctx, bwrap, bwrapIsolationArgs()[0], "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--", "true").Run()
 	usable := err == nil
 	actual, _ := bwrapUsability.LoadOrStore(bwrap, usable)
 	return bwrap, actual.(bool)
@@ -75,6 +77,21 @@ func Available() bool {
 	return ok
 }
 
+// bwrapIsolationArgs returns the process-isolation namespace flags every
+// sandbox profile must carry: a private PID namespace so /proc exposes no host
+// processes (no reading host env/API keys via /proc/<host-pid>/environ), a
+// private IPC namespace, a private UTS namespace, and a parent-scoped private
+// user namespace. --die-with-parent makes bwrap kill its subtree when Corvus
+// dies so no orphaned sandbox process survives teardown.
+func bwrapIsolationArgs() []string {
+	return []string{
+		"--unshare-user",
+		"--unshare-pid",
+		"--unshare-ipc",
+		"--unshare-uts",
+	}
+}
+
 // bwrapArgs builds the bubblewrap command-line arguments that confine the
 // shell command to the write roots, deny network unless allowed, and overlay
 // forbid-read paths so directories appear empty and files read as empty. The
@@ -82,14 +99,18 @@ func Available() bool {
 func bwrapArgs(spec Spec, sh Shell, command string) []string {
 	args := []string{
 		"--unshare-net", // deny network by default
+	}
+	args = append(args, bwrapIsolationArgs()...)
+	args = append(args,
 		"--ro-bind", "/", "/",
 		"--dev", "/dev",
 		"--proc", "/proc",
 		"--tmpfs", "/tmp",
-	}
+	)
+	args = append(args, bwrapLifecycleArgs()...)
 	if spec.Network {
 		// Re-allow network by removing the network namespace.
-		args = args[1:] // drop --unshare-net
+		args = dropArg(args, "--unshare-net")
 	}
 	for _, root := range spec.WriteRoots {
 		args = append(args, "--bind", root, root)
@@ -109,14 +130,18 @@ func bwrapArgs(spec Spec, sh Shell, command string) []string {
 func bwrapArgsForArgs(spec Spec, args []string) []string {
 	out := []string{
 		"--unshare-net", // deny network by default
+	}
+	out = append(out, bwrapIsolationArgs()...)
+	out = append(out,
 		"--ro-bind", "/", "/",
 		"--dev", "/dev",
 		"--proc", "/proc",
 		"--tmpfs", "/tmp",
-	}
+	)
+	out = append(out, bwrapLifecycleArgs()...)
 	if spec.Network {
 		// Re-allow network by removing the network namespace.
-		out = out[1:] // drop --unshare-net
+		out = dropArg(out, "--unshare-net")
 	}
 	for _, root := range spec.WriteRoots {
 		out = append(out, "--bind", root, root)
@@ -187,6 +212,22 @@ func bwrapForbidReadArgs(roots []string) []string {
 		out = append(out, "--ro-bind", "/dev/null", entry.path)
 	}
 	return out
+}
+
+// bwrapLifecycleArgs ties the sandbox subtree to Corvus: --die-with-parent
+// kills every sandbox process when the parent exits, so no orphaned child can
+// outlive the session that spawned it.
+func bwrapLifecycleArgs() []string {
+	return []string{"--die-with-parent"}
+}
+
+func dropArg(args []string, flag string) []string {
+	for i, a := range args {
+		if a == flag {
+			return append(args[:i:i], args[i+1:]...)
+		}
+	}
+	return args
 }
 
 func bwrapExecutableMountArgs(args []string) []string {

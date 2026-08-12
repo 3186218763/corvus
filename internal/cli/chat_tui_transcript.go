@@ -207,6 +207,7 @@ func (m chatTUI) bottomRows() int {
 // positive maxLines keeps only the trailing visual lines (the live view); 0
 // renders all (verbose collapse).
 func reasoningBlock(raw string, width, maxLines int) string {
+	raw = sanitizeTerminalText(raw)
 	w := width - len([]rune(connector))
 	if w < 8 {
 		w = 8
@@ -744,7 +745,7 @@ func wrapForViewport(text string, width int, fg cliColor) string {
 // a full-width surface that adds two blank rows and becomes grey in ANSI-256
 // terminals.
 func renderUserBubble(line string, width int, planMode bool, current bool) string {
-	line = displayLineForImageRefs(line)
+	line = displayLineForImageRefs(sanitizeTerminalText(line))
 	prefix := "› "
 	if planMode {
 		prefix = "› [plan] "

@@ -26,6 +26,7 @@ import (
 	"corvus/internal/hook"
 	"corvus/internal/i18n"
 	"corvus/internal/jobs"
+	"corvus/internal/mcplaunch"
 	"corvus/internal/memory"
 	"corvus/internal/permission"
 	"corvus/internal/plugin"
@@ -2771,6 +2772,53 @@ func TestAddMCPServerAuthorizesExplicitUserAddBeforeConnecting(t *testing.T) {
 	}
 }
 
+// TestMCPSpecProjectScopedRequiresLaunchApproval pins the trust-boundary
+// contract: a repository-declared MCP server must not connect as implicitly
+// authorized through the controller path. It needs the same exact-identity
+// launch approval (or a recorded grant) the boot path enforces.
+func TestMCPSpecProjectScopedRequiresLaunchApproval(t *testing.T) {
+	c := New(Options{WorkspaceRoot: "/workspace"})
+	entry := config.PluginEntry{
+		Name:   "project-server",
+		Source: config.MCPSourceProjectConfig,
+	}
+	spec := c.mcpSpec(entry)
+	if !spec.RequireLaunchApproval {
+		t.Fatal("project-scoped MCP spec must require launch approval")
+	}
+	if spec.Authorized {
+		t.Fatal("project-scoped MCP spec must not be pre-authorized")
+	}
+
+	userEntry := config.PluginEntry{
+		Name:   "user-server",
+		Source: config.MCPSourceUserConfig,
+	}
+	userSpec := c.mcpSpec(userEntry)
+	if userSpec.RequireLaunchApproval {
+		t.Fatal("user-installed MCP must not require launch approval")
+	}
+	if !userSpec.Authorized {
+		t.Fatal("user-installed MCP must be authorized")
+	}
+}
+
+// TestConnectMCPServerProjectScopedFailsClosedWithoutGrant: connecting a
+// project-declared MCP server with no durable launch grant and no authorization
+// store must fail closed with a launch-approval error, never start the process.
+func TestConnectMCPServerProjectScopedFailsClosedWithoutGrant(t *testing.T) {
+	c := New(Options{WorkspaceRoot: "/workspace"})
+	entry := config.PluginEntry{
+		Name:   "project-server",
+		Type:   "stdio",
+		Source: config.MCPSourceProjectConfig,
+	}
+	_, err := c.connectMCPServer(entry)
+	if err == nil || !strings.Contains(err.Error(), "launch approval") {
+		t.Fatalf("connectMCPServer error = %v, want a launch-approval-required error", err)
+	}
+}
+
 func TestAddMCPServerWritesGlobalConfigWithoutShadowingProject(t *testing.T) {
 	isolateControlConfigHome(t)
 	workspace := t.TempDir()
@@ -2860,7 +2908,12 @@ command = "project-shared"
 	}
 }
 
-func TestConnectConfiguredProjectMCPIsTrustedByDefault(t *testing.T) {
+// TestConnectConfiguredProjectMCPRequiresApproval pins the trust-boundary
+// contract: a project-declared MCP server is NOT trusted by default. The
+// first explicit connect records an exact-identity launch grant; later
+// connects (including fresh controllers) reuse it; any identity change
+// invalidates the grant and fails closed.
+func TestConnectConfiguredProjectMCPRequiresApproval(t *testing.T) {
 	isolateControlConfigHome(t)
 	workspace := t.TempDir()
 	var requests atomic.Int32
@@ -2900,18 +2953,23 @@ func TestConnectConfiguredProjectMCPIsTrustedByDefault(t *testing.T) {
 		})
 	}))
 	defer server.Close()
-	if err := os.MkdirAll(filepath.Join(workspace, ".corvus"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(workspace, ".corvus", "config.toml"), []byte(fmt.Sprintf(`
+	writeProjectMCP := func(url string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(workspace, ".corvus"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(workspace, ".corvus", "config.toml"), []byte(fmt.Sprintf(`
 [[plugins]]
 name = "project-docs"
 type = "http"
 url = %q
-`, server.URL)), 0o644); err != nil {
-		t.Fatal(err)
+`, url)), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
+	writeProjectMCP(server.URL)
 
+	launchManager := mcplaunch.ForWorkspace(config.CorvusHomeDir(), workspace)
 	host := plugin.NewHost()
 	defer host.Close()
 	reg := tool.NewRegistry()
@@ -2922,34 +2980,77 @@ url = %q
 		PluginCtx:     context.Background(),
 		WorkspaceRoot: workspace,
 		MCPConfigureSpec: func(spec *plugin.Spec) {
+			spec.LaunchManager = launchManager
 			configured = *spec
 		},
 	})
 
+	// First explicit connect records the exact-identity grant and connects.
 	n, err := ctrl.ConnectConfiguredMCPServer("project-docs")
 	if err != nil {
 		t.Fatalf("ConnectConfiguredMCPServer: %v", err)
 	}
 	if n != 1 || requests.Load() == 0 {
-		t.Fatalf("trusted project MCP = %d tools, %d requests; want 1 tool and a live connection", n, requests.Load())
+		t.Fatalf("approved project MCP = %d tools, %d requests; want 1 tool and a live connection", n, requests.Load())
 	}
 	if _, ok := reg.Get("mcp__project-docs__search"); !ok {
 		t.Fatalf("project MCP tool missing; names=%v", reg.Names())
 	}
-	if !configured.Authorized || configured.RequireLaunchApproval || configured.Dir != workspace {
-		t.Fatalf("project MCP spec = %+v, want trusted project-scoped runtime", configured)
+	if !configured.RequireLaunchApproval || configured.Authorized {
+		t.Fatalf("project MCP spec = %+v, want approval-gated (RequireLaunchApproval, not Authorized)", configured)
+	}
+	if configured.Dir != workspace {
+		t.Fatalf("project MCP dir = %q, want %q", configured.Dir, workspace)
 	}
 
-	nextHost := plugin.NewHost()
-	defer nextHost.Close()
+	// A fresh controller reuses the persisted grant without a new approval.
 	nextCtrl := New(Options{
-		Host:          nextHost,
+		Host:          plugin.NewHost(),
 		Registry:      tool.NewRegistry(),
 		PluginCtx:     context.Background(),
 		WorkspaceRoot: workspace,
+		MCPConfigureSpec: func(spec *plugin.Spec) {
+			spec.LaunchManager = launchManager
+		},
 	})
 	if n, err := nextCtrl.ConnectConfiguredMCPServer("project-docs"); err != nil || n != 1 {
-		t.Fatalf("subsequent project MCP connection = (%d, %v), want zero-confirmation trust", n, err)
+		t.Fatalf("grant-reused connection = (%d, %v), want success", n, err)
+	}
+
+	// An identity change (different endpoint) does NOT silently reuse the old
+	// grant: resolving authorization for the original endpoint's identity now
+	// fails closed, so automatic paths (boot auto-start, lazy tool calls)
+	// refuse the server until the user explicitly connects the new identity.
+	stale := plugin.Spec{
+		Name:                  "project-docs",
+		Type:                  "http",
+		URL:                   server.URL,
+		RequireLaunchApproval: true,
+		LaunchManager:         launchManager,
+		WorkspaceRoot:         workspace,
+	}
+	if resolved := plugin.ResolveStoredAuthorization(context.Background(), stale); resolved.ServerAuthorized() {
+		t.Fatal("drifted identity must not be authorized by the old grant")
+	}
+	// The explicit connect of the changed identity is the user's approval
+	// action: it records a fresh grant and connects.
+	changed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":null,"result":{}}`))
+	}))
+	defer changed.Close()
+	writeProjectMCP(changed.URL)
+	fresh := New(Options{
+		Host:          plugin.NewHost(),
+		Registry:      tool.NewRegistry(),
+		PluginCtx:     context.Background(),
+		WorkspaceRoot: workspace,
+		MCPConfigureSpec: func(spec *plugin.Spec) {
+			spec.LaunchManager = launchManager
+		},
+	})
+	if _, err := fresh.ConnectConfiguredMCPServer("project-docs"); err != nil {
+		t.Fatalf("explicit connect of changed identity should record a fresh grant: %v", err)
 	}
 }
 

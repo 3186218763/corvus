@@ -25,7 +25,9 @@ import (
 // their turn does not arrive within syncQueueWait, so one stalled consumer can
 // never wedge unrelated emitters (background-job notices, usage telemetry).
 // ApprovalRequest / AskRequest always enqueue and wait their turn: the run loop
-// blocks on the frontend's answer, so dropping one would hang the turn.
+// blocks on the frontend's answer, so dropping one would hang the turn. The
+// same applies to TurnDone / CompactionDone — the frontend's turn-unlock
+// signals.
 func Sync(s Sink) Sink {
 	if nilutil.IsNil(s) {
 		return Discard
@@ -71,8 +73,20 @@ func (s *syncSink) Dropped() uint64 {
 	return s.dropped.Load()
 }
 
+// criticalKind reports events that must never be shed: the run loop blocks on
+// the frontend's answer to an approval, and the frontend's input gate unlocks
+// only on TurnDone / CompactionDone. Dropping either class would hang or
+// permanently lock the UI.
+func criticalKind(e Event) bool {
+	switch e.Kind {
+	case ApprovalRequest, AskRequest, TurnDone, CompactionDone:
+		return true
+	}
+	return false
+}
+
 func (s *syncSink) Emit(e Event) {
-	critical := e.Kind == ApprovalRequest || e.Kind == AskRequest
+	critical := criticalKind(e)
 	node := &syncNode{event: e, ready: make(chan struct{})}
 
 	isHead := false

@@ -63,6 +63,59 @@ func waitFor(t *testing.T, cond func() bool) {
 	t.Fatal("condition not met within deadline")
 }
 
+func TestStartForSessionAfterCloseRejected(t *testing.T) {
+	m := NewManager(event.Discard)
+	m.Close()
+	j := m.StartForSession("session-a", "bash", "late", func(context.Context, io.Writer) (string, error) {
+		return "never", nil
+	})
+	if j.status != Failed {
+		t.Fatalf("job after Close = %s, want Failed (manager must reject new jobs once closing)", j.status)
+	}
+	if j.artifactErr == "" || !strings.Contains(j.artifactErr, "closed") {
+		t.Fatalf("job after Close artifactErr = %q, want a manager-closed error", j.artifactErr)
+	}
+	select {
+	case <-j.done:
+	default:
+		t.Fatal("rejected job must be immediately done")
+	}
+}
+
+// TestCloseRacingStartForSession guards the Start/Close handshake: every
+// wg.Add must happen before Close begins wg.Wait. Without the closing flag a
+// late Start lands its Add while Wait is draining, which panics the process
+// ("WaitGroup is reused before previous Wait has returned") or trips -race.
+func TestCloseRacingStartForSession(t *testing.T) {
+	for i := 0; i < 50; i++ {
+		m := NewManager(event.Discard)
+		release := make(chan struct{})
+		j := m.Start("bash", "x", func(ctx context.Context, _ io.Writer) (string, error) {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-release:
+				return "done", nil
+			}
+		})
+		_ = j
+		closing := make(chan struct{})
+		go func() {
+			defer close(closing)
+			m.Close()
+		}()
+		// Wait is now blocked with the counter held by job x. Release it so the
+		// counter drains to zero while fresh Starts keep calling wg.Add — an
+		// Add landing in that window panics the process unless Close first set
+		// the closing flag under m.mu.
+		close(release)
+		for k := 0; k < 200; k++ {
+			m.Start("bash", "y", func(context.Context, io.Writer) (string, error) { return "z", nil })
+		}
+		<-closing
+	}
+}
+
 func TestStartForSessionStampsJobContext(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()

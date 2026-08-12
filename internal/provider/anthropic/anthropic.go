@@ -26,6 +26,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -518,6 +519,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 	var inTok, outTok, cacheCreate, cacheRead int
 	var stopReason string
 	haveUsage := false
+	sawMessageStop := false
 	mergeUsage := func(usage *wireUsage) {
 		if usage == nil {
 			return
@@ -637,6 +639,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			}
 			mergeUsage(ev.Usage)
 		case "message_stop":
+			sawMessageStop = true
 			// Stream complete; fall through to finalize below.
 		case "error":
 			msg := "stream error"
@@ -652,11 +655,20 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		return
 	}
 	if stalled.Load() {
-		send(provider.Chunk{Type: provider.ChunkError, Err: fmt.Errorf("%s: stream stalled — no data for %s, connection likely dropped", c.name, idleTimeout)})
+		// Recoverable: the agent can append a tail recovery prompt and retry.
+		send(provider.Chunk{Type: provider.ChunkError, Err: &provider.StreamInterruptedError{Err: fmt.Errorf("%s: stream stalled — no data for %s, connection likely dropped", c.name, idleTimeout)}})
 		return
 	}
 	if err := scanner.Err(); err != nil {
-		send(provider.Chunk{Type: provider.ChunkError, Err: fmt.Errorf("%s: read stream: %w", c.name, err)})
+		send(provider.Chunk{Type: provider.ChunkError, Err: &provider.StreamInterruptedError{Err: fmt.Errorf("%s: read stream: %w", c.name, err)}})
+		return
+	}
+	// A proxy that idle-closes with a clean FIN ends the scan with no error.
+	// Without this check the turn would be committed as complete — including
+	// half-streamed tool-call arguments, which are silently dropped and then
+	// 400 on every replay (openai #3953). Mirrors the openai provider guard.
+	if !sawMessageStop && stopReason == "" {
+		send(provider.Chunk{Type: provider.ChunkError, Err: &provider.StreamInterruptedError{Err: fmt.Errorf("%s: stream ended before completion: %w", c.name, io.ErrUnexpectedEOF)}})
 		return
 	}
 

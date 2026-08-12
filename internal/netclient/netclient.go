@@ -50,6 +50,11 @@ type TransportOptions struct {
 	TLSHandshakeTimeout   time.Duration
 	ResponseHeaderTimeout time.Duration
 	ForceIPv4             bool
+	// Timeout caps the entire request including body reads (http.Client.Timeout).
+	// Per-phase transport timeouts alone do not bound io.ReadAll on a slow or
+	// infinite body; body-consuming tools must set this so a stalled backend
+	// cannot hang the caller (or a single-threaded MCP server) forever.
+	Timeout time.Duration
 }
 
 // NormalizeMode maps empty and unknown modes to auto, preserving a fail-open
@@ -85,7 +90,7 @@ func NewHTTPClient(spec ProxySpec, opts TransportOptions) (*http.Client, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &http.Client{Transport: tr}, nil
+	return &http.Client{Transport: tr, Timeout: opts.Timeout}, nil
 }
 
 // NewTransport clones net/http's default transport and overlays the requested

@@ -124,6 +124,18 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	userDefaultModel := cfg.DefaultModel
 	globalSecrets := cfg.Secrets
 	globalPricingCurrency := cfg.UI.Currency
+	globalWebSearch := cfg.WebSearch
+	// Security controls are user-global: a cloned repository's project config
+	// must not be able to weaken them. Snapshot the full security surface
+	// before the project merge and restore it after (mirroring Secrets).
+	// agent.system_prompt_file is intentionally NOT protected: it already runs
+	// through workspace containment, and a project can equally inject
+	// instructions via AGENTS.md/CORVUS.md — the boundary is the OS sandbox
+	// and permission engine, not the prompt file.
+	globalPermissions := cfg.Permissions
+	globalSandbox := cfg.Sandbox
+	globalNetwork := cfg.Network
+	globalNetworkPolicy := cfg.NetworkPolicy
 
 	projectTOML := ProjectConfigPathForRoot(root)
 	tomlSources = append(tomlSources, projectTOML)
@@ -148,6 +160,29 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	// Pricing currency is a user-level regional preference. A repository must
 	// not be able to alter how the user's spend is shown.
 	cfg.UI.Currency = globalPricingCurrency
+	// [web_search] is a user-global security control too: base_url selects the
+	// endpoint that api_key is sent to, so a cloned repository must not be able
+	// to redirect the user's search credential (exfiltration) or point the
+	// search client at internal addresses (SSRF).
+	if projectMeta.IsDefined("web_search") {
+		cfg.addLoadWarning("[web_search] is a user-global setting; the project value is ignored (the search key and endpoint must stay under user control)")
+	}
+	cfg.WebSearch = globalWebSearch
+	// The security surface ([permissions], [sandbox], [network],
+	// [network_policy]) is user-global: a cloned repository must not be able
+	// to weaken the permission engine, disable the OS sandbox, or open network
+	// egress — project MCP requires launch approval and project hooks cannot
+	// answer approvals, so project config must not bypass the same trust
+	// boundary.
+	for _, section := range []string{"permissions", "sandbox", "network", "network_policy"} {
+		if projectMeta.IsDefined(section) {
+			cfg.addLoadWarning(section + " is a user-global security setting; the project value is ignored")
+		}
+	}
+	cfg.Permissions = globalPermissions
+	cfg.Sandbox = globalSandbox
+	cfg.Network = globalNetwork
+	cfg.NetworkPolicy = globalNetworkPolicy
 	// TOML decoding replaces [[plugins]] wholesale, so cfg.Plugins now holds
 	// only the last file's. Re-merge by name across all sources (later wins) so a
 	// project .corvus/config.toml doesn't drop the global config's MCP servers.

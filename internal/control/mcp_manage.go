@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -85,8 +86,25 @@ func (c *Controller) RegisterMCPServerOnDemand(e config.PluginEntry) (int, error
 
 // connectMCPServer expands an entry's ${VARS}, applies the known-server
 // overrides scoped to the workspace, and connects it live via the mcp manager.
+// Project-declared entries require the same exact-identity launch approval the
+// boot path enforces: an existing grant passes through, otherwise the explicit
+// connect records one (a deliberate user action) before the process starts.
+// Automatic paths without a grant fail closed.
 func (c *Controller) connectMCPServer(e config.PluginEntry) (int, error) {
 	spec := c.mcpSpec(e)
+	if spec.RequireLaunchApproval {
+		resolved := plugin.ResolveStoredAuthorization(context.Background(), spec)
+		if !resolved.ServerAuthorized() {
+			if err := plugin.AuthorizeProjectSpecLaunch(context.Background(), resolved); err != nil {
+				return 0, fmt.Errorf("MCP server %q requires launch approval: %v", e.Name, err)
+			}
+			resolved = plugin.ResolveStoredAuthorization(context.Background(), resolved)
+			if !resolved.ServerAuthorized() {
+				return 0, fmt.Errorf("MCP server %q requires launch approval (no grant could be recorded)", e.Name)
+			}
+		}
+		spec = resolved
+	}
 	n, err := c.mcp.connectSpec(spec)
 	if err == nil && c.capabilityRuntime != nil {
 		c.capabilityRuntime.UpsertServer(e, spec, true)
@@ -111,7 +129,11 @@ func (c *Controller) mcpSpec(e config.PluginEntry) plugin.Spec {
 		ToolTimeouts:       controllerMCPToolTimeouts(exp.ToolTimeoutSeconds),
 		WorkspaceRoot:      c.WorkspaceRoot(),
 		ConfigSource:       configSource,
-		Authorized:         exp.Source.UserAuthorized(),
+		Authorized:         exp.Source.UserAuthorized() && !exp.Source.ProjectScoped(),
+		// Repository-declared servers need the same exact-identity launch
+		// approval the boot path enforces (boot_plugins.go); without it the
+		// connect gate refuses to start the process.
+		RequireLaunchApproval: exp.Source.ProjectScoped(),
 		// Explicit user installs and reconnects run as trusted host processes.
 		ProcessMode: plugin.MCPProcessHost,
 	}, c.WorkspaceRoot())

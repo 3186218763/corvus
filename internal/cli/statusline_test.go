@@ -240,6 +240,24 @@ func TestShellPrefixBadgeIsShell(t *testing.T) {
 	}
 }
 
+func TestClassicModeTagShowsAskForDefaultPosture(t *testing.T) {
+	i18n.DetectLanguage("en")
+	ctrl := control.New(control.Options{})
+	// The controller's default posture is Ask; the classic layout must show
+	// "Ask", not the misleading "Auto".
+	if got := ctrl.ToolApprovalMode(); got != control.ToolApprovalAsk {
+		t.Fatalf("controller default mode = %q, want ask", got)
+	}
+	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
+	m.cfg = config.Default()
+	if err := m.cfg.SetUIShortcutLayout("classic"); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.modeTagText(); got != "Ask" {
+		t.Fatalf("classic modeTagText() = %q, want Ask", got)
+	}
+}
+
 func TestDesktopModeTagParityOnBadge(t *testing.T) {
 	i18n.DetectLanguage("en")
 
@@ -273,15 +291,19 @@ func TestIdleStatuslineIsCompact(t *testing.T) {
 	content := renderStatuslineView(t, false)
 	plainView := ansi.Strip(content)
 	// Mode pill anchors the footer left edge; the footer keeps the idle state.
-	if !strings.Contains(plainView, "Auto") {
-		t.Fatalf("idle view missing Auto mode badge:\n%s", plainView)
+	// The default posture is Ask, so the pill must not claim Auto.
+	if !strings.Contains(plainView, "Ask") {
+		t.Fatalf("idle view missing Ask mode badge:\n%s", plainView)
+	}
+	if strings.Contains(plainView, "Auto") {
+		t.Fatalf("idle view mislabels the default Ask posture as Auto:\n%s", plainView)
 	}
 	footer := footerInteractionPlain(content)
 	if !strings.Contains(footer, "ready") {
 		t.Fatalf("idle status line missing ready state:\n%s", footer)
 	}
-	if !strings.HasPrefix(strings.TrimSpace(footer), "Auto") {
-		t.Fatalf("footer row should start with the Auto badge (bottom-left anchor), got %q", footer)
+	if !strings.HasPrefix(strings.TrimSpace(footer), "Ask") {
+		t.Fatalf("footer row should start with the Ask badge (bottom-left anchor), got %q", footer)
 	}
 	for _, old := range []string{"Shift-Tab", "Ctrl-O", "Ctrl-D", "Enter sends", "Esc clears/exits state", "PgUp/PgDn"} {
 		if strings.Contains(footer, old) {
@@ -353,8 +375,8 @@ func TestStatuslineLocalizedIdleState(t *testing.T) {
 	content := renderStatuslineView(t, false)
 	plainView := ansi.Strip(content)
 	plain := bottomStatusPlain(content)
-	if !strings.Contains(plainView, "Auto") {
-		t.Fatalf("localized view missing Auto mode badge:\n%s", plainView)
+	if !strings.Contains(plainView, "Ask") {
+		t.Fatalf("localized view missing Ask mode badge:\n%s", plainView)
 	}
 	if !strings.Contains(plain, "就绪") {
 		t.Fatalf("localized idle state missing:\n%s", plain)

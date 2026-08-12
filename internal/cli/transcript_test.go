@@ -633,6 +633,57 @@ func TestAssistantMarkdownHistoryDropsName(t *testing.T) {
 	}
 }
 
+// TestSanitizeTerminalTextStripsControlSequences pins the terminal-integrity
+// contract: text that reaches the transcript (user paste, reasoning, tool
+// stream output) must not be able to clear the screen, hide the cursor, or
+// write the clipboard via OSC 52 — only SGR color codes survive.
+func TestSanitizeTerminalTextStripsControlSequences(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain text passes through", "hello world", "hello world"},
+		{"tab newline kept", "a\tb\nc\r", "a\tb\nc\r"},
+		{"clear screen stripped", "hi \x1b[2J evil", "hi  evil"},
+		{"cursor hidden stripped", "a\x1b[?25lb", "ab"},
+		{"OSC52 clipboard write stripped", "a\x1b]52;c;dGVzdA==\x07b", "ab"},
+		{"OSC52 ST-terminated stripped", "a\x1b]52;c;x\x1b\\b", "ab"},
+		{"SGR colors preserved", "\x1b[31mred\x1b[0m", "\x1b[31mred\x1b[0m"},
+		{"SGR 256-color preserved", "\x1b[38;5;196mX\x1b[39m", "\x1b[38;5;196mX\x1b[39m"},
+		{"non-SGR CSI stripped", "a\x1b[1;31Hb\x1b[0m", "ab\x1b[0m"},
+		{"stray ESC sequence stripped", "a\x1bc", "a"},
+		{"trailing lone ESC stripped", "a\x1b", "a"},
+		{"NUL and C0 stripped", "a\x00b\x08c", "abc"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sanitizeTerminalText(tc.in); got != tc.want {
+				t.Fatalf("sanitizeTerminalText(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRenderEntryPointsSanitizeControlSequences: the transcript render entry
+// points must never leak raw ESC sequences into the terminal.
+func TestRenderEntryPointsSanitizeControlSequences(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.TrueColor
+	configureCLITheme("dark")
+
+	payload := "evil\x1b[2J\x1b[?25l\x1b]52;c;dGVzdA==\x07text"
+	if got := ansi.Strip(renderUserBubble(payload, 80, false, true)); strings.Contains(got, "\x1b") {
+		t.Fatalf("renderUserBubble leaked control sequences: %q", got)
+	}
+	if got := ansi.Strip(reasoningBlock(payload, 80, 0)); strings.Contains(got, "\x1b") {
+		t.Fatalf("reasoningBlock leaked control sequences: %q", got)
+	}
+	if got := clampPlain(payload, 80); strings.Contains(got, "\x1b]") || strings.Contains(got, "[?") {
+		t.Fatalf("clampPlain leaked terminal-control sequences: %q", got)
+	}
+}
+
 func TestUserBubbleStaysSingleLineWhenColorOn(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.TrueColor

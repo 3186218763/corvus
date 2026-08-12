@@ -255,6 +255,53 @@ func TestBackgroundWriterStartingAfterPreviewBlocksCommit(t *testing.T) {
 	}
 }
 
+// TestRewindOversizedFileNeverTruncates pins the preimage-capture contract:
+// a file above the capture size limit has NO restorable payload, so the
+// snapshot must not be fabricated from empty content — a rewind would
+// otherwise publish a 0-byte file over the user's data. The oversized preimage
+// must surface as a coverage gap and the file must stay untouched.
+func TestRewindOversizedFileNeverTruncates(t *testing.T) {
+	root := t.TempDir()
+	a := filepath.Join(root, "big.bin")
+	write(t, a, string(bytes.Repeat([]byte{'x'}, 33<<20))) // 33 MiB > 32 MiB capture limit
+
+	s := New("", root)
+	s.Begin(0, "edit", 0)
+	s.CaptureBefore(a, CaptureBeforeOpts{Source: CaptureBeforeMutation})
+	// The tool then rewrites the file (now small); rewind must restore the
+	// preimage — or, since it cannot, refuse rather than truncate.
+	write(t, a, "mutated")
+
+	plan, err := s.PrepareRewind(0, RewindCode, 1, 0, false)
+	if err != nil {
+		t.Fatalf("PrepareRewind: %v", err)
+	}
+	hasGap := false
+	for _, g := range plan.CoverageGaps {
+		if g.Reason == GapOversized {
+			hasGap = true
+		}
+	}
+	if !hasGap {
+		t.Fatalf("expected an oversized coverage gap in plan: %+v", plan.CoverageGaps)
+	}
+	if plan.FileCount != 0 {
+		t.Fatalf("oversized file must not be restorable: plan files = %v", plan.Files)
+	}
+
+	result, err := s.CommitRewindWithForward(plan.PlanID, nil, nil, nil)
+	if err != nil {
+		// Refusal is acceptable — the preimage was never capturable.
+		if got := read(t, a); got != "mutated" {
+			t.Fatalf("refused rewind changed file to %q", got)
+		}
+		return
+	}
+	if result.OK {
+		t.Fatal("rewind must not report OK for a file it cannot restore")
+	}
+}
+
 func TestCaptureRejectsAncestorSymlink(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()

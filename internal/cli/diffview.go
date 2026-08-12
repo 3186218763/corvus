@@ -230,7 +230,7 @@ func clampPlain(s string, w int) string {
 	if w < 1 {
 		w = 1
 	}
-	return ansi.Truncate(expandTabs(s), w, "")
+	return ansi.Truncate(expandTabs(sanitizeTerminalText(s)), w, "")
 }
 
 // expandTabs replaces tabs with spaces to the next tabWidth stop. A literal tab

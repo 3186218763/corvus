@@ -15,6 +15,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -162,6 +163,7 @@ type Manager struct {
 	sessionOwnershipProbe func(path string) bool
 
 	mu           sync.Mutex
+	closing      bool
 	seq          int
 	jobs         map[string]*Job
 	order        []string
@@ -400,6 +402,13 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 		return m.startInvalid(parentSession, kind, label, err)
 	}
 	m.mu.Lock()
+	if m.closing {
+		m.mu.Unlock()
+		// The manager is draining (Close/CloseAsync in progress). Reject the job
+		// instead of racing wg.Add against the drain's wg.Wait, which panics
+		// the process ("WaitGroup is reused before previous Wait has returned").
+		return m.startInvalid(parentSession, kind, label, errors.New("jobs: manager is closed"))
+	}
 	m.seq++
 	id := fmt.Sprintf("%s-%d", kind, m.seq)
 	ctx, cancel := context.WithCancel(m.root)
@@ -426,6 +435,13 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 	key := jobKey(parentSession, id)
 	m.jobs[key] = j
 	m.order = append(m.order, key)
+	// wg.Add must stay inside m.mu: Close sets m.closing under the same lock
+	// before it starts wg.Wait, so once Wait is running no Add can land.
+	m.wg.Add(1)
+	if m.stalledWarning > 0 {
+		m.wg.Add(1)
+		go m.monitorStalled(parentSession, j)
+	}
 	m.mu.Unlock()
 	j.mu.Lock()
 	if err := m.writeJobMetaLocked(j, Running); err != nil {
@@ -439,11 +455,6 @@ func (m *Manager) StartForSession(parentSession, kind, label string, run func(ct
 
 	m.emitIfActive(parentSession, event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: startedText(kind, id, label)})
 
-	m.wg.Add(1)
-	if m.stalledWarning > 0 {
-		m.wg.Add(1)
-		go m.monitorStalled(parentSession, j)
-	}
 	go func() {
 		defer m.wg.Done()
 		result, err := runRecovered(ctx, jobWriter{j}, run)
@@ -1719,6 +1730,15 @@ func (m *Manager) purgeSessionLocked(parentSession string) {
 	m.order = kept
 }
 
+// markClosing flips the manager into the draining state under m.mu. Every
+// future StartForSession rejects immediately (startInvalid) instead of calling
+// wg.Add, so the drain's wg.Wait can never race a late Add.
+func (m *Manager) markClosing() {
+	m.mu.Lock()
+	m.closing = true
+	m.mu.Unlock()
+}
+
 // Close cancels the session context and waits briefly for every background job
 // goroutine to return before unblocking. If a non-cooperative job ignores
 // cancellation, cleanup of the temporary artifact root continues in the
@@ -1732,6 +1752,7 @@ func (m *Manager) Close() {
 // persistent cleanup, but still needs the manager's root context and temporary
 // artifact root released eventually.
 func (m *Manager) CloseAsync() {
+	m.markClosing()
 	m.cancel()
 	go func() {
 		m.wg.Wait()
@@ -1743,6 +1764,7 @@ func (m *Manager) CloseAsync() {
 // CloseWithGrace is Close with an explicit wait window, used by tests and
 // callers that need to surface non-cooperative jobs.
 func (m *Manager) CloseWithGrace(grace time.Duration) TeardownResult {
+	m.markClosing()
 	m.cancel()
 	done := make(chan struct{})
 	go func() {

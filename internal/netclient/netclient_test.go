@@ -124,6 +124,33 @@ func TestSummaryRedactsPassword(t *testing.T) {
 	}
 }
 
+// TestNewHTTPClientOverallTimeout pins the whole-request cap: clients built
+// for body-reading tools (web_search, web_fetch) must carry an overall Timeout
+// so a slow/infinite body can never hang the caller forever — per-phase
+// transport timeouts alone do not bound io.ReadAll.
+func TestNewHTTPClientOverallTimeout(t *testing.T) {
+	c, err := NewHTTPClient(ProxySpec{Mode: ModeOff}, TransportOptions{
+		DialTimeout:           5 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ResponseHeaderTimeout: 5 * time.Second,
+		Timeout:               30 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewHTTPClient: %v", err)
+	}
+	if c.Timeout != 30*time.Second {
+		t.Fatalf("client.Timeout = %v, want 30s overall cap", c.Timeout)
+	}
+	// The zero value must stay backward compatible: no overall cap.
+	c2, err := NewHTTPClient(ProxySpec{Mode: ModeOff}, TransportOptions{})
+	if err != nil {
+		t.Fatalf("NewHTTPClient: %v", err)
+	}
+	if c2.Timeout != 0 {
+		t.Fatalf("client.Timeout = %v, want 0 (unset) by default", c2.Timeout)
+	}
+}
+
 func TestHTTPClientProxyModesAffectRequests(t *testing.T) {
 	var targetHits int32
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

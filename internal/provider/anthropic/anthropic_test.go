@@ -370,6 +370,88 @@ func TestReadStreamError(t *testing.T) {
 	}
 }
 
+// TestReadStreamCleanFINTerminalGuard pins the same guard the openai provider
+// carries (#3953): a proxy that idle-closes with a clean FIN ends the scan with
+// no error, so without a terminal-state check a truncated stream would be
+// committed as a successful completion — including half-streamed tool-call
+// arguments. A missing message_stop must surface as a recoverable
+// StreamInterruptedError, never as ChunkDone.
+func TestReadStreamCleanFINTerminalGuard(t *testing.T) {
+	sse := `event: message_start
+data: {"type":"message_start","message":{"id":"msg_1","usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello world"}}
+`
+	// Note: no message_delta, no message_stop — the connection ends with a clean EOF.
+	c := &client{name: "anthropic"}
+	resp := &http.Response{Body: io.NopCloser(strings.NewReader(sse))}
+	ch := make(chan provider.Chunk)
+	go c.readStream(context.Background(), resp, ch)
+
+	var text strings.Builder
+	var gotErr error
+	done := false
+	for ck := range ch {
+		switch ck.Type {
+		case provider.ChunkText:
+			text.WriteString(ck.Text)
+		case provider.ChunkError:
+			gotErr = ck.Err
+		case provider.ChunkDone:
+			done = true
+		}
+	}
+	if gotErr == nil {
+		t.Fatalf("clean FIN without message_stop must fail, got text=%q done=%v", text.String(), done)
+	}
+	if !provider.IsStreamInterrupted(gotErr) {
+		t.Fatalf("clean-FIN error = %T %v, want a recoverable StreamInterruptedError", gotErr, gotErr)
+	}
+	if done {
+		t.Fatal("truncated stream must not emit ChunkDone")
+	}
+}
+
+// TestReadStreamPartialToolCallCleanFINGuard: a stream cut mid tool_use must
+// not silently drop the tool intent — the agent's recovery path depends on the
+// interrupt being visible (the half-built call is never valid to execute).
+func TestReadStreamPartialToolCallCleanFINGuard(t *testing.T) {
+	sse := `event: message_start
+data: {"type":"message_start","message":{"id":"msg_1"}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"get_weather"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"city\":\"Par"}}
+`
+	// No content_block_stop / message_stop — the FIN lands mid-argument.
+	c := &client{name: "anthropic"}
+	resp := &http.Response{Body: io.NopCloser(strings.NewReader(sse))}
+	ch := make(chan provider.Chunk)
+	go c.readStream(context.Background(), resp, ch)
+
+	var gotErr error
+	done := false
+	for ck := range ch {
+		switch ck.Type {
+		case provider.ChunkError:
+			gotErr = ck.Err
+		case provider.ChunkDone:
+			done = true
+		case provider.ChunkToolCall:
+			t.Fatalf("half-streamed tool call must never be emitted as complete: %+v", ck.ToolCall)
+		}
+	}
+	if gotErr == nil || !provider.IsStreamInterrupted(gotErr) {
+		t.Fatalf("mid-tool_use clean FIN: gotErr=%v, want StreamInterruptedError", gotErr)
+	}
+	if done {
+		t.Fatal("truncated stream must not emit ChunkDone")
+	}
+}
+
 // TestBuildRequestThinking checks that, with thinking enabled, the request carries
 // the adaptive thinking + effort config and the prior assistant turn's signed
 // thinking block is replayed first (before its tool_use).

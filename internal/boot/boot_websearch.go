@@ -24,6 +24,9 @@ func buildWebSearchTool(cfg *config.Config, proxySpec netclient.ProxySpec, netPo
 		DialTimeout:           webSearchDialTimeout,
 		TLSHandshakeTimeout:   webSearchDialTimeout,
 		ResponseHeaderTimeout: webSearchDialTimeout,
+		// Cap the whole request including the body: a search backend that
+		// answers headers but stalls its body must not hang the turn forever.
+		Timeout: webSearchRequestTimeout,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("web_search: network client: %w", err)
@@ -35,4 +38,7 @@ func buildWebSearchTool(cfg *config.Config, proxySpec netclient.ProxySpec, netPo
 	return tl, nil
 }
 
-const webSearchDialTimeout = 15 * time.Second
+const (
+	webSearchDialTimeout    = 15 * time.Second
+	webSearchRequestTimeout = 30 * time.Second
+)

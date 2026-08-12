@@ -106,14 +106,22 @@ func resolveRoot(dir string) (string, error) {
 
 // buildTools assembles the served tool set. The default set is read-only
 // (fail closed): read/list/search tools bound to the workspace root plus the
-// SSRF-guarded web_fetch with the configured proxy. With allowWrite the
-// writer tools and a workspace-confined bash are added, but every call still
-// passes through policy.Decide (Ask and Deny decisions refuse the call).
+// SSRF-guarded web_fetch with the configured proxy and the [network_policy]
+// egress rules. With allowWrite the writer tools and a workspace-confined
+// bash are added, but every call still passes through policy.Decide (Ask and
+// Deny decisions refuse the call).
 func buildTools(cfg *config.Config, root string, allowWrite bool) ([]tool.Tool, error) {
 	proxySpec := cfg.NetworkProxySpec()
 	writeRoots := cfg.WriteRootsForRoot(root)
 	guard := builtin.NewSessionDataGuard(config.MemoryUserDir(), cfg.AllowWriteRoots())
 	search := builtin.ResolveSearch(cfg.Tools.Search.Engine, cfg.Tools.Search.RgPath, os.Stderr)
+	// The egress policy gates web_fetch, bash URL arguments, and web_search on
+	// this surface too — an MCP host speaking to this server is exactly the
+	// outbound channel the deny rules exist for.
+	netPolicy, err := cfg.NetPolicy()
+	if err != nil {
+		return nil, fmt.Errorf("network policy: %w", err)
+	}
 	ws := builtin.Workspace{
 		Dir:             root,
 		WriteRoots:      writeRoots,
@@ -127,6 +135,7 @@ func buildTools(cfg *config.Config, root string, allowWrite bool) ([]tool.Tool, 
 		BashTimeout:  time.Duration(cfg.BashTimeoutSeconds()) * time.Second,
 		Search:       search,
 		ProxySpec:    proxySpec,
+		NetPolicy:    netPolicy,
 		SessionGuard: guard,
 	}
 	// readOnlyServed is the default fail-closed tool set. Session-coupled
@@ -134,27 +143,24 @@ func buildTools(cfg *config.Config, root string, allowWrite bool) ([]tool.Tool, 
 	// ReadOnly but do nothing useful without a live controller session, so
 	// they are excluded from the MCP surface.
 	readOnlyServed := []string{"read_file", "ls", "glob", "grep", "code_index"}
-	all := ws.Tools(readOnlyServed...)
-	tools := make([]tool.Tool, 0, len(all)+2)
-	tools = append(tools, all...)
+	tools := append([]tool.Tool{}, ws.Tools(readOnlyServed...)...)
 	// Workspace already binds web_fetch to the configured proxy; the explicit
 	// ConfineWebFetch guarantees the read-only set never falls back to the
 	// unconfined init-registered instance even if the Workspace set changes.
 	// New() deduplicates by name, keeping the Workspace-bound instance.
-	tools = append(tools, builtin.ConfineWebFetch(proxySpec))
+	tools = append(tools, builtin.ConfineWebFetch(proxySpec, netPolicy))
 	// tool_search discovers the served surface on demand; web_search joins it
 	// when a [web_search] engine is configured. Both are read-only and fit the
 	// fail-closed MCP toolset.
 	tools = append(tools, builtin.NewToolSearchTool(toolSearchSnapshot(tools)))
 	if cfg.WebSearch.Enabled() {
-		netPolicy, err := cfg.NetPolicy()
-		if err != nil {
-			return nil, fmt.Errorf("web_search: %w", err)
-		}
 		client, err := netclient.NewHTTPClient(proxySpec, netclient.TransportOptions{
 			DialTimeout:           15 * time.Second,
 			TLSHandshakeTimeout:   15 * time.Second,
 			ResponseHeaderTimeout: 15 * time.Second,
+			// Overall cap including the body: this server is single-threaded,
+			// so a stalled search backend must never hang it permanently.
+			Timeout: 30 * time.Second,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("web_search: network client: %w", err)
@@ -166,11 +172,12 @@ func buildTools(cfg *config.Config, root string, allowWrite bool) ([]tool.Tool, 
 		tools = append(tools, wsTool)
 	}
 	if allowWrite {
-		// Workspace tools include bash bound to the workspace sandbox spec;
-		// the extra ConfineBash is the explicit failsafe layer (deduplicated
-		// by New(), the Workspace instance wins).
-		tools = append(tools, all...)
-		tools = append(tools, builtin.ConfineBash(ws.Bash, guard, ws.BashTimeout))
+		// The writer tools confined to the workspace write roots (the
+		// workspace itself also binds them; the explicit ConfineWriters set is
+		// the failsafe layer — New() deduplicates by name and the Workspace
+		// instances carry the same confinement).
+		tools = append(tools, ws.Tools("write_file", "edit_file", "multi_edit", "move_file", "notebook_edit", "delete_range", "delete_symbol")...)
+		tools = append(tools, builtin.ConfineBashWithNetPolicy(ws.Bash, guard, netPolicy, ws.BashTimeout))
 	}
 	return tools, nil
 }

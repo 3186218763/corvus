@@ -57,6 +57,53 @@ func TestBwrapArgsForArgsMountsTemporaryExecutableAfterMasks(t *testing.T) {
 	}
 }
 
+func TestBwrapArgsAddProcessIsolation(t *testing.T) {
+	sh := Shell{Kind: ShellBash, Path: "/bin/bash"}
+	argv := bwrapArgs(Spec{}, sh, "echo hi")
+	for _, flag := range []string{
+		"--unshare-user",
+		"--unshare-pid",
+		"--unshare-ipc",
+		"--unshare-uts",
+		"--die-with-parent",
+	} {
+		if !containsArg(argv, flag) {
+			t.Errorf("bwrapArgs missing %s (process isolation): %v", flag, argv)
+		}
+	}
+	if indexArgs(argv, "--unshare-net") < 0 {
+		t.Fatalf("network must be denied by default: %v", argv)
+	}
+}
+
+func TestBwrapArgsForArgsAddsProcessIsolation(t *testing.T) {
+	argv := bwrapArgsForArgs(Spec{}, []string{"/usr/bin/true"})
+	for _, flag := range []string{
+		"--unshare-user",
+		"--unshare-pid",
+		"--unshare-ipc",
+		"--unshare-uts",
+		"--die-with-parent",
+	} {
+		if !containsArg(argv, flag) {
+			t.Errorf("bwrapArgsForArgs missing %s (process isolation): %v", flag, argv)
+		}
+	}
+}
+
+func TestBwrapArgsKeepProcessIsolationWhenNetworkAllowed(t *testing.T) {
+	sh := Shell{Kind: ShellBash, Path: "/bin/bash"}
+	argv := bwrapArgs(Spec{Network: true}, sh, "echo hi")
+	if indexArgs(argv, "--unshare-net") >= 0 {
+		t.Fatalf("network flag must be dropped when Network is true: %v", argv)
+	}
+	for _, flag := range []string{"--unshare-pid", "--unshare-ipc", "--unshare-uts", "--die-with-parent"} {
+		if !containsArg(argv, flag) {
+			t.Errorf("process isolation %s must survive network enable: %v", flag, argv)
+		}
+	}
+}
+
 func TestBwrapForbidReadArgsMasksFilesAndDirectories(t *testing.T) {
 	dir := t.TempDir()
 	nested := filepath.Join(dir, "nested")
@@ -86,6 +133,15 @@ func indexArgs(args []string, want ...string) int {
 		}
 	}
 	return -1
+}
+
+func containsArg(args []string, want string) bool {
+	for _, a := range args {
+		if a == want {
+			return true
+		}
+	}
+	return false
 }
 
 func containsPath(paths []string, want string) bool {
