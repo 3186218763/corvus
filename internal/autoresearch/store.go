@@ -19,6 +19,7 @@ import (
 	"time"
 	"unicode"
 
+	"corvus/internal/fileutil"
 	fileencoding "corvus/internal/fileutil/encoding"
 )
 
@@ -758,11 +759,14 @@ func appendJSONL(root *os.Root, path string, data []byte) error {
 	if err := root.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("autoresearch: create jsonl dir: %w", err)
 	}
-	f, err := root.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	f, err := root.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o644)
 	if err != nil {
 		return fmt.Errorf("autoresearch: open %s: %w", path, err)
 	}
 	defer f.Close()
+	if err := fileutil.EnsureTrailingNewline(f); err != nil {
+		return fmt.Errorf("autoresearch: boundary %s: %w", path, err)
+	}
 	if _, err := f.Write(append(data, '\n')); err != nil {
 		return fmt.Errorf("autoresearch: append %s: %w", path, err)
 	}

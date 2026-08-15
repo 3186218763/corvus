@@ -19,9 +19,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-)
 
-const retryInterval = 75 * time.Millisecond
+	"corvus/internal/filelock"
+)
 
 // DefaultRetainGrace bounds how long RetainUntil keeps the write lease for a
 // background job that never reports completion. When it fires, the hold is
@@ -32,8 +32,6 @@ const DefaultRetainGrace = 5 * time.Minute
 // before failing. It is a conservative safety net for a peer session that
 // wedged while holding the lock; healthy acquisitions complete in milliseconds.
 const DefaultAcquireTimeout = 10 * time.Minute
-
-var errHeld = errors.New("workspace write lease is held")
 
 // WaitNotice is called once when an acquisition cannot complete immediately.
 // It must return quickly and must not call back into Owner.
@@ -70,7 +68,6 @@ func WithAcquireTimeout(d time.Duration) Option {
 type Owner struct {
 	lockPath string
 	onWait   WaitNotice
-	local    *localLock
 
 	retainGrace    time.Duration
 	acquireTimeout time.Duration
@@ -105,15 +102,6 @@ func (o *Owner) State() State {
 	return State{Acquired: o.acquired, Waiting: o.waiting}
 }
 
-type localLock struct {
-	token chan struct{}
-}
-
-var localRegistry = struct {
-	sync.Mutex
-	locks map[string]*localLock
-}{locks: map[string]*localLock{}}
-
 // New returns a Delivery-session lease owner for workspaceRoot. lockDir must be
 // shared by Corvus processes for cross-process protection; it is kept outside
 // the workspace so acquiring a lease never dirties user files.
@@ -132,19 +120,9 @@ func New(workspaceRoot, lockDir string, onWait WaitNotice, opts ...Option) (*Own
 	sum := sha256.Sum256([]byte(canonical))
 	key := hex.EncodeToString(sum[:])
 
-	localRegistry.Lock()
-	local := localRegistry.locks[key]
-	if local == nil {
-		local = &localLock{token: make(chan struct{}, 1)}
-		local.token <- struct{}{}
-		localRegistry.locks[key] = local
-	}
-	localRegistry.Unlock()
-
 	o := &Owner{
 		lockPath:       filepath.Join(lockDir, key+".lock"),
 		onWait:         onWait,
-		local:          local,
 		retainGrace:    DefaultRetainGrace,
 		acquireTimeout: DefaultAcquireTimeout,
 	}
@@ -350,12 +328,11 @@ func (o *Owner) releaseIfIdleLocked() func() {
 }
 
 func (o *Owner) acquire(ctx context.Context) (func(), error) {
-	waited := false
-	notifyWait := func() {
-		if waited {
-			return
-		}
-		waited = true
+	// One shared lock implementation (ADR-0006): filelock serializes this
+	// process and the cross-process file; the wait hook carries the lease's
+	// "busy" notice and Waiting state once, when acquisition cannot complete
+	// immediately.
+	waitHook := func() {
 		o.mu.Lock()
 		o.waiting = true
 		o.mu.Unlock()
@@ -363,43 +340,9 @@ func (o *Owner) acquire(ctx context.Context) (func(), error) {
 			o.onWait()
 		}
 	}
-
-	select {
-	case <-o.local.token:
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-		notifyWait()
-		select {
-		case <-o.local.token:
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
+	release, err := filelock.Acquire(ctx, o.lockPath, filelock.WithWaitHook(waitHook))
+	if err != nil {
+		return nil, fmt.Errorf("acquire workspace write lease: %w", err)
 	}
-
-	releaseLocal := func() { o.local.token <- struct{}{} }
-	for {
-		releaseFile, err := tryLockFile(o.lockPath)
-		if err == nil {
-			return func() {
-				releaseFile()
-				releaseLocal()
-			}, nil
-		}
-		if !errors.Is(err, errHeld) {
-			releaseLocal()
-			return nil, fmt.Errorf("acquire workspace write lease: %w", err)
-		}
-		notifyWait()
-		timer := time.NewTimer(retryInterval)
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
-			releaseLocal()
-			return nil, ctx.Err()
-		}
-	}
+	return release, nil
 }

@@ -18,6 +18,23 @@ const retryInterval = 20 * time.Millisecond
 // Callers normally see their context error after Acquire's bounded retry loop.
 var ErrHeld = errors.New("file lock held")
 
+// AcquireOption tunes one Acquire call.
+type AcquireOption func(*acquireOptions)
+
+type acquireOptions struct {
+	waitHook func()
+}
+
+// WithWaitHook registers fn to be called at most once, right after Acquire
+// learns it cannot complete immediately — the in-process slot or the lock file
+// is already held — and before it starts retrying. Use it to surface "waiting"
+// UX; Acquire's own loop stays silent.
+func WithWaitHook(fn func()) AcquireOption {
+	return func(o *acquireOptions) {
+		o.waitHook = fn
+	}
+}
+
 type localLock struct {
 	token chan struct{}
 }
@@ -30,9 +47,23 @@ var localRegistry = struct {
 // Acquire obtains an exclusive lock on path until the returned release
 // function is called. It serializes both goroutines in this process and other
 // Corvus processes, and never waits past ctx's deadline.
-func Acquire(ctx context.Context, path string) (func(), error) {
+func Acquire(ctx context.Context, path string, opts ...AcquireOption) (func(), error) {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	var options acquireOptions
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
+	}
+	notified := false
+	notifyWait := func() {
+		if notified || options.waitHook == nil {
+			return
+		}
+		notified = true
+		options.waitHook()
 	}
 	key, err := canonicalLockPath(path)
 	if err != nil {
@@ -49,8 +80,13 @@ func Acquire(ctx context.Context, path string) (func(), error) {
 
 	select {
 	case <-local.token:
-	case <-ctx.Done():
-		return nil, fmt.Errorf("acquire file lock: %w", ctx.Err())
+	default:
+		notifyWait()
+		select {
+		case <-local.token:
+		case <-ctx.Done():
+			return nil, fmt.Errorf("acquire file lock: %w", ctx.Err())
+		}
 	}
 	releaseLocal := func() { local.token <- struct{}{} }
 
@@ -69,6 +105,7 @@ func Acquire(ctx context.Context, path string) (func(), error) {
 			releaseLocal()
 			return nil, fmt.Errorf("acquire file lock: %w", err)
 		}
+		notifyWait()
 		timer := time.NewTimer(retryInterval)
 		select {
 		case <-timer.C:

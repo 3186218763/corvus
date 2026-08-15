@@ -14,6 +14,7 @@ import (
 
 	"corvus/internal/agent"
 	"corvus/internal/event"
+	"corvus/internal/fileutil"
 	"corvus/internal/guardian"
 	"corvus/internal/jobs"
 	"corvus/internal/store"
@@ -591,11 +592,14 @@ func appendSnapshotConflictDiagnostic(path, mode, outcome string, saveErr error,
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		return
 	}
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o600)
 	if err != nil {
 		return
 	}
 	defer f.Close()
+	if fileutil.EnsureTrailingNewline(f) != nil {
+		return
+	}
 	_, _ = f.Write(append(data, '\n'))
 }
 

@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"corvus/internal/config"
+	"corvus/internal/fileutil"
 	fileencoding "corvus/internal/fileutil/encoding"
 	"corvus/internal/frontmatter"
+	"gopkg.in/yaml.v3"
 )
 
 // Store is the scoped auto-memory store: project and global directories of
@@ -531,9 +531,9 @@ func flushIndexIn(dir string, lines map[string]string) error {
 	}
 	result := strings.TrimRight(b.String(), "\n")
 	if result == "" {
-		return os.WriteFile(path, []byte(""), 0o644)
+		return fileutil.AtomicWriteFile(path, []byte(""), 0o644)
 	}
-	return os.WriteFile(path, []byte(result+"\n"), 0o644)
+	return fileutil.AtomicWriteFile(path, []byte(result+"\n"), 0o644)
 }
 
 // reindexIn rewrites the MEMORY.md line for name in the given directory,

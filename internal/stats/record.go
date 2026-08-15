@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"corvus/internal/filelock"
+	"corvus/internal/fileutil"
 )
 
 // dayLayout names one stats file per UTC-free local day, e.g. 2026-08-02.jsonl.
@@ -89,29 +90,10 @@ func (w *Writer) Append(r record) error {
 		return err
 	}
 	defer f.Close()
-	if err := ensureRecordBoundary(f); err != nil {
+	if err := fileutil.EnsureTrailingNewline(f); err != nil {
 		return err
 	}
 	_, err = f.Write(append(b, '\n'))
-	return err
-}
-
-// ensureRecordBoundary separates a torn trailing JSON object from the next
-// append. The caller holds the cross-process append lock, so checking the last
-// byte and repairing it cannot race another Corvus writer.
-func ensureRecordBoundary(f *os.File) error {
-	st, err := f.Stat()
-	if err != nil || st.Size() == 0 {
-		return err
-	}
-	var tail [1]byte
-	if _, err := f.ReadAt(tail[:], st.Size()-1); err != nil {
-		return err
-	}
-	if tail[0] == '\n' {
-		return nil
-	}
-	_, err = f.Write([]byte{'\n'})
 	return err
 }
 
