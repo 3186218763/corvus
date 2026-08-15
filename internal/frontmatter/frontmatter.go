@@ -1,18 +1,13 @@
-// Package frontmatter parses the ---fenced YAML frontmatter blocks that prefix
-// skill, command, and memory files.
+// Package frontmatter parses and renders the ---fenced YAML frontmatter
+// blocks that prefix skill, command, and memory files.
 package frontmatter
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
-
-type DecodeOptions struct {
-	KnownFields bool
-}
 
 // Split separates an optional leading ---fenced block from the body. It returns
 // the parsed keys (lowercased) and the remaining body. With no opening/closing
@@ -26,7 +21,7 @@ type DecodeOptions struct {
 // tools survive. The last write wins for duplicate keys.
 func Split(s string) (map[string]string, string) {
 	fm := map[string]string{}
-	raw, body, ok := splitRaw(s)
+	raw, body, ok := Raw(s)
 	if !ok {
 		return fm, body
 	}
@@ -34,23 +29,11 @@ func Split(s string) (map[string]string, string) {
 	return fm, body
 }
 
-// Decode separates frontmatter and decodes the YAML block into out. It is for
-// callers that need typed schema validation; Split remains the permissive
-// compatibility parser for legacy metadata consumers.
-func Decode(s string, out any, opts DecodeOptions) (string, error) {
-	raw, body, ok := splitRaw(s)
-	if !ok || strings.TrimSpace(raw) == "" {
-		return body, nil
-	}
-	dec := yaml.NewDecoder(bytes.NewBufferString(raw))
-	dec.KnownFields(opts.KnownFields)
-	if err := dec.Decode(out); err != nil {
-		return "", err
-	}
-	return body, nil
-}
-
-func splitRaw(s string) (raw, body string, ok bool) {
+// Raw separates an optional leading ---fenced block, returning the raw YAML
+// text and the body. Callers that need key detection beyond Split's string
+// flattening (for example, marker keys whose values are mappings) scan the
+// raw block instead of re-implementing the fence scan.
+func Raw(s string) (raw, body string, ok bool) {
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	lines := strings.Split(s, "\n")
 	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
@@ -62,6 +45,41 @@ func splitRaw(s string) (raw, body string, ok bool) {
 		}
 	}
 	return "", s, false // opened but never closed: treat all as body
+}
+
+// ParseError reports whether s carries a ---fenced block that is not valid
+// YAML. No fence, an empty block, or a valid block all yield nil. Use it when
+// Split's permissive map (which silently yields nothing on bad YAML) is not
+// enough and the author should hear about the typo.
+func ParseError(s string) error {
+	raw, _, ok := Raw(s)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte(raw), &doc); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Encode renders frontmatter (a struct or map marshaled as YAML at indent 2)
+// followed by the body in one ---fenced document, the single writer format for
+// memory files, skill files, and skill stubs. The body is right-trimmed and
+// ends with exactly one newline; an empty body renders as a lone trailing
+// newline after the fence.
+func Encode(frontmatter any, body string) string {
+	var b strings.Builder
+	b.WriteString("---\n")
+	enc := yaml.NewEncoder(&b)
+	enc.SetIndent(2)
+	// Callers pass flat structs and maps of scalars; encoding cannot fail.
+	_ = enc.Encode(frontmatter)
+	_ = enc.Close()
+	b.WriteString("---\n\n")
+	b.WriteString(strings.TrimRight(body, " \t\r\n"))
+	b.WriteString("\n")
+	return b.String()
 }
 
 func parseYAMLFrontmatter(content string, out map[string]string) {

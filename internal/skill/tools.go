@@ -8,9 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"corvus/internal/event"
+	"corvus/internal/frontmatter"
 	"corvus/internal/tool"
 )
 
@@ -574,9 +573,9 @@ type SkillFileOptions struct {
 }
 
 // skillFileFrontmatter is the YAML shape RenderSkillFile emits. Field order is
-// the emission order (yaml.v3 preserves struct order); values are marshaled by
-// yaml.v3 so free-text fields with colons, '#', quotes, or newlines are
-// escaped correctly instead of corrupting the block — an unparseable
+// the emission order (struct order is preserved); values are serialized by
+// frontmatter.Encode so free-text fields with colons, '#', quotes, or newlines
+// are escaped correctly instead of corrupting the block — an unparseable
 // frontmatter would make the loader fall back to an EMPTY field map, silently
 // resetting runAs to inline and invocation to auto (see frontmatter.Split).
 type skillFileFrontmatter struct {
@@ -617,9 +616,7 @@ func RenderSkillFile(opts SkillFileOptions) string {
 			}
 		}
 	}
-	// Marshaling a flat struct of strings cannot fail.
-	raw, _ := yaml.Marshal(fm)
-	return "---\n" + string(raw) + "---\n\n" + strings.TrimRight(opts.Body, " \t\r\n") + "\n"
+	return frontmatter.Encode(fm, opts.Body)
 }
 
 // --- shared helpers ---

@@ -997,22 +997,15 @@ func hasSkillMarker(content string, fm map[string]string) bool {
 	return frontmatterHasSkillMarkerKey(content)
 }
 
+// frontmatterHasSkillMarkerKey detects marker keys whose values are mappings
+// (profiles:) — Split's one-level flatten drops those keys from its map, so the
+// raw block is scanned directly.
 func frontmatterHasSkillMarkerKey(content string) bool {
-	lines := strings.Split(content, "\n")
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+	raw, _, ok := frontmatter.Raw(content)
+	if !ok {
 		return false
 	}
-	end := -1
-	for i := 1; i < len(lines); i++ {
-		if strings.TrimSpace(lines[i]) == "---" {
-			end = i
-			break
-		}
-	}
-	if end < 0 {
-		return false
-	}
-	for _, line := range lines[1:end] {
+	for _, line := range strings.Split(raw, "\n") {
 		key, _, ok := strings.Cut(line, ":")
 		if ok && isSkillMarkerFrontmatterKey(strings.ToLower(strings.TrimSpace(key))) {
 			return true
@@ -1379,17 +1372,23 @@ func parseRunAs(runAs, context, agent string) RunAs {
 }
 
 // stubBody is the scaffold written by `/skill new` — minimal frontmatter plus
-// guidance the author fills in.
+// guidance the author fills in. Frontmatter goes through frontmatter.Encode so
+// an unusual name is escaped rather than corrupting the block.
 func stubBody(name string) string {
-	return "---\nname: " + name + "\ndescription: One-liner — what does this skill do?\n---\n\n# " + name + `
+	return frontmatter.Encode(
+		struct {
+			Name        string `yaml:"name"`
+			Description string `yaml:"description"`
+		}{name, "One-liner — what does this skill do?"},
+		"# "+name+`
 
 Replace this body with the playbook the model should follow when this skill is invoked.
 
 Tips:
 - Reference tools by name (bash, edit_file, grep, read_file, ...)
-- Add ` + "`runAs: subagent`" + ` to frontmatter to spawn an isolated subagent loop
-- Add ` + "`allowed-tools: read_file, grep`" + ` to scope a subagent's tools
-`
+- Add `+"`runAs: subagent`"+` to frontmatter to spawn an isolated subagent loop
+- Add `+"`allowed-tools: read_file, grep`"+` to scope a subagent's tools
+`)
 }
 
 // resolveCustomPaths expands "~" and makes each custom path absolute relative to

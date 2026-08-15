@@ -14,7 +14,6 @@ import (
 	"corvus/internal/fileutil"
 	fileencoding "corvus/internal/fileutil/encoding"
 	"corvus/internal/frontmatter"
-	"gopkg.in/yaml.v3"
 )
 
 // Store is the scoped auto-memory store: project and global directories of
@@ -382,12 +381,11 @@ func repairOwnerWrite(root *os.Root, path string, dir bool) {
 
 // memoryFrontmatter is the YAML shape render emits, mirroring the auto-memory
 // shape (name / description / metadata.type) so the files are interchangeable
-// with that ecosystem and re-readable by loadMemory. Marshaled by yaml.v3 so a
-// title or description containing ": ", '#', or quotes is escaped instead of
-// corrupting the block — frontmatter.Split returns an EMPTY map for
-// unparseable YAML, which would silently drop the memory's name/title/type on
-// the next load. Plain values render byte-identically to the previous
-// hand-built format.
+// with that ecosystem and re-readable by loadMemory. Serialized by
+// frontmatter.Encode so a title or description containing ": ", '#', or
+// quotes is escaped instead of corrupting the block — frontmatter.Split
+// returns an EMPTY map for unparseable YAML, which would silently drop the
+// memory's name/title/type on the next load.
 type memoryFrontmatter struct {
 	ID        string `yaml:"id,omitempty"`
 	Revision  int    `yaml:"revision,omitempty"`
@@ -422,17 +420,7 @@ func render(m Memory, name string) string {
 		fm.Metadata.FactType = string(actualType)
 	}
 	fm.Metadata.Scope = string(scope)
-	var b strings.Builder
-	b.WriteString("---\n")
-	enc := yaml.NewEncoder(&b)
-	enc.SetIndent(2)
-	// Encoding a flat struct of strings cannot fail.
-	_ = enc.Encode(fm)
-	_ = enc.Close()
-	b.WriteString("---\n\n")
-	b.WriteString(strings.TrimSpace(m.Body))
-	b.WriteString("\n")
-	return b.String()
+	return frontmatter.Encode(fm, strings.TrimSpace(m.Body))
 }
 
 // previousReleaseRoutingType keeps scope safe when an older Corvus binary

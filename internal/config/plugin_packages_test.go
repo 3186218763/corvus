@@ -184,3 +184,95 @@ func TestCommandDirsWithoutPluginState(t *testing.T) {
 		t.Fatal("CommandDirsForRoot must still return the conventional dirs")
 	}
 }
+
+// The three MCP timeout fields were dropped when a package manifest was copied
+// into config (ADR-0007): the plugin layer never carried them, so the boot
+// chain saw zeros and fell back to defaults regardless of the manifest.
+func TestPluginPackageMCPTimeoutsAndTierSurviveImport(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CORVUS_HOME", home)
+	root := filepath.Join(home, "plugins", "timed")
+	writeConfigTestFile(t, filepath.Join(root, pluginpkg.NativeManifest), `{
+  "name": "timed",
+  "version": "1.0.0",
+  "mcpServers": {
+    "slow-helper": {
+      "command": "bin/helper",
+      "startup_timeout_seconds": 5,
+      "call_timeout_seconds": 60,
+      "tool_timeout_seconds": {"deep-research": 900},
+      "tier": "eager"
+    }
+  }
+}`)
+	if err := pluginpkg.Upsert(home, pluginpkg.InstalledPlugin{
+		Name: "timed", Root: "plugins/timed", Version: "1.0.0",
+		ManifestKind: "corvus", Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadForRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var entry *PluginEntry
+	for i := range cfg.Plugins {
+		if cfg.Plugins[i].Name == "slow-helper" {
+			entry = &cfg.Plugins[i]
+		}
+	}
+	if entry == nil {
+		t.Fatalf("plugin MCP server missing: %#v", cfg.Plugins)
+	}
+	if entry.StartupTimeoutSeconds != 5 || entry.CallTimeoutSeconds != 60 || entry.ToolTimeoutSeconds["deep-research"] != 900 {
+		t.Fatalf("timeouts dropped on import: startup=%d call=%d tool=%v",
+			entry.StartupTimeoutSeconds, entry.CallTimeoutSeconds, entry.ToolTimeoutSeconds)
+	}
+	// Tier is a retired user-facing setting: normalizeLegacyMCPTiers erases it
+	// from every entry (user TOML, .mcp.json, and packages alike) at load, so
+	// the manifest's eager tier must NOT survive either — same policy for all
+	// sources, applied in exactly one place.
+	if entry.Tier != "" || entry.ResolvedTier() != "background" {
+		t.Fatalf("package tier escaped the load-time normalization: tier=%q resolved=%q", entry.Tier, entry.ResolvedTier())
+	}
+}
+
+// Claude-format imports forced autoStart=false and had no timeouts at all; the
+// canonical schema carries both, and auto_start is now honored when the
+// manifest states it explicitly (absent stays false — see
+// TestClaudePackageMCPExpandsRootAndDoesNotAutoStart).
+func TestClaudeImportHonorsAutoStartAndTimeouts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CORVUS_HOME", home)
+	root := filepath.Join(home, "plugins", "claude-timed")
+	writeConfigTestFile(t, filepath.Join(root, pluginpkg.ClaudeManifest), `{"name":"claude-timed"}`)
+	writeConfigTestFile(t, filepath.Join(root, ".mcp.json"), `{
+  "mcpServers": {
+    "pinned": {
+      "command": "bin/server",
+      "auto_start": true,
+      "startup_timeout_seconds": 15,
+      "call_timeout_seconds": 120,
+      "tool_timeout_seconds": {"crawl": 600}
+    }
+  }
+}`)
+	if err := pluginpkg.Upsert(home, pluginpkg.InstalledPlugin{Name: "claude-timed", Root: "plugins/claude-timed", ManifestKind: "claude", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadForRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Plugins) != 1 {
+		t.Fatalf("plugins = %#v", cfg.Plugins)
+	}
+	got := cfg.Plugins[0]
+	if !got.ShouldAutoStart() {
+		t.Fatal("explicit auto_start: true was not honored on Claude import")
+	}
+	if got.StartupTimeoutSeconds != 15 || got.CallTimeoutSeconds != 120 || got.ToolTimeoutSeconds["crawl"] != 600 {
+		t.Fatalf("timeouts dropped on Claude import: startup=%d call=%d tool=%v",
+			got.StartupTimeoutSeconds, got.CallTimeoutSeconds, got.ToolTimeoutSeconds)
+	}
+}

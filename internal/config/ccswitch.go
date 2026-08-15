@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/mcpjson"
 	"corvus/internal/secrets"
 )
 
@@ -22,9 +23,9 @@ type ccSwitchMCPRow struct {
 }
 
 type ccSwitchLegacyServer struct {
-	ID     string        `json:"id"`
-	Name   string        `json:"name"`
-	Server mcpServerSpec `json:"server"`
+	ID     string             `json:"id"`
+	Name   string             `json:"name"`
+	Server mcpjson.ServerSpec `json:"server"`
 	Apps   struct {
 		Codex  bool  `json:"codex"`
 		Corvus *bool `json:"corvus"`
@@ -188,7 +189,7 @@ func ccSwitchDBHasCorvusColumn(sqlite, path string) (bool, error) {
 func ccSwitchRowsToPlugins(rows []ccSwitchMCPRow) ([]PluginEntry, error) {
 	entries := make([]PluginEntry, 0, len(rows))
 	for _, row := range rows {
-		var s mcpServerSpec
+		var s mcpjson.ServerSpec
 		if err := json.Unmarshal([]byte(row.ServerConfig), &s); err != nil {
 			return nil, fmt.Errorf("cc-switch import: server %q config: %w", row.Name, err)
 		}
@@ -249,7 +250,7 @@ func loadCCSwitchLegacyConfig(path string) ([]PluginEntry, error) {
 	return entries, nil
 }
 
-func pluginFromMCPServerSpec(name string, s mcpServerSpec) PluginEntry {
+func pluginFromMCPServerSpec(name string, s mcpjson.ServerSpec) PluginEntry {
 	return PluginEntry{
 		Name:    name,
 		Type:    s.Type,

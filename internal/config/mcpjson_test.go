@@ -1246,3 +1246,31 @@ func TestUpsertPluginInProjectSourceRequiresProjectFileLock(t *testing.T) {
 		t.Fatalf("failed locked update changed project config:\n%s", got)
 	}
 }
+
+// Tier was invisible to this reader before the canonical schema: .mcp.json
+// tier values were decoded then dropped on the floor (ADR-0007).
+func TestLoadMCPJSONMapsTier(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, mcpJSONFile)
+	doc := `{
+  "mcpServers": {
+    "eager-srv": { "command": "run-eager", "tier": "eager" },
+    "lazy-srv": { "command": "run-lazy", "tier": "lazy" },
+    "typo-srv": { "command": "run-typo", "tier": "urgent" },
+    "plain-srv": { "command": "run-plain" }
+  }
+}`
+	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadMCPJSON(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"eager-srv": "eager", "lazy-srv": "background", "typo-srv": "background", "plain-srv": "background"}
+	for _, e := range got {
+		if e.Tier != want[e.Name] {
+			t.Errorf("%s tier = %q, want %q", e.Name, e.Tier, want[e.Name])
+		}
+	}
+}

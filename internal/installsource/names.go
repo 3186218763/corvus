@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"corvus/internal/config"
+	"corvus/internal/mcpjson"
 )
 
 // packageNameRe matches valid npm package-name segments. Pinned by [a-z0-9._-]
@@ -255,20 +256,12 @@ func normalizeTransport(t string) string {
 	}
 }
 
-// normalizeTier maps a tier value into the supported set. The boolean returned
-// reports whether the original value was already recognized; callers use it to
-// surface a warning when a typo'd tier quietly becomes "background".
+// normalizeTier maps a tier value into the supported set, delegating to the
+// canonical alias table (internal/mcpjson). The boolean returned reports
+// whether the original value was already recognized; callers use it to surface
+// a warning when a typo'd tier quietly becomes "background".
 func normalizeTier(tier string) (string, bool) {
-	switch strings.ToLower(strings.TrimSpace(tier)) {
-	case "eager":
-		return "eager", true
-	case "background", "lazy":
-		return "background", true
-	case "":
-		return "background", true
-	default:
-		return "background", false
-	}
+	return mcpjson.NormalizeTier(tier)
 }
 
 // pluginTransport reports the effective transport for a plugin entry,

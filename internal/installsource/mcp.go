@@ -1,14 +1,13 @@
 package installsource
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"corvus/internal/config"
 	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/mcpjson"
 )
 
 // mcpEntryAction assembles the DTO for a single MCP server install. The
@@ -168,44 +167,26 @@ func readMCPJSON(path string) ([]config.PluginEntry, []string, error) {
 	return entries, warnings, nil
 }
 
-// parseMCPJSON extracts mcpServers entries from a .mcp.json-style document.
-// Warnings are returned for non-fatal anomalies (unknown tier values) and
-// collected separately so a typo does not refuse an otherwise valid file.
+// parseMCPJSON extracts mcpServers entries from a .mcp.json-style document,
+// decoding through the canonical wire schema (internal/mcpjson). Warnings are
+// returned for non-fatal anomalies (unknown tier values) and collected
+// separately so a typo does not refuse an otherwise valid file.
 func parseMCPJSON(b []byte) ([]config.PluginEntry, []string, error) {
-	var raw struct {
-		MCPServers map[string]struct {
-			Type                  string            `json:"type"`
-			Command               string            `json:"command"`
-			Args                  []string          `json:"args"`
-			Env                   map[string]string `json:"env"`
-			URL                   string            `json:"url"`
-			Headers               map[string]string `json:"headers"`
-			AutoStart             *bool             `json:"auto_start"`
-			StartupTimeoutSeconds int               `json:"startup_timeout_seconds"`
-			CallTimeoutSeconds    int               `json:"call_timeout_seconds"`
-			ToolTimeoutSeconds    map[string]int    `json:"tool_timeout_seconds"`
-			Tier                  string            `json:"tier"`
-		} `json:"mcpServers"`
-	}
-	if err := json.Unmarshal(b, &raw); err != nil {
+	raw, err := mcpjson.Parse(b)
+	if err != nil {
 		return nil, nil, newErr(ErrInvalidManifest, "could not parse .mcp.json: %v", err)
 	}
 	if len(raw.MCPServers) == 0 {
 		return nil, nil, newErr(ErrManifestMissing, ".mcp.json has no mcpServers")
 	}
-	names := make([]string, 0, len(raw.MCPServers))
-	for name := range raw.MCPServers {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := raw.SortedNames()
 	out := make([]config.PluginEntry, 0, len(names))
 	var warnings []string
 	for _, name := range names {
 		s := raw.MCPServers[name]
 		// Validate the raw transport before normalizeTransport gets a
 		// chance to silently map an unknown value to "auto"/"stdio".
-		rawType := strings.ToLower(strings.TrimSpace(s.Type))
-		if rawType != "" && rawType != "stdio" && rawType != "http" && rawType != "sse" && rawType != "streamable-http" {
+		if _, ok := mcpjson.NormalizeType(s.Type); !ok {
 			return nil, warnings, newErr(ErrInvalidManifest, "MCP server %q has unknown transport %q", name, s.Type)
 		}
 		typ := normalizeTransport(s.Type)

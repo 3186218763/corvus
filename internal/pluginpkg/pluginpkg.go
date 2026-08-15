@@ -20,6 +20,7 @@ import (
 	"corvus/internal/fileutil"
 	fileencoding "corvus/internal/fileutil/encoding"
 	"corvus/internal/frontmatter"
+	"corvus/internal/mcpjson"
 )
 
 const (
@@ -190,18 +191,14 @@ func (h Hook) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fields)
 }
 
+// MCPServer is one mcpServers entry of a package manifest. The wire fields —
+// including the Corvus policy extensions (timeouts, tier, auto_start, title) —
+// come from the canonical schema (internal/mcpjson, ADR-0007); DisplayName and
+// Imported are package-layer provenance layered on top.
 type MCPServer struct {
-	Type        string            `json:"type,omitempty"`
-	Command     string            `json:"command,omitempty"`
-	Args        []string          `json:"args,omitempty"`
-	Env         map[string]string `json:"env,omitempty"`
-	URL         string            `json:"url,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	AutoStart   *bool             `json:"auto_start,omitempty"`
-	Tier        string            `json:"tier,omitempty"`
-	DisplayName string            `json:"display_name,omitempty"`
-	Description string            `json:"description,omitempty"`
-	Imported    bool              `json:"imported,omitempty"`
+	mcpjson.ServerSpec
+	DisplayName string `json:"display_name,omitempty"`
+	Imported    bool   `json:"imported,omitempty"`
 }
 
 // State is persisted at <Corvus home>/plugin-packages.json.

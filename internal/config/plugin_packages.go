@@ -50,6 +50,10 @@ func mergeInstalledPluginPackages(cfg *Config, root string) []string {
 				AutoStart: srv.AutoStart,
 				Tier:      srv.Tier,
 				Source:    MCPSourcePluginPackage,
+
+				StartupTimeoutSeconds: srv.StartupTimeoutSeconds,
+				CallTimeoutSeconds:    srv.CallTimeoutSeconds,
+				ToolTimeoutSeconds:    srv.ToolTimeoutSeconds,
 			}
 			if existing, ok := pluginEntryByName(cfg.Plugins, name); ok {
 				if owner, packageOwned := cfg.pluginPackageOwners[name]; packageOwned && pluginPackageEntriesEqual(existing, entry) {

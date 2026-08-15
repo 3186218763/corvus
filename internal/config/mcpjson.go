@@ -12,29 +12,14 @@ import (
 	"corvus/internal/fileutil"
 	fileencoding "corvus/internal/fileutil/encoding"
 	"corvus/internal/mcpdiag"
+	"corvus/internal/mcpjson"
 )
 
 // mcpJSONFile is the project-root file Claude Code calls .mcp.json. Corvus reads
 // it so an MCP server already configured for Claude works here unchanged — the
-// server specs map field-for-field onto PluginEntry.
+// server specs map field-for-field onto PluginEntry via the canonical wire
+// schema (internal/mcpjson).
 const mcpJSONFile = ".mcp.json"
-
-// mcpServerSpec mirrors one entry of Claude Code's "mcpServers" map. The field
-// names and semantics match PluginEntry: command/args/env describe a local
-// stdio server; type/url/headers describe a remote one. Corvus also accepts
-// startup and call timeout fields as Corvus policy extensions.
-type mcpServerSpec struct {
-	Type                  string            `json:"type"`
-	Command               string            `json:"command"`
-	Args                  []string          `json:"args"`
-	Env                   map[string]string `json:"env"`
-	URL                   string            `json:"url"`
-	Headers               map[string]string `json:"headers"`
-	StartupTimeoutSeconds int               `json:"startup_timeout_seconds"`
-	CallTimeoutSeconds    int               `json:"call_timeout_seconds"`
-	ToolTimeoutSeconds    map[string]int    `json:"tool_timeout_seconds"`
-	AutoStart             *bool             `json:"auto_start"`
-}
 
 // loadMCPJSON reads path (Claude Code's .mcp.json) and returns its servers as
 // PluginEntry values, sorted by name for a stable connection order. An absent
@@ -52,10 +37,8 @@ func loadMCPJSON(path string) ([]PluginEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mcp config %s: %w", path, err)
 	}
-	var doc struct {
-		MCPServers map[string]mcpServerSpec `json:"mcpServers"`
-	}
-	if err := json.Unmarshal(b, &doc); err != nil {
+	doc, err := mcpjson.Parse(b)
+	if err != nil {
 		return nil, fmt.Errorf("mcp config %s: %w", path, err)
 	}
 	return specsToEntries(doc.MCPServers, nil), nil
@@ -78,7 +61,7 @@ func LoadMCPJSONPlugin(path, name string) (PluginEntry, bool, error) {
 // specsToEntries converts an mcpServers map to PluginEntry values, sorted by name
 // for a stable connection order. Names in skip are dropped (used for v0.x's
 // mcpDisabled list).
-func specsToEntries(specs map[string]mcpServerSpec, skip map[string]bool) []PluginEntry {
+func specsToEntries(specs map[string]mcpjson.ServerSpec, skip map[string]bool) []PluginEntry {
 	names := make([]string, 0, len(specs))
 	for name := range specs {
 		if !skip[name] {
@@ -132,7 +115,8 @@ func anonymousMCPName(i int) string {
 	return fmt.Sprintf("mcp-%d", i+1)
 }
 
-func pluginEntryFromMCPSpec(name string, s mcpServerSpec) PluginEntry {
+func pluginEntryFromMCPSpec(name string, s mcpjson.ServerSpec) PluginEntry {
+	tier, _ := mcpjson.NormalizeTier(s.Tier)
 	e := PluginEntry{
 		Name:                  name,
 		Type:                  s.Type,
@@ -145,6 +129,7 @@ func pluginEntryFromMCPSpec(name string, s mcpServerSpec) PluginEntry {
 		CallTimeoutSeconds:    s.CallTimeoutSeconds,
 		ToolTimeoutSeconds:    s.ToolTimeoutSeconds,
 		AutoStart:             s.AutoStart,
+		Tier:                  tier,
 	}
 	e, _ = NormalizePluginCommandLine(e)
 	return e
@@ -347,7 +332,7 @@ func clearMCPJSONAuthentication(path, name string) (PluginEntry, bool, error) {
 	if !ok {
 		return PluginEntry{}, false, fmt.Errorf("clear plugin authentication: no plugin %q", name)
 	}
-	var spec mcpServerSpec
+	var spec mcpjson.ServerSpec
 	if err := json.Unmarshal(raw, &spec); err != nil {
 		return PluginEntry{}, false, fmt.Errorf("mcp config %s: server %q: %w", path, name, err)
 	}

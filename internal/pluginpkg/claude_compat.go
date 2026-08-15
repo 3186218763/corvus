@@ -14,6 +14,7 @@ import (
 
 	fileencoding "corvus/internal/fileutil/encoding"
 	"corvus/internal/frontmatter"
+	"corvus/internal/mcpjson"
 )
 
 const (
@@ -305,19 +306,8 @@ func appendClaudeMCPFile(root string, manifest *Manifest) ([]string, []Compatibi
 	if err != nil {
 		return compatibilityFailure("mcp", claudeMCPPath, err)
 	}
-	var raw struct {
-		MCPServers map[string]struct {
-			Type        string            `json:"type"`
-			Command     string            `json:"command"`
-			Args        []string          `json:"args"`
-			Env         map[string]string `json:"env"`
-			URL         string            `json:"url"`
-			Headers     map[string]string `json:"headers"`
-			Title       string            `json:"title"`
-			Description string            `json:"description"`
-		} `json:"mcpServers"`
-	}
-	if err := json.Unmarshal(body, &raw); err != nil {
+	raw, err := mcpjson.Parse(body)
+	if err != nil {
 		return compatibilityFailure("mcp", claudeMCPPath, err)
 	}
 	if len(raw.MCPServers) == 0 {
@@ -374,17 +364,30 @@ func appendClaudeMCPFile(root string, manifest *Manifest) ([]string, []Compatibi
 			issues = append(issues, CompatibilityIssue{Capability: "mcp", Path: claudeMCPPath, Reason: reason})
 			continue
 		}
+		// Imported servers do not auto-start unless the manifest says so: a
+		// Claude-format .mcp.json carries no auto_start, and a package pulling
+		// in a third-party server should not quietly add it to every boot.
 		autoStart := false
+		if spec.AutoStart != nil {
+			autoStart = *spec.AutoStart
+		}
 		manifest.MCPServers[id] = MCPServer{
-			Type:        typ,
-			Command:     strings.TrimSpace(spec.Command),
-			Args:        cleanStringList(spec.Args),
-			Env:         cloneHookEnv(spec.Env),
-			URL:         strings.TrimSpace(spec.URL),
-			Headers:     cloneHookEnv(spec.Headers),
-			AutoStart:   &autoStart,
+			ServerSpec: mcpjson.ServerSpec{
+				Type:                  typ,
+				Command:               strings.TrimSpace(spec.Command),
+				Args:                  cleanStringList(spec.Args),
+				Env:                   cloneHookEnv(spec.Env),
+				URL:                   strings.TrimSpace(spec.URL),
+				Headers:               cloneHookEnv(spec.Headers),
+				AutoStart:             &autoStart,
+				StartupTimeoutSeconds: spec.StartupTimeoutSeconds,
+				CallTimeoutSeconds:    spec.CallTimeoutSeconds,
+				ToolTimeoutSeconds:    spec.ToolTimeoutSeconds,
+				Tier:                  spec.Tier,
+				Title:                 strings.TrimSpace(spec.Title),
+				Description:           strings.TrimSpace(spec.Description),
+			},
 			DisplayName: firstNonEmpty(strings.TrimSpace(spec.Title), strings.TrimSpace(displayName)),
-			Description: strings.TrimSpace(spec.Description),
 			Imported:    true,
 		}
 	}

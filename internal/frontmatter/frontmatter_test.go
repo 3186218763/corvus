@@ -132,49 +132,64 @@ func TestSplitYAMLScalarsWithColonAndMultiline(t *testing.T) {
 	}
 }
 
-func TestDecodeTypedFrontmatter(t *testing.T) {
-	var meta struct {
-		Name         string   `yaml:"name"`
-		Description  string   `yaml:"description"`
-		AllowedTools []string `yaml:"allowed-tools"`
-	}
-	body, err := Decode("---\nname: review\ndescription: \"run: checks\"\nallowed-tools:\n  - read_file\n  - grep\n---\nbody", &meta, DecodeOptions{KnownFields: true})
-	if err != nil {
-		t.Fatalf("Decode: %v", err)
-	}
-	if meta.Name != "review" || meta.Description != "run: checks" {
-		t.Fatalf("meta = %+v", meta)
-	}
-	if strings.Join(meta.AllowedTools, ",") != "read_file,grep" {
-		t.Fatalf("AllowedTools = %#v", meta.AllowedTools)
-	}
-	if body != "body" {
-		t.Fatalf("body = %q", body)
-	}
-}
-
-func TestDecodeKnownFieldsReportsUnknownKey(t *testing.T) {
-	var meta struct {
-		Name string `yaml:"name"`
-	}
-	_, err := Decode("---\nname: ok\nextra: nope\n---\nbody", &meta, DecodeOptions{KnownFields: true})
+func TestParseErrorReportsMalformedYAML(t *testing.T) {
+	err := ParseError("---\nname: [unterminated\n---\nbody")
 	if err == nil {
-		t.Fatal("Decode accepted unknown frontmatter key")
-	}
-	if !strings.Contains(err.Error(), "extra") {
-		t.Fatalf("error = %v, want unknown key name", err)
-	}
-}
-
-func TestDecodeReportsMalformedYAML(t *testing.T) {
-	var meta struct {
-		Name string `yaml:"name"`
-	}
-	_, err := Decode("---\nname: [unterminated\n---\nbody", &meta, DecodeOptions{})
-	if err == nil {
-		t.Fatal("Decode accepted malformed YAML")
+		t.Fatal("ParseError accepted malformed YAML")
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "line") {
 		t.Fatalf("error = %v, want YAML location detail", err)
+	}
+}
+
+func TestParseErrorNoopsWithoutFenceOrContent(t *testing.T) {
+	if err := ParseError("no fence at all"); err != nil {
+		t.Fatalf("unfenced input: %v", err)
+	}
+	if err := ParseError("---\n---\n"); err != nil {
+		t.Fatalf("empty fence: %v", err)
+	}
+	if err := ParseError("---\nname: ok\n---\nbody"); err != nil {
+		t.Fatalf("valid block: %v", err)
+	}
+}
+
+func TestRaw(t *testing.T) {
+	raw, body, ok := Raw("---\r\nname: test\r\n---\r\nbody")
+	if !ok || raw != "name: test" || body != "body" {
+		t.Fatalf("Raw = (%q, %q, %v), want CRLF-normalized split", raw, body, ok)
+	}
+	if _, _, ok := Raw("---\nnever closed\n"); ok {
+		t.Fatal("unclosed fence reported ok")
+	}
+	if _, b, ok := Raw("plain"); ok || b != "plain" {
+		t.Fatalf("unfenced = (%q, %v), want body passthrough", b, ok)
+	}
+}
+
+func TestEncode(t *testing.T) {
+	fm := struct {
+		Name        string   `yaml:"name"`
+		Description string   `yaml:"description"`
+		Allowed     []string `yaml:"allowed-tools,omitempty,flow"`
+	}{"review", "run: checks", []string{"read_file", "grep"}}
+	got := Encode(fm, "body\n\n")
+	want := "---\nname: review\ndescription: 'run: checks'\nallowed-tools: [read_file, grep]\n---\n\nbody\n"
+	if got != want {
+		t.Fatalf("Encode =\n%q\nwant\n%q", got, want)
+	}
+}
+
+func TestEncodeEscapesAndTrimsBody(t *testing.T) {
+	got := Encode(map[string]string{"title": "Plan: step one"}, "  padded \n\n")
+	want := "---\ntitle: 'Plan: step one'\n---\n\n  padded\n"
+	if got != want {
+		t.Fatalf("Encode = %q, want %q", got, want)
+	}
+	// The round trip: Split reads back what Encode wrote (the body keeps the
+	// blank separator line that follows the fence).
+	fm, body := Split(got)
+	if fm["title"] != "Plan: step one" || body != "\n  padded\n" {
+		t.Fatalf("round trip = (%v, %q)", fm, body)
 	}
 }
