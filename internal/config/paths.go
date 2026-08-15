@@ -277,18 +277,17 @@ func LegacyUserConfigPaths() []string {
 
 // CorvusManagedConfigPaths returns the Corvus-owned user configuration
 // FILES that model-driven tools may repair on the user's request, each gated
-// by a fresh per-write human approval: the current config.toml, compatibility
-// TOML locations, and the legacy v0.x ~/.corvus/config.json. Individual
-// files, never directories — the Corvus home also holds credentials (.env),
-// global hooks (settings.json), skills, and session stores, and none of those
-// may ride along on a config repair.
+// by a fresh per-write human approval: the current config.toml and the
+// compatibility TOML locations. Individual files, never directories — the
+// Corvus home also holds credentials (.env), global hooks (settings.json),
+// skills, and session stores, and none of those may ride along on a config
+// repair.
 func CorvusManagedConfigPaths() []string {
 	var out []string
 	out = appendUniquePath(out, UserConfigPath())
 	for _, path := range LegacyUserConfigPaths() {
 		out = appendUniquePath(out, path)
 	}
-	out = appendUniquePath(out, legacyConfigPath())
 	return out
 }
 

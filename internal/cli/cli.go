@@ -38,7 +38,7 @@ var (
 
 func Run(args []string, version string) int {
 	i18n.DetectLanguage("")
-	migrateLegacyConfigForCLI()
+	upgradeUserConfigForCLI()
 	if cfg, err := config.Load(); err == nil && cfg.Language != "" {
 		i18n.DetectLanguage(cfg.Language)
 	}
@@ -86,10 +86,7 @@ func handleInfoArgs(args []string, version string) (code int, handled bool) {
 	return 0, false
 }
 
-func migrateLegacyConfigForCLI() {
-	if _, err := config.MigrateLegacyIfNeeded(); err != nil {
-		fmt.Fprintln(os.Stderr, "warning: config migration failed:", err)
-	}
+func upgradeUserConfigForCLI() {
 	if _, err := config.ApplyUserConfigUpgradesOnStartup(config.UserConfigPath()); err != nil {
 		fmt.Fprintln(os.Stderr, "warning: config upgrade failed:", err)
 	}

@@ -13,10 +13,8 @@ import (
 
 	"corvus/internal/agent"
 	"corvus/internal/control"
-	"corvus/internal/event"
 	"corvus/internal/i18n"
 	"corvus/internal/memory"
-	"corvus/internal/migration"
 	"corvus/internal/outputstyle"
 	"corvus/internal/plugin"
 	"corvus/internal/provider"
@@ -190,13 +188,6 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 	case "/memory":
 		m.echoLocalCommand(input)
 		m.showMemory(input)
-	case "/migrate", "/migration":
-		m.echoLocalCommand(input)
-		migration.RunLegacyRescueCommand(strings.TrimSpace(strings.TrimPrefix(input, typedCmd)), event.FuncSink(func(e event.Event) {
-			if e.Kind == event.Notice {
-				m.notice(e.Text)
-			}
-		}))
 	case "/goal":
 		return m.runGoalSubcommand(input)
 	case "/remember":

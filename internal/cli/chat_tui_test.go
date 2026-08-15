@@ -3890,54 +3890,6 @@ func TestSlashSubagentWithoutTaskStaysIdleWithUsageHint(t *testing.T) {
 	}
 }
 
-func TestSlashMigrateShowsProgress(t *testing.T) {
-	isolateCLIConfigHome(t)
-	m := newTestChatTUI()
-
-	if cmd := m.runSlashCommand("/migrate"); cmd != nil {
-		t.Fatal("/migrate should run locally without returning a command")
-	}
-	out := strings.Join(m.transcript, "\n")
-	for _, want := range []string{
-		"/migrate",
-		"migration rescue: checking legacy config and credentials",
-		"migration rescue: scanning legacy memory",
-		"migration rescue: scanning legacy sessions",
-		"migration rescue complete:",
-	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("missing %q in transcript:\n%s", want, out)
-		}
-	}
-}
-
-func TestSlashMigrateFromImportsExplicitSessions(t *testing.T) {
-	home := isolateCLIConfigHome(t)
-	legacySessions := filepath.Join(home, "Old Corvus", "sessions")
-	if err := os.MkdirAll(legacySessions, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(legacySessions, "old-chat.jsonl"), []byte(`{"role":"user","content":"hello from old install"}`+"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	m := newTestChatTUI()
-
-	input := `/migrate --from "` + filepath.Dir(legacySessions) + `"`
-	if cmd := m.runSlashCommand(input); cmd != nil {
-		t.Fatal("/migrate --from should run locally without returning a command")
-	}
-	out := strings.Join(m.transcript, "\n")
-	for _, want := range []string{
-		input,
-		"migration rescue: scanning explicit legacy sessions from " + filepath.Dir(legacySessions),
-		"imported 1 past session(s) from " + legacySessions,
-	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("missing %q in transcript:\n%s", want, out)
-		}
-	}
-}
-
 // TestDoubleCtrlCQuit verifies that Ctrl+C while idle requires a double-press
 // within the 1.5s window to actually quit. A single press shows a hint; a
 // second press within the window returns tea.Quit.

@@ -71,37 +71,6 @@ func isProjectDotEnvControlKey(key string) bool {
 	}
 }
 
-func legacyCredentialsPaths() []string {
-	current := UserCredentialsPath()
-	seen := map[string]bool{}
-	var paths []string
-	add := func(path string) {
-		if path == "" {
-			return
-		}
-		path = filepath.Clean(path)
-		if current != "" && samePath(path, current) {
-			return
-		}
-		if seen[path] {
-			return
-		}
-		seen[path] = true
-		paths = append(paths, path)
-	}
-	if dir := legacyOSSupportDir(); dir != "" {
-		add(filepath.Join(dir, "credentials"))
-	}
-	if dir := userSupportDir(); dir != "" {
-		add(filepath.Join(dir, "credentials"))
-		add(filepath.Join(dir, ".env"))
-	}
-	for _, cfg := range legacyXDGConfigPaths() {
-		add(filepath.Join(filepath.Dir(cfg), "credentials"))
-	}
-	return paths
-}
-
 func loadDotEnvFileAs(path string, source CredentialSource) {
 	file, ok := readDotEnvFile(path)
 	if !ok {

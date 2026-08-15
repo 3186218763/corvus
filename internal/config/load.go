@@ -222,13 +222,6 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 		cfg.mergeMCPJSON(entries)
 	}
 
-	// Lowest priority before the one-time v1.9.1 MCP migration: the v0.x
-	// ~/.corvus/config.json's mcpServers. Once the migration marker exists, the
-	// current config is authoritative even when it is empty; reading the legacy
-	// source again would resurrect servers the user removed from current config.
-	if !mcpGlobalMigrationComplete() {
-		cfg.mergeMCPJSON(loadLegacyMCP(legacyConfigPath()))
-	}
 	_ = mergeInstalledPluginPackages(cfg, root)
 	normalizePluginCommandLines(cfg)
 	normalizeLegacyEffort(cfg)

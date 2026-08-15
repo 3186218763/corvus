@@ -254,7 +254,6 @@ type Messages struct {
 	CmdStatus           string // /status
 	CmdWorkMode         string // /work-mode
 	CmdMemory           string // /memory
-	CmdMigrate          string // /migrate
 	CmdGoal             string // /goal
 	CmdRemember         string // /remember
 	CmdForget           string // /forget

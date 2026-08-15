@@ -163,7 +163,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		return nil, err
 	}
 	// Sink + one-time boot notices.
-	sink, err := buildSinkAndNotices(opts, cfgResult.cfg, cfgResult.entry, cfgResult.modelName, cfgResult.migrated, cfgResult.migErr, cfgResult.stepLimitsMigrated, cfgResult.stepLimitMigErr, cfgResult.redactToolOutputMigrated, cfgResult.redactToolOutputMigErr, cfgResult.memoryCompilerMigrated, cfgResult.memoryCompilerMigErr)
+	sink, err := buildSinkAndNotices(opts, cfgResult.cfg, cfgResult.entry, cfgResult.modelName, cfgResult.stepLimitsMigrated, cfgResult.stepLimitMigErr, cfgResult.redactToolOutputMigrated, cfgResult.redactToolOutputMigErr, cfgResult.memoryCompilerMigrated, cfgResult.memoryCompilerMigErr)
 	if err != nil {
 		return nil, err
 	}

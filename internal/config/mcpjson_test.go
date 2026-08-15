@@ -442,7 +442,7 @@ func TestLoadMergesPluginsAcrossTOMLSources(t *testing.T) {
 }
 
 func TestLoadProjectMCPPriorityIsCorvusThenMCPJSONThenGlobal(t *testing.T) {
-	_, userConfig, _ := legacyHome(t)
+	userConfig, _ := isolatedHome(t)
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
 		t.Fatal(err)
@@ -492,7 +492,7 @@ command = "project-corvus-mcp"
 }
 
 func TestUpsertPluginInSourcePreservesGlobalAndProjectBoundaries(t *testing.T) {
-	_, userConfig, _ := legacyHome(t)
+	userConfig, _ := isolatedHome(t)
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
 		t.Fatal(err)
@@ -544,7 +544,7 @@ command = "project-old"
 }
 
 func TestRemoveEffectivePluginRevealsLowerPriorityDeclaration(t *testing.T) {
-	_, userConfig, _ := legacyHome(t)
+	userConfig, _ := isolatedHome(t)
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
 		t.Fatal(err)
@@ -832,95 +832,8 @@ url = "https://example.test/mcp?access_token=%s&workspace=main"
 	}
 }
 
-func TestLoadLegacyMCP(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.json")
-	doc := `{
-  "mcpServers": {
-    "github":  { "command": "npx", "args": ["-y", "server-github"], "env": { "TOKEN": "x" } },
-    "old":     { "command": "foo" },
-    "remote":  { "type": "sse", "url": "https://x/sse", "headers": { "Authorization": "Bearer y" } }
-  },
-  "mcpDisabled": ["old"],
-  "projects": { "/some/root": { "shellAllowed": [] } }
-}`
-	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	got := loadLegacyMCP(path)
-	// "old" is in mcpDisabled and dropped; github + remote remain, name-sorted.
-	if len(got) != 2 {
-		t.Fatalf("got %d entries, want 2: %+v", len(got), got)
-	}
-	if got[0].Name != "github" || got[1].Name != "remote" {
-		t.Fatalf("names = %q, %q; want github, remote", got[0].Name, got[1].Name)
-	}
-	if got[0].Command != "npx" || got[0].Env["TOKEN"] != "x" {
-		t.Errorf("github mapped wrong: %+v", got[0])
-	}
-	if got[1].Type != "sse" || got[1].URL != "https://x/sse" || got[1].Headers["Authorization"] != "Bearer y" {
-		t.Errorf("remote mapped wrong: %+v", got[1])
-	}
-
-	doc = `{
-  "mcp": [
-    "memory=npx -y @modelcontextprotocol/server-memory",
-    "remote=https://x/sse",
-    "stream=streamable+https://x/http",
-    "github=node dupe.js",
-    "off=npx server-off",
-    "uvx run anonymous-server"
-  ],
-  "mcpServers": { "github": { "command": "npx" } },
-  "mcpEnv": { "memory": { "MEMORY_PATH": "/tmp/mem" } },
-  "mcpDisabled": ["off"]
-}`
-	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	got = loadLegacyMCP(path)
-	byName := map[string]PluginEntry{}
-	for _, e := range got {
-		byName[e.Name] = e
-	}
-	if m := byName["memory"]; m.Command != "npx" || m.Env["MEMORY_PATH"] != "/tmp/mem" {
-		t.Errorf("legacy mcp string entry mapped wrong: %+v", m)
-	}
-	if r := byName["remote"]; r.Type != "sse" || r.URL != "https://x/sse" {
-		t.Errorf("plain URL should map to SSE: %+v", r)
-	}
-	if s := byName["stream"]; s.Type != "http" || s.URL != "https://x/http" {
-		t.Errorf("streamable+ URL should map to http: %+v", s)
-	}
-	if g := byName["github"]; g.Command != "npx" || len(g.Args) != 0 {
-		t.Errorf("mcpServers should win the github name collision: %+v", g)
-	}
-	if a := byName["mcp-6"]; a.Command != "uvx" || len(a.Args) != 2 {
-		t.Errorf("anonymous spec should get a synthesized name: %+v", a)
-	}
-	if _, hasOff := byName["off"]; hasOff || len(got) != 5 {
-		t.Errorf("disabled entry should be skipped, got %d: %+v", len(got), got)
-	}
-
-	// Absent, malformed, and empty paths must not error — just yield nil, so a
-	// stale legacy file can never block startup.
-	if got := loadLegacyMCP(filepath.Join(dir, "nope.json")); got != nil {
-		t.Errorf("absent file: got %+v, want nil", got)
-	}
-	if err := os.WriteFile(path, []byte("{not json"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if got := loadLegacyMCP(path); got != nil {
-		t.Errorf("malformed file: got %+v, want nil", got)
-	}
-	if got := loadLegacyMCP(""); got != nil {
-		t.Errorf("empty path: got %+v, want nil", got)
-	}
-}
-
 func TestRemovePluginFromSourcesForRootRemovesEveryWritableDeclaration(t *testing.T) {
-	_, userConfig, _ := legacyHome(t)
+	userConfig, _ := isolatedHome(t)
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
 		t.Fatal(err)
@@ -970,7 +883,7 @@ command = "duplicate-mcp"
 }
 
 func TestRemovePluginFromSourcesForRootPreflightsEverySource(t *testing.T) {
-	_, userConfig, _ := legacyHome(t)
+	userConfig, _ := isolatedHome(t)
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Dir(userConfig), 0o755); err != nil {
 		t.Fatal(err)

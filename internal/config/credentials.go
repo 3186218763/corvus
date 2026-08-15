@@ -16,12 +16,10 @@ import (
 )
 
 const (
-	CredentialsStoreAuto    = "auto"
-	CredentialsStoreKeyring = "keyring"
-	CredentialsStoreFile    = "file"
+	CredentialsStoreAuto = "auto"
+	CredentialsStoreFile = "file"
 
-	credentialsKeyringService = "corvus"
-	credentialClearedPrefix   = "# corvus-cleared "
+	credentialClearedPrefix = "# corvus-cleared "
 )
 
 const (
@@ -64,7 +62,6 @@ var credentialSourceTracker = struct {
 var userCredentialEditMu sync.Mutex
 
 var storedCredentialValueLookup = storedCredentialValue
-var legacyKeyringCredentialValueLookup = legacyKeyringCredentialValue
 
 // CredentialResolver resolves credentials repeatedly for one caller-owned view
 // build. It keeps expensive global credential-store lookups bounded to one per
@@ -120,8 +117,6 @@ func cloneCredentialResolution(res CredentialResolution) CredentialResolution {
 
 func normalizeCredentialsStore(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case CredentialsStoreKeyring:
-		return CredentialsStoreKeyring
 	case CredentialsStoreFile:
 		return CredentialsStoreFile
 	default:

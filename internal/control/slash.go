@@ -8,7 +8,6 @@ import (
 
 	"corvus/internal/config"
 	"corvus/internal/i18n"
-	"corvus/internal/migration"
 	"corvus/internal/pluginpkg"
 	"corvus/internal/skill"
 )
@@ -438,9 +437,6 @@ func (c *Controller) managementNotice(trimmed string) bool {
 	case "/memory":
 		args := strings.TrimSpace(strings.TrimPrefix(trimmed, fields[0]))
 		c.notice(MemoryCommandText(c, args))
-	case "/migrate", "/migration":
-		args := strings.TrimSpace(strings.TrimPrefix(trimmed, fields[0]))
-		migration.RunLegacyRescueCommand(args, c.sink)
 	case "/skill", "/skills":
 		sub := ""
 		if len(fields) >= 2 {

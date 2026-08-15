@@ -53,7 +53,6 @@ func builtinSlashSpecs() []builtinSlashSpec {
 		{name: "/currency", insert: "/currency ", hint: i18n.M.CmdCurrency, descend: true, showInHelp: true},
 		{name: "/help", insert: "/help", hint: i18n.M.CmdHelp, showInHelp: true},
 		{name: "/memory", insert: "/memory ", hint: i18n.M.CmdMemory, showInHelp: true},
-		{name: "/migrate", aliases: []string{"/migration"}, insert: "/migrate", hint: i18n.M.CmdMigrate, showInHelp: true},
 		{name: "/goal", insert: "/goal ", hint: i18n.M.CmdGoal, descend: true},
 		{name: "/remember", insert: "/remember ", hint: i18n.M.CmdRemember},
 		{name: "/forget", insert: "/forget ", hint: i18n.M.CmdForget},

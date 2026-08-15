@@ -256,13 +256,12 @@ func TestManagedConfigWriteGatedOnApprover(t *testing.T) {
 	managed := NewManagedConfigPaths(config.CorvusManagedConfigPaths())
 	w := writeFile{roots: realRoots(cfg.WriteRootsForRoot(project)), managed: managed}
 
-	// Approved: current config.toml and the legacy v0.x config.json become
-	// writable, and the approver sees each target.
+	// Approved: the current config.toml becomes writable, and the approver
+	// sees the target.
 	approve := &stubConfigWriteApprover{allow: true}
 	ctx := tool.WithConfigWriteApprover(context.Background(), approve)
 	for _, target := range []string{
 		config.UserConfigPath(),
-		filepath.Join(home, ".corvus", "config.json"),
 	} {
 		args, _ := json.Marshal(map[string]string{"path": target, "content": "{}\n"})
 		if _, err := w.Execute(ctx, args); err != nil {
@@ -272,7 +271,7 @@ func TestManagedConfigWriteGatedOnApprover(t *testing.T) {
 			t.Fatalf("managed config was not created %s: %v", target, err)
 		}
 	}
-	if len(approve.asked) != 2 {
+	if len(approve.asked) != 1 {
 		t.Fatalf("approver should be asked once per write, asked=%v", approve.asked)
 	}
 

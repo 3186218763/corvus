@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -659,9 +658,6 @@ func ClearPluginAuthenticationInSourceForRoot(root, name string) (PluginEntry, b
 	}
 	lockPaths := append([]string{}, userConfigCandidatePaths()...)
 	lockPaths = append(lockPaths, projectTOML, projectMCPJSON)
-	if legacy := legacyConfigPath(); strings.TrimSpace(legacy) != "" {
-		lockPaths = append(lockPaths, legacy)
-	}
 	unlock, err := lockConfigFilesEdits(lockPaths...)
 	if err != nil {
 		return PluginEntry{}, false, "", fmt.Errorf("clear plugin authentication: %w", err)
@@ -742,7 +738,7 @@ func MCPConfigPathForEntry(root string, entry PluginEntry) string {
 		}
 		return UserConfigPath()
 	case MCPSourceLegacyUser:
-		return legacyConfigPath()
+		return "" // the v0.x config.json is no longer read; such entries only persist in written TOML
 	case MCPSourcePluginPackage:
 		return ""
 	}
@@ -899,15 +895,6 @@ func removePluginFromSourceForRootLocked(entry PluginEntry, path string) (bool, 
 		return removed, path, err
 	case MCPSourcePluginPackage:
 		return false, "", fmt.Errorf("MCP server %q is managed by an installed plugin package", entry.Name)
-	case MCPSourceLegacyUser:
-		edit, changed, err := planLegacyMCPDisable(path, entry.Name)
-		if err != nil || !changed {
-			return false, path, err
-		}
-		if err := applyConfigSourceEdits([]configSourceEdit{edit}); err != nil {
-			return false, path, err
-		}
-		return true, path, nil
 	}
 	cfg, err := LoadForEditReadOnlyStrict(path)
 	if err != nil {
@@ -958,9 +945,6 @@ func mcpConfigSourcePathsForRoot(root string) []string {
 	}
 	paths := append([]string{}, userConfigCandidatePaths()...)
 	paths = append(paths, projectTOML, projectMCPJSON)
-	if legacy := legacyConfigPath(); strings.TrimSpace(legacy) != "" {
-		paths = append(paths, legacy)
-	}
 	return paths
 }
 
@@ -973,7 +957,7 @@ type configSourceEdit struct {
 }
 
 func newConfigSourceEdit(path string, write func() error) (configSourceEdit, error) {
-	userOwned := isUserConfigPath(path) || samePath(path, legacyConfigPath())
+	userOwned := isUserConfigPath(path)
 	resolved, err := resolveConfigAccessPath(path, userOwned)
 	if err != nil {
 		return configSourceEdit{}, err
@@ -1053,95 +1037,6 @@ func planMCPJSONPluginRemoval(path, name string) (configSourceEdit, bool, error)
 	return edit, err == nil, err
 }
 
-func planLegacyMCPDisable(path, name string) (configSourceEdit, bool, error) {
-	if strings.TrimSpace(path) == "" {
-		return configSourceEdit{}, false, nil
-	}
-	resolved, err := resolveConfigAccessPath(path, true)
-	if err != nil {
-		return configSourceEdit{}, false, err
-	}
-	info, err := os.Stat(resolved)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return configSourceEdit{}, false, nil
-		}
-		return configSourceEdit{}, false, err
-	}
-	data, err := fileencoding.ReadFileUTF8(resolved)
-	if err != nil {
-		return configSourceEdit{}, false, err
-	}
-	var root map[string]json.RawMessage
-	var view struct {
-		MCP         []string                   `json:"mcp"`
-		MCPServers  map[string]json.RawMessage `json:"mcpServers"`
-		MCPDisabled []string                   `json:"mcpDisabled"`
-	}
-	if err := json.Unmarshal(data, &root); err != nil {
-		return configSourceEdit{}, false, nil
-	}
-	if err := json.Unmarshal(data, &view); err != nil {
-		return configSourceEdit{}, false, nil
-	}
-
-	foundNamed := false
-	changed := false
-	filtered := make([]string, 0, len(view.MCP))
-	for i, raw := range view.MCP {
-		entry, ok := parseLegacyMCPSpec(raw)
-		if !ok {
-			filtered = append(filtered, raw)
-			continue
-		}
-		effectiveName := entry.Name
-		if effectiveName == "" {
-			effectiveName = anonymousMCPName(i)
-		}
-		if effectiveName != name {
-			filtered = append(filtered, raw)
-			continue
-		}
-		if entry.Name == "" {
-			changed = true
-			continue
-		}
-		foundNamed = true
-		filtered = append(filtered, raw)
-	}
-	if _, ok := view.MCPServers[name]; ok {
-		foundNamed = true
-	}
-	if foundNamed && !containsString(view.MCPDisabled, name) {
-		view.MCPDisabled = append(view.MCPDisabled, name)
-		changed = true
-	}
-	if !changed {
-		return configSourceEdit{}, false, nil
-	}
-	if len(filtered) != len(view.MCP) {
-		raw, marshalErr := json.Marshal(filtered)
-		if marshalErr != nil {
-			return configSourceEdit{}, false, marshalErr
-		}
-		root["mcp"] = raw
-	}
-	disabledRaw, err := json.Marshal(view.MCPDisabled)
-	if err != nil {
-		return configSourceEdit{}, false, err
-	}
-	root["mcpDisabled"] = disabledRaw
-	out, err := json.MarshalIndent(root, "", "  ")
-	if err != nil {
-		return configSourceEdit{}, false, err
-	}
-	out = append(out, '\n')
-	edit, err := newConfigSourceEdit(path, func() error {
-		return fileutil.AtomicWriteFile(resolved, out, info.Mode().Perm())
-	})
-	return edit, err == nil, err
-}
-
 // RemovePluginFromSourcesForRoot removes an MCP server from every writable
 // config source that can contribute it for root. Removing all matching TOML
 // declarations prevents a lower-priority duplicate from reappearing after the
@@ -1167,15 +1062,11 @@ func RemovePluginFromSourcesForRoot(root, name string) (bool, error) {
 	if resolvedRoot != "." {
 		mcpPath = filepath.Join(resolvedRoot, mcpJSONFile)
 	}
-	legacyPath := legacyConfigPath()
 	lockPaths := append([]string{}, userPaths...)
 	if !isUserPath {
 		lockPaths = append(lockPaths, projectTOML)
 	}
 	lockPaths = append(lockPaths, mcpPath)
-	if legacyPath != "" {
-		lockPaths = append(lockPaths, legacyPath)
-	}
 	unlock, err := lockConfigFilesEdits(lockPaths...)
 	if err != nil {
 		return false, fmt.Errorf("remove MCP server: %w", err)
@@ -1210,13 +1101,6 @@ func RemovePluginFromSourcesForRoot(root, name string) (bool, error) {
 	}
 	if changed {
 		edits = append(edits, mcpEdit)
-	}
-	legacyEdit, changed, err := planLegacyMCPDisable(legacyPath, name)
-	if err != nil {
-		return false, err
-	}
-	if changed {
-		edits = append(edits, legacyEdit)
 	}
 	if len(edits) == 0 {
 		return false, nil

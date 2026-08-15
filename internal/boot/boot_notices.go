@@ -6,14 +6,13 @@ import (
 
 	"corvus/internal/config"
 	"corvus/internal/event"
-	"corvus/internal/migration"
 	"corvus/internal/stats"
 )
 
 // buildSinkAndNotices wraps the frontend sink (usage recorder) and emits the
 // one-time boot notices: config migration outcomes, ignored legacy settings,
 // and the missing-API-key warning.
-func buildSinkAndNotices(opts Options, cfg *config.Config, entry *config.ProviderEntry, modelName string, migrated *config.MigrationResult, migErr error, stepLimitsMigrated bool, stepLimitMigErr error, redactToolOutputMigrated bool, redactToolOutputMigErr error, memoryCompilerMigrated bool, memoryCompilerMigErr error) (event.Sink, error) {
+func buildSinkAndNotices(opts Options, cfg *config.Config, entry *config.ProviderEntry, modelName string, stepLimitsMigrated bool, stepLimitMigErr error, redactToolOutputMigrated bool, redactToolOutputMigErr error, memoryCompilerMigrated bool, memoryCompilerMigErr error) (event.Sink, error) {
 	// Serialize the frontend's sink once: background jobs (below) emit from their
 	// own goroutines, which can overlap a running turn's emission, so every emitter
 	// shares this synchronized sink. The job manager is session-scoped — its jobs
@@ -28,11 +27,6 @@ func buildSinkAndNotices(opts Options, cfg *config.Config, entry *config.Provide
 		sink = stats.NewRecorder(sink, config.StatsDir(), source)
 	}
 
-	if migErr != nil {
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Config migration did not complete.", Detail: "config migration from ~/.corvus failed: " + migErr.Error()})
-	} else if migrated != nil {
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: migrated.Notice()})
-	}
 	if stepLimitsMigrated || cfg.IgnoredLegacyAgentStepLimits() {
 		level := event.LevelInfo
 		text := "Deprecated agent step limits were removed."
@@ -74,8 +68,6 @@ func buildSinkAndNotices(opts Options, cfg *config.Config, entry *config.Provide
 		}
 		sink.Emit(event.Event{Kind: event.Notice, Level: level, Text: text, Detail: detail})
 	}
-	migration.MigrateLegacyMemorySources(sink)
-	migration.MigrateLegacySessionSources(sink)
 	if ignored := cfg.IgnoredProjectDefaultModel(); ignored != "" {
 		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Ignored the project config's default_model.", Detail: fmt.Sprintf("project .corvus/config.toml sets default_model = %q but no configured provider serves it; using %q from your user config instead. Edit or remove that default_model line to silence this notice.", ignored, cfg.DefaultModel)})
 	}

@@ -23,8 +23,6 @@ type configResult struct {
 	keepPolicy               agent.KeepPolicy
 	entry                    *config.ProviderEntry
 	modelRef                 string
-	migrated                 *config.MigrationResult
-	migErr                   error
 	stepLimitsMigrated       bool
 	stepLimitMigErr          error
 	redactToolOutputMigrated bool
@@ -46,10 +44,6 @@ func buildConfigAndModel(opts Options) (*configResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	// One-time import of v1/v0.5 legacy config — runs before Load so the freshly
-	// written config + ~/.env are picked up this same boot. CLI Run also calls this
-	// before config-only commands; this call stays as the shared frontend fallback.
-	migrated, migErr := config.MigrateLegacyIfNeededForRoot(root)
 	stepLimitsMigrated, stepLimitMigErr := config.MigrateLegacyAgentStepLimitsForRoot(root)
 	redactToolOutputMigrated, redactToolOutputMigErr := config.MigrateLegacyRedactToolOutputForRoot(root)
 	memoryCompilerMigrated, memoryCompilerMigErr := config.MigrateLegacyMemoryCompilerForRoot(root)
@@ -114,8 +108,6 @@ func buildConfigAndModel(opts Options) (*configResult, error) {
 		keepPolicy:               keepPolicy,
 		entry:                    entry,
 		modelRef:                 modelRef,
-		migrated:                 migrated,
-		migErr:                   migErr,
 		stepLimitsMigrated:       stepLimitsMigrated,
 		stepLimitMigErr:          stepLimitMigErr,
 		redactToolOutputMigrated: redactToolOutputMigrated,

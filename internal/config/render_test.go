@@ -79,7 +79,6 @@ func TestCorvusManagedConfigPathsAreConfigFilesOnly(t *testing.T) {
 	paths := CorvusManagedConfigPaths()
 	for _, want := range []string{
 		filepath.Join(home, "AppData", "Roaming", "corvus", "config.toml"),
-		filepath.Join(home, ".corvus", "config.json"),
 	} {
 		found := false
 		for _, got := range paths {
@@ -96,7 +95,7 @@ func TestCorvusManagedConfigPathsAreConfigFilesOnly(t *testing.T) {
 	// the sensitive Corvus-home siblings (credentials, hooks, skills,
 	// sessions) may ride along.
 	for _, got := range paths {
-		if base := filepath.Base(got); base != "config.toml" && base != "config.json" {
+		if base := filepath.Base(got); base != "config.toml" {
 			t.Fatalf("managed config path %q is not a known config file (paths must be files, not directories): %v", got, paths)
 		}
 		for _, forbidden := range []string{
@@ -1217,29 +1216,6 @@ func TestCredentialSourceCandidatesSkipHomeEnvWhenIsolated(t *testing.T) {
 		if c.Kind == CredentialSourceHomeEnv {
 			t.Fatalf("credentialSourceCandidates includes CredentialSourceHomeEnv when isolated: %v", c)
 		}
-	}
-}
-
-func TestMigrateLegacyIfNeededSkipsWhenIsolated(t *testing.T) {
-	home := isolateUserConfigHome(t)
-	isolated := filepath.Join(home, "isolated-home")
-	t.Setenv("CORVUS_HOME", isolated)
-
-	// Create a legacy config.json in production home — migration must skip it.
-	legacyDir := filepath.Join(home, ".corvus")
-	if err := os.MkdirAll(legacyDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(legacyDir, "config.json"), []byte(`{"model":"production-model","apiKey":"sk-legacy"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	res, err := MigrateLegacyIfNeeded()
-	if err != nil {
-		t.Fatalf("MigrateLegacyIfNeeded() error = %v", err)
-	}
-	if res != nil {
-		t.Fatalf("MigrateLegacyIfNeeded() = %+v, want nil when isolated", res)
 	}
 }
 

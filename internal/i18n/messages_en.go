@@ -183,7 +183,7 @@ var English = Messages{
 	SlashUnavailable:   "command unavailable in this build",
 	SlashUnknown:       "unknown command",
 	SlashTodoCleared:   "task list dismissed",
-	SlashHelp:          "commands: /compact · /new · /clear · /resume · /rewind · /tree · /branch · /switch · /todo · /verbose · /model (switch model) · /effort · /theme · /language · /mcp · /skills · /plugins · /hooks · /paste-image · /memory · /migrate · /goal · /remember · /quit · /help · plus skills (/init, /explore, …)",
+	SlashHelp:          "commands: /compact · /new · /clear · /resume · /rewind · /tree · /branch · /switch · /todo · /verbose · /model (switch model) · /effort · /theme · /language · /mcp · /skills · /plugins · /hooks · /paste-image · /memory · /goal · /remember · /quit · /help · plus skills (/init, /explore, …)",
 
 	SkillPickerTitle:             "Skills",
 	SkillPickerAvailableFmt:      "%d available",
@@ -264,7 +264,6 @@ var English = Messages{
 	CmdStatus:           "show session status",
 	CmdWorkMode:         "switch work mode",
 	CmdMemory:           "inspect instructions, memory, and recovery",
-	CmdMigrate:          "retry legacy data migration",
 	CmdGoal:             "set or clear the active goal",
 	CmdRemember:         "save a memory note",
 	CmdForget:           "archive a saved memory",
