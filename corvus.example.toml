@@ -13,10 +13,12 @@
 # 默认模型：格式为 "provider/model"；也可以只写 provider 名（取其 default 模型）
 # 或裸模型名（取第一个列出该模型的 provider）。
 default_model = "deepseek/deepseek-chat"
+# language = "zh"                      # 界面/默认回复语言（zh | en；空 = 按 $LANG 自动检测）
 
 [ui]
 # 界面主题：auto | dark | light（空 = 自动）
 theme = "auto"
+# show_reasoning = false               # Ctrl+O / /verbose：在 CLI 中展开思考文本；false = 折叠
 
 [agent]
 # 会话默认温度（0.0–2.0；省略则使用供应商默认值）
@@ -54,3 +56,8 @@ api_key = "sk-..."                     # API key 占位符：替换为真实密�
 # context_window = 65536    # 上下文窗口大小（token）
 # effort = "medium"         # 思考力度（low | medium | high，取决于模型/供应商支持）
 # api_key_env = "DEEPSEEK_API_KEY"  # 从环境变量注入密钥；api_key 优先于 api_key_env
+# max_output_tokens = 8192  # 单次回复输出上限（token；0 = 供应商默认）
+# balance_url = "https://api.deepseek.com/user/balance"  # 余额查询端点（可选；留空 = 不查询）
+# price = { input = 0.14, cache_hit = 0.0028, output = 0.28, currency = "$" }  # 计费（每百万 token）
+# prices = { "deepseek-reasoner" = { input = 2.0, output = 8.0, currency = "$" } }  # 按模型计费，优先于 price
+# model_overrides = { "deepseek-reasoner" = { supported_efforts = ["disabled", "high"], default_effort = "high" } }  # 单模型参数覆盖
