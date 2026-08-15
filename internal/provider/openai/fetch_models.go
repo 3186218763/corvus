@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"corvus/internal/netclient"
 )
 
 type modelFetchStatusError struct {
@@ -28,6 +30,9 @@ const (
 type FetchModelsOptions struct {
 	Headers  map[string]string
 	AuthMode ModelFetchAuthMode
+	// Proxy routes the model-list request through the user's proxy settings
+	// (ADR-0004); the zero spec keeps env-proxy (mode auto) behavior.
+	Proxy netclient.ProxySpec
 }
 
 func (e modelFetchStatusError) Error() string {
@@ -53,7 +58,10 @@ func FetchModels(ctx context.Context, baseURL, apiKey string, headers map[string
 // FetchModelsWithOptions calls the OpenAI-compatible GET /models endpoint and
 // returns the available model IDs.
 func FetchModelsWithOptions(ctx context.Context, baseURL, apiKey string, opts FetchModelsOptions) ([]string, error) {
-	cli := &http.Client{Timeout: 10 * time.Second}
+	cli, err := netclient.NewHTTPClient(opts.Proxy, netclient.TransportOptions{Timeout: 10 * time.Second})
+	if err != nil {
+		return nil, fmt.Errorf("fetch models: network: %w", err)
+	}
 	url := strings.TrimRight(baseURL, "/")
 	if !strings.HasSuffix(url, "/models") {
 		url += "/models"

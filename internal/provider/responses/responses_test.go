@@ -10,9 +10,19 @@ import (
 	"testing"
 	"time"
 
+	"corvus/internal/netclient"
 	"corvus/internal/provider"
 )
 
+// mustNew wraps New for tests: construction errors are test failures.
+func mustNew(t testing.TB, cfg Config) provider.Provider {
+	t.Helper()
+	p, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return p
+}
 func boolPtr(value bool) *bool { return &value }
 
 func collect(t *testing.T, p provider.Provider, req provider.Request) []provider.Chunk {
@@ -75,7 +85,7 @@ func TestDeepSeekEffortUsesResponsesReasoningShape(t *testing.T) {
 		{"auto", ""}, {"disabled", "none"}, {"minimal", "minimal"}, {"low", "low"}, {"high", "high"}, {"max", "max"},
 	}
 	for _, test := range tests {
-		client := New(Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Effort: test.effort}).(*client)
+		client := mustNew(t, Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Effort: test.effort}).(*client)
 		body, _, _ := client.buildRequestBody(provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})
 		reasoning, _ := body["reasoning"].(map[string]any)
 		got, _ := reasoning["effort"].(string)
@@ -86,7 +96,7 @@ func TestDeepSeekEffortUsesResponsesReasoningShape(t *testing.T) {
 }
 
 func TestRequestSerializesExplicitMaxOutputTokens(t *testing.T) {
-	client := New(Config{Name: "responses", BaseURL: "https://example.com", Model: "model"}).(*client)
+	client := mustNew(t, Config{Name: "responses", BaseURL: "https://example.com", Model: "model"}).(*client)
 	body, _, _ := client.buildRequestBody(provider.Request{
 		Messages:  []provider.Message{{Role: provider.RoleUser, Content: "hi"}},
 		MaxTokens: 32 * 1024,
@@ -99,33 +109,33 @@ func TestRequestSerializesExplicitMaxOutputTokens(t *testing.T) {
 func TestRequestUsesOnlySafeProviderOutputDefaults(t *testing.T) {
 	message := []provider.Message{{Role: provider.RoleUser, Content: "hi"}}
 
-	deepseek := New(Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"}).(*client)
+	deepseek := mustNew(t, Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"}).(*client)
 	deepseekBody, _, _ := deepseek.buildRequestBody(provider.Request{Messages: message})
 	if got := deepseekBody["max_output_tokens"]; got != provider.DefaultReasoningOutputTokens {
 		t.Fatalf("DeepSeek max_output_tokens = %#v, want %d", got, provider.DefaultReasoningOutputTokens)
 	}
 
 	for _, effort := range []string{"none", "disabled", "off", " NONE "} {
-		thinkingDisabled := New(Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Effort: effort}).(*client)
+		thinkingDisabled := mustNew(t, Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Effort: effort}).(*client)
 		thinkingDisabledBody, _, _ := thinkingDisabled.buildRequestBody(provider.Request{Messages: message})
 		if _, exists := thinkingDisabledBody["max_output_tokens"]; exists {
 			t.Fatalf("thinking-disabled DeepSeek effort %q received an automatic output budget: %#v", effort, thinkingDisabledBody)
 		}
 	}
 
-	explicitThinkingDisabled := New(Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Effort: "none", MaxOutputTokens: 8192}).(*client)
+	explicitThinkingDisabled := mustNew(t, Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Effort: "none", MaxOutputTokens: 8192}).(*client)
 	explicitThinkingDisabledBody, _, _ := explicitThinkingDisabled.buildRequestBody(provider.Request{Messages: message})
 	if got := explicitThinkingDisabledBody["max_output_tokens"]; got != 8192 {
 		t.Fatalf("explicit thinking-disabled DeepSeek budget = %#v, want 8192", got)
 	}
 
-	unknown := New(Config{Name: "responses", BaseURL: "https://example.com", Model: "model"}).(*client)
+	unknown := mustNew(t, Config{Name: "responses", BaseURL: "https://example.com", Model: "model"}).(*client)
 	unknownBody, _, _ := unknown.buildRequestBody(provider.Request{Messages: message})
 	if _, exists := unknownBody["max_output_tokens"]; exists {
 		t.Fatalf("unknown Responses endpoint received an inferred output budget: %#v", unknownBody)
 	}
 
-	disabled := New(Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", MaxOutputTokens: -1}).(*client)
+	disabled := mustNew(t, Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", MaxOutputTokens: -1}).(*client)
 	disabledBody, _, _ := disabled.buildRequestBody(provider.Request{Messages: message})
 	if _, exists := disabledBody["max_output_tokens"]; exists {
 		t.Fatalf("disabled DeepSeek Responses budget remained present: %#v", disabledBody)
@@ -156,7 +166,7 @@ func TestStatelessRequestReplaysReasoningContentAndToolPair(t *testing.T) {
 	}))
 	defer server.Close()
 
-	p := New(Config{Name: "deepseek", APIKey: "key", BaseURL: server.URL, Model: "deepseek-v4-flash", Mode: "stateless", Effort: "high"})
+	p := mustNew(t, Config{Name: "deepseek", APIKey: "key", BaseURL: server.URL, Model: "deepseek-v4-flash", Mode: "stateless", Effort: "high"})
 	collect(t, p, provider.Request{Messages: []provider.Message{
 		{Role: provider.RoleSystem, Content: "system"},
 		{Role: provider.RoleUser, Content: "weather"},
@@ -192,7 +202,7 @@ func TestStatelessRequestReplaysReasoningContentAndToolPair(t *testing.T) {
 }
 
 func TestStatelessRequestSanitizesMissingToolOutput(t *testing.T) {
-	client := New(Config{Name: "test", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"}).(*client)
+	client := mustNew(t, Config{Name: "test", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"}).(*client)
 	body, _, _ := client.buildRequestBody(provider.Request{Messages: []provider.Message{
 		{Role: provider.RoleUser, Content: "run"},
 		{Role: provider.RoleAssistant, ReasoningContent: "call", ToolCalls: []provider.ToolCall{{ID: "call_1", Name: "bash", Arguments: `{"command":"pwd"}`}}},
@@ -213,7 +223,7 @@ func TestStreamDoesNotDuplicateDoneText(t *testing.T) {
 	}))
 	defer server.Close()
 
-	chunks := collect(t, New(Config{Name: "test", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateless"}), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})
+	chunks := collect(t, mustNew(t, Config{Name: "test", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateless"}), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})
 	var text string
 	var usage *provider.Usage
 	for _, chunk := range chunks {
@@ -248,7 +258,7 @@ func TestFunctionArgumentEventsUseOutputItemMappingAndCumulativeProgress(t *test
 	}))
 	defer server.Close()
 
-	chunks := collect(t, New(Config{Name: "test", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateless"}), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "pwd"}}})
+	chunks := collect(t, mustNew(t, Config{Name: "test", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateless"}), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "pwd"}}})
 	var starts, completed int
 	var progress []int
 	for _, chunk := range chunks {
@@ -283,7 +293,7 @@ func TestIncompleteResponseSurfacesFinishReason(t *testing.T) {
 		writeEvents(w, `{"type":"response.incomplete","response":{"id":"resp_1","incomplete_details":{"reason":"max_output_tokens"},"usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5}}}`)
 	}))
 	defer server.Close()
-	p := New(Config{Name: "test", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateful"}).(*client)
+	p := mustNew(t, Config{Name: "test", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateful"}).(*client)
 	p.lastResponseID = "stale"
 	p.expectedPrefixDigest = "stale"
 	chunks := collect(t, p, provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})
@@ -317,7 +327,7 @@ func TestStatefulContinuationValidatesConversationPrefix(t *testing.T) {
 		)
 	}))
 	defer server.Close()
-	p := New(Config{Name: "stateful", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateful"})
+	p := mustNew(t, Config{Name: "stateful", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateful"})
 
 	collect(t, p, provider.Request{Messages: []provider.Message{{Role: provider.RoleSystem, Content: "sys"}, {Role: provider.RoleUser, Content: "one"}}})
 	collect(t, p, provider.Request{Messages: []provider.Message{{Role: provider.RoleSystem, Content: "sys"}, {Role: provider.RoleUser, Content: "one"}, {Role: provider.RoleAssistant, Content: "answer"}, {Role: provider.RoleUser, Content: "two"}}})
@@ -361,7 +371,7 @@ func TestExpiredPreviousResponseRetriesOnceWithFullHistory(t *testing.T) {
 		)
 	}))
 	defer server.Close()
-	p := New(Config{Name: "stateful", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateful"})
+	p := mustNew(t, Config{Name: "stateful", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateful"})
 	collect(t, p, provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "one"}}})
 	chunks := collect(t, p, provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "one"}, {Role: provider.RoleAssistant, Content: "answer"}, {Role: provider.RoleUser, Content: "two"}}})
 	if len(bodies) != 3 {
@@ -394,7 +404,7 @@ func TestDashScopeCacheHeaderIsVendorScoped(t *testing.T) {
 		writeEvents(w, `{"type":"response.completed","response":{"id":"resp","usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}`)
 	}))
 	defer server.Close()
-	p := New(Config{Name: "test", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateless", SessionCache: boolPtr(true)}).(*client)
+	p := mustNew(t, Config{Name: "test", APIKey: "key", BaseURL: server.URL, Model: "m", Mode: "stateless", SessionCache: boolPtr(true)}).(*client)
 	p.vendor = "deepseek"
 	collect(t, p, provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})
 	if got != "" {
@@ -408,20 +418,20 @@ func TestDashScopeCacheHeaderIsVendorScoped(t *testing.T) {
 }
 
 func TestRequiresToolCallReasoningOnlyForDeepSeek(t *testing.T) {
-	deepseek := New(Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"})
+	deepseek := mustNew(t, Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"})
 	if !provider.RequiresToolCallReasoning(deepseek) {
 		t.Fatal("DeepSeek Responses provider must preserve tool-call reasoning")
 	}
-	other := New(Config{Name: "other", BaseURL: "https://example.com", Model: "m"})
+	other := mustNew(t, Config{Name: "other", BaseURL: "https://example.com", Model: "m"})
 	if provider.RequiresToolCallReasoning(other) {
 		t.Fatal("unknown Responses endpoint unexpectedly requires DeepSeek reasoning")
 	}
 }
 
 func TestMissingToolCallReasoningWarningFingerprintTracksResponsesConfiguration(t *testing.T) {
-	first := New(Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Effort: "high"})
-	same := New(Config{Name: "deepseek", BaseURL: "https://api.deepseek.com/", Model: "deepseek-v4-flash", Effort: "high"})
-	changedEffort := New(Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Effort: "max"})
+	first := mustNew(t, Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Effort: "high"})
+	same := mustNew(t, Config{Name: "deepseek", BaseURL: "https://api.deepseek.com/", Model: "deepseek-v4-flash", Effort: "high"})
+	changedEffort := mustNew(t, Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Effort: "max"})
 	got := provider.MissingToolCallReasoningWarningFingerprint(first)
 	if got != provider.MissingToolCallReasoningWarningFingerprint(same) {
 		t.Fatal("equivalent Responses configurations produced different fingerprints")
@@ -436,7 +446,7 @@ func TestFailedEventSurfacesAuthenticationError(t *testing.T) {
 		writeEvents(w, `{"type":"response.failed","response":{"id":"resp","error":{"code":"invalid_api_key","message":"bad API key"}}}`)
 	}))
 	defer server.Close()
-	chunks := collect(t, New(Config{Name: "test", APIKey: "key", KeyEnv: "TEST_API_KEY", BaseURL: server.URL, Model: "m"}), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})
+	chunks := collect(t, mustNew(t, Config{Name: "test", APIKey: "key", KeyEnv: "TEST_API_KEY", BaseURL: server.URL, Model: "m"}), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "hi"}}})
 	for _, chunk := range chunks {
 		if chunk.Type == provider.ChunkError {
 			if _, ok := chunk.Err.(*provider.AuthError); !ok || !strings.Contains(chunk.Err.Error(), "TEST_API_KEY") {
@@ -449,7 +459,7 @@ func TestFailedEventSurfacesAuthenticationError(t *testing.T) {
 }
 
 func TestBuildRequestBodyPromptCacheKeyNonDeepSeek(t *testing.T) {
-	c := New(Config{Name: "oai", BaseURL: "https://api.openai.com", Model: "gpt-test"}).(*client)
+	c := mustNew(t, Config{Name: "oai", BaseURL: "https://api.openai.com", Model: "gpt-test"}).(*client)
 	body, _, _ := c.buildRequestBody(provider.Request{
 		Messages:       []provider.Message{{Role: provider.RoleUser, Content: "hi"}},
 		PromptCacheKey: "corvus:session:abc",
@@ -460,12 +470,24 @@ func TestBuildRequestBodyPromptCacheKeyNonDeepSeek(t *testing.T) {
 }
 
 func TestBuildRequestBodyPromptCacheKeyDeepSeekOmits(t *testing.T) {
-	c := New(Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"}).(*client)
+	c := mustNew(t, Config{Name: "deepseek", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"}).(*client)
 	body, _, _ := c.buildRequestBody(provider.Request{
 		Messages:       []provider.Message{{Role: provider.RoleUser, Content: "hi"}},
 		PromptCacheKey: "corvus:session:abc",
 	})
 	if _, ok := body["prompt_cache_key"]; ok {
 		t.Fatalf("DeepSeek Responses must omit key: %#v", body)
+	}
+}
+
+// TestNewRejectsInvalidProxySpec pins ADR-0004: a broken proxy spec fails
+// construction loudly instead of silently dialing direct.
+func TestNewRejectsInvalidProxySpec(t *testing.T) {
+	_, err := New(Config{
+		Name: "x", BaseURL: "https://example.com", Model: "m",
+		Proxy: netclient.ProxySpec{Mode: netclient.ModeCustom, URL: "://"},
+	})
+	if err == nil {
+		t.Fatal("invalid proxy spec must fail construction, not silently dial direct")
 	}
 }

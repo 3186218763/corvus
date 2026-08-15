@@ -15,6 +15,7 @@ import (
 	"corvus/internal/config"
 	"corvus/internal/event"
 	"corvus/internal/mcplaunch"
+	"corvus/internal/netclient"
 	"corvus/internal/plugin"
 	"corvus/internal/sandbox"
 	"corvus/internal/skill"
@@ -45,6 +46,7 @@ func buildMCPPlugins(ctx context.Context, opts Options, sink event.Sink, cfg *co
 		WriterRoots:           writeRoots,
 		ForbidReadRoots:       forbidReadRoots,
 		Network:               networkEnabled,
+		Proxy:                 cfg.NetworkProxySpec(),
 		PackageOwners:         pluginPackageOwners(cfg),
 	}
 	autoStartEntries := cfg.EnabledPlugins(root, config.DefaultMCPActivationStore())
@@ -508,6 +510,9 @@ type PluginSpecOptions struct {
 	ForbidReadRoots       []string
 	Network               bool
 	PackageOwners         map[string]string
+	// Proxy routes remote HTTP/SSE MCP server connections through the user's
+	// proxy settings (ADR-0004).
+	Proxy netclient.ProxySpec
 }
 
 // PluginSpecsForRootWithOptions maps configured plugin entries to plugin.Spec
@@ -544,6 +549,7 @@ func pluginSpecFromEntryWithOptions(e config.PluginEntry, workspaceRoot string, 
 		Env:                   e.Env,
 		URL:                   e.URL,
 		Headers:               e.Headers,
+		Proxy:                 opts.Proxy,
 		DefaultStartupTimeout: opts.DefaultStartupTimeout,
 		StartupTimeout:        secondsDuration(e.StartupTimeoutSeconds),
 		DefaultCallTimeout:    opts.DefaultCallTimeout,

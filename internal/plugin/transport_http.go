@@ -11,7 +11,9 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
+	"corvus/internal/netclient"
 	"corvus/internal/tool"
 )
 
@@ -46,6 +48,10 @@ func newHTTPTransport(s Spec) (*httpTransport, error) {
 	if s.URL == "" {
 		return nil, fmt.Errorf("http plugin %q: url is required", s.Name)
 	}
+	client, err := newTransportClient(s.Proxy)
+	if err != nil {
+		return nil, fmt.Errorf("http plugin %q: network: %w", s.Name, err)
+	}
 	headers := make(map[string]string, len(s.Headers))
 	for key, value := range s.Headers {
 		headers[key] = value
@@ -55,16 +61,36 @@ func newHTTPTransport(s Spec) (*httpTransport, error) {
 		url:     s.URL,
 		headers: headers,
 		roots:   mcpRoots(s.WorkspaceRoot),
-		client: &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) == 0 || sameHTTPOrigin(via[0].URL, req.URL) {
-				return nil
-			}
-			// Do not send configured credentials to another origin. Returning
-			// ErrUseLastResponse exposes the 3xx to the normal status handling
-			// without issuing the redirected request.
-			return http.ErrUseLastResponse
-		}},
+		client:  client,
 	}, nil
+}
+
+// newTransportClient builds the shared HTTP/SSE client for remote MCP servers:
+// the user's proxy settings are honored via netclient, and there is no overall
+// timeout — SSE streams are long-lived, and per-call deadlines come from each
+// call's context (ADR-0004).
+func newTransportClient(proxy netclient.ProxySpec) (*http.Client, error) {
+	client, err := netclient.NewHTTPClient(proxy, netclient.TransportOptions{
+		DialTimeout:         30 * time.Second,
+		KeepAlive:           30 * time.Second,
+		TLSHandshakeTimeout: 15 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+	client.CheckRedirect = sameOriginRedirect
+	return client, nil
+}
+
+// sameOriginRedirect allows redirects only within the original origin, so
+// configured credentials (Authorization, custom headers) are never forwarded
+// to another host. Returning ErrUseLastResponse exposes the 3xx to the normal
+// status handling without issuing the redirected request.
+func sameOriginRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) == 0 || sameHTTPOrigin(via[0].URL, req.URL) {
+		return nil
+	}
+	return http.ErrUseLastResponse
 }
 
 func sameHTTPOrigin(a, b *url.URL) bool {

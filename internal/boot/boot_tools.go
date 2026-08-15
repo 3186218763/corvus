@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
 	"time"
 
@@ -259,7 +258,7 @@ type skillToolsResult struct {
 // buildSkillTools wires the skill sub-agent runners, slash commands,
 // install_source, and the read-only/full skills sources, then enables them in
 // non-economy mode.
-func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entry *config.ProviderEntry, root string, reg *tool.Registry, balanceClient *http.Client, pluginSpecOptions PluginSpecOptions, pluginHost *plugin.Host, execProv provider.Provider, maxSteps int, subagentStore *agent.SubagentStore, headlessGate *control.SharedHeadlessGate, keepPolicy agent.KeepPolicy, maxSubagentDepth int, subagentScheduler *agent.SubagentScheduler, tokenDelivery bool, workspaceLease *workspacelease.Owner, capRuntimeGet func() *agent.MCPCapabilityRuntime, skillStore *skill.Store, skills []skill.Skill, resolveSubagentProvider func(modelRef, effort string) (provider.Provider, *provider.Pricing, int, error), subagentIdentity func(modelRef, effort string) (string, string), tokenEconomy bool) (*skillToolsResult, error) {
+func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entry *config.ProviderEntry, root string, reg *tool.Registry, proxySpec netclient.ProxySpec, pluginSpecOptions PluginSpecOptions, pluginHost *plugin.Host, execProv provider.Provider, maxSteps int, subagentStore *agent.SubagentStore, headlessGate *control.SharedHeadlessGate, keepPolicy agent.KeepPolicy, maxSubagentDepth int, subagentScheduler *agent.SubagentScheduler, tokenDelivery bool, workspaceLease *workspacelease.Owner, capRuntimeGet func() *agent.MCPCapabilityRuntime, skillStore *skill.Store, skills []skill.Skill, resolveSubagentProvider func(modelRef, effort string) (provider.Provider, *provider.Pricing, int, error), subagentIdentity func(modelRef, effort string) (string, string), tokenEconomy bool) (*skillToolsResult, error) {
 	// Skill tools: read_only_skill is a narrow explicitly read-only entry point; the
 	// full skills source adds run_skill / install_skill plus the dedicated
 	// subagent wrappers (explore / research / review / security_review). Read-only
@@ -550,7 +549,7 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 		installSourceAdded = true
 		reg.Add(installsource.NewTool(installsource.Options{
 			ProjectRoot: root,
-			HTTPClient:  balanceClient,
+			Proxy:       proxySpec,
 			ConnectMCP: func(e config.PluginEntry) (installsource.MCPConnectResult, error) {
 				spec := pluginSpecFromEntryWithOptions(e, root, pluginSpecOptions)
 				if opts.Stderr != nil {

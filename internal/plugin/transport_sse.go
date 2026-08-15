@@ -82,12 +82,11 @@ func newSSETransport(ctx context.Context, s Spec) (*sseTransport, error) {
 	if t.replyTimeout <= 0 {
 		t.replyTimeout = defaultCallTimeout
 	}
-	t.client = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) == 0 || sameHTTPOrigin(via[0].URL, req.URL) {
-			return nil
-		}
-		return http.ErrUseLastResponse
-	}}
+	t.client, err = newTransportClient(s.Proxy)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("sse plugin %q: network: %w", s.Name, err)
+	}
 	go t.replyLoop()
 	go t.readLoop()
 	return t, nil

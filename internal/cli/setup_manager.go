@@ -687,7 +687,7 @@ func testAndRefreshProvider(s *providerSetupSession, p config.ProviderEntry) {
 	p.ResolveAPIKeyFromProcessEnvForProbe()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	models, err := p.FetchModels(ctx)
+	models, err := p.FetchModels(ctx, s.cfg.NetworkProxySpec())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, i18n.M.FetchModelsFailedFmt+"\n", p.Name, err)
 		return

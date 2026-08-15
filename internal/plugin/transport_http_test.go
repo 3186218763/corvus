@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"corvus/internal/netclient"
 	"corvus/internal/tool"
 )
 
@@ -380,4 +381,16 @@ func names(ts []tool.Tool) []string {
 		out[i] = t.Name()
 	}
 	return out
+}
+
+// TestNewHTTPTransportRejectsInvalidProxy pins ADR-0004: transport construction
+// fails loudly on a broken proxy spec instead of silently dialing direct.
+func TestNewHTTPTransportRejectsInvalidProxy(t *testing.T) {
+	_, err := newHTTPTransport(Spec{
+		Name: "x", URL: "http://127.0.0.1:1/mcp",
+		Proxy: netclient.ProxySpec{Mode: netclient.ModeCustom, URL: "://"},
+	})
+	if err == nil {
+		t.Fatal("invalid proxy spec must fail transport construction")
+	}
 }

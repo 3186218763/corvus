@@ -25,6 +25,7 @@ import (
 
 	"corvus/internal/event"
 	"corvus/internal/mcplaunch"
+	"corvus/internal/netclient"
 	"corvus/internal/provider"
 	"corvus/internal/sandbox"
 	"corvus/internal/secrets"
@@ -78,6 +79,10 @@ type Spec struct {
 	Env     map[string]string
 	URL     string
 	Headers map[string]string
+	// Proxy is the resolved user proxy spec for HTTP/SSE server connections
+	// (ADR-0004). Host-only policy like Package: never serialized into user
+	// configs and excluded from launch identities.
+	Proxy netclient.ProxySpec
 	// DefaultStartupTimeout is the background initialize + tools/list safety cap
 	// for this server. Zero keeps Corvus's built-in default.
 	DefaultStartupTimeout time.Duration

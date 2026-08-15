@@ -713,6 +713,9 @@ func selectLanguage() (string, error) {
 	return tags[idx], nil
 }
 
+// fetchModelListCompat probes the model list during interactive provider
+// setup, before a config file may exist; the zero proxy spec keeps env-proxy
+// (mode auto) behavior (ADR-0004).
 func fetchModelListCompat(ctx context.Context, baseURL, apiKey string) ([]string, error) {
 	candidates, err := config.BuildModelFetchURLs(baseURL, "")
 	if err != nil {
@@ -721,7 +724,7 @@ func fetchModelListCompat(ctx context.Context, baseURL, apiKey string) ([]string
 	var lastErr error
 	var firstHardErr error
 	for _, u := range candidates {
-		models, err := openai.FetchModels(ctx, u, apiKey, nil)
+		models, err := openai.FetchModelsWithOptions(ctx, u, apiKey, openai.FetchModelsOptions{})
 		if err == nil {
 			return models, nil
 		}

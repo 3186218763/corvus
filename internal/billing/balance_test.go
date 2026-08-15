@@ -5,7 +5,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
+
+// testClient is the explicit bounded client tests pass to FetchWithClient now
+// that the package no longer keeps a default (ADR-0004).
+var testClient = &http.Client{Timeout: 5 * time.Second}
 
 // A DeepSeek-shaped response parses, exposes Available, and Display prefers CNY
 // with the right symbol; the request carries the bearer key.
@@ -25,7 +30,7 @@ func TestFetchDeepSeekShape(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	b, err := Fetch(context.Background(), srv.URL, "secret-key")
+	b, err := FetchWithClient(context.Background(), testClient, srv.URL, "secret-key")
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -53,7 +58,7 @@ func TestFetchDeepSeekShape(t *testing.T) {
 // An empty url is "not configured", not an error: (nil, nil), and Display on a nil
 // balance is "".
 func TestFetchEmptyURL(t *testing.T) {
-	b, err := Fetch(context.Background(), "", "key")
+	b, err := FetchWithClient(context.Background(), testClient, "", "key")
 	if err != nil || b != nil {
 		t.Fatalf("Fetch(\"\") = (%v, %v), want (nil, nil)", b, err)
 	}
@@ -69,7 +74,7 @@ func TestFetchHTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":"invalid key"}`))
 	}))
 	defer srv.Close()
-	if _, err := Fetch(context.Background(), srv.URL, "bad"); err == nil {
+	if _, err := FetchWithClient(context.Background(), testClient, srv.URL, "bad"); err == nil {
 		t.Fatal("want error on 401, got nil")
 	}
 }

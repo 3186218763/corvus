@@ -49,7 +49,7 @@ func newFromConfig(cfg provider.Config) (provider.Provider, error) {
 		Name: cfg.Name, APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model,
 		Effort: effort, Mode: mode, Stateful: stateful, Proxy: proxy,
 		KeyEnv: keyEnv, KeySource: keySource, MaxOutputTokens: maxOutputTokens,
-	}), nil
+	})
 }
 
 // Config holds Responses API provider settings.
@@ -122,8 +122,13 @@ type client struct {
 	expectedPrefixDigest string
 }
 
-// New creates a Responses API provider.
-func New(cfg Config) provider.Provider {
+// New creates a Responses API provider. The HTTP client follows the user's
+// proxy settings via netclient; an invalid spec fails construction loudly
+// (boot validates it earlier, so this only fires on inconsistent programmatic
+// use) instead of silently dialing direct (ADR-0004). Like the other
+// providers there is no overall client timeout: streams are bounded by the
+// per-request context and the idle watchdog.
+func New(cfg Config) (provider.Provider, error) {
 	vendor := DetectVendor(cfg.BaseURL)
 	maxOutputTokens := cfg.MaxOutputTokens
 	if maxOutputTokens == 0 && vendor == "deepseek" && !responsesReasoningDisabled(cfg.Effort) {
@@ -133,19 +138,21 @@ func New(cfg Config) provider.Provider {
 	if cfg.SessionCache != nil {
 		sessionCache = *cfg.SessionCache
 	}
-	httpClient := &http.Client{Timeout: 300 * time.Second}
-	if built, err := netclient.NewHTTPClient(cfg.Proxy, netclient.TransportOptions{
-		DialTimeout: 30 * time.Second, KeepAlive: 30 * time.Second,
-		TLSHandshakeTimeout: 15 * time.Second, ResponseHeaderTimeout: 120 * time.Second,
-	}); err == nil {
-		httpClient = built
+	httpClient, err := netclient.NewHTTPClient(cfg.Proxy, netclient.TransportOptions{
+		DialTimeout:           30 * time.Second,
+		KeepAlive:             30 * time.Second,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: 120 * time.Second, // models can think for a while before the first token
+	})
+	if err != nil {
+		return nil, fmt.Errorf("responses: network: %w", err)
 	}
 	return &client{
 		name: cfg.Name, apiKey: cfg.APIKey, keyEnv: cfg.KeyEnv, keySource: cfg.KeySource,
 		baseURL: strings.TrimRight(cfg.BaseURL, "/"), model: cfg.Model, effort: cfg.Effort,
 		vendor: vendor, mode: cfg.mode(), sessionCache: sessionCache, maxOutputTokens: maxOutputTokens,
 		http: httpClient, idleTimeout: defaultStreamIdleTimeout,
-	}
+	}, nil
 }
 
 func responsesReasoningDisabled(effort string) bool {

@@ -68,7 +68,9 @@ func buildJobsAndProviders(opts Options, sink event.Sink, cfg *config.Config, ro
 	if err := netclient.Validate(proxySpec); err != nil {
 		return nil, err
 	}
-	balanceClient, err := netclient.NewHTTPClient(proxySpec, netclient.TransportOptions{})
+	// The 12s cap is billing's bounded-query contract (internal/billing): a
+	// slow endpoint must not hang the status line (ADR-0004).
+	balanceClient, err := netclient.NewHTTPClient(proxySpec, netclient.TransportOptions{Timeout: 12 * time.Second})
 	if err != nil {
 		return nil, err
 	}

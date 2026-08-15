@@ -208,7 +208,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		return nil, err
 	}
 	// Skill sub-agent runners, slash commands, install_source, skills sources.
-	skillToolsResult, err := buildSkillTools(ctx, cfgResult.cfg, opts, cfgResult.entry, cfgResult.root, toolResult.reg, jobsResult.balanceClient, pluginResult.pluginSpecOptions, toolResult.pluginHost, jobsResult.execProv, lspResult.maxSteps, lspResult.subagentStore, hookResult.headlessGate, cfgResult.keepPolicy, subagentResult.maxSubagentDepth, subagentResult.subagentScheduler, cfgResult.tokenDelivery, jobsResult.workspaceLease, subagentResult.capRuntimeGet, promptResult.skillStore, promptResult.skills, subagentResult.resolveSubagentProvider, subagentResult.subagentIdentity, cfgResult.tokenEconomy)
+	skillToolsResult, err := buildSkillTools(ctx, cfgResult.cfg, opts, cfgResult.entry, cfgResult.root, toolResult.reg, jobsResult.proxySpec, pluginResult.pluginSpecOptions, toolResult.pluginHost, jobsResult.execProv, lspResult.maxSteps, lspResult.subagentStore, hookResult.headlessGate, cfgResult.keepPolicy, subagentResult.maxSubagentDepth, subagentResult.subagentScheduler, cfgResult.tokenDelivery, jobsResult.workspaceLease, subagentResult.capRuntimeGet, promptResult.skillStore, promptResult.skills, subagentResult.resolveSubagentProvider, subagentResult.subagentIdentity, cfgResult.tokenEconomy)
 	if err != nil {
 		return nil, err
 	}

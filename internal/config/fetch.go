@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"corvus/internal/netclient"
 	"corvus/internal/provider/openai"
 )
 
@@ -22,8 +23,10 @@ var knownModelFetchCompatSuffixes = []string{
 }
 
 // FetchModels queries the provider's OpenAI-compatible GET /models endpoint and
-// returns the available model IDs, sorted alphabetically.
-func (e *ProviderEntry) FetchModels(ctx context.Context) ([]string, error) {
+// returns the available model IDs, sorted alphabetically. proxy is the user's
+// resolved proxy spec, so the fetch follows the same egress path as chat
+// (ADR-0004).
+func (e *ProviderEntry) FetchModels(ctx context.Context, proxy netclient.ProxySpec) ([]string, error) {
 	if e.BaseURL == "" {
 		return nil, fmt.Errorf("fetch models: provider %q has no base_url", e.Name)
 	}
@@ -42,6 +45,7 @@ func (e *ProviderEntry) FetchModels(ctx context.Context) ([]string, error) {
 		models, err := openai.FetchModelsWithOptions(ctx, u, key, openai.FetchModelsOptions{
 			Headers:  e.Headers,
 			AuthMode: authMode,
+			Proxy:    proxy,
 		})
 		if err == nil {
 			return models, nil

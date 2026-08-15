@@ -3,39 +3,14 @@ package builtin
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-func TestBlockedFetchIP(t *testing.T) {
-	blocked := []string{
-		"169.254.169.254",      // cloud metadata (link-local)
-		"10.1.2.3",             // RFC1918
-		"172.16.5.6",           // RFC1918
-		"192.168.1.1",          // RFC1918
-		"0.0.0.0",              // unspecified
-		"fe80::1",              // IPv6 link-local
-		"fc00::1",              // IPv6 unique-local
-		"::ffff:10.0.0.1",      // IPv4-mapped private
-		"100.100.100.200",      // Alibaba Cloud metadata (CGNAT)
-		"100.64.0.1",           // RFC 6598 shared space
-		"::ffff:100.100.100.1", // IPv4-mapped CGNAT
-	}
-	for _, s := range blocked {
-		if !blockedFetchIP(net.ParseIP(s)) {
-			t.Errorf("%s should be blocked", s)
-		}
-	}
-	allowed := []string{"8.8.8.8", "1.1.1.1", "127.0.0.1", "::1", "93.184.216.34"}
-	for _, s := range allowed {
-		if blockedFetchIP(net.ParseIP(s)) {
-			t.Errorf("%s should be allowed", s)
-		}
-	}
-}
+// The blocklist itself is pinned in internal/ssrfguard (TestBlockedIP); these
+// tests pin web_fetch's behavior through the shared guard.
 
 // TestWebFetchAllowsLoopback proves the guard doesn't break normal fetches: a
 // loopback dev server (httptest binds 127.0.0.1) stays reachable.

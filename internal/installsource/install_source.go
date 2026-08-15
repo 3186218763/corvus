@@ -16,10 +16,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"corvus/internal/config"
+	"corvus/internal/netclient"
 	"corvus/internal/pluginpkg"
 	"corvus/internal/skill"
+	"corvus/internal/ssrfguard"
 	"corvus/internal/tool"
 )
 
@@ -51,12 +54,40 @@ type OnDisconnectFunc func(serverName string) bool
 // Options configure the install_source tool. ProjectRoot "" and HomeDir
 // "" fall back to os.Getwd / os.UserHomeDir at construction time.
 type Options struct {
-	ProjectRoot  string
-	HomeDir      string
+	ProjectRoot string
+	HomeDir     string
+	// HTTPClient overrides the fetch client (tests inject httptest clients).
+	// Production callers instead pass Proxy and get the same proxy-aware
+	// guarded client web_fetch uses (ADR-0004); the zero spec keeps
+	// env-proxy behavior.
 	HTTPClient   *http.Client
+	Proxy        netclient.ProxySpec
 	ConnectMCP   MCPConnector
 	OnDisconnect OnDisconnectFunc
 	Approval     ApprovalFunc
+}
+
+// installFetchTimeout bounds each install-source fetch including body reads.
+const installFetchTimeout = 30 * time.Second
+
+// proxyURLFor resolves the effective proxy URL ("", nil = direct) for each
+// request, mirroring web_fetch's per-request resolution so NoProxy and
+// DirectHosts are honored per target.
+func proxyURLFor(spec netclient.ProxySpec) func(*http.Request) (string, error) {
+	return func(req *http.Request) (string, error) {
+		pf, err := netclient.ProxyFunc(spec)
+		if err != nil {
+			return "", err
+		}
+		if pf == nil {
+			return "", nil
+		}
+		u, err := pf(req)
+		if err != nil || u == nil {
+			return "", err
+		}
+		return u.String(), nil
+	}
 }
 
 type installSourceTool struct {
@@ -104,12 +135,18 @@ func NewTool(opts Options) tool.Tool {
 	}
 	client := opts.HTTPClient
 	if client == nil {
-		client = &http.Client{}
+		// install_source fetches untrusted URLs (SKILL.md, .mcp.json, GitHub
+		// manifests); fetch through the same proxy-aware guarded client
+		// web_fetch uses, so a prompt-injected source can't reach cloud
+		// metadata / internal services (ADR-0004). The guard must see the
+		// *target*, not the proxy: wrapping a proxied transport's DialContext
+		// rejected LAN proxies (clash on 192.168.x) and never checked the
+		// real destination.
+		client = ssrfguard.GuardedClient(proxyURLFor(opts.Proxy), installFetchTimeout)
+	} else {
+		// Injected clients (tests, direct httptest) still get the dial guard.
+		client = ssrfGuardClient(client)
 	}
-	// install_source fetches untrusted URLs (SKILL.md, .mcp.json, GitHub
-	// manifests); guard the dial against SSRF the same way web_fetch does, so a
-	// prompt-injected source can't reach cloud metadata / internal services.
-	client = ssrfGuardClient(client)
 	return &installSourceTool{
 		root:         root,
 		home:         home,
