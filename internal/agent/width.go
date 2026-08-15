@@ -1,23 +1,18 @@
 package agent
 
 import (
-	"regexp"
 	"strings"
 
-	"github.com/mattn/go-runewidth"
+	"github.com/charmbracelet/x/ansi"
 )
 
-// ansiSGR matches ANSI Select-Graphic-Rendition sequences (\e[…m). Width
-// measurement strips these so styled streamed text still gets counted by its
-// visible column footprint.
-var ansiSGR = regexp.MustCompile("\x1b\\[[0-9;]*m")
-
-// visibleWidth returns the column count of s after stripping ANSI SGR codes.
-// Delegates to go-runewidth so emoji, fullwidth forms, and ZWJ sequences all
-// measure correctly — a hand-rolled CJK-only table missed every emoji range
-// and made the streamed-text row count drift on emoji-heavy answers.
+// visibleWidth returns the printable column width of s: ANSI escape codes are
+// ignored and wide / grapheme-cluster characters (CJK, emoji ZWJ sequences,
+// keycaps, flags) count as the cells they occupy. x/ansi is the single width
+// authority (ADR-0002); go-runewidth answered 1 cell for flags and keycaps,
+// which undercounted streamed rows and left stale output on redraw.
 func visibleWidth(s string) int {
-	return runewidth.StringWidth(ansiSGR.ReplaceAllString(s, ""))
+	return ansi.StringWidth(s)
 }
 
 // streamedRows counts how many rows the cursor has descended after raw text

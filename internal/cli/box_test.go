@@ -7,6 +7,36 @@ import (
 
 // --- visibleWidth ---
 
+// TestVisibleWidthTerminalCellPins locks the terminal-cell semantics of the
+// width authority (x/ansi; ADR-0002). These cases are exactly where candidate
+// width libraries disagree — go-runewidth answered 1 for flags and keycaps.
+// If this table fails after a dependency change, the library changed cell
+// semantics; do not "fix" the expectations to match a new library without
+// reopening ADR-0002.
+func TestVisibleWidthTerminalCellPins(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{"cjk", "中", 2},
+		{"cjk pair", "中文", 4},
+		{"zwj family", "👨‍👩‍👧‍👦", 2},
+		{"emoji with modifier", "👍🏽", 2},
+		{"flag", "🇺🇳", 2},
+		{"keycap", "1️⃣", 2},
+		{"ansi sgr ignored", "\x1b[31mred\x1b[0m", 3},
+		{"arrow", "→", 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := visibleWidth(tc.in); got != tc.want {
+				t.Errorf("visibleWidth(%q) = %d, want %d", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestVisibleWidthPlain(t *testing.T) {
 	if got := visibleWidth("hello"); got != 5 {
 		t.Errorf("visibleWidth(hello) = %d, want 5", got)

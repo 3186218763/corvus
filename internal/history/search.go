@@ -14,6 +14,7 @@ import (
 	"corvus/internal/provider"
 	"corvus/internal/retrieval"
 	"corvus/internal/store"
+	"corvus/internal/textutil"
 )
 
 // Kind identifies the part of a saved message indexed for retrieval.
@@ -475,12 +476,7 @@ func renderMessage(idx int, msg provider.Message) string {
 }
 
 func truncate(s string, maxRunes int) string {
-	s = strings.TrimSpace(s)
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
-	}
-	return string(runes[:maxRunes]) + "..."
+	return textutil.TruncateGraphemes(strings.TrimSpace(s), maxRunes, "...")
 }
 
 func clamp(n, def, max int) int {

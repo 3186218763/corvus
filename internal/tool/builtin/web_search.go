@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"corvus/internal/netpolicy"
+	"corvus/internal/textutil"
 	"corvus/internal/tool"
 )
 
@@ -354,12 +355,5 @@ func decodeSearchJSON(r io.Reader, dst any) error {
 }
 
 func truncateRunes(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	runes := []rune(s)
-	if len(runes) <= n {
-		return s
-	}
-	return string(runes[:n]) + "…"
+	return textutil.TruncateGraphemes(s, n, "…")
 }

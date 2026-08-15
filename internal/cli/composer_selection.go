@@ -8,7 +8,6 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	rw "github.com/mattn/go-runewidth"
 	"github.com/rivo/uniseg"
 )
 
@@ -70,7 +69,7 @@ func composerCellsWidth(cells []composerCell) int {
 	for _, cell := range cells {
 		b.WriteRune(cell.r)
 	}
-	return uniseg.StringWidth(b.String())
+	return visibleWidth(b.String())
 }
 
 func composerSpaces(cells []composerCell) []composerCell {
@@ -110,7 +109,7 @@ func wrapComposerLine(runes []rune, width, logicalRow, logicalStart int) []compo
 			word = nil
 			spaces = nil
 		} else if len(word) > 0 {
-			lastWidth := rw.RuneWidth(word[len(word)-1].r)
+			lastWidth := visibleWidth(string(word[len(word)-1].r))
 			if composerCellsWidth(word)+lastWidth > width {
 				if len(lines[row]) > 0 {
 					row++
