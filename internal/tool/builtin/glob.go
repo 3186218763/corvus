@@ -31,7 +31,7 @@ type globTool struct {
 func (globTool) Name() string { return "glob" }
 
 func (globTool) Description() string {
-	return "Find files matching a glob pattern (e.g. \"*.go\", \"internal/*/*.go\", \"**/*.test.ts\"). Supports shell metacharacters * ? [] and the recursive ** pattern."
+	return "Find files matching a glob pattern (e.g. \"*.go\", \"internal/*/*.go\", \"**/*.test.ts\"). Supports shell metacharacters * ? [] and the recursive ** pattern. Like grep, results skip hidden, vendor, and git-ignored entries — point the pattern straight at a directory (e.g. \".github/**\") to search it in full."
 }
 
 func (globTool) Schema() json.RawMessage {
@@ -135,6 +135,17 @@ func (g globTool) globRecursive(ctx context.Context, pattern, displayPattern str
 		return "(no matches)", nil
 	}
 
+	// A forbidden read root stays invisible even when the walk points straight
+	// at it, mirroring the non-recursive path's match filtering.
+	if skipForbidDir(root, g.forbidRoots) {
+		return "(no matches)", nil
+	}
+
+	// Prune exactly like grep's walk (ADR-0003): hidden entries, the shared
+	// noise-dir table, and the repository's ignore rules are skipped — unless
+	// the walk root is itself hidden or ignored, which searches it in full.
+	ig := newWalkIgnorer(root, g.forbidRoots)
+
 	var matches []string
 	truncated := false
 
@@ -146,12 +157,13 @@ func (g globTool) globRecursive(ctx context.Context, pattern, displayPattern str
 			return nil // skip unreadable entries
 		}
 		if d.IsDir() {
-			if skipWalkDir(root, path, d.Name()) || skipForbidDir(path, g.forbidRoots) {
+			if ig.skip(path, d.Name(), true) {
 				return filepath.SkipDir
 			}
+			ig.enter(path)
 			return nil
 		}
-		if confineRead(g.forbidRoots, path) {
+		if ig.skip(path, d.Name(), false) {
 			return nil
 		}
 		rel, rerr := filepath.Rel(root, path)

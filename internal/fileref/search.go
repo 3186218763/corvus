@@ -5,16 +5,18 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"corvus/internal/fileutil"
 )
 
+// Noise tables for @-completion, layered on the shared recursive-walk table
+// (fileutil.IsNoiseDir, ADR-0003): build outputs and scratch paths crowd out
+// real matches, OS metadata files are never wanted, and .codex holds another
+// agent's workspace config rather than user files.
 var skipEntryNames = map[string]bool{
-	".codex":       true,
-	".DS_Store":    true,
-	".git":         true,
-	".npm":         true,
-	".pnpm-store":  true,
-	"node_modules": true,
-	"Thumbs.db":    true,
+	".codex":    true,
+	".DS_Store": true,
+	"Thumbs.db": true,
 }
 
 var skipDirNames = map[string]bool{
@@ -22,13 +24,11 @@ var skipDirNames = map[string]bool{
 	"dist":  true,
 }
 
+// skipDirPaths are workspace-relative paths (not bare names) to prune.
 var skipDirPaths = map[string]bool{
-	"bin":                      true,
-	"desktop/frontend/wailsjs": true,
-	"npm/.stage":               true,
-	"site/.astro":              true,
-	"stage":                    true,
-	"tmp":                      true,
+	"bin":   true,
+	"stage": true,
+	"tmp":   true,
 }
 
 const (
@@ -83,7 +83,7 @@ func Search(root, query string, limit int) []SearchResult {
 				return filepath.SkipDir
 			}
 			rel = filepath.ToSlash(rel)
-			if skipEntryNames[name] || skipDirNames[name] || skipDirPaths[rel] || (!showHidden && strings.HasPrefix(name, ".")) {
+			if fileutil.IsNoiseDir(name) || skipEntryNames[name] || skipDirNames[name] || skipDirPaths[rel] || (!showHidden && strings.HasPrefix(name, ".")) {
 				return filepath.SkipDir
 			}
 			// Allow matching directory names so the user can select a

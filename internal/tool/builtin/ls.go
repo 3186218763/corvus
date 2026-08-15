@@ -26,7 +26,7 @@ type listDir struct {
 func (listDir) Name() string { return "ls" }
 
 func (listDir) Description() string {
-	return "List the entries of a directory. Directories are shown with a trailing slash; files show their byte size. Set recursive=true to list all nested files depth-first (skips .git/node_modules)."
+	return "List the entries of a directory. Directories are shown with a trailing slash; files show their byte size. Set recursive=true to list all nested files depth-first. Like grep, recursive listing skips hidden, vendor, and git-ignored entries — list such a directory directly to see it in full."
 }
 
 func (listDir) Schema() json.RawMessage {
@@ -91,10 +91,13 @@ func (l listDir) Execute(ctx context.Context, args json.RawMessage) (string, err
 	return b.String(), nil
 }
 
-// listRecursive walks a directory tree depth-first, skipping noise dirs.
-// Depth is capped to guard against symlink loops.
+// listRecursive walks a directory tree depth-first, pruning exactly like
+// grep/glob (ADR-0003): hidden entries, the shared noise-dir table, and
+// git-ignored entries are skipped, but listing a hidden or ignored directory
+// directly shows it in full. Depth is capped to guard against symlink loops.
 func (l listDir) listRecursive(root string, rp ResolvedPath) (string, error) {
 	var b strings.Builder
+	ig := newWalkIgnorer(root, l.forbidRoots)
 	err := filepath.WalkDir(root, func(p string, d os.DirEntry, wErr error) error {
 		if wErr != nil {
 			return wErr
@@ -103,13 +106,12 @@ func (l listDir) listRecursive(root string, rp ResolvedPath) (string, error) {
 			return nil
 		}
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", ".DS_Store", "__pycache__", ".idea", ".vscode":
+			if ig.skip(p, d.Name(), true) {
 				return filepath.SkipDir
 			}
-			if skipForbidDir(p, l.forbidRoots) {
-				return filepath.SkipDir
-			}
+			ig.enter(p)
+		} else if ig.skip(p, d.Name(), false) {
+			return nil
 		}
 		rel, rErr := filepath.Rel(root, p)
 		if rErr != nil {

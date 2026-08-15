@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"corvus/internal/fileutil"
 	"corvus/internal/tool"
 )
 
@@ -339,12 +340,15 @@ func supportedCodeIndexFile(path string) bool {
 	}
 }
 
+// skipCodeIndexDir reports whether a directory is pruned from indexing: the
+// shared noise-dir table (fileutil.IsNoiseDir, ADR-0003) plus build outputs
+// and IDE dirs, which hold no reviewable source.
 func skipCodeIndexDir(name string) bool {
 	switch name {
-	case ".git", "node_modules", "vendor", "__pycache__", ".idea", ".vscode", ".next", "dist", "build", "target", "coverage":
+	case ".idea", ".vscode", ".next", "dist", "build", "target", "coverage":
 		return true
 	default:
-		return false
+		return fileutil.IsNoiseDir(name)
 	}
 }
 

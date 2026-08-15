@@ -71,3 +71,87 @@ func TestLsRecursive(t *testing.T) {
 		t.Fatalf("recursive ls should skip .git; got:\n%s", rec)
 	}
 }
+
+// initGitRepo creates a minimal git repository so walkIgnorer loads its
+// .gitignore (no repo root means no ignore rules are applied at all).
+func initGitRepo(t *testing.T, dir, gitignore string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(gitignore), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestGlobRecursiveRespectsGitignore pins ADR-0003: ** patterns skip
+// git-ignored and hidden entries like grep, while a walk rooted directly at a
+// hidden or ignored directory searches it in full.
+func TestGlobRecursiveRespectsGitignore(t *testing.T) {
+	root := t.TempDir()
+	initGitRepo(t, root, "generated/\n*.secret\n")
+	for _, p := range []string{
+		"keep.go",
+		"generated/skip.go",
+		"top.secret",
+		".hidden/nested.go",
+	} {
+		full := filepath.Join(root, filepath.FromSlash(p))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g := globTool{workDir: root}
+
+	out := runTool(t, g, map[string]any{"pattern": "**/*.go"})
+	if !strings.Contains(out, "keep.go") {
+		t.Fatalf("plain file should match; got:\n%s", out)
+	}
+	if strings.Contains(out, "generated") {
+		t.Fatalf("git-ignored dir should be skipped; got:\n%s", out)
+	}
+	if strings.Contains(out, ".hidden") {
+		t.Fatalf("hidden dir should be skipped; got:\n%s", out)
+	}
+
+	if out := runTool(t, g, map[string]any{"pattern": "**/*.secret"}); out != "(no matches)" {
+		t.Fatalf("git-ignored file extension should be skipped; got:\n%s", out)
+	}
+	// Pointing the pattern straight at the hidden dir searches it in full.
+	out = runTool(t, g, map[string]any{"pattern": ".hidden/**/*.go"})
+	if !strings.Contains(out, "nested.go") {
+		t.Fatalf("explicitly targeted hidden dir should be searched; got:\n%s", out)
+	}
+}
+
+// TestLsRecursiveRespectsGitignore pins the same ADR-0003 semantics for ls.
+func TestLsRecursiveRespectsGitignore(t *testing.T) {
+	root := t.TempDir()
+	initGitRepo(t, root, "generated/\n")
+	if err := os.MkdirAll(filepath.Join(root, "generated"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"keep.txt", "generated/skip.txt", ".hidden.txt"} {
+		if err := os.WriteFile(filepath.Join(root, p), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	l := listDir{workDir: root}
+	rec, err := l.Execute(context.Background(), json.RawMessage(`{"path":".","recursive":true}`))
+	if err != nil {
+		t.Fatalf("recursive ls: %v", err)
+	}
+	if !strings.Contains(rec, "keep.txt") {
+		t.Fatalf("plain file should be listed; got:\n%s", rec)
+	}
+	if strings.Contains(rec, "generated") {
+		t.Fatalf("git-ignored dir should be skipped; got:\n%s", rec)
+	}
+	if strings.Contains(rec, ".hidden.txt") {
+		t.Fatalf("hidden file should be skipped; got:\n%s", rec)
+	}
+}

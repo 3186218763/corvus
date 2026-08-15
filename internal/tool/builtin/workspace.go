@@ -259,26 +259,9 @@ func cleanReadSubpath(sub string) (string, bool) {
 	return filepath.ToSlash(cleaned), true
 }
 
-// vendorDirs are directory names grep and glob skip during a recursive walk:
-// dependency, VCS, and build-cache trees that almost never hold the searched
-// source and would otherwise dominate the walk (node_modules alone can be 100k+
-// files) and fill the result cap with noise. Only skipped when nested — a walk
-// rooted directly at one (an explicit `grep node_modules`) still searches it.
-var vendorDirs = map[string]bool{
-	".git": true, ".svn": true, ".hg": true, ".jj": true,
-	"node_modules": true, "vendor": true, ".venv": true,
-	"__pycache__": true, ".mypy_cache": true, ".pytest_cache": true,
-}
-
-// skipWalkDir reports whether a directory should be pruned from a recursive walk
-// rooted at root. The root itself is never pruned, so explicitly targeting a
-// vendor dir still works.
-func skipWalkDir(root, path, name string) bool {
-	if path == root {
-		return false
-	}
-	return vendorDirs[name] || isProtectedDir(absClean(path))
-}
+// Recursive walks (grep, glob, ls) prune directories via walkIgnorer, which
+// layers the shared noise-dir table (fileutil.IsNoiseDir, ADR-0003) with the
+// repository's ignore rules; see gitignore.go.
 
 // skipForbidDir reports whether a directory should be pruned from a recursive
 // walk because it is within any forbid-read root. forbidRoots are pre-resolved

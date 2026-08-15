@@ -632,6 +632,12 @@ func stringArg(m map[string]any, key string) string {
 // path.Match, '*' is not stopped by '/', which is what command-line and path
 // prefixes ("rm -rf*", "/etc/*") intuitively expect. Linear time with
 // backtracking, byte-oriented.
+//
+// Deliberately a separate matcher family from path globs
+// (fileutil.MatchSlashGlob, doublestar) and gitignore rules: it matches
+// command prefixes, not filesystem paths. Do not "unify" it with doublestar —
+// that would stop '*' at separators and silently tighten or loosen permission
+// rules (ADR-0003).
 func matchGlob(pattern, name string) bool {
 	var px, nx, starPx, starNx int
 	starPx = -1

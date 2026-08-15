@@ -1585,6 +1585,8 @@ func ReadOnlySubagentToolRegistryForDepthWithRuntime(parent *tool.Registry, name
 // expandToolPatterns resolves explicit wildcard allowlist entries from imported
 // agent profiles against the current registry. Expansion is deterministic and
 // session-local, so optional MCP tools only enter a child after connection.
+// Patterns match tool names, never filesystem paths; filepath.Match's '*'
+// (stopped by '/') is the right semantics for names (ADR-0003).
 func expandToolPatterns(parent *tool.Registry, names []string) []string {
 	if parent == nil {
 		return nil

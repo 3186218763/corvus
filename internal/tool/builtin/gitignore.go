@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	ignore "github.com/sabhiram/go-gitignore"
+
+	"corvus/internal/fileutil"
 )
 
 // ignoreFrame is the cumulative ignore state at a directory: every applicable
@@ -20,8 +22,9 @@ type ignoreFrame struct {
 	gi       *ignore.GitIgnore
 }
 
-// walkIgnorer prunes a recursive grep walk to mirror ripgrep: it skips hidden
-// entries, the fixed vendorDirs, and anything matched by the repository's ignore
+// walkIgnorer prunes a recursive walk to mirror ripgrep: it skips hidden
+// entries, the shared noise-dir table (fileutil.IsNoiseDir), and anything
+// matched by the repository's ignore
 // rules — every applicable .gitignore (root + ancestors + per-directory), plus
 // .git/info/exclude and the global core.excludesFile. The walk root is never
 // pruned, and pointing grep straight at a hidden or ignored path searches it in
@@ -80,8 +83,9 @@ func (ig *walkIgnorer) enter(path string) {
 }
 
 // skip reports whether a walked entry should be pruned, popping frames the walk
-// has moved past. The root is never pruned; hidden entries and vendorDirs always
-// are; everything else is pruned when the active matcher ignores it.
+// has moved past. The root is never pruned; hidden entries and the shared
+// noise-dir table always are; everything else is pruned when the active matcher
+// ignores it.
 func (ig *walkIgnorer) skip(path, name string, isDir bool) bool {
 	abs := absClean(path)
 	for len(ig.frames) > 1 && !underDir(ig.frames[len(ig.frames)-1].dir, abs) {
@@ -93,7 +97,7 @@ func (ig *walkIgnorer) skip(path, name string, isDir bool) bool {
 	if isHiddenName(name) {
 		return true
 	}
-	if isDir && (vendorDirs[name] || isProtectedDir(abs)) {
+	if isDir && (fileutil.IsNoiseDir(name) || isProtectedDir(abs)) {
 		return true
 	}
 	if isDir && skipForbidDir(abs, ig.forbidRoots) {

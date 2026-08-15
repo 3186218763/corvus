@@ -303,6 +303,9 @@ func bindAllowedTools(refs []string, bindings []tool.MCPBinding) []string {
 	}
 	for _, ref := range refs {
 		matches := map[string]tool.MCPBinding{}
+		// ref patterns match tool names/aliases, never filesystem paths;
+		// path.Match's '*' (stopped by '/') is the right semantics for that
+		// and is not part of the path-glob family (ADR-0003).
 		isPattern := strings.ContainsAny(ref, "*?[")
 		for _, binding := range bindings {
 			aliases := append(tool.MCPBindingAliases(binding), binding.CallableName)
