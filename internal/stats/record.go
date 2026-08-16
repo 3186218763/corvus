@@ -1,12 +1,11 @@
 // Package stats records per-call token usage as append-only daily JSONL files
-// under the user state root (config.StatsDir), and aggregates them for the
-// desktop "usage statistics" panel.
+// under the user state root (config.StatsDir).
 //
 // Design notes:
 //   - Only provider usage (including request-only failures) and turn
-//     completions (event.TurnDone) are recorded here. Turn markers power the
-//     panel's "completed turns" metric;
-//     they are deliberately not presented as distinct conversation sessions.
+//     completions (event.TurnDone) are recorded here. Turn markers make
+//     per-day turn counts available without touching session files; they are
+//     deliberately not presented as distinct conversation sessions.
 //     Token usage was never persisted before this feature, so token numbers
 //     accumulate from the day the feature ships.
 //   - Files are append-only: each record is one JSON line appended with
@@ -18,7 +17,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -55,8 +53,7 @@ type Writer struct {
 	dir string
 }
 
-// NewWriter returns a Writer rooted at dir. An empty dir disables recording
-// (query-only usage).
+// NewWriter returns a Writer rooted at dir. An empty dir disables recording.
 func NewWriter(dir string) *Writer {
 	return &Writer{dir: strings.TrimSpace(dir)}
 }
@@ -97,63 +94,6 @@ func (w *Writer) Append(r record) error {
 	return err
 }
 
-// readDaily loads one daily file into records. Missing files yield nil, nil.
-func readDaily(dir, day string) ([]record, error) {
-	if strings.TrimSpace(dir) == "" {
-		return nil, nil
-	}
-	f, err := os.Open(filepath.Join(dir, day+".jsonl"))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return decodeRecords(f)
-}
-
-// readDailyRange snapshots the available daily files with one directory scan,
-// then reads only dates requested by the query. Long custom ranges are often
-// mostly empty; avoiding one failed os.Open per absent day keeps their cost
-// proportional to the data that actually exists.
-func readDailyRange(dir string, days []string) (map[string][]record, error) {
-	out := make(map[string][]record)
-	if strings.TrimSpace(dir) == "" || len(days) == 0 {
-		return out, nil
-	}
-	wanted := make(map[string]struct{}, len(days))
-	for _, day := range days {
-		wanted[day] = struct{}{}
-	}
-	entries, err := os.ReadDir(dir)
-	if errors.Is(err, os.ErrNotExist) {
-		return out, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".jsonl") {
-			continue
-		}
-		day := strings.TrimSuffix(name, ".jsonl")
-		if _, ok := wanted[day]; !ok {
-			continue
-		}
-		records, err := readDaily(dir, day)
-		if err != nil {
-			return nil, err
-		}
-		out[day] = records
-	}
-	return out, nil
-}
-
 func decodeRecords(r io.Reader) ([]record, error) {
 	var out []record
 	sc := bufio.NewScanner(r)
@@ -166,32 +106,12 @@ func decodeRecords(r io.Reader) ([]record, error) {
 		var rec record
 		if err := json.Unmarshal([]byte(line), &rec); err != nil {
 			// Malformed lines (a crash mid-write or a manual edit) are skipped
-			// rather than failing the whole day's aggregation. This tolerates
-			// any number of bad lines; a fully corrupt file reads as an empty
-			// day, which is preferable to the panel erroring out.
+			// rather than failing the whole file's read. This tolerates any
+			// number of bad lines; a fully corrupt file reads as empty, which
+			// is preferable to erroring out.
 			continue
 		}
 		out = append(out, rec)
 	}
 	return out, sc.Err()
-}
-
-// daysInRange lists the daily file names (without extension) whose timestamps
-// intersect [from, to], inclusive.
-func daysInRange(from, to time.Time) []string {
-	from = dayStart(from)
-	to = dayStart(to)
-	if to.Before(from) {
-		return nil
-	}
-	var days []string
-	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
-		days = append(days, d.Format(dayLayout))
-	}
-	return days
-}
-
-func dayStart(t time.Time) time.Time {
-	y, m, d := t.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
 }

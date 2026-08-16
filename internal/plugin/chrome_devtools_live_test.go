@@ -69,16 +69,16 @@ func TestChromeDevtoolsMCPLive(t *testing.T) {
 	}
 	t.Log("step 02/12 trusted host process mode selected")
 
-	result, err := host.InstallAndConnect(callCtx, spec)
+	tools, err := host.EnsureConnectedWithLifecycle(lifeCtx, callCtx, spec, 0)
 	if err != nil {
-		t.Fatalf("InstallAndConnect: state=%s action=%s err=%v", result.State, result.Action, err)
+		t.Fatalf("connect: %v", err)
 	}
-	if result.State != "ready" || result.ToolCount == 0 {
-		t.Fatalf("install result = %+v, want ready with tools", result)
+	if len(tools) == 0 {
+		t.Fatalf("tools/list = 0 tools, want ready with tools")
 	}
-	t.Logf("step 03/12 initialize + tools/list ready: tools=%d", result.ToolCount)
+	t.Logf("step 03/12 initialize + tools/list ready: tools=%d", len(tools))
 
-	tools, err := host.ToolsFor(callCtx, spec.Name)
+	tools, err = host.ToolsFor(callCtx, spec.Name)
 	if err != nil {
 		t.Fatalf("ToolsFor: %v", err)
 	}

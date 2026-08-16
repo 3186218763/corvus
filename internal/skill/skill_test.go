@@ -84,9 +84,6 @@ func TestDisableDiscoveryReturnsEmptyStore(t *testing.T) {
 	if skills := store.SlashList(); len(skills) != 0 {
 		t.Fatalf("disabled store slash skills = %+v, want none", skills)
 	}
-	if inspection := store.Inspect(); len(inspection.Roots) != 0 || len(inspection.Candidates) != 0 {
-		t.Fatalf("disabled store inspection = %+v, want empty", inspection)
-	}
 	if _, ok := store.Read("project"); ok {
 		t.Fatal("disabled store read discovered a skill")
 	}

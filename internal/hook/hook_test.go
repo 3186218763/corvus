@@ -43,21 +43,6 @@ func writeHookTestBytes(t *testing.T, path string, body []byte) {
 	}
 }
 
-func TestContextFileUsableRequiresReadableRegularFile(t *testing.T) {
-	root := t.TempDir()
-	if ContextFileUsable("") {
-		t.Fatal("empty context path should be unusable")
-	}
-	if ContextFileUsable(root) {
-		t.Fatal("context directory should be unusable")
-	}
-	path := filepath.Join(root, "CLAUDE.md")
-	writeHookTestFile(t, path, "Use the bundled workflow.")
-	if !ContextFileUsable(path) {
-		t.Fatal("readable regular context file should be usable")
-	}
-}
-
 func requireNode(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("node"); err != nil {
@@ -472,9 +457,6 @@ func TestLoadSuperpowersV620PreservesExplicitBashRequirement(t *testing.T) {
 		t.Fatalf("execution contract = mode %q shell %q argv %#v, want explicit Bash shell form",
 			h.ExecutionMode, h.Shell, h.Argv)
 	}
-	if !requiresWindowsBash(h.HookConfig) {
-		t.Fatal("superpowers 6.2.0 hook should declare a Windows Bash runtime dependency")
-	}
 	if want := `"` + filepath.ToSlash(root) + `/hooks/run-hook.cmd" session-start`; h.Command != want {
 		t.Fatalf("command = %q, want %q", h.Command, want)
 	}
@@ -490,39 +472,6 @@ func TestPluginExplicitBashCommandUsesPOSIXCompatibleRoot(t *testing.T) {
 	want := `"C:/Users/Test User/AppData/Roaming/corvus/plugins/superpowers/hooks/run-hook.cmd" session-start`
 	if config.Command != want {
 		t.Fatalf("explicit Bash command = %q, want POSIX-compatible root %q", config.Command, want)
-	}
-}
-
-func TestExplicitBashRuntimeUsesConfiguredPath(t *testing.T) {
-	wantPath := filepath.Join(t.TempDir(), "PortableGit", "bin", "bash.exe")
-	var resolvedPath string
-	options := RuntimeOptionsForShell("bash", wantPath)
-	err := checkRuntimeForPlatform(HookConfig{
-		Command:       `"C:\\Users\\Test User\\plugins\\superpowers\\hooks\\run-hook.cmd" session-start`,
-		ExecutionMode: ExecutionShell,
-		Shell:         "bash",
-	}, options, "windows", func(path string) (string, error) {
-		resolvedPath = path
-		return path, nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resolvedPath != wantPath {
-		t.Fatalf("resolved Bash path = %q, want configured path %q", resolvedPath, wantPath)
-	}
-}
-
-func TestExplicitBashRuntimeReportsMissingDependency(t *testing.T) {
-	err := checkRuntimeForPlatform(HookConfig{
-		Command:       `"C:\\Users\\Test User\\plugins\\superpowers\\hooks\\run-hook.cmd" session-start`,
-		ExecutionMode: ExecutionShell,
-		Shell:         "bash",
-	}, RuntimeOptions{}, "windows", func(string) (string, error) {
-		return "", missingWindowsHookBashError()
-	})
-	if err == nil || !strings.Contains(err.Error(), "Git Bash") {
-		t.Fatalf("missing Bash runtime error = %v", err)
 	}
 }
 
@@ -984,17 +933,6 @@ func TestCorvusHomeDoesNotFallBackToLegacyWhenIsolated(t *testing.T) {
 		t.Fatalf("Load hooks = %+v, want empty (isolated CORVUS_HOME must not load legacy hooks)", hooks)
 	}
 
-}
-
-func TestProjectDefinesHooks(t *testing.T) {
-	proj := t.TempDir()
-	if ProjectDefinesHooks(proj) {
-		t.Error("empty project should define no hooks")
-	}
-	writeSettings(t, proj, sampleSettings)
-	if !ProjectDefinesHooks(proj) {
-		t.Error("project with settings.json should define hooks")
-	}
 }
 
 func TestMalformedSettingsIgnored(t *testing.T) {

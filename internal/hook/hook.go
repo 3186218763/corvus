@@ -196,24 +196,10 @@ func ProjectSettingsPath(projectRoot string) string {
 	return filepath.Join(projectRoot, SettingsDirname, SettingsFilename)
 }
 
-// ContextFileUsable reports whether a plugin contextFile can take the same
-// execution path as readContextFile. Keep machine status and diagnostics on
-// this shared predicate so a path that merely exists (for example, a
-// directory) is not advertised as runnable.
-func ContextFileUsable(path string) bool {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return false
-	}
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() {
-		return false
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	return file.Close() == nil
+// UsesToolMatcher reports whether an event evaluates HookConfig.Match.
+// Non-tool events ignore matchers entirely, including malformed ones.
+func UsesToolMatcher(event Event) bool {
+	return event == PreToolUse || event == PostToolUse || event == PostToolUseFailure || event == PermissionRequest
 }
 
 // LoadOptions configure Load.
@@ -248,23 +234,6 @@ func Load(opts LoadOptions) []ResolvedHook {
 		}
 	}
 	return out
-}
-
-// ProjectDefinesHooks reports whether a project's settings.json exists and
-// declares at least one hook.
-func ProjectDefinesHooks(projectRoot string) bool {
-	s := readSettings(ProjectSettingsPath(projectRoot))
-	if s == nil {
-		return false
-	}
-	for _, e := range Events {
-		for _, cfg := range s.Hooks[e] {
-			if strings.TrimSpace(cfg.Command) != "" {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func readSettings(path string) *Settings {
@@ -1088,43 +1057,6 @@ type RuntimeOptions struct {
 	BashPath string
 }
 
-// RuntimeOptionsForShell carries an explicitly configured Bash path into Hook
-// execution while leaving other interpreter preferences independent.
-func RuntimeOptionsForShell(prefer, path string) RuntimeOptions {
-	if !strings.EqualFold(strings.TrimSpace(prefer), "bash") {
-		return RuntimeOptions{}
-	}
-	return RuntimeOptions{BashPath: strings.TrimSpace(path)}
-}
-
-// RuntimeIssue identifies one plugin Hook whose host dependency is unavailable.
-type RuntimeIssue struct {
-	Event       Event
-	Description string
-	Err         error
-}
-
-// CheckPackageRuntime validates every Hook exported by a plugin package without
-// launching commands.
-func CheckPackageRuntime(pkg pluginpkg.Package, options RuntimeOptions) []RuntimeIssue {
-	events := make([]string, 0, len(pkg.Manifest.Hooks))
-	for event := range pkg.Manifest.Hooks {
-		events = append(events, event)
-	}
-	sort.Strings(events)
-	var issues []RuntimeIssue
-	for _, eventName := range events {
-		for _, h := range pkg.Manifest.Hooks[eventName] {
-			if err := CheckRuntime(pluginHookExecutionConfig(h, pkg.Root), options); err != nil {
-				issues = append(issues, RuntimeIssue{
-					Event: Event(eventName), Description: h.Description, Err: err,
-				})
-			}
-		}
-	}
-	return issues
-}
-
 type SpawnResult struct {
 	ExitCode  int
 	Stdout    string
@@ -1492,36 +1424,6 @@ func spawnShellCommand(ctx context.Context, command, preferred string, options R
 		return nil, errors.New("hook shell \"cmd\" is only available on Windows")
 	default:
 		return nil, fmt.Errorf("unsupported hook shell %q", preferred)
-	}
-}
-
-// CheckRuntime reports an unavailable host dependency without running a Hook.
-func CheckRuntime(config HookConfig, options RuntimeOptions) error {
-	return checkRuntimeForPlatform(config, options, runtime.GOOS, resolveWindowsHookBash)
-}
-
-func checkRuntimeForPlatform(config HookConfig, options RuntimeOptions, goos string, resolveBash func(string) (string, error)) error {
-	if goos != "windows" || !requiresWindowsBash(config) {
-		return nil
-	}
-	_, err := resolveBash(options.BashPath)
-	return err
-}
-
-func requiresWindowsBash(config HookConfig) bool {
-	switch config.ExecutionMode {
-	case ExecutionShell:
-		return strings.EqualFold(strings.TrimSpace(config.Shell), "bash")
-	case ExecutionExec:
-		return isBarePOSIXShellWord(config.Command) && hasCommandStringFlag(config.Argv)
-	case ExecutionLegacy:
-		if config.Argv != nil {
-			return isBarePOSIXShellWord(config.Command) && hasCommandStringFlag(config.Argv)
-		}
-		fields, _, _, ok := parseSimpleHookCommandFields(config.Command)
-		return ok && len(fields) >= 3 && isBarePOSIXShellWord(fields[0]) && hasCommandStringFlag(fields[1:])
-	default:
-		return false
 	}
 }
 
