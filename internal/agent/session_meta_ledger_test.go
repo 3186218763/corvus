@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"corvus/internal/provider"
+	"corvus/internal/store"
 )
 
 // shrinkMetaReadBackoffs keeps corrupt-sidecar tests fast. Only the pacing of
@@ -246,7 +247,7 @@ func TestMissingMetaRemainsKnownZeroRevisionBaseline(t *testing.T) {
 func TestSaveSnapshotToleratesEventIndexWriteFailure(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "session.jsonl")
 	// Squat a directory on the index path so every index write must fail.
-	if err := os.MkdirAll(SessionEventIndexPath(path), 0o755); err != nil {
+	if err := os.MkdirAll(store.SessionEventIndex(path), 0o755); err != nil {
 		t.Fatalf("pre-create index dir: %v", err)
 	}
 	s := NewSession("sys")
@@ -281,7 +282,7 @@ func TestSaveSnapshotToleratesEventIndexWriteFailure(t *testing.T) {
 	if got := len(loaded.Messages); got != 3 {
 		t.Fatalf("loaded %d messages, want 3", got)
 	}
-	if info, err := os.Stat(SessionEventIndexPath(path)); err != nil || !info.IsDir() {
+	if info, err := os.Stat(store.SessionEventIndex(path)); err != nil || !info.IsDir() {
 		t.Fatalf("fixture broke: index path no longer a directory (err=%v)", err)
 	}
 }

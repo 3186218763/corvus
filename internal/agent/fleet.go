@@ -242,7 +242,7 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 			defer wg.Done()
 			// Each fleet item runs as its own task-shaped execution so
 			// transcripts, evidence, and scheduler claims stay independent.
-			itemCtx := withCallContext(ctx, subID, subSinkFor(subID, sink), nil, false)
+			itemCtx := WithToolCallContext(ctx, subID, subSinkFor(subID, sink), nil, false)
 			out, err := f.taskTool.RunProfileSpec(itemCtx, spec)
 			res := fleetItemResult{index: idx, profile: spec.Profile, output: out, err: err}
 			if err == nil {

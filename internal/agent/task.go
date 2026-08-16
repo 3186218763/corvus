@@ -1898,22 +1898,13 @@ func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *to
 
 // readOnlyAgentConstruction is the single pairing every strictly read-only
 // loop shares: the permanent ReadOnlyExecution flag plus the final registry
-// filter. Batch children (RunReadOnlySubAgentWithSession) and legacy call sites
-// that still use NewReadOnlyAgent build through it, so a missed call site
-// cannot set only half the boundary. The interactive two-model planner uses
-// NewPlannerAgent instead (PlannerMCPExecution).
+// filter. Batch children (RunReadOnlySubAgentWithSession) build through it, so
+// a missed call site cannot set only half the boundary. The interactive
+// two-model planner uses NewPlannerAgent instead (PlannerMCPExecution).
 func readOnlyAgentConstruction(reg *tool.Registry, opts Options) (*tool.Registry, Options) {
 	opts.ReadOnlyExecution = true
 	opts.PlannerMCPExecution = false
 	return strictReadOnlyExecutionRegistry(reg), opts
-}
-
-// NewReadOnlyAgent constructs a long-lived, strictly read-only agent through
-// the shared construction boundary. Prefer NewPlannerAgent for the two-model
-// planner so authorized non-destructive MCP can run via use_capability.
-func NewReadOnlyAgent(prov provider.Provider, reg *tool.Registry, sess *Session, opts Options, sink event.Sink) *Agent {
-	reg, opts = readOnlyAgentConstruction(reg, opts)
-	return New(prov, reg, sess, opts, sink)
 }
 
 // NewPlannerAgent constructs the interactive two-model planner: permanent

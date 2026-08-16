@@ -129,14 +129,6 @@ type sessionEventIndex struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-func SessionEventLogPath(sessionPath string) string {
-	return store.SessionEventLog(sessionPath)
-}
-
-func SessionEventIndexPath(sessionPath string) string {
-	return store.SessionEventIndex(sessionPath)
-}
-
 func sessionEventLogSize(sessionPath string) int64 {
 	path := store.SessionEventLog(sessionPath)
 	if path == "" {

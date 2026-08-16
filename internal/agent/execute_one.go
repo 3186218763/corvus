@@ -524,7 +524,7 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 			}, true
 		}
 	}
-	cctx := withCallContext(ctx, plan.call.ID, a.sink, a.asker, a.planMode.Load())
+	cctx := WithToolCallContext(ctx, plan.call.ID, a.sink, a.asker, a.planMode.Load())
 	cctx = WithSubagentDepth(cctx, a.subagentDepth)
 	if a.evidence != nil {
 		cctx = evidence.WithLedger(cctx, a.evidence)

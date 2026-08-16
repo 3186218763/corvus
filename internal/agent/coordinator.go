@@ -11,6 +11,7 @@ import (
 	"corvus/internal/nilutil"
 	"corvus/internal/provider"
 	"corvus/internal/sandbox"
+	"corvus/internal/textutil"
 	"corvus/internal/tool"
 )
 
@@ -136,26 +137,11 @@ type Coordinator struct {
 	plannerUserDecisionAsker PlannerUserDecisionAsker
 }
 
-// NewCoordinator wires a planner provider (with its own session) to an executor.
-// sink receives the planner's phase/text/usage events; the executor emits its
-// own events to its own sink (the CLI wires the same sink into both). A nil
-// sink is replaced with event.Discard.
-func NewCoordinator(planner provider.Provider, plannerSession *Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, shouldPlan func(context.Context, string) bool) *Coordinator {
-	var policy PlannerPolicy
-	if shouldPlan != nil {
-		policy = func(ctx context.Context, input string) PlannerDecision {
-			if !shouldPlan(ctx, input) {
-				return PlannerDecision{Route: PlannerRouteExecutorOnly, Reason: "legacy_skip"}
-			}
-			return PlannerDecision{Route: PlannerRoutePlanAndExecute, Depth: PlannerDepthFull, Reason: "legacy_plan"}
-		}
-	}
-	return newCoordinator(planner, plannerSession, plannerPricing, plannerTools, plannerOptions, executor, temperature, sink, policy)
-}
-
-// NewCoordinatorWithPlannerPolicy wires the structured deterministic planner
-// router used by the product boot path. NewCoordinator remains as a compatibility
-// adapter for direct callers and older tests that still provide a bool gate.
+// NewCoordinator wires a planner provider (with its own session) to an executor
+// behind a per-turn planner policy. sink receives the planner's phase/text/usage
+// events; the executor emits its own events to its own sink (the CLI wires the
+// same sink into both). A nil sink is replaced with event.Discard; a nil policy
+// preserves the historical "plan every turn" behavior.
 func NewCoordinatorWithPlannerPolicy(planner provider.Provider, plannerSession *Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, policy PlannerPolicy) *Coordinator {
 	return newCoordinator(planner, plannerSession, plannerPricing, plannerTools, plannerOptions, executor, temperature, sink, policy)
 }
@@ -646,7 +632,7 @@ func parsePlannerAskBlock(plan string) (event.AskQuestion, bool) {
 			question = value
 		case "option", "选项":
 			if value != "" && len(options) < 4 {
-				options = append(options, event.AskOption{Label: truncateRunes(value, 72)})
+				options = append(options, event.AskOption{Label: truncateAskText(value, 72)})
 			}
 		}
 	}
@@ -659,7 +645,7 @@ func parsePlannerAskBlock(plan string) (event.AskQuestion, bool) {
 	return event.AskQuestion{
 		ID:      "planner_user_decision",
 		Header:  "Planner",
-		Prompt:  truncateRunes(question, 280),
+		Prompt:  truncateAskText(question, 280),
 		Options: options,
 	}, true
 }
@@ -678,7 +664,7 @@ func plannerQuestionPrompt(plan string) string {
 			strings.Contains(lower, "please confirm") ||
 			strings.Contains(lower, "请用户") ||
 			strings.Contains(lower, "需要用户") {
-			return truncateRunes(line, 280)
+			return truncateAskText(line, 280)
 		}
 	}
 	return "Planner needs your decision before execution. Choose an option or type your own answer."
@@ -689,7 +675,7 @@ func plannerDecisionOptions(plan string) []event.AskOption {
 	if len(choices) >= 2 {
 		opts := make([]event.AskOption, 0, min(len(choices), 4))
 		for _, choice := range choices {
-			opts = append(opts, event.AskOption{Label: truncateRunes(choice, 72)})
+			opts = append(opts, event.AskOption{Label: truncateAskText(choice, 72)})
 			if len(opts) == 4 {
 				break
 			}
@@ -754,12 +740,11 @@ func planWithHostUserAnswer(plan, answer string) string {
 	return strings.TrimSpace(plan) + "\n\nHost user answer to planner question:\n" + strings.TrimSpace(answer)
 }
 
-func truncateRunes(s string, max int) string {
-	rs := []rune(strings.TrimSpace(s))
-	if len(rs) <= max {
-		return string(rs)
-	}
-	return string(rs[:max]) + "..."
+// truncateAskText trims and truncates a planner ask label or prompt by
+// grapheme cluster (ADR-0002) so combined emoji and other multi-rune clusters
+// are never split mid-character.
+func truncateAskText(s string, max int) string {
+	return textutil.TruncateGraphemes(strings.TrimSpace(s), max, "...")
 }
 
 // isNoOpPlan reports whether the plan explicitly concludes that nothing needs

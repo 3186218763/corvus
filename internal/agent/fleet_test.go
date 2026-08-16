@@ -29,7 +29,7 @@ func TestBackgroundFleetRegistersEveryWriterUntilCompletion(t *testing.T) {
 	fleet := NewFleetTool(task)
 	manager := jobs.NewManager(event.Discard)
 	defer manager.Close()
-	ctx := withCallContext(context.Background(), "fleet-call", event.Discard, nil, false)
+	ctx := WithToolCallContext(context.Background(), "fleet-call", event.Discard, nil, false)
 	ctx = jobs.WithManager(ctx, manager)
 	ctx = jobs.WithSession(ctx, "parent-session")
 	args := json.RawMessage(`{
@@ -82,7 +82,7 @@ func TestBackgroundFleetRegistersReservationWhileItemsAreQueued(t *testing.T) {
 	fleet := NewFleetTool(task)
 	manager := jobs.NewManager(event.Discard)
 	defer manager.Close()
-	ctx := withCallContext(context.Background(), "queued-fleet", event.Discard, nil, false)
+	ctx := WithToolCallContext(context.Background(), "queued-fleet", event.Discard, nil, false)
 	ctx = jobs.WithManager(ctx, manager)
 	ctx = jobs.WithSession(ctx, "queued-session")
 	args := json.RawMessage(`{
@@ -148,7 +148,7 @@ func TestFleetRejectsSingleTaskAndPathConflict(t *testing.T) {
 			{"prompt": "b", "write_paths": []string{"same.md"}},
 		},
 	})
-	_, err = f.Execute(withCallContext(context.Background(), "fleet-call", event.Discard, nil, false), args)
+	_, err = f.Execute(WithToolCallContext(context.Background(), "fleet-call", event.Discard, nil, false), args)
 	if err == nil || !strings.Contains(err.Error(), "conflict") {
 		t.Fatalf("path conflict error = %v", err)
 	}
@@ -162,7 +162,7 @@ func TestFleetRejectsSingleTaskAndPathConflict(t *testing.T) {
 			{"prompt": "writer b", "write_paths": []string{"same.md"}},
 		},
 	})
-	_, err = f.Execute(withCallContext(context.Background(), "fleet-call", event.Discard, nil, false), args)
+	_, err = f.Execute(WithToolCallContext(context.Background(), "fleet-call", event.Discard, nil, false), args)
 	if err == nil || !strings.Contains(err.Error(), "task 2 and task 3") {
 		t.Fatalf("mixed-task conflict error = %v, want original task numbers 2 and 3", err)
 	}
@@ -181,7 +181,7 @@ func TestFleetCancellationPreservesStartedItemStatus(t *testing.T) {
 		WithScheduler(NewSubagentScheduler(2, 2))
 	f := NewFleetTool(task)
 
-	ctx, cancel := context.WithCancel(withCallContext(context.Background(), "fleet-call", event.Discard, nil, false))
+	ctx, cancel := context.WithCancel(WithToolCallContext(context.Background(), "fleet-call", event.Discard, nil, false))
 	done := make(chan struct {
 		out string
 		err error
@@ -272,7 +272,7 @@ func TestFleetParallelDisjointWriters(t *testing.T) {
 		})
 	}
 	args, _ := json.Marshal(map[string]any{"tasks": tasks})
-	ctx := withCallContext(context.Background(), "fleet-call", event.Discard, nil, false)
+	ctx := WithToolCallContext(context.Background(), "fleet-call", event.Discard, nil, false)
 	out, err := f.Execute(ctx, args)
 	if err != nil {
 		t.Fatalf("fleet: %v", err)

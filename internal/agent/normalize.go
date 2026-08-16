@@ -2,7 +2,7 @@ package agent
 
 import "corvus/internal/provider"
 
-// NormalizeSession runs the persisted-history-safe repairs on a loaded
+// normalizeSession runs the persisted-history-safe repairs on a loaded
 // conversation and is the agent-side entry point for making old, partially
 // saved, or interrupted sessions replayable. It is a thin wrapper over
 // provider.NormalizeSessionMessages, which shares assistant-turn repairs with
@@ -21,6 +21,6 @@ import "corvus/internal/provider"
 // Well-formed histories are returned without allocating (see
 // provider.NormalizeSessionMessages), so this is a no-op in both time and memory
 // for the common case and cannot perturb a provider's prefix-cache key.
-func NormalizeSession(msgs []provider.Message) []provider.Message {
+func normalizeSession(msgs []provider.Message) []provider.Message {
 	return provider.NormalizeSessionMessages(msgs)
 }

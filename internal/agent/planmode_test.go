@@ -464,11 +464,11 @@ func TestRunSubAgentWithSessionInheritsPlanWorkflow(t *testing.T) {
 }
 
 func TestCallContextMirrorsPlanModeOntoLeafKey(t *testing.T) {
-	on := withCallContext(context.Background(), "c", event.Discard, nil, true)
+	on := WithToolCallContext(context.Background(), "c", event.Discard, nil, true)
 	if !PlanModeFromContext(on) || !planmode.Active(on) {
 		t.Fatal("plan-mode flags disagree for an active planning call")
 	}
-	off := withCallContext(context.Background(), "c", event.Discard, nil, false)
+	off := WithToolCallContext(context.Background(), "c", event.Discard, nil, false)
 	if PlanModeFromContext(off) || planmode.Active(off) {
 		t.Fatal("plan-mode flags disagree for a standard call")
 	}

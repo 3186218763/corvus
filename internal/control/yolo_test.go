@@ -776,7 +776,7 @@ func TestPlanModePropagatesToCoordinatorPlannerAndKeepsYolo(t *testing.T) {
 	}}
 	execProvider := &scriptedTurns{turns: [][]provider.Chunk{textTurn("executor done")}}
 	executor := agent.New(execProvider, tool.NewRegistry(), agent.NewSession("exec"), agent.Options{}, event.Discard)
-	coordinator := agent.NewCoordinator(planner, agent.NewSession("planner"), nil, plannerTools, agent.Options{}, executor, 0, event.Discard, nil)
+	coordinator := agent.NewCoordinatorWithPlannerPolicy(planner, agent.NewSession("planner"), nil, plannerTools, agent.Options{}, executor, 0, event.Discard, nil)
 	c := New(Options{Runner: coordinator, Executor: executor})
 
 	c.SetPlanMode(true)

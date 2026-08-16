@@ -45,7 +45,7 @@ func TestTaskUnknownProfileRejected(t *testing.T) {
 	task := NewTaskTool(&mockProvider{name: "sub"}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(mustSubagentStore(t), root, "base", "high").
 		WithProfileLookup(func(string) (ProfileDefinition, bool) { return ProfileDefinition{}, false })
-	_, err := task.Execute(withCallContext(context.Background(), "c", event.Discard, nil, false),
+	_, err := task.Execute(WithToolCallContext(context.Background(), "c", event.Discard, nil, false),
 		json.RawMessage(`{"prompt":"x","profile":"nope"}`))
 	if err == nil || !strings.Contains(err.Error(), "unknown profile") {
 		t.Fatalf("err = %v", err)
@@ -64,7 +64,7 @@ func TestTaskProfileUsesBodyAsSystemPrompt(t *testing.T) {
 			}
 			return ProfileDefinition{Name: name, Body: "You rewrite docs carefully."}, true
 		})
-	_, err := task.Execute(withCallContext(context.Background(), "c", event.Discard, nil, false),
+	_, err := task.Execute(WithToolCallContext(context.Background(), "c", event.Discard, nil, false),
 		json.RawMessage(`{"prompt":"rewrite a.md","profile":"doc-rewriter"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +84,7 @@ func TestTaskToolsIntersectionCannotExpand(t *testing.T) {
 		WithProfileLookup(func(name string) (ProfileDefinition, bool) {
 			return ProfileDefinition{Name: name, Body: "body", AllowedTools: []string{"read_file"}}, true
 		})
-	_, err := task.Execute(withCallContext(context.Background(), "c", event.Discard, nil, false),
+	_, err := task.Execute(WithToolCallContext(context.Background(), "c", event.Discard, nil, false),
 		json.RawMessage(`{"prompt":"x","profile":"p","tools":["write_file"]}`))
 	if err == nil || !strings.Contains(err.Error(), "intersection") {
 		t.Fatalf("err = %v", err)

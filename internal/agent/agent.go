@@ -68,15 +68,6 @@ with complete_step citing the successful verification command. The host enforces
 these gates and will reject mutation or finalization when evidence is missing.
 </delivery-runtime>`
 
-// Renderer redraws the assistant's final-answer text as styled output. It is
-// applied only after a turn's text stream completes, so the user sees raw
-// markdown stream live, then a single redraw replaces it with formatted
-// output. The renderer is intentionally interface-shaped so the agent stays
-// independent of the cli's markdown library choice. Consumed by TextSink.
-type Renderer interface {
-	Render(text string) string
-}
-
 // Asker puts structured multiple-choice questions to the user and blocks for the
 // answers. The agent consults it for the `ask` tool. It is interface-shaped so
 // the agent stays independent of the frontend; a nil asker means no interactive
@@ -102,24 +93,17 @@ type callContext struct {
 	planMode bool
 }
 
-// withCallContext stamps ctx with the executing call's ID, the agent's sink, and
-// the asker. executeOne sets this before every Execute; `task` reads it (via
-// CallContext) to nest sub-agent events, and `ask` reads the asker to prompt.
-// The plan-mode flag is mirrored onto the leaf planmode key so tools that must
-// not import this package (for example internal/tool/builtin) can still read it.
-func withCallContext(ctx context.Context, parentID string, sink event.Sink, asker Asker, planMode bool) context.Context {
+// WithToolCallContext stamps ctx with the executing call's ID, the agent's
+// sink, and the asker. executeOne sets this before every Execute; `task` reads
+// it (via CallContext) to nest sub-agent events, and `ask` reads the asker to
+// prompt. Controller entry points that deliberately invoke the same tool
+// machinery (for example a user typing /<subagent-skill>) use it directly so
+// nested sub-agent activity still reaches the parent event stream. The
+// plan-mode flag is mirrored onto the leaf planmode key so tools that must not
+// import this package (for example internal/tool/builtin) can still read it.
+func WithToolCallContext(ctx context.Context, parentID string, sink event.Sink, asker Asker, planMode bool) context.Context {
 	ctx = planmode.WithActive(ctx, planMode)
 	return context.WithValue(ctx, callContextKey{}, callContext{parentID: parentID, sink: sink, asker: asker, planMode: planMode})
-}
-
-// WithToolCallContext stamps ctx as a host-initiated top-level tool call.
-// Normal model-selected tools receive this context from executeOne; controller
-// entry points that deliberately invoke the same tool machinery (for example a
-// user typing /<subagent-skill>) use this exported wrapper so nested sub-agent
-// activity still reaches the parent event stream and plan-mode policy remains
-// visible to the invoked runner.
-func WithToolCallContext(ctx context.Context, parentID string, sink event.Sink, asker Asker, planMode bool) context.Context {
-	return withCallContext(ctx, parentID, sink, asker, planMode)
 }
 
 // CallContext returns the executing call's ID, the agent's sink, and the asker,

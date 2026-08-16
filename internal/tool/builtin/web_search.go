@@ -164,7 +164,7 @@ func (t webSearch) Execute(ctx context.Context, args json.RawMessage) (string, e
 	fmt.Fprintf(&b, "%d result(s) for %q:\n", len(results), query)
 	for _, r := range results {
 		fmt.Fprintf(&b, "- %s — %s\n", strings.TrimSpace(r.Title), strings.TrimSpace(r.URL))
-		if snippet := truncateRunes(strings.TrimSpace(r.Content), webSearchSnippetRune); snippet != "" {
+		if snippet := truncateGraphemes(strings.TrimSpace(r.Content), webSearchSnippetRune); snippet != "" {
 			fmt.Fprintf(&b, "  %s\n", snippet)
 		}
 	}
@@ -354,6 +354,6 @@ func decodeSearchJSON(r io.Reader, dst any) error {
 	return nil
 }
 
-func truncateRunes(s string, n int) string {
-	return textutil.TruncateGraphemes(s, n, "…")
+func truncateGraphemes(s string, n int) string {
+	return textutil.TruncateGraphemes(s, n, "...")
 }

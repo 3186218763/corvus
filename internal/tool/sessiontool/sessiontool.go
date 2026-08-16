@@ -169,19 +169,19 @@ loop:
 				break loop
 			}
 			fmt.Fprintf(&b, "## User (turn %d)\n", turnCount)
-			b.WriteString(truncateRunes(m.Content, 2000))
+			b.WriteString(truncateGraphemes(m.Content, 2000))
 			b.WriteString("\n\n")
 
 		case provider.RoleAssistant:
 			if m.Content != "" {
 				fmt.Fprintf(&b, "## Assistant (turn %d)\n", max(turnCount, 1))
-				b.WriteString(truncateRunes(m.Content, 2000))
+				b.WriteString(truncateGraphemes(m.Content, 2000))
 				b.WriteString("\n\n")
 			}
 			if len(m.ToolCalls) > 0 {
 				b.WriteString("### Tool Calls\n\n")
 				for _, tc := range m.ToolCalls {
-					fmt.Fprintf(&b, "- `%s(%s)`\n", tc.Name, truncateRunes(string(tc.Arguments), 1200))
+					fmt.Fprintf(&b, "- `%s(%s)`\n", tc.Name, truncateGraphemes(string(tc.Arguments), 1200))
 				}
 				b.WriteString("\n")
 			}
@@ -189,7 +189,7 @@ loop:
 		case provider.RoleTool:
 			fmt.Fprintf(&b, "### Tool Result: %s\n\n", m.Name)
 			if params.ShowToolResults && m.Content != "" {
-				b.WriteString(truncateRunes(m.Content, 2000))
+				b.WriteString(truncateGraphemes(m.Content, 2000))
 				b.WriteString("\n\n")
 			}
 		}
@@ -200,9 +200,9 @@ loop:
 
 // ---- helpers ----------------------------------------------------------------
 
-// truncateRunes preserves the historical name but truncates by grapheme
-// clusters so previews do not split combined emoji or other visible characters.
-func truncateRunes(s string, max int) string {
+// truncateGraphemes trims then truncates by grapheme clusters so previews do
+// not split combined emoji or other visible characters.
+func truncateGraphemes(s string, max int) string {
 	s = strings.TrimSpace(s)
 	return textutil.TruncateGraphemes(s, max, "...")
 }

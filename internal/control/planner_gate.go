@@ -668,21 +668,8 @@ var plannerAmbiguousScopeTerms = []string{
 	"这个 bug", "这个bug", "这个问题", "性能", "整个模块", "全部问题",
 }
 
-// TaskWarrantsPlanner is retained as a small compatibility predicate for
-// callers and tests that do not need depth or approval semantics.
-func TaskWarrantsPlanner(input string) bool {
-	return DecidePlannerRoute(context.Background(), input).Route != agent.PlannerRouteExecutorOnly
-}
-
 // NewPlannerPolicy returns the structured deterministic policy used by the
 // two-model product path.
 func NewPlannerPolicy() agent.PlannerPolicy {
 	return DecidePlannerRoute
-}
-
-// NewPlannerGate retains the historical bool shape for direct callers.
-func NewPlannerGate() func(context.Context, string) bool {
-	return func(ctx context.Context, input string) bool {
-		return DecidePlannerRoute(ctx, input).Route != agent.PlannerRouteExecutorOnly
-	}
 }

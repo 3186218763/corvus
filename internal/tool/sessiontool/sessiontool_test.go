@@ -341,9 +341,9 @@ func TestTruncateRunes(t *testing.T) {
 		{"a👨‍👩‍👧‍👦bc", 2, "a👨‍👩‍👧‍👦..."},
 	}
 	for _, tt := range tests {
-		got := truncateRunes(tt.s, tt.max)
+		got := truncateGraphemes(tt.s, tt.max)
 		if got != tt.want {
-			t.Errorf("truncateRunes(%q, %d) = %q, want %q", tt.s, tt.max, got, tt.want)
+			t.Errorf("truncateGraphemes(%q, %d) = %q, want %q", tt.s, tt.max, got, tt.want)
 		}
 	}
 }

@@ -96,7 +96,7 @@ func TestParallelTasksRejectsUnboundedBatchBeforeRuntimeLookup(t *testing.T) {
 func TestParallelTasksForegroundCompletesAndClosesWorkers(t *testing.T) {
 	task := newTestTaskTool(t, parallelStaticProvider{}, tool.NewRegistry(), "sys", "", "", nil)
 	parallel := NewParallelTasksTool(task, tool.NewRegistry())
-	ctx := withCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
+	ctx := WithToolCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
 
 	done := make(chan error, 1)
 	go func() {
@@ -132,7 +132,7 @@ func TestParallelTasksInjectsWorkspaceContextIntoChildren(t *testing.T) {
 	task := NewTaskTool(promptRoutingProvider{}, nil, tool.NewRegistry(), 20, 0, 0, 0, 0, 0, 0, 0.0, "", "sys", nil, 0, "", "", nil).
 		WithTranscripts(NewSubagentStore(t.TempDir()), workspace, "base-model", "base-effort")
 	parallel := NewParallelTasksTool(task, tool.NewRegistry())
-	ctx := withCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
+	ctx := WithToolCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
 
 	out, err := parallel.Execute(ctx, json.RawMessage(`{"tasks":[{"prompt":"inspect one"},{"prompt":"inspect two"}]}`))
 	if err != nil {
@@ -159,7 +159,7 @@ func TestParallelTasksDeliveryClassifiesPristinePrompt(t *testing.T) {
 		WithTranscripts(NewSubagentStore(t.TempDir()), workspace, "base-model", "base-effort").
 		WithDeliveryProfile(true)
 	parallel := NewParallelTasksTool(task, tool.NewRegistry())
-	ctx := withCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
+	ctx := WithToolCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
 
 	out, err := parallel.Execute(ctx, json.RawMessage(`{"tasks":[{"prompt":"Who are you?"},{"prompt":"Nice to meet you"}]}`))
 	if err != nil {
@@ -181,7 +181,7 @@ func TestParallelTasksDeliveryClassifiesPristinePrompt(t *testing.T) {
 func TestParallelTasksInheritLanguagePreferencesFromContext(t *testing.T) {
 	task := newTestTaskTool(t, promptRoutingProvider{}, tool.NewRegistry(), "sys", "", "", nil)
 	parallel := NewParallelTasksTool(task, tool.NewRegistry())
-	ctx := withCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
+	ctx := WithToolCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
 	ctx = WithResponseLanguagePreference(ctx, "zh")
 	ctx = WithReasoningLanguagePreference(ctx, "zh")
 
@@ -200,7 +200,7 @@ func TestParallelTasksDoesNotExposeWriterToolsToChildren(t *testing.T) {
 	parentReg.Add(fakeTool{name: "write_file", readOnly: false, calls: &writerCalls})
 	task := newTestTaskTool(t, writerCallingProvider{}, parentReg, "sys", "", "", nil)
 	parallel := NewParallelTasksTool(task, parentReg)
-	ctx := withCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
+	ctx := WithToolCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
 
 	out, err := parallel.Execute(ctx, json.RawMessage(`{
 		"tasks": [
@@ -232,7 +232,7 @@ func TestParallelTasksBlocksWriterResolvedThroughReadOnlyProxy(t *testing.T) {
 	}})
 	task := newTestTaskTool(t, proxyWriterCallingProvider{}, parentReg, "sys", "", "", nil)
 	parallel := NewParallelTasksTool(task, parentReg)
-	ctx := withCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
+	ctx := WithToolCallContext(context.Background(), "parallel-call", event.Discard, nil, false)
 
 	out, err := parallel.Execute(ctx, json.RawMessage(`{
 		"tasks": [
@@ -255,7 +255,7 @@ func TestParallelTasksCancelReturnsPartialAggregate(t *testing.T) {
 	task := newTestTaskTool(t, promptRoutingProvider{}, tool.NewRegistry(), "sys", "", "", nil)
 	parallel := NewParallelTasksTool(task, tool.NewRegistry())
 
-	ctx, cancel := context.WithCancel(withCallContext(context.Background(), "parallel-call", event.Discard, nil, false))
+	ctx, cancel := context.WithCancel(WithToolCallContext(context.Background(), "parallel-call", event.Discard, nil, false))
 	defer cancel()
 	done := make(chan struct {
 		out string

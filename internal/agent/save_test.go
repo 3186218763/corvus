@@ -658,7 +658,7 @@ func TestSaveSnapshotAppendsAcrossInterruptedToolCallTail(t *testing.T) {
 		t.Fatalf("SaveSnapshot after tool result: %v", err)
 	}
 
-	replay, err := replaySessionEventLog(SessionEventLogPath(path))
+	replay, err := replaySessionEventLog(store.SessionEventLog(path))
 	if err != nil {
 		t.Fatalf("replay event log: %v", err)
 	}
@@ -726,7 +726,7 @@ func TestSaveSnapshotAppendsAcrossPartiallyAnsweredMultiToolCallTail(t *testing.
 	if events[1].MessageIndex != 4 || len(events[1].Messages) != 3 {
 		t.Fatalf("multi-tool append event index=%d len=%d, want index 4 len 3", events[1].MessageIndex, len(events[1].Messages))
 	}
-	replay, err := replaySessionEventLog(SessionEventLogPath(path))
+	replay, err := replaySessionEventLog(store.SessionEventLog(path))
 	if err != nil {
 		t.Fatalf("replay event log: %v", err)
 	}
@@ -766,7 +766,7 @@ func TestSaveSnapshotUnchangedInterruptedToolCallTailIsNoOp(t *testing.T) {
 	if err := s.SaveSnapshot(path); err != nil {
 		t.Fatalf("mid-turn SaveSnapshot: %v", err)
 	}
-	logBefore, err := os.ReadFile(SessionEventLogPath(path))
+	logBefore, err := os.ReadFile(store.SessionEventLog(path))
 	if err != nil {
 		t.Fatalf("ReadFile event log: %v", err)
 	}
@@ -774,7 +774,7 @@ func TestSaveSnapshotUnchangedInterruptedToolCallTailIsNoOp(t *testing.T) {
 	if err := s.SaveSnapshot(path); err != nil {
 		t.Fatalf("SaveSnapshot unchanged: %v", err)
 	}
-	logAfter, err := os.ReadFile(SessionEventLogPath(path))
+	logAfter, err := os.ReadFile(store.SessionEventLog(path))
 	if err != nil {
 		t.Fatalf("ReadFile event log after no-op snapshot: %v", err)
 	}
@@ -856,7 +856,7 @@ func TestSaveSnapshotAfterDirtyResumeKeepsEventChainReplayable(t *testing.T) {
 		t.Fatalf("SaveSnapshot after dirty resume: %v", err)
 	}
 
-	replay, err := replaySessionEventLog(SessionEventLogPath(path))
+	replay, err := replaySessionEventLog(store.SessionEventLog(path))
 	if err != nil {
 		t.Fatalf("replay event log: %v", err)
 	}
@@ -918,7 +918,7 @@ func TestSaveSnapshotAfterDirtyResumeWithTruncatedToolArgsPersistsRepair(t *test
 	if len(events) != 2 || events[1].Type != sessionEventTypeReplace || events[1].Reason != "snapshot" {
 		t.Fatalf("events after truncated-args repair = %+v, want trailing snapshot replace", events)
 	}
-	replay, err := replaySessionEventLog(SessionEventLogPath(path))
+	replay, err := replaySessionEventLog(store.SessionEventLog(path))
 	if err != nil {
 		t.Fatalf("replay event log: %v", err)
 	}
@@ -1104,7 +1104,7 @@ func TestSaveSnapshotMigratesLegacyJSONLToEventLog(t *testing.T) {
 	if got := reloaded.Messages[len(reloaded.Messages)-1].Content; got != "migrated" {
 		t.Fatalf("migrated tail = %q, want migrated", got)
 	}
-	if _, err := os.Stat(SessionEventIndexPath(path)); err != nil {
+	if _, err := os.Stat(store.SessionEventIndex(path)); err != nil {
 		t.Fatalf("event index missing: %v", err)
 	}
 }
@@ -2634,7 +2634,7 @@ func TestListSessionsMissingDir(t *testing.T) {
 
 func readSessionEventsForTest(t *testing.T, path string) []sessionEventRecord {
 	t.Helper()
-	f, err := os.Open(SessionEventLogPath(path))
+	f, err := os.Open(store.SessionEventLog(path))
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}

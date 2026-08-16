@@ -1322,7 +1322,7 @@ func loadSessionUnlocked(path string) (*Session, error) {
 	// for a well-formed history, so we detect an actual repair by comparing
 	// slice headers: when NormalizeSession allocated a new backing array, the
 	// session is marked dirty so the next Save persists the fix.
-	normalized := NormalizeSession(s.Messages)
+	normalized := normalizeSession(s.Messages)
 	normalized = migrateLegacyProviderContent(normalized)
 	if len(normalized) != len(s.Messages) || (len(s.Messages) > 0 && &normalized[0] != &s.Messages[0]) {
 		s.normalizedDirty = true

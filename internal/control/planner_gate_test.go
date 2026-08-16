@@ -7,7 +7,7 @@ import (
 	"corvus/internal/agent"
 )
 
-func TestTaskWarrantsPlanner(t *testing.T) {
+func TestDecidePlannerRouteWorkVersusQuestions(t *testing.T) {
 	cases := []struct {
 		input string
 		want  bool
@@ -79,22 +79,10 @@ func TestTaskWarrantsPlanner(t *testing.T) {
 		{activeGoalBlock("implement the new caching layer", GoalResearchAuto) + "\n\nimplement the new caching layer across the backend", true},
 	}
 	for _, c := range cases {
-		if got := TaskWarrantsPlanner(c.input); got != c.want {
-			t.Errorf("TaskWarrantsPlanner(%q) = %v, want %v", c.input, got, c.want)
+		got := DecidePlannerRoute(context.Background(), c.input).Route != agent.PlannerRouteExecutorOnly
+		if got != c.want {
+			t.Errorf("DecidePlannerRoute(%q) warrants planner = %v, want %v", c.input, got, c.want)
 		}
-	}
-}
-
-func TestNewPlannerGateUsesDeterministicTaskPolicy(t *testing.T) {
-	gate := NewPlannerGate()
-	if gate == nil {
-		t.Fatal("NewPlannerGate returned nil")
-	}
-	if got := gate(context.Background(), "what is this?"); got {
-		t.Error("planner gate should skip low-risk questions")
-	}
-	if got := gate(context.Background(), "fix the bug"); !got {
-		t.Error("planner gate should plan work requests")
 	}
 }
 

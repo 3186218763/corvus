@@ -33,7 +33,7 @@ func TestBackgroundTaskReturnsBeforeSlotFrees(t *testing.T) {
 	prov := &blockingProvider{started: started}
 	jm := jobs.NewManager(event.Discard)
 	defer jm.Close()
-	ctx := jobs.WithManager(withCallContext(context.Background(), "bg", event.Discard, nil, false), jm)
+	ctx := jobs.WithManager(WithToolCallContext(context.Background(), "bg", event.Discard, nil, false), jm)
 	ctx = jobs.WithSession(ctx, "sess-bg")
 	ctx = WithParentSession(ctx, "sess-bg")
 
