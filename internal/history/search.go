@@ -315,7 +315,7 @@ func (s *Searcher) sources(scope string) ([]sourceFile, error) {
 func appendSessionSources(out []sourceFile, seen map[string]bool, dir, source string) []sourceFile {
 	out = appendFiles(out, seen, listJSONL(dir, source, agent.IsVisibleSession)...)
 	if strings.TrimSpace(dir) != "" {
-		out = appendFiles(out, seen, listJSONL(subagentsDir(dir), source, func(path string) bool {
+		out = appendFiles(out, seen, listJSONL(store.SubagentDir(dir), source, func(path string) bool {
 			return visibleSubagentSession(dir, path)
 		})...)
 	}
@@ -491,11 +491,11 @@ func clamp(n, def, max int) int {
 
 func (s *Searcher) visiblePath(path string) bool {
 	switch {
-	case underRoot(path, subagentsDir(s.sessionDir)):
+	case underRoot(path, store.SubagentDir(s.sessionDir)):
 		return visibleSubagentSession(s.sessionDir, path)
 	case underRoot(path, s.sessionDir):
 		return agent.IsVisibleSession(path)
-	case underRoot(path, subagentsDir(s.globalSessionDir)):
+	case underRoot(path, store.SubagentDir(s.globalSessionDir)):
 		return visibleSubagentSession(s.globalSessionDir, path)
 	case underRoot(path, s.globalSessionDir):
 		return agent.IsVisibleSession(path)
@@ -533,20 +533,13 @@ func subagentParentSession(path string) (string, bool) {
 	return strings.TrimSpace(meta.ParentSession), true
 }
 
-func subagentsDir(dir string) string {
-	if strings.TrimSpace(dir) == "" {
-		return ""
-	}
-	return filepath.Join(dir, "subagents")
-}
-
 func (s *Searcher) allowedPath(path string) bool {
 	roots := []string{s.sessionDir, s.globalSessionDir, s.archiveDir}
 	if s.sessionDir != "" {
-		roots = append(roots, subagentsDir(s.sessionDir))
+		roots = append(roots, store.SubagentDir(s.sessionDir))
 	}
 	if s.globalSessionDir != "" {
-		roots = append(roots, subagentsDir(s.globalSessionDir))
+		roots = append(roots, store.SubagentDir(s.globalSessionDir))
 	}
 	for _, root := range roots {
 		if underRoot(path, root) {

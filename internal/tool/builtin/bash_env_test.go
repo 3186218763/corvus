@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"corvus/internal/proc"
 	"corvus/internal/sandbox"
 	"corvus/internal/secrets"
 )
@@ -100,8 +101,8 @@ func TestParseShellPATH(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := parseShellPATH([]byte(c.out), marker); got != c.want {
-				t.Fatalf("parseShellPATH(%q) = %q, want %q", c.out, got, c.want)
+			if got := proc.ParseShellPATH([]byte(c.out), marker); got != c.want {
+				t.Fatalf("proc.ParseShellPATH(%q) = %q, want %q", c.out, got, c.want)
 			}
 		})
 	}

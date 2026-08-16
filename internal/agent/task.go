@@ -88,19 +88,6 @@ const subagentToolBoundarySummary = "Recursive agent/skill tools are exposed onl
 // inject MaxParallelWriters via SubagentScheduler.
 const maxConcurrentBackgroundTasks = DefaultMaxParallelWriters
 
-// AlwaysHiddenSubagentTools returns the tool names excluded from every
-// subagent's registry regardless of an explicit allowlist or delegation
-// depth (unlike subagentRecursiveTools, which depends on remaining depth).
-// That covers both subagentAlwaysHiddenTools and subagentJobTools —
-// SubagentToolRegistryForDepth and its read-only variant strip the job tools
-// unconditionally too. Host UIs offering a tool picker for a subagent
-// profile's allowed-tools should exclude these from the offered choices —
-// selecting them would be silently ignored at runtime.
-func AlwaysHiddenSubagentTools() []string {
-	names := append([]string(nil), subagentAlwaysHiddenTools...)
-	return append(names, subagentJobTools...)
-}
-
 // SubagentMetaTools returns the tool names that spawned agents should not inherit
 // from the parent registry unless a future call site deliberately opts into a
 // different boundary. They can spawn or author more agent work, so excluding them
@@ -115,30 +102,7 @@ func SubagentMetaTools() []string {
 	return out
 }
 
-// SubagentToolRegistry returns the tool set exposed inside spawned sub-agents:
-// the requested whitelist (or every parent tool), minus meta tools that would
-// spawn more agent work and job tools whose runtime manager is not injected into
-// sub-agents. When bash is present, it is wrapped to advertise and allow only
-// foreground execution.
-func SubagentToolRegistry(parent *tool.Registry, names []string) *tool.Registry {
-	return SubagentToolRegistryForDepth(parent, names, 1, 1)
-}
-
-// SubagentToolRegistryForDepth returns the writer-capable tool set for a spawned
-// subagent at childDepth. Recursive delegation tools are available only when the
-// child still has room to spawn one more subagent.
-//
-// Direct mcp__* schemas are never exposed: MCP goes only through the fixed
-// use_capability proxy so connect/disconnect/tool-list churn cannot change the
-// child provider-visible tool prefix. With no explicit allowlist the child gets
-// the full proxy (installed/authorized MCP, including tools without
-// readOnlyHint). An explicit allowlist converts mcp__* / mcp-tool: names into a
-// capability-id allowlist on a restricted proxy.
-func SubagentToolRegistryForDepth(parent *tool.Registry, names []string, childDepth, maxDepth int) *tool.Registry {
-	return SubagentToolRegistryForDepthWithRuntime(parent, names, childDepth, maxDepth, nil)
-}
-
-// SubagentToolRegistryForDepthWithRuntime is SubagentToolRegistryForDepth with
+// SubagentToolRegistryForDepthWithRuntime builds the writer-capable tool set
 // an optional session MCP runtime used when the parent registry has no
 // use_capability (for example Economy or legacy callers) but sub-agents still
 // need the proxy.
@@ -638,7 +602,7 @@ func (r *ReadOnlyTaskTool) Execute(ctx context.Context, args json.RawMessage) (s
 	if err != nil {
 		return "", err
 	}
-	return GuardSubagentHostDecisionText(answer), nil
+	return tool.GuardSubagentHostDecisionText(answer), nil
 }
 
 // childMaxSteps resolves a sub-agent's step budget. An explicit request wins.
@@ -999,7 +963,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (st
 		}
 		return FormatSubagentRunResult(answer, run, false), nil
 	}
-	return GuardSubagentHostDecisionText(answer), nil
+	return tool.GuardSubagentHostDecisionText(answer), nil
 }
 
 func (t *TaskTool) acquireSlot(ctx context.Context, req AcquireRequest) (func(), error) {
@@ -1510,25 +1474,6 @@ func PlannerToolRegistry(parent *tool.Registry) *tool.Registry {
 // ReadOnlySubagentToolRegistry returns the tool set exposed to read-only
 // sub-agents: read-only research tools plus a bash wrapper that enforces the
 // permission-layer read-only command policy at execution time. Workflow/meta tools are
-// excluded even when their Tool.ReadOnly contract is true.
-func ReadOnlySubagentToolRegistry(parent *tool.Registry, names []string) *tool.Registry {
-	return ReadOnlySubagentToolRegistryForDepth(parent, names, 1, 1)
-}
-
-// ReadOnlySubagentToolRegistryForDepth returns the tool set exposed to read-only
-// subagents. It permits only read-only delegation tools while another depth
-// layer is available. Direct mcp__* schemas are never exposed; MCP goes only
-// through use_capability. Dynamic execution still requires authorized server +
-// readOnlyHint + non-destructive (enforced by ReadOnlyExecution), so strict
-// agents share the stable proxy schema and connection reuse without permission
-// relaxation.
-//
-// Custom profile/call allowlists remain authoritative and convert MCP names
-// into a capability-id allowlist on a restricted proxy.
-func ReadOnlySubagentToolRegistryForDepth(parent *tool.Registry, names []string, childDepth, maxDepth int) *tool.Registry {
-	return ReadOnlySubagentToolRegistryForDepthWithRuntime(parent, names, childDepth, maxDepth, nil)
-}
-
 // ReadOnlySubagentToolRegistryForDepthWithRuntime is the read-only registry
 // builder with an optional session MCP runtime for proxy injection.
 func ReadOnlySubagentToolRegistryForDepthWithRuntime(parent *tool.Registry, names []string, childDepth, maxDepth int, runtime *MCPCapabilityRuntime) *tool.Registry {
@@ -1790,7 +1735,7 @@ func FormatSubagentReference(run *SubagentRun) string {
 }
 
 func FormatSubagentRunResult(answer string, run *SubagentRun, failed bool) string {
-	answer = GuardSubagentHostDecisionText(answer)
+	answer = tool.GuardSubagentHostDecisionText(answer)
 	if run == nil || run.Ref == "" {
 		return answer
 	}
@@ -1801,14 +1746,6 @@ func FormatSubagentRunResult(answer string, run *SubagentRun, failed bool) strin
 		return "Subagent reference (failed): " + run.Ref + "\n\nFinal answer:\n" + answer
 	}
 	return FormatSubagentReference(run) + "\n\nFinal answer:\n" + answer
-}
-
-// GuardSubagentHostDecisionText appends a fixed boundary warning only when a
-// child agent result appears to discuss host approval or user-owned decisions.
-// The implementation lives in internal/tool so the skill tools share the exact
-// same phrase list and notice.
-func GuardSubagentHostDecisionText(answer string) string {
-	return tool.GuardSubagentHostDecisionText(answer)
 }
 
 // maxReviewReportNudges bounds the in-session completion nudges sent to a

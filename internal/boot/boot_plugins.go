@@ -475,17 +475,6 @@ func partitionByTier(entries []config.PluginEntry) (eager, bg []config.PluginEnt
 	return eager, bg
 }
 
-// PluginSpecs maps configured plugin entries to plugin.Spec, expanding ${VAR}
-// references. Exported so custom assemblers can connect the config's plugins
-// alongside their own (e.g. ACP's per-session MCP servers).
-
-// PluginSpecs maps configured plugin entries to plugin.Spec, expanding ${VAR}
-// references. Exported so custom assemblers can connect the config's plugins
-// alongside their own (e.g. ACP's per-session MCP servers).
-func PluginSpecs(entries []config.PluginEntry) []plugin.Spec {
-	return PluginSpecsForRoot(entries, "")
-}
-
 // PluginSpecsForRoot maps configured plugin entries to plugin.Spec and applies
 // workspace-aware compatibility overrides for known cwd-sensitive servers.
 
@@ -724,38 +713,6 @@ func applyDefaultMCPStartupTimeout(specs []plugin.Spec, timeout time.Duration) [
 func autoShellPrefer(prefer string) bool {
 	p := strings.ToLower(strings.TrimSpace(prefer))
 	return p == "" || p == "auto"
-}
-
-// MCPStartupNotice formats the warning shown when configured MCP servers failed
-// to connect, naming the first few; ok is false when none failed.
-
-// MCPStartupNotice formats the warning shown when configured MCP servers failed
-// to connect, naming the first few; ok is false when none failed.
-func MCPStartupNotice(failures []plugin.Failure) (text, detail string, ok bool) {
-	if len(failures) == 0 {
-		return "", "", false
-	}
-	names := make([]string, 0, min(len(failures), 3))
-	details := make([]string, 0, len(failures))
-	for i, f := range failures {
-		if i >= 3 {
-			continue
-		}
-		names = append(names, f.Name)
-	}
-	for _, f := range failures {
-		line := f.Name
-		if strings.TrimSpace(f.Error) != "" {
-			line += ": " + strings.TrimSpace(f.Error)
-		}
-		details = append(details, line)
-	}
-	more := ""
-	if len(failures) > len(names) {
-		more = fmt.Sprintf(" (+%d more)", len(failures)-len(names))
-	}
-	return "Some MCP servers failed to start; run /mcp for details.", fmt.Sprintf("%d MCP server(s) failed to start: %s%s\n%s",
-		len(failures), strings.Join(names, ", "), more, strings.Join(details, "\n")), true
 }
 
 // LSPSpecs returns the language → server map: the built-in defaults overlaid with

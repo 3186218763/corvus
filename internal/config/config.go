@@ -740,15 +740,12 @@ type AgentConfig struct {
 	GuardianTemperature float64 `toml:"guardian_temperature"`
 	// RecoveryModel optionally names a dedicated model for the independent
 	// recovery reviewer. Empty falls back to GuardianModel, then the main model.
-	RecoveryModel string `toml:"recovery_model"`
-	// RecoveryTemperature is accepted from older configs but ignored. Auto
-	// Guard review is deterministic at temperature zero.
-	RecoveryTemperature float64           `toml:"recovery_temperature"`
-	SubagentModel       string            `toml:"subagent_model"`
-	SubagentModels      map[string]string `toml:"subagent_models"`
-	SubagentEffort      string            `toml:"subagent_effort"`
-	SubagentEfforts     map[string]string `toml:"subagent_efforts"`
-	MaxSubagentDepth    int               `toml:"max_subagent_depth"`
+	RecoveryModel    string            `toml:"recovery_model"`
+	SubagentModel    string            `toml:"subagent_model"`
+	SubagentModels   map[string]string `toml:"subagent_models"`
+	SubagentEffort   string            `toml:"subagent_effort"`
+	SubagentEfforts  map[string]string `toml:"subagent_efforts"`
+	MaxSubagentDepth int               `toml:"max_subagent_depth"`
 	// MaxSubagentConcurrency bounds how many sub-agents (task, fleet items,
 	// profile skills, nested children) may run at once in one session.
 	// 0 means the default (6). Values outside 1–32 are clamped on load.

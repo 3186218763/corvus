@@ -92,10 +92,6 @@ func loadCCSwitchMCPFromRoot(root string) ([]PluginEntry, error) {
 	return nil, fmt.Errorf("cc-switch import: no Corvus-enabled MCP servers found in %s", root)
 }
 
-func ImportCCSwitchMCPEntries(entries []PluginEntry) (total, added, updated int, err error) {
-	return importMCPEntries(entries)
-}
-
 // ImportCCSwitchMCP upserts cc-switch's Corvus-enabled MCP servers into the
 // user-global Corvus config and saves it.
 func ImportCCSwitchMCP() (total, added, updated int, err error) {
@@ -103,10 +99,10 @@ func ImportCCSwitchMCP() (total, added, updated int, err error) {
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	return importMCPEntries(entries)
+	return ImportMCPEntries(entries)
 }
 
-func importMCPEntries(entries []PluginEntry) (total, added, updated int, err error) {
+func ImportMCPEntries(entries []PluginEntry) (total, added, updated int, err error) {
 	path := UserConfigPath()
 	if strings.TrimSpace(path) == "" {
 		return 0, 0, 0, fmt.Errorf("cc-switch import: cannot resolve user config path")

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"corvus/internal/compaction"
 	"corvus/internal/event"
 	"errors"
 	"os"
@@ -169,7 +170,7 @@ func TestCompactKeepsMidSessionUserTurns(t *testing.T) {
 	// summary text — while the assistant/tool work between them is folded.
 	var pinnedFirst, keptMid bool
 	for _, m := range sess.Snapshot() {
-		if isCompactionSummary(m) {
+		if compaction.IsCompactionSummary(m) {
 			continue
 		}
 		if m.Role == provider.RoleUser && m.Content == "first task" {
@@ -351,7 +352,7 @@ func TestKeepIndexesKeepsSiblingToolResultsForKeptError(t *testing.T) {
 		{Role: provider.RoleTool, ToolCallID: "ok", Name: "read_file", Content: "package main"},
 	}
 
-	keep := keepIndexes(region, KeepErrors)
+	keep := compaction.KeepIndexes(region, KeepErrors)
 	for i, kept := range keep {
 		if !kept {
 			t.Fatalf("keep[%d] = false, want all sibling tool-call messages kept: %v", i, keep)
@@ -369,7 +370,7 @@ func TestKeepIndexesScopesPolicyAfterLatestSummary(t *testing.T) {
 		{Role: provider.RoleTool, ToolCallID: "new", Name: "bash", Content: "error: new failure"},
 	}
 
-	keep := keepIndexes(region, KeepErrors)
+	keep := compaction.KeepIndexes(region, KeepErrors)
 	want := []bool{false, false, false, true, true}
 	for i := range want {
 		if keep[i] != want[i] {
@@ -416,7 +417,7 @@ func TestKeepUserMarkedRequiresUserPrefixMarker(t *testing.T) {
 		{Role: provider.RoleUser, Content: "  <keep> exact requirement"},
 	}
 
-	keep := keepIndexes(region, KeepUserMarked)
+	keep := compaction.KeepIndexes(region, KeepUserMarked)
 	want := []bool{false, false, true}
 	for i := range want {
 		if keep[i] != want[i] {
@@ -771,16 +772,16 @@ func TestRenderTranscriptRedactsToolCallArgs(t *testing.T) {
 		{Role: provider.RoleTool, Name: "research", Content: "Found 5 projects."},
 	}
 
-	out := renderTranscript(msgs)
+	out := compaction.RenderTranscript(msgs)
 
 	if strings.Contains(out, "Search for recently popular") {
-		t.Fatalf("renderTranscript leaked tool-call arguments into transcript:\n%s", out)
+		t.Fatalf("compaction.RenderTranscript leaked tool-call arguments into transcript:\n%s", out)
 	}
 	if !strings.Contains(out, "[assistant calls research]") {
-		t.Fatalf("renderTranscript missing tool-call label:\n%s", out)
+		t.Fatalf("compaction.RenderTranscript missing tool-call label:\n%s", out)
 	}
 	if !strings.Contains(out, "task") {
-		t.Fatalf("renderTranscript missing key names:\n%s", out)
+		t.Fatalf("compaction.RenderTranscript missing key names:\n%s", out)
 	}
 }
 
@@ -795,7 +796,7 @@ func TestInterruptedDisplayStaysVerbatimAndOutOfCompactionPrompt(t *testing.T) {
 	if len(kept) != 1 || !kept[0].LocalOnly || len(fold) != 0 {
 		t.Fatalf("compaction partition kept=%+v fold=%+v, want local display kept verbatim", kept, fold)
 	}
-	if transcript := renderTranscript([]provider.Message{local}); transcript != "" {
+	if transcript := compaction.RenderTranscript([]provider.Message{local}); transcript != "" {
 		t.Fatalf("local interrupted output leaked into compaction prompt: %q", transcript)
 	}
 }
@@ -937,12 +938,12 @@ func TestSummarizeToolArgs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := summarizeToolArgs(tt.args)
+			got := compaction.SummarizeToolArgs(tt.args)
 			if !strings.Contains(got, tt.want) {
-				t.Errorf("summarizeToolArgs(%q) = %q, want contains %q", tt.args, got, tt.want)
+				t.Errorf("compaction.SummarizeToolArgs(%q) = %q, want contains %q", tt.args, got, tt.want)
 			}
 			if tt.wantNot != "" && strings.Contains(got, tt.wantNot) {
-				t.Errorf("summarizeToolArgs(%q) = %q, should NOT contain %q", tt.args, got, tt.wantNot)
+				t.Errorf("compaction.SummarizeToolArgs(%q) = %q, should NOT contain %q", tt.args, got, tt.wantNot)
 			}
 		})
 	}

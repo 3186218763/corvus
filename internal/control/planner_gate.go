@@ -9,6 +9,7 @@ import (
 
 	"corvus/internal/agent"
 	"corvus/internal/capability"
+	"corvus/internal/textutil"
 )
 
 const (
@@ -361,24 +362,10 @@ func containsUnnegatedPlannerApproval(text string) bool {
 				break
 			}
 			idx += offset
-			if !plannerApprovalNegated(text[:idx]) {
+			if !textutil.ApprovalPrefixNegated(text[:idx], 0, true, []string{"不要", "不需要", "无需", "无须", "不用", "不必", "别", "do not", "don't", "not", "no need to", "do not need to", "don't need to", "not necessary to", "without"}) {
 				return true
 			}
 			offset = idx + len(term)
-		}
-	}
-	return false
-}
-
-func plannerApprovalNegated(prefix string) bool {
-	prefix = strings.TrimSpace(prefix)
-	for _, negation := range []string{
-		"不要", "不需要", "无需", "无须", "不用", "不必", "别",
-		"do not", "don't", "not", "no need to", "do not need to", "don't need to",
-		"not necessary to", "without",
-	} {
-		if strings.HasSuffix(prefix, negation) {
-			return true
 		}
 	}
 	return false
@@ -579,22 +566,13 @@ func containsLexicalTerm(s, term string) bool {
 	if term == "" {
 		return false
 	}
-	if containsNonASCII(term) || strings.ContainsAny(term, " -_/") {
+	if textutil.ContainsNonASCII(term) || strings.ContainsAny(term, " -_/") {
 		return strings.Contains(s, term)
 	}
 	for _, token := range strings.FieldsFunc(s, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_'
 	}) {
 		if token == term {
-			return true
-		}
-	}
-	return false
-}
-
-func containsNonASCII(s string) bool {
-	for _, r := range s {
-		if r > unicode.MaxASCII {
 			return true
 		}
 	}

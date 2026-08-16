@@ -47,15 +47,6 @@ func DeepSeekV4PricesForCurrency(currency string) map[string]*provider.Pricing {
 	return deepSeekV4PricesUSD()
 }
 
-// DeepSeekV4PricesForLanguage maps a language preference to the corresponding
-// official pricing table.
-func DeepSeekV4PricesForLanguage(lang string) map[string]*provider.Pricing {
-	if normalizeDeepSeekPricingLanguage(lang) == "zh" {
-		return DeepSeekV4PricesForCurrency("CNY")
-	}
-	return DeepSeekV4PricesForCurrency("USD")
-}
-
 func deepSeekV4PricesForConfig(c *Config) map[string]*provider.Pricing {
 	return DeepSeekV4PricesForCurrency(c.DeepSeekOfficialPricingCurrency())
 }
@@ -327,11 +318,6 @@ func ApplyUserConfigUpgradesOnStartup(path string) (bool, error) {
 	return true, nil
 }
 
-// ResetOfficialProviderPricingOnUpgrade is retained for older call sites.
-func ResetOfficialProviderPricingOnUpgrade(path string) (bool, error) {
-	return ApplyUserConfigUpgradesOnStartup(path)
-}
-
 func shouldMarkWindowsBashSandboxDefaultUpgrade(fromVersion int) bool {
 	return runtimeGOOS == "windows" && fromVersion < windowsBashSandboxDefaultConfigVersion
 }
@@ -392,19 +378,6 @@ func isKnownDeepSeekOfficialPricing(model string, price *provider.Pricing) bool 
 		}
 	}
 	return false
-}
-
-// IsOfficialDeepSeekProvider reports whether an entry targets DeepSeek's
-// official API endpoint. Desktop telemetry uses this after a regional-currency
-// change so custom endpoints and rates stay untouched.
-func IsOfficialDeepSeekProvider(p *ProviderEntry) bool {
-	return officialProviderKind(p) == "deepseek"
-}
-
-// IsKnownDeepSeekOfficialPricing reports whether price is one of Corvus's
-// built-in DeepSeek regional defaults for model.
-func IsKnownDeepSeekOfficialPricing(model string, price *provider.Pricing) bool {
-	return isKnownDeepSeekOfficialPricing(model, price)
 }
 
 func samePricing(a, b *provider.Pricing) bool {

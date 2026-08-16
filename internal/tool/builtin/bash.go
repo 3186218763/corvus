@@ -484,10 +484,10 @@ func bashCommandEnv(ctx context.Context) []string {
 	if runtime.GOOS == "windows" {
 		return env
 	}
-	currentPath, _ := envValue(env, "PATH")
+	currentPath, _ := proc.EnvValue(env, "PATH")
 	if shellPath := strings.TrimSpace(bashShellPATH(ctx)); shellPath != "" {
 		if merged := mergePathLists(shellPath, currentPath); merged != currentPath {
-			env = setEnvValue(env, "PATH", merged)
+			env = proc.SetEnvValue(env, "PATH", merged)
 		}
 	}
 	return env
@@ -509,7 +509,7 @@ func defaultBashShellPATH(ctx context.Context) string {
 		{"-c", script},
 	} {
 		out := runShellPATHCommand(ctx, shell, args)
-		if path := parseShellPATH(out, marker); path != "" {
+		if path := proc.ParseShellPATH(out, marker); path != "" {
 			return path
 		}
 	}
@@ -547,16 +547,6 @@ func runShellPATHCommand(parent context.Context, shell string, args []string) []
 	return out
 }
 
-func parseShellPATH(out []byte, marker string) string {
-	lines := strings.Split(strings.ReplaceAll(string(out), "\r\n", "\n"), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.HasPrefix(lines[i], marker) {
-			return strings.TrimSpace(strings.TrimPrefix(lines[i], marker))
-		}
-	}
-	return ""
-}
-
 func hasPathSeparator(s string) bool {
 	return strings.ContainsAny(s, `/\`)
 }
@@ -567,43 +557,6 @@ func isExecutableFile(path string) bool {
 		return false
 	}
 	return info.Mode().Perm()&0o111 != 0
-}
-
-func setEnvValue(env []string, key, value string) []string {
-	out := make([]string, 0, len(env)+1)
-	replaced := false
-	for _, kv := range env {
-		k, _, ok := strings.Cut(kv, "=")
-		if ok && envKeyEqual(k, key) {
-			if !replaced {
-				out = append(out, key+"="+value)
-				replaced = true
-			}
-			continue
-		}
-		out = append(out, kv)
-	}
-	if !replaced {
-		out = append(out, key+"="+value)
-	}
-	return out
-}
-
-func envValue(env []string, key string) (string, bool) {
-	for i := len(env) - 1; i >= 0; i-- {
-		k, v, ok := strings.Cut(env[i], "=")
-		if ok && envKeyEqual(k, key) {
-			return v, true
-		}
-	}
-	return "", false
-}
-
-func envKeyEqual(a, b string) bool {
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(a, b)
-	}
-	return a == b
 }
 
 func mergePathLists(primary, secondary string) string {

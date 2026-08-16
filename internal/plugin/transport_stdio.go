@@ -179,7 +179,7 @@ func prepareMCPPrivateStateForOS(s Spec, processSandbox sandbox.Spec, env []stri
 	// state path can exceed the 108-byte Unix-domain-socket limit used by MCP
 	// servers such as MATLAB before their initialize response is written.
 	for key, value := range privateEnv {
-		env = setEnvValue(env, key, value)
+		env = proc.SetEnvValue(env, key, value)
 	}
 	processSandbox.WriteRoots = append(processSandbox.WriteRoots, root, privateRoot)
 	processSandbox.AppContainerWriteRoots = append(processSandbox.AppContainerWriteRoots, root, privateRoot)
@@ -265,11 +265,11 @@ func resolveStdioExecutable(ctx context.Context, s Spec, env []string) (string, 
 		return exe, env, nil
 	}
 
-	currentPath, _ := envValue(env, "PATH")
+	currentPath, _ := proc.EnvValue(env, "PATH")
 	if runtime.GOOS == "windows" {
 		fallbackPath := mergePathLists(windowsStdioFallbackPATH(env), currentPath)
 		if fallbackPath != currentPath {
-			fallbackEnv := setEnvValue(env, "PATH", fallbackPath)
+			fallbackEnv := proc.SetEnvValue(env, "PATH", fallbackPath)
 			if exe, ok := lookPathInEnv(s.Command, fallbackEnv); ok {
 				return exe, fallbackEnv, nil
 			}
@@ -300,10 +300,10 @@ func stdioWorkingDir(s Spec) string {
 // subprocess environment with a PATH that matches what the user sees in their
 // terminal, even when Corvus was launched from the Finder / Dock / open(1).
 func enrichStdioShellPATH(ctx context.Context, env []string) []string {
-	currentPath, _ := envValue(env, "PATH")
+	currentPath, _ := proc.EnvValue(env, "PATH")
 	if shellPath := strings.TrimSpace(stdioShellPATH(ctx)); shellPath != "" {
 		if fallbackPath := mergePathLists(shellPath, currentPath); fallbackPath != currentPath {
-			env = setEnvValue(env, "PATH", fallbackPath)
+			env = proc.SetEnvValue(env, "PATH", fallbackPath)
 		}
 	}
 	return env
@@ -314,8 +314,8 @@ func hasPathSeparator(s string) bool {
 }
 
 func lookPathInEnv(command string, env []string) (string, bool) {
-	path, _ := envValue(env, "PATH")
-	pathext, _ := envValue(env, "PATHEXT")
+	path, _ := proc.EnvValue(env, "PATH")
+	pathext, _ := proc.EnvValue(env, "PATHEXT")
 	for _, dir := range filepath.SplitList(path) {
 		if dir == "" || !filepath.IsAbs(dir) {
 			continue
@@ -372,12 +372,12 @@ func windowsStdioFallbackPATH(env []string) string {
 	if runtime.GOOS != "windows" {
 		return ""
 	}
-	programFiles, _ := envValue(env, "ProgramFiles")
-	programFilesX86, _ := envValue(env, "ProgramFiles(x86)")
-	localAppData, _ := envValue(env, "LOCALAPPDATA")
-	appData, _ := envValue(env, "APPDATA")
-	userProfile, _ := envValue(env, "USERPROFILE")
-	chocolatey, _ := envValue(env, "ChocolateyInstall")
+	programFiles, _ := proc.EnvValue(env, "ProgramFiles")
+	programFilesX86, _ := proc.EnvValue(env, "ProgramFiles(x86)")
+	localAppData, _ := proc.EnvValue(env, "LOCALAPPDATA")
+	appData, _ := proc.EnvValue(env, "APPDATA")
+	userProfile, _ := proc.EnvValue(env, "USERPROFILE")
+	chocolatey, _ := proc.EnvValue(env, "ChocolateyInstall")
 	if localAppData == "" && userProfile != "" {
 		localAppData = filepath.Join(userProfile, "AppData", "Local")
 	}
@@ -431,7 +431,7 @@ func defaultStdioShellPATH(ctx context.Context) string {
 		{"-c", script},
 	} {
 		out := runShellPATHCommand(ctx, shell, args)
-		if path := parseShellPATH(out, marker); path != "" {
+		if path := proc.ParseShellPATH(out, marker); path != "" {
 			return path
 		}
 	}
@@ -473,59 +473,12 @@ func prepareStdioShellPATHProbe(cmd *exec.Cmd) {
 	proc.PrepareShellPATHProbe(cmd)
 }
 
-func parseShellPATH(out []byte, marker string) string {
-	lines := strings.Split(strings.ReplaceAll(string(out), "\r\n", "\n"), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.HasPrefix(lines[i], marker) {
-			return strings.TrimSpace(strings.TrimPrefix(lines[i], marker))
-		}
-	}
-	return ""
-}
-
 func mergeEnv(base []string, overrides map[string]string) []string {
 	out := append([]string(nil), base...)
 	for k, v := range overrides {
-		out = setEnvValue(out, k, v)
+		out = proc.SetEnvValue(out, k, v)
 	}
 	return out
-}
-
-func setEnvValue(env []string, key, value string) []string {
-	out := make([]string, 0, len(env)+1)
-	replaced := false
-	for _, kv := range env {
-		k, _, ok := strings.Cut(kv, "=")
-		if ok && envKeyEqual(k, key) {
-			if !replaced {
-				out = append(out, key+"="+value)
-				replaced = true
-			}
-			continue
-		}
-		out = append(out, kv)
-	}
-	if !replaced {
-		out = append(out, key+"="+value)
-	}
-	return out
-}
-
-func envValue(env []string, key string) (string, bool) {
-	for i := len(env) - 1; i >= 0; i-- {
-		k, v, ok := strings.Cut(env[i], "=")
-		if ok && envKeyEqual(k, key) {
-			return v, true
-		}
-	}
-	return "", false
-}
-
-func envKeyEqual(a, b string) bool {
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(a, b)
-	}
-	return a == b
 }
 
 func mergePathLists(primary, secondary string) string {

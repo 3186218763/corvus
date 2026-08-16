@@ -11,6 +11,14 @@ import (
 	"corvus/internal/tool"
 )
 
+func testSubagentToolRegistry(parent *tool.Registry, names []string) *tool.Registry {
+	return SubagentToolRegistryForDepthWithRuntime(parent, names, 1, 1, nil)
+}
+
+func testReadOnlySubagentToolRegistry(parent *tool.Registry, names []string) *tool.Registry {
+	return ReadOnlySubagentToolRegistryForDepthWithRuntime(parent, names, 1, 1, nil)
+}
+
 type subagentRegistryTool struct {
 	name     string
 	schema   string
@@ -89,7 +97,7 @@ func TestSubagentToolRegistryFiltersUnavailableToolsAndWrapsBash(t *testing.T) {
 		result: "foreground ok",
 	})
 
-	sub := SubagentToolRegistry(parent, nil)
+	sub := testSubagentToolRegistry(parent, nil)
 	for _, hidden := range []string{
 		"task",
 		"read_only_task",
@@ -142,8 +150,8 @@ func TestSubagentToolRegistryRestrictsCapabilityProxyToAllowedMCPIDs(t *testing.
 	allowedID := "mcp-tool:figma/search"
 
 	for _, sub := range []*tool.Registry{
-		SubagentToolRegistry(parent, []string{allowedID}),
-		ReadOnlySubagentToolRegistry(parent, []string{allowedID}),
+		testSubagentToolRegistry(parent, []string{allowedID}),
+		testReadOnlySubagentToolRegistry(parent, []string{allowedID}),
 	} {
 		proxy, ok := sub.Get("use_capability")
 		if !ok {
@@ -175,7 +183,7 @@ func TestSubagentToolRegistryRestrictsCapabilityProxyToAllowedMCPIDs(t *testing.
 	})
 	// Direct mcp__* names convert into a capability allowlist; the model never
 	// sees mcp__ schemas on the sub-agent surface.
-	converted := SubagentToolRegistry(parent, []string{"mcp__figma__search"})
+	converted := testSubagentToolRegistry(parent, []string{"mcp__figma__search"})
 	if _, ok := converted.Get("mcp__figma__search"); ok {
 		t.Fatalf("direct MCP tool must not enter subagent registry: %v", converted.Names())
 	}
@@ -204,7 +212,7 @@ func TestSubagentToolRegistryDefaultGetsUnrestrictedProxy(t *testing.T) {
 	})
 	parent.Add(subagentRegistryTool{name: "read_file", readOnly: true})
 
-	sub := SubagentToolRegistry(parent, nil)
+	sub := testSubagentToolRegistry(parent, nil)
 	if _, ok := sub.Get("mcp__gh__search"); ok {
 		t.Fatalf("default subagent registry must strip direct MCP: %v", sub.Names())
 	}
@@ -229,7 +237,7 @@ func TestReadOnlySubagentToolRegistryKeepsProxyButNotDirectMCP(t *testing.T) {
 	})
 	parent.Add(subagentRegistryTool{name: "read_file", readOnly: true})
 
-	sub := ReadOnlySubagentToolRegistry(parent, nil)
+	sub := testReadOnlySubagentToolRegistry(parent, nil)
 	if _, ok := sub.Get("mcp__gh__search"); ok {
 		t.Fatalf("read-only registry must not expose direct MCP: %v", sub.Names())
 	}
@@ -255,7 +263,7 @@ func TestReadOnlySubagentToolRegistryKeepsOnlyResearchToolsAndSafeBash(t *testin
 		result: "safe bash ok",
 	})
 
-	sub := ReadOnlySubagentToolRegistry(parent, nil)
+	sub := testReadOnlySubagentToolRegistry(parent, nil)
 	for _, hidden := range []string{"task", "read_only_task", "read_only_skill", "write_file", "remember", "todo_write", "complete_step", "connect_tool_source"} {
 		if _, ok := sub.Get(hidden); ok {
 			t.Fatalf("read-only subagent registry should hide %q; got %v", hidden, sub.Names())
@@ -307,7 +315,7 @@ func TestReadOnlySubagentToolRegistryAllowsOnlyReadOnlyDelegationBeforeDepthLimi
 	}
 	parent.Add(subagentRegistryTool{name: "read_file", readOnly: true})
 
-	firstLayer := ReadOnlySubagentToolRegistryForDepth(parent, nil, 1, 2)
+	firstLayer := ReadOnlySubagentToolRegistryForDepthWithRuntime(parent, nil, 1, 2, nil)
 	for _, want := range []string{"read_file", "read_only_task", "read_only_skill", "read_skill"} {
 		if _, ok := firstLayer.Get(want); !ok {
 			t.Fatalf("first-layer read-only registry should expose %q; got %v", want, firstLayer.Names())
@@ -319,7 +327,7 @@ func TestReadOnlySubagentToolRegistryAllowsOnlyReadOnlyDelegationBeforeDepthLimi
 		}
 	}
 
-	secondLayer := ReadOnlySubagentToolRegistryForDepth(parent, nil, 2, 2)
+	secondLayer := ReadOnlySubagentToolRegistryForDepthWithRuntime(parent, nil, 2, 2, nil)
 	for _, hidden := range []string{"task", "run_skill", "read_only_task", "read_only_skill", "explore", "write_file"} {
 		if _, ok := secondLayer.Get(hidden); ok {
 			t.Fatalf("depth-limited read-only registry should hide %q; got %v", hidden, secondLayer.Names())
@@ -341,7 +349,7 @@ func TestReadOnlySubagentToolRegistryIncludesMCPReadOnlyHint(t *testing.T) {
 		serverAuthorized:     true,
 	})
 
-	sub := ReadOnlySubagentToolRegistry(parent, nil)
+	sub := testReadOnlySubagentToolRegistry(parent, nil)
 	if _, ok := sub.Get("mcp__srv__read"); ok {
 		t.Fatalf("read-only subagent registry must not expose direct MCP schemas; got %v", sub.Names())
 	}
@@ -378,7 +386,7 @@ func TestCustomProfileAllowlistRestrictsMCPTools(t *testing.T) {
 	})
 
 	// A custom profile boundary is authoritative even for installed MCP tools.
-	general := SubagentToolRegistry(parent, []string{"read_file"})
+	general := testSubagentToolRegistry(parent, []string{"read_file"})
 	if _, ok := general.Get("read_file"); !ok {
 		t.Fatalf("custom profile should keep allowlisted built-in; got %v", general.Names())
 	}
@@ -394,7 +402,7 @@ func TestCustomProfileAllowlistRestrictsMCPTools(t *testing.T) {
 		}
 	}
 
-	explicit := SubagentToolRegistry(parent, []string{"mcp__chrome__*"})
+	explicit := testSubagentToolRegistry(parent, []string{"mcp__chrome__*"})
 	if _, ok := explicit.Get("mcp__chrome__list_pages"); ok {
 		t.Fatalf("explicit MCP wildcard must not expose direct schemas: %v", explicit.Names())
 	}
@@ -416,12 +424,12 @@ func TestCustomProfileAllowlistRestrictsMCPTools(t *testing.T) {
 		t.Fatal("wildcard must reject other server capabilities")
 	}
 
-	ro := ReadOnlySubagentToolRegistry(parent, []string{"read_file"})
+	ro := testReadOnlySubagentToolRegistry(parent, []string{"read_file"})
 	if _, ok := ro.Get("use_capability"); ok {
 		t.Fatalf("read-only built-in-only profile should not install MCP proxy; got %v", ro.Names())
 	}
 
-	explicitRO := ReadOnlySubagentToolRegistry(parent, []string{"mcp__chrome__*"})
+	explicitRO := testReadOnlySubagentToolRegistry(parent, []string{"mcp__chrome__*"})
 	if _, ok := explicitRO.Get("mcp__chrome__list_pages"); ok {
 		t.Fatalf("read-only MCP wildcard must not expose direct schemas: %v", explicitRO.Names())
 	}
@@ -451,14 +459,14 @@ func TestMCPToolAvailabilityAcrossGeneralAndReadOnlySubagents(t *testing.T) {
 		server:               "srv", raw: "tool", serverAuthorized: true,
 	})
 
-	general := SubagentToolRegistry(parent, nil)
+	general := testSubagentToolRegistry(parent, nil)
 	if _, ok := general.Get("mcp__srv__tool"); ok {
 		t.Fatalf("general subagent must not expose direct MCP: %v", general.Names())
 	}
 	if _, ok := general.Get("use_capability"); !ok {
 		t.Fatalf("general subagent must expose use_capability: %v", general.Names())
 	}
-	ro := ReadOnlySubagentToolRegistry(parent, nil)
+	ro := testReadOnlySubagentToolRegistry(parent, nil)
 	if _, ok := ro.Get("mcp__srv__tool"); ok {
 		t.Fatalf("read-only subagent must not expose direct MCP: %v", ro.Names())
 	}
@@ -491,7 +499,7 @@ func TestRestrictedCapabilityProxyDescriptionIsStable(t *testing.T) {
 		server:               "alpha", raw: "search", serverAuthorized: true,
 	})
 
-	before := SubagentToolRegistry(parent, []string{"mcp__alpha__*"})
+	before := testSubagentToolRegistry(parent, []string{"mcp__alpha__*"})
 	beforeProxy, ok := before.Get("use_capability")
 	if !ok {
 		t.Fatal("restricted proxy missing")
@@ -505,7 +513,7 @@ func TestRestrictedCapabilityProxyDescriptionIsStable(t *testing.T) {
 		subagentRegistryTool: subagentRegistryTool{name: "mcp__alpha__list", readOnly: true},
 		server:               "alpha", raw: "list", serverAuthorized: true,
 	})
-	after := SubagentToolRegistry(parent, []string{"mcp__alpha__*"})
+	after := testSubagentToolRegistry(parent, []string{"mcp__alpha__*"})
 	afterProxy, ok := after.Get("use_capability")
 	if !ok {
 		t.Fatal("restricted proxy missing after MCP install")
@@ -536,7 +544,7 @@ func TestRestrictedCapabilityProxyListFiltersServers(t *testing.T) {
 		server:               "alpha", raw: "search", serverAuthorized: true,
 	})
 
-	sub := SubagentToolRegistry(parent, []string{"mcp__alpha__search"})
+	sub := testSubagentToolRegistry(parent, []string{"mcp__alpha__search"})
 	tl, ok := sub.Get("use_capability")
 	if !ok {
 		t.Fatal("missing restricted proxy")
@@ -572,7 +580,7 @@ func TestMalformedCapabilityAllowlistDoesNotInstallProxy(t *testing.T) {
 		{"mcp-tool:onlyserver"},
 		{"mcp-server:/bad"},
 	} {
-		sub := SubagentToolRegistry(parent, allow)
+		sub := testSubagentToolRegistry(parent, allow)
 		if _, ok := sub.Get("use_capability"); ok {
 			t.Fatalf("malformed allowlist %v must not install use_capability; got %v", allow, sub.Names())
 		}

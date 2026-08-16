@@ -199,7 +199,6 @@ func richRenderFixture() *Config {
 	c.UI.Currency = "CNY"
 	c.UI.ProviderAccess = []string{"deepseek-flash", "mimo-pro"}
 	c.Agent.RecoveryModel = "mimo-pro"
-	c.Agent.RecoveryTemperature = 0.15
 	c.Agent.ReasoningLanguage = "zh"
 	c.Agent.ToolResultSnipRatio = 0.65
 	c.Agent.SubagentModel = "mimo-pro"
@@ -364,7 +363,7 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 	if want := []string{"deepseek-flash", "mimo-pro"}; !reflect.DeepEqual(got.UI.ProviderAccess, want) {
 		t.Errorf("ui.provider_access = %v, want %v", got.UI.ProviderAccess, want)
 	}
-	if got.Agent.RecoveryModel != "mimo-pro" || got.Agent.RecoveryTemperature != 0 {
+	if got.Agent.RecoveryModel != "mimo-pro" {
 		t.Errorf("agent recovery settings not preserved: %+v", got.Agent)
 	}
 	if got.Agent.MaxSteps != orig.Agent.MaxSteps {
@@ -705,7 +704,6 @@ func TestScopedRenderSeparatesUserAndProjectConfig(t *testing.T) {
 	c.UI.Theme = "dark"
 	c.UI.ThemeStyle = "graphite"
 	c.Agent.RecoveryModel = "deepseek-pro"
-	c.Agent.RecoveryTemperature = 0.2
 
 	user := RenderTOMLForScope(c, RenderScopeUser)
 	for _, want := range []string{"config_version = 5", "[ui]", `currency = "CNY"`, `theme = "dark"`, `recovery_model = "deepseek-pro"`, "[tools.shell]"} {
@@ -791,7 +789,6 @@ func TestScopedRenderKeepsPluginsInTheirOwningConfig(t *testing.T) {
 func TestProjectDeltaRendersRecoveryReviewerOverride(t *testing.T) {
 	c := Default()
 	c.Agent.RecoveryModel = "deepseek-pro"
-	c.Agent.RecoveryTemperature = 0.2
 
 	delta := RenderTOMLProjectDelta(c)
 	for _, want := range []string{"[agent]", `recovery_model = "deepseek-pro"`} {

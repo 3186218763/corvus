@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"corvus/internal/store"
 	"time"
 )
 
@@ -71,7 +73,7 @@ func TryAcquireRecoveryParentGuard(path, parentDir string) (*SessionRemovalGuard
 	if parentDir == "" {
 		parentDir = filepath.Dir(path)
 	}
-	parentPath := filepath.Join(parentDir, parentID+".jsonl")
+	parentPath := store.SessionPath(parentDir, parentID)
 	if parentPath == path || !IsVisibleSession(parentPath) {
 		return nil, ErrRecoveryBranchNotCovered
 	}
@@ -105,7 +107,7 @@ func recoveryBranchCoveredByParent(path, parentDir string, meta BranchMeta) bool
 	if parentDir == "" {
 		parentDir = filepath.Dir(path)
 	}
-	parentPath := filepath.Join(parentDir, parentID+".jsonl")
+	parentPath := store.SessionPath(parentDir, parentID)
 	if parentPath == path || !IsVisibleSession(parentPath) {
 		return false
 	}

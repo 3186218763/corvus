@@ -3,6 +3,8 @@ package agent
 import (
 	"strings"
 	"unicode/utf8"
+
+	"corvus/internal/textutil"
 )
 
 // heuristicInputIsTask reports whether a user input reads as an actionable
@@ -148,22 +150,13 @@ func containsTaskNeedle(input, needle string) bool {
 	if needle == "" {
 		return false
 	}
-	if containsNonASCII(needle) || strings.Contains(needle, " ") {
+	if textutil.ContainsNonASCII(needle) || strings.Contains(needle, " ") {
 		return strings.Contains(input, needle)
 	}
 	for _, word := range strings.FieldsFunc(input, func(r rune) bool {
 		return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '_'
 	}) {
 		if word == needle {
-			return true
-		}
-	}
-	return false
-}
-
-func containsNonASCII(s string) bool {
-	for _, r := range s {
-		if r > 127 {
 			return true
 		}
 	}

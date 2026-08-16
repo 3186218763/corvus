@@ -188,7 +188,7 @@ func (s *MCPActivationStore) Lookup(scope MCPActivationScope, workspace, source,
 // An explicit activation override wins; otherwise auto_start=false maps to
 // disabled and true/nil map to enabled.
 func (s *MCPActivationStore) IsEnabled(entry PluginEntry, workspace string) (bool, error) {
-	scope, workspaceFP, source, owner := ActivationIdentity(entry, workspace)
+	scope, workspaceFP, source, owner := activationIdentity(entry, workspace)
 	if s != nil {
 		if enabled, found, err := s.Lookup(scope, workspaceFP, source, owner, entry.Name); err != nil {
 			return false, err
@@ -201,7 +201,7 @@ func (s *MCPActivationStore) IsEnabled(entry PluginEntry, workspace string) (boo
 
 // SetServerEnabled records a durable enable/disable override for entry.
 func (s *MCPActivationStore) SetServerEnabled(entry PluginEntry, workspace string, enabled bool) error {
-	scope, workspaceFP, source, owner := ActivationIdentity(entry, workspace)
+	scope, workspaceFP, source, owner := activationIdentity(entry, workspace)
 	return s.SetEnabled(MCPActivationOverride{
 		Scope:     scope,
 		Workspace: workspaceFP,
@@ -214,7 +214,7 @@ func (s *MCPActivationStore) SetServerEnabled(entry PluginEntry, workspace strin
 
 // ClearServer removes the activation override for entry, restoring defaults.
 func (s *MCPActivationStore) ClearServer(entry PluginEntry, workspace string) error {
-	scope, workspaceFP, source, owner := ActivationIdentity(entry, workspace)
+	scope, workspaceFP, source, owner := activationIdentity(entry, workspace)
 	return s.Clear(MCPActivationOverride{
 		Scope:     scope,
 		Workspace: workspaceFP,
@@ -222,11 +222,6 @@ func (s *MCPActivationStore) ClearServer(entry PluginEntry, workspace string) er
 		Owner:     owner,
 		Server:    entry.Name,
 	})
-}
-
-// ActivationIdentity returns the durable key components for one plugin entry.
-func ActivationIdentity(entry PluginEntry, workspace string) (scope MCPActivationScope, workspaceFP, source, owner string) {
-	return activationIdentity(entry, workspace)
 }
 
 func (s *MCPActivationStore) saveLocked(file MCPActivationFile) error {

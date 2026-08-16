@@ -1351,7 +1351,7 @@ func spawnLegacyCommand(ctx context.Context, command string, args []string, opti
 	if args != nil {
 		return spawnExecCommand(ctx, command, args, options)
 	}
-	if node, flag, script, ok := repairableNodeEvalArgs(command); ok {
+	if node, flag, script, ok := nodeEvalArgs(command, false); ok {
 		return exec.CommandContext(ctx, node, flag, script), nil
 	}
 	if powershell, args, ok := repairablePowerShellFileArgs(command); ok {
@@ -1369,7 +1369,7 @@ func spawnLegacyCommand(ctx context.Context, command string, args []string, opti
 			}
 			return exec.CommandContext(ctx, shell, args...), nil
 		}
-		if node, flag, script, ok := directNodeEvalArgs(command); ok {
+		if node, flag, script, ok := nodeEvalArgs(command, true); ok {
 			return exec.CommandContext(ctx, node, flag, script), nil
 		}
 		if cmd, ok := windowsCmdShellCommand(ctx, command); ok {

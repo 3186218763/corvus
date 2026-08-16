@@ -1210,7 +1210,7 @@ func TestApplyDeepSeekOfficialDefaultPricingExplicitCurrencyWins(t *testing.T) {
 	}
 }
 
-func TestResetOfficialProviderPricingOnUpgradeRunsOnce(t *testing.T) {
+func TestApplyUserConfigUpgradesOnStartupResetsPricingOnce(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "corvus.toml")
 	c := &Config{
 		ConfigVersion: 2,
@@ -1240,9 +1240,9 @@ func TestResetOfficialProviderPricingOnUpgradeRunsOnce(t *testing.T) {
 		t.Fatalf("SaveTo: %v", err)
 	}
 
-	changed, err := ResetOfficialProviderPricingOnUpgrade(path)
+	changed, err := ApplyUserConfigUpgradesOnStartup(path)
 	if err != nil {
-		t.Fatalf("ResetOfficialProviderPricingOnUpgrade: %v", err)
+		t.Fatalf("ApplyUserConfigUpgradesOnStartup: %v", err)
 	}
 	if !changed {
 		t.Fatal("upgrade reset did not run for config_version 2")
@@ -1279,9 +1279,9 @@ func TestResetOfficialProviderPricingOnUpgradeRunsOnce(t *testing.T) {
 	if err := got.SaveTo(path); err != nil {
 		t.Fatalf("SaveTo after custom edit: %v", err)
 	}
-	changed, err = ResetOfficialProviderPricingOnUpgrade(path)
+	changed, err = ApplyUserConfigUpgradesOnStartup(path)
 	if err != nil {
-		t.Fatalf("second ResetOfficialProviderPricingOnUpgrade: %v", err)
+		t.Fatalf("second ApplyUserConfigUpgradesOnStartup: %v", err)
 	}
 	if changed {
 		t.Fatal("upgrade reset ran again after config_version was updated")

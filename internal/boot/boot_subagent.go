@@ -2,7 +2,6 @@ package boot
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"corvus/internal/agent"
@@ -12,6 +11,7 @@ import (
 	"corvus/internal/provider"
 	"corvus/internal/sandbox"
 	"corvus/internal/skill"
+	"corvus/internal/store"
 	"corvus/internal/textutil"
 	"corvus/internal/tool"
 	"corvus/internal/workspacelease"
@@ -292,7 +292,7 @@ func newSubagentStore(sessionDir string) (*agent.SubagentStore, error) {
 	if sessionDir == "" {
 		return nil, nil
 	}
-	store := agent.NewSubagentStore(filepath.Join(sessionDir, "subagents"))
+	store := agent.NewSubagentStore(store.SubagentDir(sessionDir))
 	if _, err := store.CleanupStaleRunning(); err != nil {
 		return nil, fmt.Errorf("cleanup stale subagents: %w", err)
 	}

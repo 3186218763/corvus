@@ -56,23 +56,33 @@ func (deleteSymbol) Schema() json.RawMessage {
 
 func (deleteSymbol) ReadOnly() bool { return false }
 
-func (d deleteSymbol) Execute(ctx context.Context, args json.RawMessage) (string, error) {
-	var p struct {
-		Path   string `json:"path"`
-		Name   string `json:"name"`
-		Kind   string `json:"kind"`
-		Parent string `json:"parent"`
-	}
+type symbolArgs struct {
+	Path   string `json:"path"`
+	Name   string `json:"name"`
+	Kind   string `json:"kind"`
+	Parent string `json:"parent"`
+}
+
+func (d deleteSymbol) parseArgs(args json.RawMessage) (symbolArgs, error) {
+	var p symbolArgs
 	if err := decodeArgs(args, &p); err != nil {
-		return "", err
+		return p, err
 	}
 	if p.Path == "" {
-		return "", fmt.Errorf("path is required")
+		return p, fmt.Errorf("path is required")
 	}
 	if p.Name == "" {
-		return "", fmt.Errorf("name is required")
+		return p, fmt.Errorf("name is required")
 	}
 	p.Path = resolveIn(d.workDir, p.Path)
+	return p, nil
+}
+
+func (d deleteSymbol) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	p, err := d.parseArgs(args)
+	if err != nil {
+		return "", err
+	}
 	if err := confineWrite(ctx, d.roots, d.guard, d.managed, p.Path); err != nil {
 		return "", err
 	}
@@ -103,22 +113,10 @@ func (d deleteSymbol) Execute(ctx context.Context, args json.RawMessage) (string
 }
 
 func (d deleteSymbol) Preview(args json.RawMessage) (diff.Change, error) {
-	var p struct {
-		Path   string `json:"path"`
-		Name   string `json:"name"`
-		Kind   string `json:"kind"`
-		Parent string `json:"parent"`
-	}
-	if err := decodeArgs(args, &p); err != nil {
+	p, err := d.parseArgs(args)
+	if err != nil {
 		return diff.Change{}, err
 	}
-	if p.Path == "" {
-		return diff.Change{}, fmt.Errorf("path is required")
-	}
-	if p.Name == "" {
-		return diff.Change{}, fmt.Errorf("name is required")
-	}
-	p.Path = resolveIn(d.workDir, p.Path)
 	if err := confinePreview(d.roots, d.guard, d.managed, p.Path); err != nil {
 		return diff.Change{}, err
 	}

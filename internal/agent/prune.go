@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"corvus/internal/compaction"
 	"corvus/internal/provider"
 	"corvus/internal/tool"
 )
@@ -71,7 +72,7 @@ func (a *Agent) maintainStaleToolResults(mode toolResultMaintenanceMode) (PruneS
 		}
 		// Honor the keep policy before maintenance: an error:/blocked: tool
 		// result that KeepErrors would preserve must reach compact() verbatim.
-		if a.keepPolicy&KeepErrors != 0 && isErrorMessage(m) {
+		if a.keepPolicy&KeepErrors != 0 && compaction.IsErrorMessage(m) {
 			continue
 		}
 		idx = append(idx, i)

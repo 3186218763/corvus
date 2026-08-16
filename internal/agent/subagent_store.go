@@ -134,7 +134,7 @@ func ListSubagentsByParent(sessionDir, parentSession string) ([]SubagentArtifact
 	if strings.TrimSpace(sessionDir) == "" || parentSession == "" {
 		return nil, nil
 	}
-	dir := filepath.Join(sessionDir, "subagents")
+	dir := store.SubagentDir(sessionDir)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {

@@ -886,11 +886,20 @@ func normalizeLegacyAgentStepLimits(c *Config) bool {
 	return found
 }
 
-// migrateRetiredConfigKeysForRoot walks the user-global and project configs
-// chosen for root once, applying migrate to each unique path. It is the shared
-// body of the retired-key ForRoot migrations; what names the deprecated
-// setting in error messages.
-func migrateRetiredConfigKeysForRoot(root, what string, migrate func(string) (bool, error)) (bool, error) {
+// retiredKeyMigration names one retired config setting and the line stripper
+// that removes it from a raw TOML file.
+type retiredKeyMigration struct {
+	label string
+	strip func(string) (string, bool)
+}
+
+var (
+	legacyAgentStepLimits  = retiredKeyMigration{"agent step limits", stripLegacyAgentStepLimitLines}
+	legacyRedactToolOutput = retiredKeyMigration{"redact_tool_output", stripLegacyRedactToolOutputLines}
+	legacyMemoryCompiler   = retiredKeyMigration{"memory_compiler", stripLegacyMemoryCompilerLines}
+)
+
+func migrateRetiredKeyMigrationForRoot(root string, migration retiredKeyMigration) (bool, error) {
 	root = resolveRoot(root)
 	paths := make([]string, 0, 2)
 	if userPath := userConfigLoadPath(); userPath != "" {
@@ -906,24 +915,20 @@ func migrateRetiredConfigKeysForRoot(root, what string, migrate func(string) (bo
 			continue
 		}
 		seen[clean] = struct{}{}
-		changed, err := migrate(path)
+		changed, err := migrateRetiredConfigKeysFile(path, migration.strip)
 		if err != nil {
-			return changedAny, fmt.Errorf("migrate deprecated %s in %s: %w", what, path, err)
+			return changedAny, fmt.Errorf("migrate deprecated %s in %s: %w", migration.label, path, err)
 		}
 		changedAny = changedAny || changed
 	}
 	return changedAny, nil
 }
 
-func MigrateLegacyAgentStepLimitsForRoot(root string) (bool, error) {
-	return migrateRetiredConfigKeysForRoot(root, "agent step limits", migrateLegacyAgentStepLimitsFile)
-}
-
-// migrateLegacyAgentStepLimitsFile removes retired [agent] step-limit keys
+// MigrateLegacyAgentStepLimitsForRoot removes retired [agent] step-limit keys
 // before runtime decoding. A process-wide lock makes concurrent desktop tab
 // builds observe a single migration; the atomic rewrite protects other readers.
-func migrateLegacyAgentStepLimitsFile(path string) (bool, error) {
-	return migrateRetiredConfigKeysFile(path, stripLegacyAgentStepLimitLines)
+func MigrateLegacyAgentStepLimitsForRoot(root string) (bool, error) {
+	return migrateRetiredKeyMigrationForRoot(root, legacyAgentStepLimits)
 }
 
 func stripLegacyAgentStepLimitLines(raw string) (string, bool) {
@@ -931,11 +936,7 @@ func stripLegacyAgentStepLimitLines(raw string) (string, bool) {
 }
 
 func MigrateLegacyRedactToolOutputForRoot(root string) (bool, error) {
-	return migrateRetiredConfigKeysForRoot(root, "redact_tool_output", migrateLegacyRedactToolOutputFile)
-}
-
-func migrateLegacyRedactToolOutputFile(path string) (bool, error) {
-	return migrateRetiredConfigKeysFile(path, stripLegacyRedactToolOutputLines)
+	return migrateRetiredKeyMigrationForRoot(root, legacyRedactToolOutput)
 }
 
 func stripLegacyRedactToolOutputLines(raw string) (string, bool) {
@@ -943,11 +944,7 @@ func stripLegacyRedactToolOutputLines(raw string) (string, bool) {
 }
 
 func MigrateLegacyMemoryCompilerForRoot(root string) (bool, error) {
-	return migrateRetiredConfigKeysForRoot(root, "memory_compiler", migrateLegacyMemoryCompilerFile)
-}
-
-func migrateLegacyMemoryCompilerFile(path string) (bool, error) {
-	return migrateRetiredConfigKeysFile(path, stripLegacyMemoryCompilerLines)
+	return migrateRetiredKeyMigrationForRoot(root, legacyMemoryCompiler)
 }
 
 func migrateRetiredConfigKeysFile(path string, strip func(string) (string, bool)) (bool, error) {
@@ -1676,12 +1673,6 @@ func providerEntryMatchesCanonicalOfficialAccess(p *ProviderEntry, canonical str
 	default:
 		return false
 	}
-}
-
-// CanonicalOfficialProviderName returns the canonical provider ID for built-in
-// official provider aliases.
-func CanonicalOfficialProviderName(name string) string {
-	return canonicalOfficialProviderName(name)
 }
 
 func uiProviderAccessMap(names []string) map[string]bool {

@@ -251,13 +251,6 @@ func removeSessionArtifacts(path string) error {
 	return nil
 }
 
-// RemoveSessionArtifacts removes a transcript and every durable artifact owned
-// by it. Remote runtimes use this when a newly-created fork fails before it can
-// be registered as a live session.
-func RemoveSessionArtifacts(path string) error {
-	return removeSessionArtifacts(path)
-}
-
 // ReconcileCleanupPending retries physical cleanup for logically removed
 // sessions that were left behind by a previous process.
 func ReconcileCleanupPending(dir string) error {

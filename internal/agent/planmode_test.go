@@ -299,7 +299,7 @@ func TestUnauthorizedMCPReaderBlockedInMainPlanAndExcludedFromReadOnlyAgents(t *
 
 	for name, filtered := range map[string]*tool.Registry{
 		"planner":  FilterReadOnlyRegistry(parent),
-		"subagent": ReadOnlySubagentToolRegistry(parent, nil),
+		"subagent": testReadOnlySubagentToolRegistry(parent, nil),
 	} {
 		if _, ok := filtered.Get("read_file"); !ok {
 			t.Fatalf("%s registry lost local reader", name)

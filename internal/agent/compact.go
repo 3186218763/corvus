@@ -145,15 +145,6 @@ func (a *Agent) maybeCompact(ctx context.Context, u *provider.Usage) {
 	}
 }
 
-// foldEconomics estimates whether compacting the given region saves enough
-// tokens to justify the summarization API call. It returns false when the
-// region is too small for the savings to outweigh the extra round-trip cost
-// and latency of calling the summarizer.
-
-func foldEconomics(region []provider.Message) bool {
-	return compaction.FoldEconomics(region)
-}
-
 // compact summarizes the older middle of the session and replaces it in place:
 // the session becomes system + summary + recent tail. The dropped originals are
 // archived first, so the full history stays traceable. trigger is "auto" (the
@@ -199,7 +190,7 @@ func (a *Agent) compact(ctx context.Context, trigger, instructions string, force
 
 	// Economic check on the foldable part (kept user turns don't count toward the
 	// savings): skip if too small to justify the call, unless force demands it.
-	if !force && !foldEconomics(fold) {
+	if !force && !compaction.FoldEconomics(fold) {
 		return nil
 	}
 
@@ -237,7 +228,7 @@ func (a *Agent) compact(ctx context.Context, trigger, instructions string, force
 		// context (and auto-compaction can't loop on a still-full window); the
 		// verbatim user turns kept above are untouched.
 		a.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "Context was compacted without a generated summary.", Detail: "compaction summary unavailable (" + err.Error() + "); folded mechanically"})
-		summary = mechanicalFoldDigest(len(fold), archived)
+		summary = compaction.MechanicalFoldDigest(len(fold), archived)
 	}
 
 	compacted := make([]provider.Message, 0, head+len(kept)+1+len(msgs)-start)
@@ -341,7 +332,7 @@ func (a *Agent) SummarizeUpTo(ctx context.Context, toIdx int) error {
 // prior compaction fold. Exported for session owners outside this package
 // (e.g. the guardian) whose turn rollback must not treat a digest as a
 // disposable user message.
-func IsCompactionSummary(m provider.Message) bool { return isCompactionSummary(m) }
+func IsCompactionSummary(m provider.Message) bool { return compaction.IsCompactionSummary(m) }
 
 func (a *Agent) activeTurnStart(msgs []provider.Message) int {
 	createdAt := a.activeTurnCreatedAt.Load()
@@ -371,12 +362,6 @@ func splitLocalOnlyMessages(msgs []provider.Message) (model, localOnly []provide
 	return model, localOnly
 }
 
-// isCompactionSummary reports whether m is a rolling summary from a prior fold.
-
-func isCompactionSummary(m provider.Message) bool {
-	return compaction.IsCompactionSummary(m)
-}
-
 // pinnedPrefixLen counts the leading messages a fold keeps verbatim: the system
 // prompt, the first user turn (its task + stated facts/constraints) when it is
 // small enough to be a brief, and any prior summaries — so a fold never
@@ -389,10 +374,10 @@ func (a *Agent) pinnedPrefixLen(msgs []provider.Message) int {
 	if i < len(msgs) && msgs[i].Role == provider.RoleSystem {
 		i++
 	}
-	if i < len(msgs) && msgs[i].Role == provider.RoleUser && !isCompactionSummary(msgs[i]) && a.pinnableUserTurn(msgs[i]) {
+	if i < len(msgs) && msgs[i].Role == provider.RoleUser && !compaction.IsCompactionSummary(msgs[i]) && a.pinnableUserTurn(msgs[i]) {
 		i++
 	}
-	for i < len(msgs) && isCompactionSummary(msgs[i]) {
+	for i < len(msgs) && compaction.IsCompactionSummary(msgs[i]) {
 		i++
 	}
 	return i
@@ -408,7 +393,7 @@ func (a *Agent) pinnableUserTurn(m provider.Message) bool {
 			budget = f
 		}
 	}
-	return int(float64(msgChars(m))*a.tokPerChar()) <= budget
+	return int(float64(compaction.MsgChars(m))*a.tokPerChar()) <= budget
 }
 
 // partitionFold splits a compaction region into what is kept verbatim — small user
@@ -419,13 +404,6 @@ func (a *Agent) pinnableUserTurn(m provider.Message) bool {
 func (a *Agent) partitionFold(region []provider.Message) (kept, fold []provider.Message) {
 	return compaction.PartitionFold(region, a.keepPolicy, a.pinnableUserTurn)
 }
-func keepIndexes(region []provider.Message, policy KeepPolicy) []bool {
-	return compaction.KeepIndexes(region, policy)
-}
-func isErrorMessage(m provider.Message) bool {
-	return compaction.IsErrorMessage(m)
-}
-
 // planCompaction locates the region to summarize. head is the count of leading
 // messages preserved verbatim (see pinnedPrefixLen); start is where the preserved
 // recent tail begins, so msgs[head:start] is compacted. The tail is bounded by a
@@ -481,24 +459,13 @@ func tailStart(msgs []provider.Message, head, budgetTokens int, tokPerChar float
 // any usage is known, and ignores absurd ratios.
 func (a *Agent) tokPerChar() float64 {
 	if u := a.lastUsage.Load(); u != nil && u.PromptTokens > 0 {
-		if c := charsOfMessages(a.session.Messages); c > 0 {
+		if c := compaction.CharsOfMessages(a.session.Messages); c > 0 {
 			if r := float64(u.PromptTokens) / float64(c); r > 0.05 && r < 2 {
 				return r
 			}
 		}
 	}
 	return fallbackTokPerChar
-}
-
-// msgChars counts the characters that ride to the provider for one message —
-// content plus tool-call names and arguments, but not reasoning (stripped on
-// send).
-
-func msgChars(m provider.Message) int {
-	return compaction.MsgChars(m)
-}
-func charsOfMessages(msgs []provider.Message) int {
-	return compaction.CharsOfMessages(msgs)
 }
 
 // summarize asks the executor's own provider (no tools) to distill the region
@@ -528,7 +495,7 @@ func (a *Agent) summarize(ctx context.Context, region []provider.Message, instru
 	ch, err := a.prov.Stream(ctx, provider.Request{
 		Messages: []provider.Message{
 			{Role: provider.RoleSystem, Content: sys},
-			{Role: provider.RoleUser, Content: renderTranscript(region)},
+			{Role: provider.RoleUser, Content: compaction.RenderTranscript(region)},
 		},
 		Temperature: provider.OptionalTemperature(a.temperature),
 	})
@@ -572,29 +539,6 @@ func (a *Agent) summarizeWithRetry(ctx context.Context, fold []provider.Message,
 		return summary, err
 	}
 	return a.summarize(ctx, fold, instructions)
-}
-
-// mechanicalFoldDigest is the deterministic stand-in used when the summarizer is
-// unreachable: the foldable region is already archived, so the digest just notes
-// the gap and points the model at the user for anything it needs from before it.
-
-func mechanicalFoldDigest(n int, archive string) string {
-	return compaction.MechanicalFoldDigest(n, archive)
-}
-
-// renderTranscript flattens messages into a readable transcript for summarization.
-
-func renderTranscript(msgs []provider.Message) string {
-	return compaction.RenderTranscript(msgs)
-}
-
-// summarizeToolArgs returns a short summary of tool-call arguments instead of
-// the full JSON. This prevents the summarizer from reproducing long argument
-// text (like sub-agent task prompts) in the compaction summary, which would
-// leak into the session as a user message (#4317).
-
-func summarizeToolArgs(args string) string {
-	return compaction.SummarizeToolArgs(args)
 }
 
 // archiveMessages writes the dropped originals to a timestamped .jsonl (one

@@ -14,7 +14,10 @@
 // ~/.corvus tree) and the desktop root unification land in later slices.
 package store
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 // IsSessionTranscriptName reports whether name is a primary session transcript
 // file. Append-only event logs and guardian sidecars also end in .jsonl, so
@@ -197,4 +200,18 @@ func SessionSpillDir(sessionPath string) string {
 		return ""
 	}
 	return sessionStem(sessionPath) + ".spill"
+}
+
+// SubagentDir is the sub-agent artifact directory inside a session directory.
+func SubagentDir(sessionDir string) string {
+	sessionDir = strings.TrimSpace(sessionDir)
+	if sessionDir == "" {
+		return ""
+	}
+	return filepath.Join(sessionDir, "subagents")
+}
+
+// SessionPath is the primary transcript path for a session id inside dir.
+func SessionPath(dir, id string) string {
+	return filepath.Join(dir, id+".jsonl")
 }

@@ -9,71 +9,32 @@ import (
 	"corvus/internal/provider"
 )
 
-// LocalProviderResolver preserves the historical config-backed provider path.
-type LocalProviderResolver struct {
-	cfg   *config.Config
-	proxy netclient.ProxySpec
-}
-
-func NewLocalProviderResolver(cfg *config.Config, proxy netclient.ProxySpec) *LocalProviderResolver {
-	return &LocalProviderResolver{cfg: cfg, proxy: proxy}
-}
-
-func (r *LocalProviderResolver) Catalog() []provider.Descriptor {
-	if r == nil || r.cfg == nil {
-		return nil
-	}
-	out := make([]provider.Descriptor, 0, len(r.cfg.Providers))
-	for i := range r.cfg.Providers {
-		e := &r.cfg.Providers[i]
-		ref := modelRefFromEntry(e)
-		d := provider.Descriptor{
-			Ref: ref, DisplayName: e.Name, Model: e.Model,
-			ContextWindow: e.ContextWindow, Vision: config.EffectiveVision(e),
-			Tools: true, DefaultEffort: config.EffectiveEffort(e),
-		}
-		if price := e.PriceForModel(e.Model); price != nil {
-			d.PricingCurrency = price.Currency
-			d.CacheHitPerMillion = price.CacheHit
-			d.InputPerMillion = price.Input
-			d.OutputPerMillion = price.Output
-		}
-		if len(e.SupportedEfforts) > 0 {
-			d.Efforts = append([]string(nil), e.SupportedEfforts...)
-			d.Reasoning = true
-		}
-		if config.ReasoningProtocolForEntry(e) == config.ReasoningProtocolDeepSeek {
-			d.ToolCallReasoning = true
-			d.Reasoning = true
-		}
-		out = append(out, d)
-	}
-	return out
-}
-
-func (r *LocalProviderResolver) Resolve(selection provider.Selection) (provider.Provider, error) {
-	if r == nil || r.cfg == nil {
+// resolveLocalProvider resolves the selection through the config-backed
+// provider table: the historical default path when no caller-owned resolver
+// is installed.
+func resolveLocalProvider(cfg *config.Config, proxy netclient.ProxySpec, selection provider.Selection) (provider.Provider, error) {
+	if cfg == nil {
 		return nil, fmt.Errorf("local provider resolver is not configured")
 	}
 	ref := strings.TrimSpace(selection.Ref)
 	if ref == "" {
 		return nil, fmt.Errorf("provider selection ref is required")
 	}
-	entry, ok := r.cfg.ResolveModel(ref)
+	entry, ok := cfg.ResolveModel(ref)
 	if !ok {
 		return nil, fmt.Errorf("%w %q", ErrUnknownModel, ref)
 	}
 	if selection.Effort != nil {
 		entry.Effort = *selection.Effort
 	}
-	return NewProviderWithProxy(entry, r.proxy, r.cfg.WebSearch.Enabled())
+	return NewProviderWithProxy(entry, proxy, cfg.WebSearch.Enabled())
 }
 
 func resolveProvider(opts Options, cfg *config.Config, proxy netclient.ProxySpec, selection provider.Selection) (provider.Provider, error) {
 	if opts.ProviderResolver != nil {
 		return opts.ProviderResolver.Resolve(selection)
 	}
-	return NewLocalProviderResolver(cfg, proxy).Resolve(selection)
+	return resolveLocalProvider(cfg, proxy, selection)
 }
 
 func modelRefFromEntry(e *config.ProviderEntry) string {

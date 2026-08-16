@@ -927,14 +927,13 @@ func TestRecoveryReviewerSettingsRoundTripThroughUserSave(t *testing.T) {
 	isolateUserConfigHome(t)
 	c := Default()
 	c.Agent.RecoveryModel = "deepseek-pro"
-	c.Agent.RecoveryTemperature = 0.25
 
 	path := UserConfigPath()
 	if err := c.SaveTo(path); err != nil {
 		t.Fatalf("SaveTo: %v", err)
 	}
 	got := LoadForEdit(path)
-	if got.Agent.RecoveryModel != "deepseek-pro" || got.Agent.RecoveryTemperature != 0 {
+	if got.Agent.RecoveryModel != "deepseek-pro" {
 		t.Fatalf("agent recovery settings not preserved: %+v", got.Agent)
 	}
 }
@@ -1315,7 +1314,7 @@ func TestRetiredConfigMigrationRequiresConfigFileLock(t *testing.T) {
 	configEditLockTimeout = 30 * time.Millisecond
 	t.Cleanup(func() { configEditLockTimeout = previousTimeout })
 
-	changed, err := migrateLegacyMemoryCompilerFile(path)
+	changed, err := migrateRetiredConfigKeysFile(path, stripLegacyMemoryCompilerLines)
 	if err == nil || changed {
 		t.Fatalf("migration while file lock held = (%v, %v), want unchanged lock error", changed, err)
 	}

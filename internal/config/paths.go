@@ -247,11 +247,6 @@ func userConfigDisplayPath() string {
 // "" when the user config dir can't be resolved.
 func UserConfigPath() string { return userConfigPath() }
 
-// LegacyUserConfigPath is the old OS app-support config.toml path when it
-// differs from UserConfigPath. It is read as a compatibility fallback when the
-// primary user config does not exist.
-func LegacyUserConfigPath() string { return legacyUserConfigPath() }
-
 // LegacyUserConfigPaths returns every known legacy user config path that differs
 // from the current v1.8.1 Corvus-home config path.
 func LegacyUserConfigPaths() []string {
@@ -335,17 +330,6 @@ func WorkspaceLeaseDir() string {
 		return ""
 	}
 	return filepath.Join(dir, "corvus", "workspace-leases")
-}
-
-// RepairMutationLockDir stores target-path repair locks in the OS-user cache.
-// It deliberately ignores Corvus home/cache overrides: isolated instances
-// can still repair the same project .corvus/config.toml, so their locks must converge.
-func RepairMutationLockDir() string {
-	dir := osUserCacheDir()
-	if strings.TrimSpace(dir) == "" {
-		return ""
-	}
-	return filepath.Join(dir, "corvus", "repair-mutation-locks")
 }
 
 // DeliveryWorktreeDir is durable storage for user-visible isolated Delivery

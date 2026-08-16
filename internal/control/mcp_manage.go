@@ -199,7 +199,7 @@ func controllerMCPToolTimeouts(values map[string]int) map[string]time.Duration {
 // live. A connection failure does not roll back the config import: the user can
 // fix local dependencies and reconnect in a later session.
 func (c *Controller) ImportMCPEntries(entries []config.PluginEntry) (total, added, updated, connected, failed, skipped int, err error) {
-	total, added, updated, err = config.ImportCCSwitchMCPEntries(entries)
+	total, added, updated, err = config.ImportMCPEntries(entries)
 	if err != nil {
 		return 0, 0, 0, 0, 0, 0, err
 	}

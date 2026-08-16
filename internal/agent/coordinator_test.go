@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"corvus/internal/compaction"
 	"corvus/internal/event"
 	"encoding/json"
 	"fmt"
@@ -353,11 +354,11 @@ func TestCoordinatorPassesHostUserDecisionToExecutor(t *testing.T) {
 // TestHandoffTaskRecoversOriginalInput guards the dual-model auto-title path
 // (#3860): previews must surface the user's words, not handoff boilerplate.
 func TestHandoffTaskRecoversOriginalInput(t *testing.T) {
-	if got := HandoffTask(formatHandoff("修复登录页的 bug", "1. read login.go")); got != "修复登录页的 bug" {
+	if got := HandoffTask(formatHandoffWithDecision("修复登录页的 bug", "1. read login.go", PlannerDecision{Route: PlannerRoutePlanAndExecute, Depth: PlannerDepthFull})); got != "修复登录页的 bug" {
 		t.Errorf("HandoffTask(handoff) = %q, want the original task", got)
 	}
 	multi := "fix the bug\n\nsteps:\n- a\n- b"
-	if got := HandoffTask(formatHandoff(multi, "plan")); got != multi {
+	if got := HandoffTask(formatHandoffWithDecision(multi, "plan", PlannerDecision{Route: PlannerRoutePlanAndExecute, Depth: PlannerDepthFull})); got != multi {
 		t.Errorf("HandoffTask(multi-line) = %q, want %q", got, multi)
 	}
 	for _, plain := range []string{"ordinary input", "", "# Corvus executor handoff with no sections"} {
@@ -1894,14 +1895,14 @@ func TestCoordinatorFailedTurnRollbackKeepsCompaction(t *testing.T) {
 	msgs := plannerSess.Snapshot()
 	var hasSummary bool
 	for _, m := range msgs {
-		if isCompactionSummary(m) {
+		if compaction.IsCompactionSummary(m) {
 			hasSummary = true
 		}
 	}
 	if !hasSummary {
 		t.Fatal("rollback reverted the compaction: no compaction summary left in the planner session")
 	}
-	if last := msgs[len(msgs)-1]; last.Role == provider.RoleUser && !isCompactionSummary(last) {
+	if last := msgs[len(msgs)-1]; last.Role == provider.RoleUser && !compaction.IsCompactionSummary(last) {
 		t.Fatalf("planner session ends in a plain user message after rollback: %q", last.Content)
 	}
 }

@@ -24,37 +24,26 @@ func NormalizeCommand(command string) string {
 }
 
 func normalizeStaticNodeEval(command string) (string, bool) {
-	node, flag, script, ok := repairableNodeEvalArgs(command)
+	node, flag, script, ok := nodeEvalArgs(command, false)
 	if !ok {
 		return "", false
 	}
 	return renderNodeEvalCommand(node, flag, script), true
 }
 
-func directNodeEvalArgs(command string) (string, string, string, bool) {
+func nodeEvalArgs(command string, allowStdinEval bool) (string, string, string, bool) {
 	fields, malformed := shellparse.StaticFields(command)
 	if malformed == "" && len(fields) == 3 && isNodeCommand(fields[0]) && isNodeEvalFlag(fields[1]) {
 		script, ok := repairQuotedNodeEvalScript(fields[2])
 		if ok {
 			return fields[0], fields[1], script, true
 		}
-		if isHookStdinNodeEval(fields[2]) {
+		if allowStdinEval && isHookStdinNodeEval(fields[2]) {
 			return fields[0], fields[1], fields[2], true
 		}
 	}
 	node, flag, script, ok := escapedNodeEvalArgs(command)
 	return node, flag, script, ok
-}
-
-func repairableNodeEvalArgs(command string) (string, string, string, bool) {
-	fields, malformed := shellparse.StaticFields(command)
-	if malformed == "" && len(fields) == 3 && isNodeCommand(fields[0]) && isNodeEvalFlag(fields[1]) {
-		script, ok := repairQuotedNodeEvalScript(fields[2])
-		if ok {
-			return fields[0], fields[1], script, true
-		}
-	}
-	return escapedNodeEvalArgs(command)
 }
 
 func normalizeEscapedPowerShellFile(command string) (string, bool) {

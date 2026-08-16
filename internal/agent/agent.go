@@ -30,6 +30,7 @@ import (
 	"corvus/internal/shellparse"
 	"corvus/internal/spill"
 	"corvus/internal/store"
+	"corvus/internal/textutil"
 	"corvus/internal/tool"
 	"corvus/internal/workspacelease"
 )
@@ -2234,7 +2235,7 @@ func deliveryTaskStartsWithMutation(input string) bool {
 	}
 	for _, needle := range deliveryMutationNeedles {
 		if containsTaskNeedle(input, needle) {
-			if containsNonASCII(needle) {
+			if textutil.ContainsNonASCII(needle) {
 				return strings.HasPrefix(input, needle)
 			}
 			tokens := strings.FieldsFunc(input, func(r rune) bool {
@@ -2300,7 +2301,7 @@ func deliveryMutationClauseNegated(clause string) bool {
 }
 
 func deliveryMutationNeedleIntent(clause, needle string) (affirmative, negated bool) {
-	if containsNonASCII(needle) {
+	if textutil.ContainsNonASCII(needle) {
 		for offset := 0; offset < len(clause); {
 			relative := strings.Index(clause[offset:], needle)
 			if relative < 0 {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"corvus/internal/compaction"
 	"corvus/internal/event"
 	"corvus/internal/nilutil"
 	"corvus/internal/provider"
@@ -494,28 +495,9 @@ func plannerPlanRequestsApproval(plan string) bool {
 			if idx < 0 {
 				continue
 			}
-			if approvalMentionNegated(line[:idx]) {
+			if textutil.ApprovalPrefixNegated(line[:idx], 30, false, []string{"无需", "无须", "不需要", "不需", "不必", "不用", "no need", "not require", "not required", "without"}) {
 				continue
 			}
-			return true
-		}
-	}
-	return false
-}
-
-// approvalMentionNegated reports whether the text immediately before a matched
-// approval phrase negates it, so plans that explicitly rule out an approval
-// round ("无需等待用户批准，直接执行") do not trigger a needless one. Only the
-// nearby prefix counts; a negation earlier in the line about something else
-// must not disarm the gate. Erring toward gating is fine — the failure mode is
-// one extra approval prompt, never a silent execution.
-func approvalMentionNegated(prefix string) bool {
-	const window = 30
-	if len(prefix) > window {
-		prefix = prefix[len(prefix)-window:]
-	}
-	for _, neg := range []string{"无需", "无须", "不需要", "不需", "不必", "不用", "no need", "not require", "not required", "without"} {
-		if strings.Contains(prefix, neg) {
 			return true
 		}
 	}
@@ -883,7 +865,7 @@ func (c *Coordinator) rollbackPlannerTurn(before []provider.Message, rewriteBefo
 			msgs = msgs[:len(msgs)-1]
 			continue
 		}
-		if last.Role != provider.RoleUser || isCompactionSummary(last) {
+		if last.Role != provider.RoleUser || compaction.IsCompactionSummary(last) {
 			break
 		}
 		msgs = msgs[:len(msgs)-1]
@@ -934,14 +916,6 @@ func plannerTurnInput(input string, decision PlannerDecision) string {
 depth: %s
 route: %s
 </planner-turn>`, strings.TrimSpace(input), decision.Depth, decision.Route)
-}
-
-func formatHandoff(task, plan string, toolContext ...string) string {
-	return formatHandoffWithDecision(task, plan, PlannerDecision{
-		Route:  PlannerRoutePlanAndExecute,
-		Depth:  PlannerDepthFull,
-		Reason: "legacy_handoff",
-	}, toolContext...)
 }
 
 func formatHandoffWithDecision(task, plan string, decision PlannerDecision, toolContext ...string) string {

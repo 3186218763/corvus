@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"corvus/internal/proc"
 	"corvus/internal/sandbox"
 	"corvus/internal/secrets"
 )
@@ -36,7 +37,7 @@ func TestPrepareMCPPrivateStateWindowsPreservesHostTemp(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, key := range []string{"TMP", "TEMP", "TMPDIR"} {
-		if value, ok := envValue(got, key); !ok || value != hostTemp {
+		if value, ok := proc.EnvValue(got, key); !ok || value != hostTemp {
 			t.Fatalf("%s = %q, %v; want inherited host temp %q", key, value, ok, hostTemp)
 		}
 	}
@@ -47,7 +48,7 @@ func TestPrepareMCPPrivateStateWindowsPreservesHostTemp(t *testing.T) {
 		"XDG_CACHE_HOME": filepath.Join(root, "cache"),
 		"XDG_STATE_HOME": filepath.Join(root, "state"),
 	} {
-		if value, ok := envValue(got, key); !ok || value != want {
+		if value, ok := proc.EnvValue(got, key); !ok || value != want {
 			t.Fatalf("%s = %q, %v; want %q", key, value, ok, want)
 		}
 	}
@@ -64,7 +65,7 @@ func TestPrepareMCPPrivateStateUnixIsolatesTemp(t *testing.T) {
 	}
 	want := filepath.Join(root, "tmp")
 	for _, key := range []string{"TMP", "TEMP", "TMPDIR"} {
-		if value, ok := envValue(got, key); !ok || value != want {
+		if value, ok := proc.EnvValue(got, key); !ok || value != want {
 			t.Fatalf("%s = %q, %v; want private temp %q", key, value, ok, want)
 		}
 	}

@@ -41,9 +41,6 @@ func (c *Controller) submit(input, display string) {
 }
 
 func (c *Controller) submitCommandOrTurn(trimmed, input, display string) {
-	runRefTurn := c.runRefTurn
-	runRefTurnWithRefs := c.runRefTurnWithRefs
-	runGoalLoop := c.runGoalLoopWithRawDisplay
 	// Background slash commands (/compact /new /clear) run under the
 	// controller's background context and are tracked by bgWG so Close can
 	// cancel them and wait for the goroutines to unwind: a /new arriving after
@@ -93,22 +90,22 @@ func (c *Controller) submitCommandOrTurn(trimmed, input, display string) {
 				c.notice("unknown command: " + trimmed)
 				return nil
 			}
-			return runGoalLoop(ctx, sent, sent, display)
+			return c.runGoalLoopWithRawDisplay(ctx, sent, sent, display)
 		})
 	case SlashCodeCommentLine(trimmed):
 		// Slash-prefixed code comments are prompt text, not slash commands.
-		runRefTurn(input, display)
+		c.runRefTurn(input, display)
 	case strings.HasPrefix(trimmed, "/"):
 		if ref, ok := FileRefLine(trimmed); ok {
-			runRefTurn(ref, display)
+			c.runRefTurn(ref, display)
 			return
 		}
 		if ref, ok := SlashPathLineRef(trimmed, c.workspaceRoot); ok {
-			runRefTurnWithRefs(input, ref, display)
+			c.runRefTurnWithRefs(input, ref, display)
 			return
 		}
 		if SlashPathLikeLine(trimmed) {
-			runRefTurn(input, display)
+			c.runRefTurn(input, display)
 			return
 		}
 		// Management verbs (/model /memory /skills /mcp) emit a Notice, so
@@ -164,7 +161,7 @@ func (c *Controller) submitCommandOrTurn(trimmed, input, display string) {
 		// turn. (Built-in slash verbs like /compact are handled above.)
 		if sent, ok := c.CustomCommand(trimmed); ok {
 			c.runGuarded(func(ctx context.Context) error {
-				return runGoalLoop(ctx, sent, sent, display)
+				return c.runGoalLoopWithRawDisplay(ctx, sent, sent, display)
 			})
 			return
 		}
@@ -179,13 +176,13 @@ func (c *Controller) submitCommandOrTurn(trimmed, input, display string) {
 			}
 			sent := c.skills.render(sk, task)
 			c.runGuarded(func(ctx context.Context) error {
-				return runGoalLoop(ctx, sent, sent, display)
+				return c.runGoalLoopWithRawDisplay(ctx, sent, sent, display)
 			})
 			return
 		}
 		c.notice("unknown command: " + trimmed)
 	default:
-		runRefTurn(input, display)
+		c.runRefTurn(input, display)
 	}
 }
 
