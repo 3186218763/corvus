@@ -311,28 +311,6 @@ func appendUniquePath(paths []string, path string) []string {
 // unavailable.
 func CorvusHomeDir() string { return corvusHomeDir() }
 
-// RemoteStateDir is local state for the remote-SSH module (the managed
-// known_hosts file, cached host metadata): <Corvus home>/remote. Routed
-// through the home resolver so CORVUS_HOME isolation holds.
-func RemoteStateDir() string {
-	home := corvusHomeDir()
-	if strings.TrimSpace(home) == "" {
-		return ""
-	}
-	return filepath.Join(home, "remote")
-}
-
-// RemoteKnownHostsPath is the Corvus-managed known_hosts file (OpenSSH
-// format) that records TOFU-accepted host keys. The user's own
-// ~/.ssh/known_hosts is only ever read, never written.
-func RemoteKnownHostsPath() string {
-	dir := RemoteStateDir()
-	if dir == "" {
-		return ""
-	}
-	return filepath.Join(dir, "known_hosts")
-}
-
 // MissingReasoningWarnStateDir is the shared directory for the rate-limited
 // missing tool-call thinking recovery gate (#7059): <Corvus home>/state. The
 // legacy name preserves callers and the existing state-file contract. Routed

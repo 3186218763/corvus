@@ -802,7 +802,7 @@ func TestPluginMutators(t *testing.T) {
 	}
 }
 
-func TestAutoStartPlugins(t *testing.T) {
+func TestEnabledPluginsCatalog(t *testing.T) {
 	c := Default()
 	off := false
 	on := true
@@ -811,9 +811,9 @@ func TestAutoStartPlugins(t *testing.T) {
 		{Name: "disabled", Command: "disabled-bin", AutoStart: &off},
 		{Name: "enabled", Command: "enabled-bin", AutoStart: &on},
 	}
-	got := c.AutoStartPlugins()
+	got := c.EnabledPlugins("", DefaultMCPActivationStore())
 	if len(got) != 2 || got[0].Name != "implicit" || got[1].Name != "enabled" {
-		t.Fatalf("AutoStartPlugins = %+v, want implicit + enabled", got)
+		t.Fatalf("EnabledPlugins = %+v, want implicit + enabled", got)
 	}
 }
 

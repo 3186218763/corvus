@@ -725,9 +725,10 @@ func (c *Config) BashModeForGOOS(goos string) string {
 type AgentConfig struct {
 	SystemPrompt     string `toml:"system_prompt"`
 	SystemPromptFile string `toml:"system_prompt_file"`
-	// Deprecated compatibility fields. Old TOML and desktop clients may still
-	// send them, but config loading normalizes both to zero and rendering omits
-	// them. One-off CLI and unattended bot limits remain separate controls.
+	// MaxSteps and PlannerMaxSteps are deprecated compatibility fields: old
+	// TOML and desktop clients may still send them, but config loading
+	// normalizes both to zero and rendering omits them. One-off CLI and
+	// unattended bot limits remain separate controls.
 	MaxSteps            int     `toml:"max_steps"`
 	PlannerMaxSteps     int     `toml:"planner_max_steps"`
 	Temperature         float64 `toml:"temperature"`
@@ -1294,16 +1295,6 @@ func resolvedMCPTier(tier string) string {
 	default:
 		return "background"
 	}
-}
-
-// AutoStartPlugins returns enabled MCP entries for the catalog. Durable
-// enable/disable overrides in mcp-activation.json take precedence over the
-// legacy auto_start field. auto_start=false without an override still maps to
-// disabled; true/nil map to enabled. "Auto start" no longer means "spawn the
-// process at session boot" — enabled servers register cached tools and start
-// on first real tool call.
-func (c *Config) AutoStartPlugins() []PluginEntry {
-	return c.EnabledPlugins("", DefaultMCPActivationStore())
 }
 
 // EnabledPlugins returns catalog-enabled MCP entries for workspace, consulting

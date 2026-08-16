@@ -44,26 +44,6 @@ func LoadForRootReadOnly(root string) (*Config, error) {
 	return loadForRoot(root, false)
 }
 
-// LoadUserConfigReadOnly loads only the trusted user-global config. It never
-// reads project .corvus/config.toml files and never performs on-disk migrations.
-// Host-owned features that may execute a configured binary should use this
-// instead of LoadForRoot so an untrusted checkout cannot choose the process.
-func LoadUserConfigReadOnly() (*Config, error) {
-	cfg := Default()
-	if path := userConfigLoadPath(); path != "" {
-		meta, err := mergeFileSnapshot(cfg, path)
-		if err != nil {
-			return nil, err
-		}
-		if meta.IsDefined("agent", "system_prompt_file") {
-			cfg.systemPromptFileSource = promptFileSourceUser
-		}
-	}
-	fillPartialProvidersFromDefaults(cfg)
-	normalizeConfigForEdit(cfg)
-	return cfg, nil
-}
-
 func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	root = resolveRoot(root)
 	expansionEnv := loadDotEnvForRoot(root)
@@ -228,14 +208,10 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	cfg.ignoredLegacyStepLimits = normalizeLegacyAgentStepLimits(cfg)
 	normalizeRetiredAutoPlan(cfg)
 	normalizeLegacyMCPTiers(cfg)
-	normalizeLegacyStepFunBaseURLs(cfg)
-	normalizeLegacyLongCatContextWindows(cfg)
-	normalizeLegacyQwenContextWindows(cfg)
-	normalizeLegacyKimiK3Catalog(cfg)
-	normalizeLegacyOpenCodeGoKimiK3Catalog(cfg)
-	normalizeLegacyMimoCustomProviders(cfg)
-	normalizeLegacyProviderModels(cfg)
-	normalizeUIOfficialProviderAccess(cfg)
+	normalizeLegacyProviderCatalogs(cfg) // runtime keeps repairs in memory only
+	// normalizeOfficialDeepSeekModels and backfillDeepSeekPro deliberately run
+	// only here, not in normalizeConfigForEdit: they materialize provider
+	// entries the edit path would otherwise persist into the user's file.
 	normalizeOfficialDeepSeekModels(cfg)
 	applyDeepSeekOfficialDefaultPricing(cfg)
 	backfillDeepSeekOfficialPrices(cfg)
@@ -249,29 +225,6 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	cfg.setExpansionEnv(expansionEnv)
 	resolveProviderCredentialsForRoot(root, cfg)
 	return cfg, nil
-}
-
-// LoadBuiltinDefaultsForRoot returns a read-only built-in-only configuration
-// without reading or migrating user/project TOML. Diagnostic and recovery tools
-// use it when configuration is malformed; it does not put the process into any
-// degraded product "mode". Provider credentials still resolve from project .env
-// first, then Corvus's persistent credentials store.
-func LoadBuiltinDefaultsForRoot(root string) *Config {
-	cfg := Default()
-	cfg.Plugins = nil
-	cfg.Skills = SkillsConfig{}
-	cfg.Statusline.Command = ""
-	cfg.LSP.Enabled = false
-	cfg.setExpansionEnv(nil)
-	cfg.CredentialsStore = credentialsStoreMode()
-	resolveProviderCredentialsForRoot(root, cfg)
-	return cfg
-}
-
-// LoadRecoveryDefaultsForRoot is retained as an alias of LoadBuiltinDefaultsForRoot
-// for older recovery call sites.
-func LoadRecoveryDefaultsForRoot(root string) *Config {
-	return LoadBuiltinDefaultsForRoot(root)
 }
 
 func (c *Config) setExpansionEnv(env map[string]string) {
@@ -324,25 +277,6 @@ func restoreUnresolvableProjectDefaultModel(c *Config, userDefault string) {
 	}
 	c.ignoredProjectDefaultModel = c.DefaultModel
 	c.DefaultModel = userDefault
-}
-
-// tomlFileDefinesKey reports whether the TOML file at path explicitly defines
-// the given top-level key. Missing or unparseable files report false.
-func tomlFileDefinesKey(path string, key ...string) bool {
-	var f Config
-	meta, err := decodeTOMLFile(path, &f)
-	if err != nil {
-		return false
-	}
-	return meta.IsDefined(key...)
-}
-
-// ConfigFileDefinesCompactRatio reports whether path explicitly overrides the
-// automatic compaction threshold. It is used by config surfaces that need to
-// explain whether the effective value came from defaults, user config, or the
-// current project.
-func ConfigFileDefinesCompactRatio(path string) bool {
-	return tomlFileDefinesKey(path, "agent", "compact_ratio")
 }
 
 // backfillDeepSeekPro restores deepseek-pro for configs the pre-fix setup wizard
@@ -748,34 +682,6 @@ func LoadForEditReadOnlyStrict(path string) (*Config, error) {
 	return loadForEditStrict(path, true, false)
 }
 
-// LoadForEditWithoutCredentialsReadOnlyStrict is the credential-free strict
-// edit loader. It never writes migrations and never substitutes defaults for a
-// malformed file.
-func LoadForEditWithoutCredentialsReadOnlyStrict(path string) (*Config, error) {
-	return loadForEditStrict(path, false, false)
-}
-
-// ValidateFile parses one TOML config in isolation without loading credentials,
-// applying migrations, or writing the file. A missing file is valid.
-func ValidateFile(path string) error {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return nil
-	}
-	_, exists, err := statConfigPath(path)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return nil
-	}
-	cfg := Default()
-	if _, err := decodeTOMLFile(path, cfg); err != nil {
-		return fmt.Errorf("config %s: %w", path, err)
-	}
-	return nil
-}
-
 // ValidateBytes parses one in-memory TOML config without loading credentials,
 // applying migrations, or writing any state.
 func ValidateBytes(data []byte) error {
@@ -830,18 +736,27 @@ func normalizeConfigForEdit(cfg *Config) bool {
 	normalizeLegacyAgentStepLimits(cfg)
 	changed := normalizeRetiredAutoPlan(cfg)
 	normalizeLegacyMCPTiers(cfg)
-	changed = normalizeLegacyStepFunBaseURLs(cfg) || changed
-	changed = normalizeLegacyLongCatContextWindows(cfg) || changed
-	changed = normalizeLegacyQwenContextWindows(cfg) || changed
-	changed = normalizeLegacyKimiK3Catalog(cfg) || changed
-	changed = normalizeLegacyOpenCodeGoKimiK3Catalog(cfg) || changed
-	changed = normalizeLegacyMimoCustomProviders(cfg) || changed
-	normalizeLegacyProviderModels(cfg)
-	normalizeUIOfficialProviderAccess(cfg)
+	changed = normalizeLegacyProviderCatalogs(cfg) || changed
 	applyDeepSeekOfficialDefaultPricing(cfg)
 	backfillDeepSeekOfficialPrices(cfg)
 	normalizeEffortConfig(cfg)
 	changed = normalizeWebSearch(cfg) || changed
+	return changed
+}
+
+// normalizeLegacyProviderCatalogs upgrades untouched official provider presets
+// to the current catalogs (context windows, model lists, MIMO/DeepSeek shape).
+// Runtime load and config edit both run it so files and runtime stay in sync;
+// changed reports whether a repair mutated the config so the edit path can
+// persist it.
+func normalizeLegacyProviderCatalogs(c *Config) (changed bool) {
+	changed = normalizeLegacyLongCatContextWindows(c)
+	changed = normalizeLegacyQwenContextWindows(c) || changed
+	changed = normalizeLegacyKimiK3Catalog(c) || changed
+	changed = normalizeLegacyOpenCodeGoKimiK3Catalog(c) || changed
+	changed = normalizeLegacyMimoCustomProviders(c) || changed
+	normalizeLegacyProviderModels(c)
+	normalizeUIOfficialProviderAccess(c)
 	return changed
 }
 
@@ -958,11 +873,11 @@ func normalizeLegacyAgentStepLimits(c *Config) bool {
 	return found
 }
 
-// MigrateLegacyAgentStepLimitsForRoot removes retired [agent] step-limit keys
-// from the user and project config selected for root. Boot calls it immediately
-// before LoadForRoot, so config-only/read-only commands never rewrite files and
-// the runtime can surface exactly one migration notice.
-func MigrateLegacyAgentStepLimitsForRoot(root string) (bool, error) {
+// migrateRetiredConfigKeysForRoot walks the user-global and project configs
+// chosen for root once, applying migrate to each unique path. It is the shared
+// body of the retired-key ForRoot migrations; what names the deprecated
+// setting in error messages.
+func migrateRetiredConfigKeysForRoot(root, what string, migrate func(string) (bool, error)) (bool, error) {
 	root = resolveRoot(root)
 	paths := make([]string, 0, 2)
 	if userPath := userConfigLoadPath(); userPath != "" {
@@ -978,13 +893,17 @@ func MigrateLegacyAgentStepLimitsForRoot(root string) (bool, error) {
 			continue
 		}
 		seen[clean] = struct{}{}
-		changed, err := migrateLegacyAgentStepLimitsFile(path)
+		changed, err := migrate(path)
 		if err != nil {
-			return changedAny, fmt.Errorf("migrate deprecated agent step limits in %s: %w", path, err)
+			return changedAny, fmt.Errorf("migrate deprecated %s in %s: %w", what, path, err)
 		}
 		changedAny = changedAny || changed
 	}
 	return changedAny, nil
+}
+
+func MigrateLegacyAgentStepLimitsForRoot(root string) (bool, error) {
+	return migrateRetiredConfigKeysForRoot(root, "agent step limits", migrateLegacyAgentStepLimitsFile)
 }
 
 // migrateLegacyAgentStepLimitsFile removes retired [agent] step-limit keys
@@ -998,34 +917,8 @@ func stripLegacyAgentStepLimitLines(raw string) (string, bool) {
 	return stripTOMLKeyLines(raw, "agent", "max_steps", "planner_max_steps")
 }
 
-// MigrateLegacyRedactToolOutputForRoot removes the retired
-// [secrets].redact_tool_output setting from the user and project configs chosen
-// for root. The setting no longer controls any runtime behavior; removing it
-// avoids leaving an explicit `true` value on disk that falsely suggests live
-// output or transcript redaction is still active.
 func MigrateLegacyRedactToolOutputForRoot(root string) (bool, error) {
-	root = resolveRoot(root)
-	paths := make([]string, 0, 2)
-	if userPath := userConfigLoadPath(); userPath != "" {
-		paths = append(paths, userPath)
-	}
-	paths = append(paths, ProjectConfigPathForRoot(root))
-
-	changedAny := false
-	seen := make(map[string]struct{}, len(paths))
-	for _, path := range paths {
-		clean := filepath.Clean(path)
-		if _, ok := seen[clean]; ok {
-			continue
-		}
-		seen[clean] = struct{}{}
-		changed, err := migrateLegacyRedactToolOutputFile(path)
-		if err != nil {
-			return changedAny, fmt.Errorf("migrate deprecated redact_tool_output in %s: %w", path, err)
-		}
-		changedAny = changedAny || changed
-	}
-	return changedAny, nil
+	return migrateRetiredConfigKeysForRoot(root, "redact_tool_output", migrateLegacyRedactToolOutputFile)
 }
 
 func migrateLegacyRedactToolOutputFile(path string) (bool, error) {
@@ -1036,34 +929,8 @@ func stripLegacyRedactToolOutputLines(raw string) (string, bool) {
 	return stripTOMLKeyLines(raw, "secrets", "redact_tool_output")
 }
 
-// MigrateLegacyMemoryCompilerForRoot removes the retired
-// [agent].memory_compiler setting from the user and project configs chosen for
-// root. The Memory v5 execution compiler was removed; stripping the key avoids
-// leaving values on disk that falsely suggest compiler behavior (especially a
-// stale verbosity = "compact") is still active.
 func MigrateLegacyMemoryCompilerForRoot(root string) (bool, error) {
-	root = resolveRoot(root)
-	paths := make([]string, 0, 2)
-	if userPath := userConfigLoadPath(); userPath != "" {
-		paths = append(paths, userPath)
-	}
-	paths = append(paths, ProjectConfigPathForRoot(root))
-
-	changedAny := false
-	seen := make(map[string]struct{}, len(paths))
-	for _, path := range paths {
-		clean := filepath.Clean(path)
-		if _, ok := seen[clean]; ok {
-			continue
-		}
-		seen[clean] = struct{}{}
-		changed, err := migrateLegacyMemoryCompilerFile(path)
-		if err != nil {
-			return changedAny, fmt.Errorf("migrate deprecated memory_compiler in %s: %w", path, err)
-		}
-		changedAny = changedAny || changed
-	}
-	return changedAny, nil
+	return migrateRetiredConfigKeysForRoot(root, "memory_compiler", migrateLegacyMemoryCompilerFile)
 }
 
 func migrateLegacyMemoryCompilerFile(path string) (bool, error) {
@@ -1114,105 +981,25 @@ func stripLegacyMCPTierLines(raw string) (string, bool) {
 	return stripTOMLKeyLines(raw, "plugins", "tier")
 }
 
-// tomlStringState tracks whether a line-oriented scan is currently inside a
-// TOML multiline string, so retired-key strippers never treat prose inside a
-// `"""..."""` or `”'...”'` value (e.g. a config example quoted in a
-// system_prompt) as a section header or key assignment.
-type tomlStringState int
-
-const (
-	tomlOutside tomlStringState = iota
-	tomlInMultilineBasic
-	tomlInMultilineLiteral
-)
-
-// advanceTOMLStringState scans one raw line and returns the multiline-string
-// state after it. Outside strings it honours single-line strings and `#`
-// comments so quote delimiters inside them cannot open a multiline state.
-// The scan is intentionally conservative: on malformed input it prefers
-// staying/returning outside, which makes callers keep lines rather than
-// delete them.
-func advanceTOMLStringState(state tomlStringState, line string) tomlStringState {
-	i := 0
-	for i < len(line) {
-		switch state {
-		case tomlInMultilineBasic:
-			if line[i] == '\\' {
-				i += 2
-				continue
-			}
-			if strings.HasPrefix(line[i:], `"""`) {
-				state = tomlOutside
-				i += 3
-				continue
-			}
-			i++
-		case tomlInMultilineLiteral:
-			if strings.HasPrefix(line[i:], "'''") {
-				state = tomlOutside
-				i += 3
-				continue
-			}
-			i++
-		default: // tomlOutside
-			switch {
-			case line[i] == '#':
-				return state // rest of the line is a comment
-			case strings.HasPrefix(line[i:], `"""`):
-				state = tomlInMultilineBasic
-				i += 3
-			case strings.HasPrefix(line[i:], "'''"):
-				state = tomlInMultilineLiteral
-				i += 3
-			case line[i] == '"': // single-line basic string
-				i++
-				for i < len(line) && line[i] != '"' {
-					if line[i] == '\\' {
-						i++
-					}
-					i++
-				}
-				i++ // closing quote (or line end on malformed input)
-			case line[i] == '\'': // single-line literal string
-				i++
-				for i < len(line) && line[i] != '\'' {
-					i++
-				}
-				i++
-			default:
-				i++
-			}
-		}
-	}
-	return state
-}
-
-// stripTOMLKeyLines removes top-level `key = ...` assignment lines under the
-// named section while leaving every line inside a TOML multiline string
-// untouched. All retired-config-key migrations share it so none of them can
-// corrupt a multiline value (such as a system_prompt quoting a config
-// example). A dropped line is first checked to not itself open a multiline
-// value; if it would, the line is kept — for these retired keys that never
-// happens (their values are single-line), and keeping a stale line is always
-// safer than truncating a string the user wrote.
 func stripTOMLKeyLines(raw, section string, keys ...string) (string, bool) {
 	lines := strings.Split(raw, "\n")
 	current := ""
-	state := tomlOutside
+	state := tomlLexState{}
 	changed := false
 	out := make([]string, 0, len(lines))
 	for _, line := range lines {
-		if state != tomlOutside {
+		after := state
+		scanTOMLLine(line, &after, nil)
+		if state.inMultilineString() {
 			// Inside a multiline string: never a section header or key line.
 			out = append(out, line)
-			state = advanceTOMLStringState(state, line)
+			state = after
 			continue
 		}
 		if header := tomlSectionHeader(line); header != "" {
 			current = header
 		}
-		next := advanceTOMLStringState(tomlOutside, line)
-		if current == section && next == tomlOutside {
+		if current == section && !after.inMultilineString() {
 			dropped := false
 			for _, key := range keys {
 				if isTOMLKeyAssignment(line, key) {
@@ -1226,7 +1013,7 @@ func stripTOMLKeyLines(raw, section string, keys ...string) (string, bool) {
 			}
 		}
 		out = append(out, line)
-		state = next
+		state = after
 	}
 	return strings.Join(out, "\n"), changed
 }
@@ -1275,20 +1062,6 @@ func normalizeLegacyProviderModels(c *Config) {
 			p.Model = model
 		}
 	}
-}
-
-const (
-	legacyStepFunOpenAIBaseURL      = "https://api.stepfun.ai/step_plan/v1"
-	officialStepFunOpenAIBaseURL    = "https://api.stepfun.com/step_plan/v1"
-	legacyStepFunAnthropicBaseURL   = "https://api.stepfun.ai/step_plan"
-	officialStepFunAnthropicBaseURL = "https://api.stepfun.com/step_plan"
-)
-
-func normalizeLegacyStepFunBaseURLs(c *Config) bool {
-	// Both stepfun.ai (global) and stepfun.com (China) are official endpoints.
-	// BaseURL is user-owned provider configuration, so neither runtime loading
-	// nor an unrelated settings save may infer a region and rewrite it.
-	return false
 }
 
 func normalizedBaseURLForMigration(raw string) string {

@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -12,9 +11,8 @@ import (
 )
 
 type dotEnvFile struct {
-	Path       string
-	Values     map[string]string
-	Duplicates []string
+	Path   string
+	Values map[string]string
 }
 
 // loadDotEnv loads Corvus's global .env for provider credentials. The
@@ -102,9 +100,8 @@ func readDotEnvFile(path string) (dotEnvFile, bool) {
 		return dotEnvFile{}, false
 	}
 	return dotEnvFile{
-		Path:       path,
-		Values:     values,
-		Duplicates: detectDotEnvDuplicateKeys(path),
+		Path:   path,
+		Values: values,
 	}, true
 }
 
@@ -120,48 +117,6 @@ func (f dotEnvFile) filtered(allow func(string) bool) map[string]string {
 	if len(out) == 0 {
 		return nil
 	}
-	return out
-}
-
-func (f dotEnvFile) warnings() []string {
-	if len(f.Duplicates) == 0 {
-		return nil
-	}
-	warnings := make([]string, 0, len(f.Duplicates))
-	for _, key := range f.Duplicates {
-		warnings = append(warnings, "duplicate .env key "+key+" in "+f.Path+"; last parsed value wins")
-	}
-	return warnings
-}
-
-func detectDotEnvDuplicateKeys(path string) []string {
-	raw, err := fileencoding.ReadFileUTF8(path)
-	if err != nil {
-		return nil
-	}
-	seen := map[string]bool{}
-	dups := map[string]bool{}
-	for _, line := range strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n") {
-		values, err := godotenv.Unmarshal(line)
-		if err != nil {
-			continue
-		}
-		for key := range values {
-			key = strings.TrimSpace(key)
-			if key == "" {
-				continue
-			}
-			if seen[key] {
-				dups[key] = true
-			}
-			seen[key] = true
-		}
-	}
-	out := make([]string, 0, len(dups))
-	for key := range dups {
-		out = append(out, key)
-	}
-	sort.Strings(out)
 	return out
 }
 

@@ -99,8 +99,8 @@ func TestClaudePackageMCPExpandsRootAndDoesNotAutoStart(t *testing.T) {
 	if got.ShouldAutoStart() {
 		t.Fatal("imported Claude MCP must require an explicit connection")
 	}
-	if len(cfg.AutoStartPlugins()) != 0 {
-		t.Fatalf("auto-start plugins = %#v", cfg.AutoStartPlugins())
+	if len(cfg.EnabledPlugins("", DefaultMCPActivationStore())) != 0 {
+		t.Fatalf("enabled plugins = %#v", cfg.EnabledPlugins("", DefaultMCPActivationStore()))
 	}
 }
 

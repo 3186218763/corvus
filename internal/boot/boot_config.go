@@ -12,23 +12,42 @@ import (
 )
 
 type configResult struct {
-	stderr                   io.Writer
-	root                     string
-	additionalDirs           []string
-	cfg                      *config.Config
-	modelName                string
-	tokenEconomy             bool
-	tokenDelivery            bool
-	runtimeProfile           capability.Profile
-	keepPolicy               agent.KeepPolicy
-	entry                    *config.ProviderEntry
-	modelRef                 string
-	stepLimitsMigrated       bool
-	stepLimitMigErr          error
-	redactToolOutputMigrated bool
-	redactToolOutputMigErr   error
-	memoryCompilerMigrated   bool
-	memoryCompilerMigErr     error
+	stderr           io.Writer
+	root             string
+	additionalDirs   []string
+	cfg              *config.Config
+	modelName        string
+	tokenEconomy     bool
+	tokenDelivery    bool
+	runtimeProfile   capability.Profile
+	keepPolicy       agent.KeepPolicy
+	entry            *config.ProviderEntry
+	modelRef         string
+	legacyMigrations legacyMigrations
+}
+
+// keyMigration is the outcome of one retired-config-key file migration.
+type keyMigration struct {
+	changed bool
+	err     error
+}
+
+// legacyMigrations bundles the retired-key migration outcomes so they thread
+// through configResult and buildSinkAndNotices as one value.
+type legacyMigrations struct {
+	stepLimits       keyMigration
+	redactToolOutput keyMigration
+	memoryCompiler   keyMigration
+}
+
+// runLegacyMigrations rewrites every retired config key before LoadForRoot
+// re-reads the files, so a deprecated setting disappears in the same boot that
+// notices its removal.
+func runLegacyMigrations(root string) (migs legacyMigrations) {
+	migs.stepLimits.changed, migs.stepLimits.err = config.MigrateLegacyAgentStepLimitsForRoot(root)
+	migs.redactToolOutput.changed, migs.redactToolOutput.err = config.MigrateLegacyRedactToolOutputForRoot(root)
+	migs.memoryCompiler.changed, migs.memoryCompiler.err = config.MigrateLegacyMemoryCompilerForRoot(root)
+	return migs
 }
 
 // buildConfigAndModel loads configuration and resolves the session model
@@ -44,9 +63,7 @@ func buildConfigAndModel(opts Options) (*configResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	stepLimitsMigrated, stepLimitMigErr := config.MigrateLegacyAgentStepLimitsForRoot(root)
-	redactToolOutputMigrated, redactToolOutputMigErr := config.MigrateLegacyRedactToolOutputForRoot(root)
-	memoryCompilerMigrated, memoryCompilerMigErr := config.MigrateLegacyMemoryCompilerForRoot(root)
+	migrations := runLegacyMigrations(root)
 	cfg, err := config.LoadForRoot(root)
 	if err != nil {
 		return nil, err
@@ -97,23 +114,18 @@ func buildConfigAndModel(opts Options) (*configResult, error) {
 	}
 
 	return &configResult{
-		stderr:                   stderr,
-		root:                     root,
-		additionalDirs:           additionalDirs,
-		cfg:                      cfg,
-		modelName:                modelName,
-		tokenEconomy:             tokenEconomy,
-		tokenDelivery:            tokenDelivery,
-		runtimeProfile:           runtimeProfile,
-		keepPolicy:               keepPolicy,
-		entry:                    entry,
-		modelRef:                 modelRef,
-		stepLimitsMigrated:       stepLimitsMigrated,
-		stepLimitMigErr:          stepLimitMigErr,
-		redactToolOutputMigrated: redactToolOutputMigrated,
-		redactToolOutputMigErr:   redactToolOutputMigErr,
-		memoryCompilerMigrated:   memoryCompilerMigrated,
-		memoryCompilerMigErr:     memoryCompilerMigErr,
+		stderr:           stderr,
+		root:             root,
+		additionalDirs:   additionalDirs,
+		cfg:              cfg,
+		modelName:        modelName,
+		tokenEconomy:     tokenEconomy,
+		tokenDelivery:    tokenDelivery,
+		runtimeProfile:   runtimeProfile,
+		keepPolicy:       keepPolicy,
+		entry:            entry,
+		modelRef:         modelRef,
+		legacyMigrations: migrations,
 	}, nil
 }
 

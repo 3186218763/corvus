@@ -222,34 +222,6 @@ func TestProjectDotEnvUsesDotenvSyntax(t *testing.T) {
 	}
 }
 
-func TestDotEnvFileWarningsReportDuplicateKeysWithoutValues(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".env")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte("TOKEN=secret-one\nOTHER=ok\nexport TOKEN='secret two'\nOTHER=last\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	file, ok := readDotEnvFile(path)
-	if !ok {
-		t.Fatal("readDotEnvFile failed")
-	}
-	if got := strings.Join(file.Duplicates, ","); got != "OTHER,TOKEN" {
-		t.Fatalf("Duplicates = %#v", file.Duplicates)
-	}
-	warnings := strings.Join(file.warnings(), "\n")
-	for _, want := range []string{"duplicate .env key OTHER", "duplicate .env key TOKEN", "last parsed value wins"} {
-		if !strings.Contains(warnings, want) {
-			t.Fatalf("warnings missing %q:\n%s", want, warnings)
-		}
-	}
-	for _, leak := range []string{"secret-one", "secret two"} {
-		if strings.Contains(warnings, leak) {
-			t.Fatalf("warnings leaked secret value %q:\n%s", leak, warnings)
-		}
-	}
-}
-
 func TestDotEnvFileFilteredPreservesProjectScopeRules(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".env")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

@@ -115,43 +115,12 @@ func TestNormalizeLegacyProviderModelsLeavesCustomProviderUntouched(t *testing.T
 	}
 }
 
-func TestNormalizeLegacyStepFunBaseURLsPreservesRegionalProviders(t *testing.T) {
-	c := &Config{Providers: []ProviderEntry{
-		{
-			Name:      "stepfun",
-			Kind:      "openai",
-			BaseURL:   legacyStepFunOpenAIBaseURL,
-			APIKeyEnv: "STEPFUN_API_KEY",
-			PresetID:  "stepfun",
-		},
-		{
-			Name:      "stepfun-anthropic",
-			Kind:      "anthropic",
-			BaseURL:   legacyStepFunAnthropicBaseURL + "/",
-			APIKeyEnv: "STEPFUN_API_KEY",
-			PresetID:  "stepfun-anthropic",
-		},
-		{
-			Name:      "custom-stepfun",
-			Kind:      "openai",
-			BaseURL:   legacyStepFunOpenAIBaseURL,
-			APIKeyEnv: "STEPFUN_API_KEY",
-		},
-	}}
-
-	if normalizeLegacyStepFunBaseURLs(c) {
-		t.Fatal("StepFun regional URL preservation unexpectedly reported a change")
-	}
-	if got := c.Providers[0].BaseURL; got != legacyStepFunOpenAIBaseURL {
-		t.Fatalf("global stepfun base_url = %q, want %q", got, legacyStepFunOpenAIBaseURL)
-	}
-	if got := c.Providers[1].BaseURL; got != legacyStepFunAnthropicBaseURL+"/" {
-		t.Fatalf("global stepfun-anthropic base_url = %q, want preserved trailing slash", got)
-	}
-	if got := c.Providers[2].BaseURL; got != legacyStepFunOpenAIBaseURL {
-		t.Fatalf("custom provider base_url = %q, want untouched legacy URL", got)
-	}
-}
+// legacyStepFun* are the global (stepfun.ai) endpoints users may still carry
+// in their config; ADR-0008 pins that they survive load/edit/save untouched.
+const (
+	legacyStepFunOpenAIBaseURL    = "https://api.stepfun.ai/step_plan/v1"
+	legacyStepFunAnthropicBaseURL = "https://api.stepfun.ai/step_plan"
+)
 
 func TestLoadAndSavePreserveStepFunRegionalBaseURLs(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")

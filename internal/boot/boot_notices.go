@@ -12,7 +12,7 @@ import (
 // buildSinkAndNotices wraps the frontend sink (usage recorder) and emits the
 // one-time boot notices: config migration outcomes, ignored legacy settings,
 // and the missing-API-key warning.
-func buildSinkAndNotices(opts Options, cfg *config.Config, entry *config.ProviderEntry, modelName string, stepLimitsMigrated bool, stepLimitMigErr error, redactToolOutputMigrated bool, redactToolOutputMigErr error, memoryCompilerMigrated bool, memoryCompilerMigErr error) (event.Sink, error) {
+func buildSinkAndNotices(opts Options, cfg *config.Config, entry *config.ProviderEntry, modelName string, migs legacyMigrations) (event.Sink, error) {
 	// Serialize the frontend's sink once: background jobs (below) emit from their
 	// own goroutines, which can overlap a running turn's emission, so every emitter
 	// shares this synchronized sink. The job manager is session-scoped — its jobs
@@ -27,15 +27,15 @@ func buildSinkAndNotices(opts Options, cfg *config.Config, entry *config.Provide
 		sink = stats.NewRecorder(sink, config.StatsDir(), source)
 	}
 
-	if stepLimitsMigrated || cfg.IgnoredLegacyAgentStepLimits() {
+	if migs.stepLimits.changed || cfg.IgnoredLegacyAgentStepLimits() {
 		level := event.LevelInfo
 		text := "Deprecated agent step limits were removed."
 		detail := "[agent].max_steps and planner_max_steps are no longer used; Corvus now manages interactive progress automatically. " +
 			"Use the CLI --max-steps flag for a one-off run or [bot].max_steps for unattended bot sessions."
-		if stepLimitMigErr != nil {
+		if migs.stepLimits.err != nil {
 			level = event.LevelWarn
 			text = "Deprecated agent step limits were ignored."
-			detail += " The old keys were ignored but could not be removed: " + stepLimitMigErr.Error()
+			detail += " The old keys were ignored but could not be removed: " + migs.stepLimits.err.Error()
 		}
 		sink.Emit(event.Event{
 			Kind:   event.Notice,
@@ -43,28 +43,28 @@ func buildSinkAndNotices(opts Options, cfg *config.Config, entry *config.Provide
 			Text:   text,
 			Detail: detail,
 		})
-	} else if stepLimitMigErr != nil {
-		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Deprecated agent step-limit migration did not complete.", Detail: stepLimitMigErr.Error()})
+	} else if migs.stepLimits.err != nil {
+		sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Deprecated agent step-limit migration did not complete.", Detail: migs.stepLimits.err.Error()})
 	}
-	if redactToolOutputMigrated || redactToolOutputMigErr != nil {
+	if migs.redactToolOutput.changed || migs.redactToolOutput.err != nil {
 		level := event.LevelInfo
 		text := "Deprecated redact_tool_output setting was removed."
 		detail := "[secrets].redact_tool_output no longer has any effect: ordinary model/tool content and local session/job artifacts now preserve their original text. Explicit diagnostics and corvus doctor redact-sessions still redact credential values."
-		if redactToolOutputMigErr != nil {
+		if migs.redactToolOutput.err != nil {
 			level = event.LevelWarn
 			text = "Deprecated redact_tool_output setting was ignored."
-			detail += " The old key could not be removed: " + redactToolOutputMigErr.Error()
+			detail += " The old key could not be removed: " + migs.redactToolOutput.err.Error()
 		}
 		sink.Emit(event.Event{Kind: event.Notice, Level: level, Text: text, Detail: detail})
 	}
-	if memoryCompilerMigrated || memoryCompilerMigErr != nil {
+	if migs.memoryCompiler.changed || migs.memoryCompiler.err != nil {
 		level := event.LevelInfo
 		text := "Deprecated memory_compiler setting was removed."
 		detail := "The Memory v5 execution compiler has been removed from Corvus: [agent].memory_compiler no longer has any effect, user turns are never replaced by compiled execution contracts, and no compiler state is written. Old transcripts containing compiled turns still display normally."
-		if memoryCompilerMigErr != nil {
+		if migs.memoryCompiler.err != nil {
 			level = event.LevelWarn
 			text = "Deprecated memory_compiler setting was ignored."
-			detail += " The old key could not be removed: " + memoryCompilerMigErr.Error()
+			detail += " The old key could not be removed: " + migs.memoryCompiler.err.Error()
 		}
 		sink.Emit(event.Event{Kind: event.Notice, Level: level, Text: text, Detail: detail})
 	}
