@@ -26,7 +26,7 @@ func TestWithResponseLanguageOnlySkipsLeadingInjectedBlock(t *testing.T) {
 func TestWithReasoningLanguageOnlySkipsLeadingInjectedBlock(t *testing.T) {
 	userMention := "explain why <reasoning-language> appears in this file"
 	got := WithReasoningLanguage(userMention, "zh")
-	if !strings.HasPrefix(got, "<reasoning-language>") || !strings.Contains(got, "简体中文") || !strings.HasSuffix(got, userMention) {
+	if !strings.HasPrefix(got, "<reasoning-language>") || !strings.Contains(got, "Simplified Chinese") || !strings.HasSuffix(got, userMention) {
 		t.Fatalf("WithReasoningLanguage should prefix user-authored tag mentions, got %q", got)
 	}
 
@@ -46,38 +46,24 @@ func TestReasoningLanguageBlockZhStaysImperative(t *testing.T) {
 	// Chinese prompts that embed English logs/code; keep it from regressing
 	// back into a suggestion.
 	block := ReasoningLanguageBlock("zh")
-	for _, want := range []string{"必须使用简体中文", "整轮", "不覆盖用户对最终回答语言的明确要求"} {
+	for _, want := range []string{"Write all visible reasoning/thinking text in Simplified Chinese", "for the entire turn", "does not override an explicit user request for the final answer language"} {
 		if !strings.Contains(block, want) {
 			t.Fatalf("zh reasoning block lost required anchor %q:\n%s", want, block)
 		}
 	}
 }
 
-func TestWithReasoningLanguageAutoInfersFromSource(t *testing.T) {
-	chinese := WithReasoningLanguage("解释 AuthHandler 的 panic", "auto")
-	if !strings.HasPrefix(chinese, "<reasoning-language>") || !strings.Contains(chinese, "简体中文") {
-		t.Fatalf("auto reasoning language should infer Chinese, got %q", chinese)
-	}
-
-	english := WithReasoningLanguage("explain this module", "auto")
-	if english != "explain this module" {
-		t.Fatalf("auto reasoning language should keep English prompts unwrapped, got %q", english)
-	}
-
-	short := WithReasoningLanguage("hi", "auto")
-	if short != "hi" {
-		t.Fatalf("short ambiguous auto prompt should not be wrapped, got %q", short)
-	}
-}
-
-func TestWithReasoningLanguageAutoUsesRawSourceOverReferencedContext(t *testing.T) {
-	expanded := "Referenced context:\n\n<file path=\"auth.go\">\npackage main\nfunc AuthHandler() error { return errors.New(\"not authorized\") }\n</file>\n\n解释 @auth.go 的报错"
-
-	got := WithReasoningLanguageForSource(expanded, "auto", "解释 @auth.go 的报错")
-	if !strings.HasPrefix(got, "<reasoning-language>") || !strings.Contains(got, "简体中文") {
-		t.Fatalf("auto reasoning language should use raw source over referenced context, got %q", got)
-	}
-	if strings.Contains(got, "use English") {
-		t.Fatalf("referenced English code should not make auto prefer English:\n%s", got)
+func TestWithReasoningLanguageAutoInjectsNothing(t *testing.T) {
+	// English reasoning is the stable LanguagePolicy default, so auto never
+	// wraps a turn — regardless of the prompt's language or referenced content.
+	for _, in := range []string{
+		"explain this module",
+		"hi",
+		"解释 AuthHandler 的 panic",
+		"Referenced context:\n\n<file path=\"auth.go\">\npackage main\n</file>\n\n解释 @auth.go 的报错",
+	} {
+		if got := WithReasoningLanguage(in, "auto"); got != in {
+			t.Fatalf("auto reasoning language should not wrap %q, got %q", in, got)
+		}
 	}
 }

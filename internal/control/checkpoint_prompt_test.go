@@ -14,7 +14,7 @@ import (
 // plan-mode marker and transient blocks. Every consumer treats Prompt as a
 // label — and the rewind picker restores it into the composer — so Checkpoints
 // must hand back what the user typed. Leaving it composed put
-// "必须使用简体中文…" in the rewind list (#6903).
+// "Write all visible reasoning/thinking text in Simplified Chinese…" in the rewind list (#6903).
 func TestCheckpointsReturnUserPromptWithoutComposedPrefixes(t *testing.T) {
 	dir := t.TempDir()
 	sess := agent.NewSession("sys")

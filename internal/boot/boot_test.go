@@ -3463,9 +3463,9 @@ api_key_env = "CORVUS_TEST_KEY_UNSET"
 
 	sys := systemMessage(ctrl.History())
 	for _, want := range []string{
-		"User-owned choices",
+		"are user-owned",
 		"call the ask tool",
-		"Do not ask in prose",
+		"never ask in prose",
 	} {
 		if !strings.Contains(sys, want) {
 			t.Fatalf("user decision policy missing %q from custom system prompt:\n%s", want, sys)

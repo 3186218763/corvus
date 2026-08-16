@@ -167,7 +167,7 @@ func (c *Controller) composeWithGoal(
 		text = PlanModeMarker + "\n\n" + text
 	}
 	text = agent.WithResponseLanguage(text, responseLanguage)
-	text = agent.WithReasoningLanguageForSource(text, reasoningLanguage, source)
+	text = agent.WithReasoningLanguage(text, reasoningLanguage)
 
 	// Memory added mid-session rides the turn (never the cached system prefix),
 	// so it takes effect now without invalidating the prompt cache. It folds into
@@ -339,7 +339,7 @@ func (c *Controller) ComposeSynthetic(text string) string {
 	lang := c.reasoningLanguage
 	c.mu.Unlock()
 	text = agent.WithResponseLanguage(text, responseLang)
-	return agent.WithReasoningLanguageForSource(text, lang, text)
+	return agent.WithReasoningLanguage(text, lang)
 }
 
 func activeGoalBlock(goal string, researchMode GoalResearchMode) string {

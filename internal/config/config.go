@@ -317,8 +317,9 @@ func NormalizeLanguage(lang string) string {
 }
 
 // ReasoningLanguage normalizes agent.reasoning_language. Empty means auto:
-// visible reasoning follows the conversation language already described by the
-// stable LanguagePolicy. Legacy "default" is treated as auto.
+// visible reasoning stays English per the stable LanguagePolicy. zh pins
+// Chinese thinking text as transient user-turn context. Legacy "default" is
+// treated as auto.
 func (c *Config) ReasoningLanguage() string {
 	if c == nil {
 		return "auto"
@@ -1321,21 +1322,18 @@ func (c *Config) EnabledPlugins(workspace string, activation *MCPActivationStore
 }
 
 // DefaultSystemPrompt is used when config provides none.
-const DefaultSystemPrompt = `You are Corvus, a coding agent.
-Use the available tools when they help you complete the user's request.
-Keep changes focused and responses concise.`
+const DefaultSystemPrompt = `You are Corvus, a coding agent. Use the available tools when they help complete the user's request. Keep changes focused and replies concise.`
 
 // UserDecisionPolicy is appended to every system prompt, including user-custom
 // prompts, so custom personas cannot accidentally remove the `ask` UI contract.
-const UserDecisionPolicy = `User-owned choices: when a consequential decision has no safe, obvious default, call the ask tool so the user can choose. Otherwise proceed with a sensible reversible default. Do not ask in prose when ask is available. In non-interactive runs, state the assumption and take the safest reversible path.`
+const UserDecisionPolicy = `Consequential decisions with no safe, obvious default are user-owned: call the ask tool, never ask in prose. Otherwise proceed with a sensible reversible default; in non-interactive runs, state the assumption and take the safest reversible path.`
 
 // LanguagePolicy is the auto fallback appended to the system prompt when no
-// concrete UI language is resolved. It is static English text, so it stays part
-// of the cache-stable prefix and avoids per-turn language injection.
-const LanguagePolicy = `Reply in the same language the user is using in their most recent message: ` +
-	`if they write in Chinese answer in Chinese, in English answer in English, and switch ` +
-	`whenever they switch. Let this also guide the language you think in. Always keep code, ` +
-	`identifiers, file paths, shell commands, and technical terms in their original form — never translate them.`
+// concrete UI language is resolved. It splits thinking from replies: reasoning
+// is always English; the reply language follows the user's most recent message.
+// It is static English text, so it stays part of the cache-stable prefix and
+// avoids per-turn language injection.
+const LanguagePolicy = `Think in English: all reasoning and thinking text is English, whatever language the conversation is in. Reply in the language of the user's most recent message, switching whenever they switch. Keep code, identifiers, file paths, shell commands, and technical terms untranslated.`
 
 // Default returns the built-in default configuration.
 func Default() *Config {

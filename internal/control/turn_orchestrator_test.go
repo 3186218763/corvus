@@ -549,7 +549,7 @@ func TestTurnOrchestratorRefTurnPreservesExpandedPasteForRouting(t *testing.T) {
 	}
 }
 
-func TestTurnOrchestratorAutoReasoningLanguageUsesRawPromptForRefTurns(t *testing.T) {
+func TestTurnOrchestratorAutoReasoningLanguageLeavesRefTurnsUnwrapped(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "auth.go"), []byte("package main\nfunc AuthHandler() error { return errors.New(\"not authorized\") }\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -572,14 +572,14 @@ func TestTurnOrchestratorAutoReasoningLanguageUsesRawPromptForRefTurns(t *testin
 		t.Fatalf("runner inputs = %d, want 1", len(runner.inputs))
 	}
 	got := runner.inputs[0]
-	if !strings.HasPrefix(got, "<reasoning-language>") || !strings.Contains(got, "简体中文") {
-		t.Fatalf("auto reasoning language should anchor Chinese before referenced context, got %q", got)
+	// Auto injects no reasoning block: English reasoning is the stable
+	// LanguagePolicy default, so a Chinese prompt with referenced context stays
+	// unwrapped and the referenced context still expands.
+	if strings.Contains(got, "<reasoning-language>") {
+		t.Fatalf("auto reasoning language should not inject a block, got %q", got)
 	}
 	if !strings.Contains(got, "Referenced context:") || !strings.Contains(got, "AuthHandler") {
 		t.Fatalf("ref context missing from model input: %q", got)
-	}
-	if strings.Contains(got, "use English") {
-		t.Fatalf("English referenced file content should not win over raw Chinese prompt:\n%s", got)
 	}
 }
 

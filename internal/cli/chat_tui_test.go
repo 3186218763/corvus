@@ -2549,7 +2549,7 @@ func TestReasoningLanguageCommandPersistsAndUpdatesController(t *testing.T) {
 		t.Fatalf("saved config missing reasoning_language=zh:\n%s", body)
 	}
 	composed := ctrl.Compose("hello")
-	if !strings.HasPrefix(composed, "<reasoning-language>") || !strings.Contains(composed, "简体中文") {
+	if !strings.HasPrefix(composed, "<reasoning-language>") || !strings.Contains(composed, "Simplified Chinese") {
 		t.Fatalf("/reasoning-language zh should affect current controller, got %q", composed)
 	}
 }
