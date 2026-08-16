@@ -74,8 +74,8 @@ func (r readFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 		Offset int    `json:"offset,omitempty"`
 		Limit  int    `json:"limit,omitempty"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return "", err
 	}
 	if p.Path == "" {
 		return "", fmt.Errorf("path is required")

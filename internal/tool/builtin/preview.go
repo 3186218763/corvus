@@ -27,8 +27,8 @@ func (w writeFile) Preview(args json.RawMessage) (diff.Change, error) {
 		Path    string `json:"path"`
 		Content string `json:"content"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return diff.Change{}, fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return diff.Change{}, err
 	}
 	if p.Path == "" {
 		return diff.Change{}, fmt.Errorf("path is required")
@@ -54,8 +54,8 @@ func (e editFile) Preview(args json.RawMessage) (diff.Change, error) {
 		OldString string `json:"old_string"`
 		NewString string `json:"new_string"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return diff.Change{}, fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return diff.Change{}, err
 	}
 	if p.Path == "" {
 		return diff.Change{}, fmt.Errorf("path is required")
@@ -92,8 +92,8 @@ func (m multiEdit) Preview(args json.RawMessage) (diff.Change, error) {
 		Path  string     `json:"path"`
 		Edits []editStep `json:"edits"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return diff.Change{}, fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return diff.Change{}, err
 	}
 	if p.Path == "" {
 		return diff.Change{}, fmt.Errorf("path is required")

@@ -73,8 +73,8 @@ type codeSymbol struct {
 
 func (c codeIndex) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	p := codeIndexArgs{Path: ".", Limit: codeIndexDefaultLimit}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return "", err
 	}
 	p.Action = strings.ToLower(strings.TrimSpace(p.Action))
 	if p.Action != "outline" && p.Action != "search" {

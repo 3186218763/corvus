@@ -1320,7 +1320,7 @@ func loadSessionUnlocked(path string) (*Session, error) {
 	// tool messages, stays in the provider send path so Save/LoadSession keeps
 	// its round-trip contract. The fast path returns the input slice unchanged
 	// for a well-formed history, so we detect an actual repair by comparing
-	// slice headers: when NormalizeSession allocated a new backing array, the
+	// slice headers: when normalizeSession allocated a new backing array, the
 	// session is marked dirty so the next Save persists the fix.
 	normalized := normalizeSession(s.Messages)
 	normalized = migrateLegacyProviderContent(normalized)

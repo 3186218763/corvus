@@ -50,8 +50,8 @@ func (g globTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 	var p struct {
 		Pattern string `json:"pattern"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return "", err
 	}
 	if p.Pattern == "" {
 		return "", fmt.Errorf("pattern is required")

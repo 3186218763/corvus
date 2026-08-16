@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,8 +22,6 @@ import (
 	"corvus/internal/netclient"
 	"corvus/internal/provider"
 )
-
-const defaultStreamIdleTimeout = 120 * time.Second
 
 func init() {
 	provider.Register("responses", newFromConfig)
@@ -92,15 +89,12 @@ func (c Config) mode() string {
 
 // DetectVendor identifies endpoint behavior that affects the Responses wire.
 func DetectVendor(baseURL string) string {
-	u, err := url.Parse(strings.TrimSpace(baseURL))
-	if err != nil {
-		return ""
-	}
-	host := strings.ToLower(u.Hostname())
+	baseURL = strings.TrimSpace(baseURL)
 	switch {
-	case host == "dashscope.aliyuncs.com", strings.HasSuffix(host, ".dashscope.aliyuncs.com"), strings.HasSuffix(host, ".maas.aliyuncs.com"):
+	case provider.MatchesVendorHost(baseURL, "dashscope.aliyuncs.com", "dashscope.aliyuncs.com"),
+		provider.MatchesVendorHost(baseURL, "maas.aliyuncs.com", "dashscope.aliyuncs.com"):
 		return "dashscope"
-	case host == "api.deepseek.com", strings.HasSuffix(host, ".deepseek.com"):
+	case provider.MatchesVendorHost(baseURL, "deepseek.com", "api.deepseek.com"):
 		return "deepseek"
 	default:
 		return ""
@@ -138,12 +132,7 @@ func New(cfg Config) (provider.Provider, error) {
 	if cfg.SessionCache != nil {
 		sessionCache = *cfg.SessionCache
 	}
-	httpClient, err := netclient.NewHTTPClient(cfg.Proxy, netclient.TransportOptions{
-		DialTimeout:           30 * time.Second,
-		KeepAlive:             30 * time.Second,
-		TLSHandshakeTimeout:   15 * time.Second,
-		ResponseHeaderTimeout: 120 * time.Second, // models can think for a while before the first token
-	})
+	httpClient, err := provider.NewStreamingHTTPClient(cfg.Proxy)
 	if err != nil {
 		return nil, fmt.Errorf("responses: network: %w", err)
 	}
@@ -151,7 +140,7 @@ func New(cfg Config) (provider.Provider, error) {
 		name: cfg.Name, apiKey: cfg.APIKey, keyEnv: cfg.KeyEnv, keySource: cfg.KeySource,
 		baseURL: strings.TrimRight(cfg.BaseURL, "/"), model: cfg.Model, effort: cfg.Effort,
 		vendor: vendor, mode: cfg.mode(), sessionCache: sessionCache, maxOutputTokens: maxOutputTokens,
-		http: httpClient, idleTimeout: defaultStreamIdleTimeout,
+		http: httpClient, idleTimeout: provider.DefaultStreamIdleTimeout,
 	}, nil
 }
 
@@ -384,7 +373,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 	idle := c.idleTimeout
 	if idle <= 0 {
-		idle = defaultStreamIdleTimeout
+		idle = provider.DefaultStreamIdleTimeout
 	}
 	watchDone := make(chan struct{})
 	activity := make(chan struct{}, 1)
@@ -457,26 +446,26 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		case "response.output_text.delta":
 			textDeltas[key] = true
 			text.WriteString(event.Delta)
-			if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkText, Text: event.Delta}) {
+			if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkText, Text: event.Delta}) {
 				return
 			}
 		case "response.output_text.done":
 			if event.Text != "" && !textDeltas[key] {
 				text.WriteString(event.Text)
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkText, Text: event.Text}) {
+				if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkText, Text: event.Text}) {
 					return
 				}
 			}
 		case "response.reasoning_text.delta", "response.reasoning_summary_text.delta":
 			reasoningDeltas[key] = true
 			reasoning.WriteString(event.Delta)
-			if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, Text: event.Delta}) {
+			if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, Text: event.Delta}) {
 				return
 			}
 		case "response.reasoning_text.done", "response.reasoning_summary_text.done":
 			if event.Text != "" && !reasoningDeltas[key] {
 				reasoning.WriteString(event.Text)
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, Text: event.Text}) {
+				if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, Text: event.Text}) {
 					return
 				}
 			}
@@ -485,7 +474,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 				call := callForItem(event.Item.ID)
 				call.id = event.Item.CallID
 				call.name = event.Item.Name
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCallStart, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name}}) {
+				if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCallStart, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name}}) {
 					return
 				}
 			}
@@ -493,7 +482,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			call := callForItem(event.ItemID)
 			call.arguments += event.Delta
 			call.argChars += len(event.Delta)
-			if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCallArgsDelta, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name}, ArgChars: call.argChars}) {
+			if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCallArgsDelta, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name}, ArgChars: call.argChars}) {
 				return
 			}
 		case "response.function_call_arguments.done":
@@ -503,7 +492,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			}
 			if !call.completed {
 				call.completed = true
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name, Arguments: call.arguments}}) {
+				if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name, Arguments: call.arguments}}) {
 					return
 				}
 			}
@@ -521,7 +510,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 				}
 				if !call.completed {
 					call.completed = true
-					if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name, Arguments: call.arguments}}) {
+					if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{ID: call.id, Name: call.name, Arguments: call.arguments}}) {
 						return
 					}
 				}
@@ -545,7 +534,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 					}
 				}
 				if event.Response.Usage != nil || usage.FinishReason != "" {
-					if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkUsage, Usage: usage}) {
+					if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkUsage, Usage: usage}) {
 						return
 					}
 				}
@@ -560,7 +549,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 						err = fmt.Errorf("responses: %s", event.Response.Error.Message)
 					}
 				}
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: err}) {
+				if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: err}) {
 					return
 				}
 			}
@@ -577,11 +566,11 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		if stalled.Load() {
 			err = fmt.Errorf("responses: stream idle timeout after %s", idle)
 		}
-		_ = sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: &provider.StreamInterruptedError{Err: err}})
+		_ = provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: &provider.StreamInterruptedError{Err: err}})
 		return
 	}
 	if !terminal {
-		_ = sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: &provider.StreamInterruptedError{Err: io.ErrUnexpectedEOF}})
+		_ = provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: &provider.StreamInterruptedError{Err: io.ErrUnexpectedEOF}})
 		return
 	}
 	if completedResponseID != "" {
@@ -601,21 +590,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		c.ResetContext()
 	}
 	if !failed {
-		_ = sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkDone})
-	}
-}
-
-func sendChunk(ctx context.Context, out chan<- provider.Chunk, chunk provider.Chunk) bool {
-	select {
-	case out <- chunk:
-		return true
-	default:
-	}
-	select {
-	case out <- chunk:
-		return true
-	case <-ctx.Done():
-		return false
+		_ = provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkDone})
 	}
 }
 

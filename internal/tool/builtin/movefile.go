@@ -45,8 +45,8 @@ func (m moveFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 		SourcePath      string `json:"source_path"`
 		DestinationPath string `json:"destination_path"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return "", err
 	}
 	if p.SourcePath == "" {
 		return "", fmt.Errorf("source_path is required")

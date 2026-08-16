@@ -39,8 +39,8 @@ func (e editFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 		OldString string `json:"old_string"`
 		NewString string `json:"new_string"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return "", err
 	}
 	if p.Path == "" {
 		return "", fmt.Errorf("path is required")

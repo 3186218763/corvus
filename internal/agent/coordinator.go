@@ -143,10 +143,6 @@ type Coordinator struct {
 // same sink into both). A nil sink is replaced with event.Discard; a nil policy
 // preserves the historical "plan every turn" behavior.
 func NewCoordinatorWithPlannerPolicy(planner provider.Provider, plannerSession *Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, policy PlannerPolicy) *Coordinator {
-	return newCoordinator(planner, plannerSession, plannerPricing, plannerTools, plannerOptions, executor, temperature, sink, policy)
-}
-
-func newCoordinator(planner provider.Provider, plannerSession *Session, plannerPricing *provider.Pricing, plannerTools *tool.Registry, plannerOptions Options, executor *Agent, temperature float64, sink event.Sink, policy PlannerPolicy) *Coordinator {
 	if nilutil.IsNil(sink) {
 		sink = event.Discard
 	}

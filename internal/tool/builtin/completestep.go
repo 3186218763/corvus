@@ -94,8 +94,8 @@ func (completeStep) Execute(ctx context.Context, args json.RawMessage) (string, 
 		Evidence  []stepEvidence `json:"evidence"`
 		Notes     string         `json:"notes"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return "", err
 	}
 	step := completeStepIdentity(p.Step, p.StepIndex)
 	if step == "" {

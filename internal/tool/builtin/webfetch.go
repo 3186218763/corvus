@@ -79,8 +79,8 @@ func (wf webFetch) Execute(ctx context.Context, args json.RawMessage) (string, e
 	var p struct {
 		URL string `json:"url"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return "", err
 	}
 	if p.URL == "" {
 		return "", fmt.Errorf("url is required")

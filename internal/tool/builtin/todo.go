@@ -64,8 +64,8 @@ func (todoWrite) Execute(ctx context.Context, args json.RawMessage) (string, err
 	var p struct {
 		Todos []todoItem `json:"todos"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return "", err
 	}
 	var done, active, pending int
 	for i, t := range p.Todos {

@@ -31,22 +31,12 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"corvus/internal/netclient"
 	"corvus/internal/provider"
 )
-
-// defaultStreamIdleTimeout caps how long a started SSE stream may go without any
-// bytes before it's treated as a dropped connection. A half-open TCP connection
-// (e.g. a proxy switched mid-stream) sends no RST, so scanner.Scan() would block
-// forever; this turns that hang into a recoverable error. Generous on purpose —
-// live streams emit tokens/keepalives far more often. Stored per-client
-// (client.idleTimeout) so a test can shorten it without a shared global that
-// would race other streams' watchdogs.
-const defaultStreamIdleTimeout = 120 * time.Second
 
 // maxPrefixContinuations keeps automatic recovery bounded. A second length
 // finish is surfaced through the existing truncation notice instead of opening
@@ -241,7 +231,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		baseURL:         strings.TrimRight(cfg.BaseURL, "/"),
 		chatURL:         chatURL,
 		prefixChatURL:   prefixChatURL,
-		headers:         cleanCustomHeaders(headers),
+		headers:         provider.CleanCustomHeaders(headers, reservedCustomHeader, true),
 		extraBody:       cleanExtraBody(extraBody),
 		model:           normalizeModelID(cfg.BaseURL, cfg.Model),
 		deepseek:        deepseek,
@@ -256,7 +246,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		maxOutputTokens: maxOutputTokens,
 		effort:          effort,
 		http:            httpClient,
-		idleTimeout:     defaultStreamIdleTimeout,
+		idleTimeout:     provider.DefaultStreamIdleTimeout,
 	}, nil
 }
 
@@ -282,12 +272,7 @@ func hasExplicitSupportedEfforts(levels []string) bool {
 
 func newHTTPClient(cfg provider.Config) (*http.Client, error) {
 	spec, _ := cfg.Extra["proxy_spec"].(netclient.ProxySpec)
-	return netclient.NewHTTPClient(spec, netclient.TransportOptions{
-		DialTimeout:           30 * time.Second,
-		KeepAlive:             30 * time.Second,
-		TLSHandshakeTimeout:   15 * time.Second,
-		ResponseHeaderTimeout: 120 * time.Second, // models can think for a while before the first token
-	})
+	return provider.NewStreamingHTTPClient(spec)
 }
 
 type client struct {
@@ -313,7 +298,7 @@ type client struct {
 	visionDetail    string        // image_url detail hint (low|high); "" = auto/omit
 	maxOutputTokens int           // configured/default total output budget; <=0 omits the optional field
 	effort          string        // reasoning_effort for OpenAI; thinking.type for MiniMax; "" = auto/provider default
-	idleTimeout     time.Duration // SSE stall watchdog window; defaultStreamIdleTimeout unless a test overrides
+	idleTimeout     time.Duration // SSE stall watchdog window; provider.DefaultStreamIdleTimeout unless a test overrides
 	authed          atomic.Bool   // a request has succeeded — gate transient-401 retry
 }
 
@@ -394,31 +379,6 @@ func normalizeChatURL(baseURL, chatURL string) string {
 	return strings.TrimRight(strings.TrimSpace(baseURL), "/") + "/chat/completions"
 }
 
-func cleanCustomHeaders(in map[string]string) map[string]string {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(in))
-	for rawName, rawValue := range in {
-		name := strings.TrimSpace(rawName)
-		value := strings.TrimSpace(rawValue)
-		if name == "" || value == "" || reservedCustomHeader(name) {
-			continue
-		}
-		out[name] = value
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-func applyCustomHeaders(h http.Header, headers map[string]string) {
-	for name, value := range cleanCustomHeaders(headers) {
-		h.Set(name, value)
-	}
-}
-
 func applyAPIKeyHeader(h http.Header, baseURL, apiKey string) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
@@ -467,14 +427,6 @@ func reservedCustomHeader(name string) bool {
 	}
 }
 
-// bufPool reuses byte buffers for JSON-marshalled request bodies. Each turn
-// allocates a buffer, marshals the request, and sends it — pooling avoids the
-// GC churn from repeated alloc/free of ~10-100KB buffers. The pool is
-// provider-level (not global) so OpenAI and Anthropic don't compete.
-var bufPool = sync.Pool{
-	New: func() any { return new(bytes.Buffer) },
-}
-
 func (c *client) Stream(ctx context.Context, req provider.Request) (<-chan provider.Chunk, error) {
 	stream, err := c.openStream(ctx, c.chatURL, c.buildRequest(req), req.Tools)
 	if err != nil {
@@ -491,15 +443,15 @@ func (c *client) Stream(ctx context.Context, req provider.Request) (<-chan provi
 
 func (c *client) openStream(ctx context.Context, targetURL string, wireReq chatRequest, tools []provider.ToolSchema) (<-chan provider.Chunk, error) {
 	requestCtx := provider.WithRequestAttemptCounter(ctx)
-	buf := bufPool.Get().(*bytes.Buffer)
+	buf := provider.BodyBufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	if err := json.NewEncoder(buf).Encode(wireReq); err != nil {
-		bufPool.Put(buf)
+		provider.BodyBufPool.Put(buf)
 		return nil, fmt.Errorf("%s: marshal request: %w", c.name, err)
 	}
 	body := make([]byte, buf.Len())
 	copy(body, buf.Bytes())
-	bufPool.Put(buf)
+	provider.BodyBufPool.Put(buf)
 
 	newReq := func(ctx context.Context) (*http.Request, error) {
 		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
@@ -509,7 +461,7 @@ func (c *client) openStream(ctx context.Context, targetURL string, wireReq chatR
 		httpReq.Header.Set("Content-Type", "application/json")
 		applyAPIKeyHeader(httpReq.Header, c.baseURL, c.apiKey)
 		httpReq.Header.Set("Accept", "text/event-stream")
-		applyCustomHeaders(httpReq.Header, c.headers)
+		provider.ApplyCustomHeaders(httpReq.Header, c.headers, reservedCustomHeader, true)
 		return httpReq, nil
 	}
 	resp, err := provider.SendWithRetry(requestCtx, c.http, c.sendOpts(), newReq)
@@ -551,19 +503,19 @@ func (c *client) streamWithPrefixContinuation(ctx context.Context, req provider.
 			case provider.ChunkText:
 				fullText.WriteString(chunk.Text)
 				currentEmitted = currentEmitted || chunk.Text != ""
-				if !sendChunk(ctx, out, chunk) {
+				if !provider.SendChunk(ctx, out, chunk) {
 					return
 				}
 			case provider.ChunkReasoning:
 				fullReasoning.WriteString(chunk.Text)
 				currentEmitted = currentEmitted || chunk.Text != ""
-				if !sendChunk(ctx, out, chunk) {
+				if !provider.SendChunk(ctx, out, chunk) {
 					return
 				}
 			case provider.ChunkToolCallStart, provider.ChunkToolCallArgsDelta, provider.ChunkToolCall:
 				currentHadTool = true
 				currentEmitted = true
-				if !sendChunk(ctx, out, chunk) {
+				if !provider.SendChunk(ctx, out, chunk) {
 					return
 				}
 			case provider.ChunkUsage:
@@ -578,10 +530,10 @@ func (c *client) streamWithPrefixContinuation(ctx context.Context, req provider.
 					emitUsageAndDone(ctx, out, totalUsage)
 					return
 				}
-				_ = sendChunk(ctx, out, chunk)
+				_ = provider.SendChunk(ctx, out, chunk)
 				return
 			default:
-				if !sendChunk(ctx, out, chunk) {
+				if !provider.SendChunk(ctx, out, chunk) {
 					return
 				}
 			}
@@ -608,10 +560,10 @@ func (c *client) streamWithPrefixContinuation(ctx context.Context, req provider.
 }
 
 func emitUsageAndDone(ctx context.Context, out chan<- provider.Chunk, usage *provider.Usage) {
-	if usage != nil && !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkUsage, Usage: usage}) {
+	if usage != nil && !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkUsage, Usage: usage}) {
 		return
 	}
-	_ = sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkDone})
+	_ = provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkDone})
 }
 
 // mergeUsage folds token counters. countRequests is false for multiple usage
@@ -668,37 +620,23 @@ func (c *client) streamWithReconnect(ctx context.Context, resp *http.Response, n
 			return
 		}
 		if !provider.IsConnReset(err) {
-			sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: err})
+			provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: err})
 			return
 		}
 		if emitted {
-			sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: &provider.StreamInterruptedError{Err: err}})
+			provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: &provider.StreamInterruptedError{Err: err}})
 			return
 		}
 		if attempt >= maxStreamReconnects {
-			sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: err})
+			provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: err})
 			return
 		}
 		next, rerr := provider.SendWithRetry(ctx, c.http, c.sendOpts(), newReq)
 		if rerr != nil {
-			sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: rerr})
+			provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkError, Err: rerr})
 			return
 		}
 		resp = next
-	}
-}
-
-func sendChunk(ctx context.Context, out chan<- provider.Chunk, chunk provider.Chunk) bool {
-	select {
-	case out <- chunk:
-		return true
-	default:
-	}
-	select {
-	case <-ctx.Done():
-		return false
-	case out <- chunk:
-		return true
 	}
 }
 
@@ -921,7 +859,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 	// pings the buffered activity channel, so there's no Timer.Reset race.
 	idleTimeout := c.idleTimeout
 	if idleTimeout <= 0 { // zero-value client (constructed without New)
-		idleTimeout = defaultStreamIdleTimeout
+		idleTimeout = provider.DefaultStreamIdleTimeout
 	}
 	done := make(chan struct{})
 	defer close(done)
@@ -994,7 +932,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			u.FinishReason = lastFinishReason
 			provider.ApplyRequestAttemptCount(ctx, u)
 			emitted = true
-			if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkUsage, Usage: u}) {
+			if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkUsage, Usage: u}) {
 				return emitted, ctx.Err()
 			}
 		}
@@ -1009,7 +947,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		}
 		if reasoningDelta != "" {
 			emitted = true
-			if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, Text: reasoningDelta}) {
+			if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, Text: reasoningDelta}) {
 				return emitted, ctx.Err()
 			}
 		}
@@ -1017,13 +955,13 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			r, txt := think.push(delta.Content)
 			if r != "" {
 				emitted = true
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, Text: r}) {
+				if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, Text: r}) {
 					return emitted, ctx.Err()
 				}
 			}
 			if txt != "" {
 				emitted = true
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkText, Text: txt}) {
+				if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkText, Text: txt}) {
 					return emitted, ctx.Err()
 				}
 			}
@@ -1061,7 +999,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			if !started[tc.Index] && cur.Name != "" {
 				started[tc.Index] = true
 				emitted = true
-				if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCallStart, ToolCall: &provider.ToolCall{ID: cur.ID, Name: cur.Name}}) {
+				if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCallStart, ToolCall: &provider.ToolCall{ID: cur.ID, Name: cur.Name}}) {
 					return emitted, ctx.Err()
 				}
 			}
@@ -1072,7 +1010,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 				if bucket := len(cur.Arguments) / 2048; bucket > argBucket[tc.Index] {
 					argBucket[tc.Index] = bucket
 					emitted = true
-					if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCallArgsDelta, ToolCall: &provider.ToolCall{ID: cur.ID, Name: cur.Name}, ArgChars: len(cur.Arguments)}) {
+					if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCallArgsDelta, ToolCall: &provider.ToolCall{ID: cur.ID, Name: cur.Name}, ArgChars: len(cur.Arguments)}) {
 						return emitted, ctx.Err()
 					}
 				}
@@ -1098,12 +1036,12 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 
 	if r, txt := think.flush(); r != "" || txt != "" {
 		if r != "" {
-			if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, Text: r}) {
+			if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkReasoning, Text: r}) {
 				return emitted, ctx.Err()
 			}
 		}
 		if txt != "" {
-			if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkText, Text: txt}) {
+			if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkText, Text: txt}) {
 				return emitted, ctx.Err()
 			}
 		}
@@ -1118,11 +1056,11 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 			// an empty tool_call_id collapses multi-tool turns downstream.
 			tc.ID = fmt.Sprintf("call_%d", idx)
 		}
-		if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCall, ToolCall: tc}) {
+		if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkToolCall, ToolCall: tc}) {
 			return emitted, ctx.Err()
 		}
 	}
-	if !sendChunk(ctx, out, provider.Chunk{Type: provider.ChunkDone}) {
+	if !provider.SendChunk(ctx, out, provider.Chunk{Type: provider.ChunkDone}) {
 		return emitted, ctx.Err()
 	}
 	return emitted, nil

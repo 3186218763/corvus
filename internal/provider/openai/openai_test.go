@@ -267,7 +267,7 @@ func TestStreamContinuesDeepSeekLengthWithAssistantPrefix(t *testing.T) {
 	c := &client{
 		name: "deepseek", apiKey: "k", baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
 		prefixChatURL: srv.URL + "/beta/chat/completions", model: "deepseek-v4-flash", deepseek: true,
-		effort: "high", http: srv.Client(), idleTimeout: defaultStreamIdleTimeout,
+		effort: "high", http: srv.Client(), idleTimeout: provider.DefaultStreamIdleTimeout,
 	}
 	ch, err := c.Stream(context.Background(), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "write"}}})
 	if err != nil {
@@ -343,7 +343,7 @@ func TestStreamContinuesReasoningOnlyDeepSeekLength(t *testing.T) {
 	c := &client{
 		name: "deepseek", apiKey: "k", baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
 		prefixChatURL: srv.URL + "/beta/chat/completions", model: "deepseek-v4-flash", deepseek: true,
-		effort: "high", http: srv.Client(), idleTimeout: defaultStreamIdleTimeout,
+		effort: "high", http: srv.Client(), idleTimeout: provider.DefaultStreamIdleTimeout,
 	}
 	ch, err := c.Stream(context.Background(), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "write"}}})
 	if err != nil {
@@ -390,7 +390,7 @@ func TestStreamKeepsTruncatedAnswerWhenDeepSeekBetaFails(t *testing.T) {
 	c := &client{
 		name: "deepseek", apiKey: "k", baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
 		prefixChatURL: srv.URL + "/beta/chat/completions", model: "deepseek-v4-flash", deepseek: true,
-		effort: "high", http: srv.Client(), idleTimeout: defaultStreamIdleTimeout,
+		effort: "high", http: srv.Client(), idleTimeout: provider.DefaultStreamIdleTimeout,
 	}
 	ch, err := c.Stream(context.Background(), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "write"}}})
 	if err != nil {
@@ -427,7 +427,7 @@ func TestStreamBoundsRepeatedDeepSeekLengthContinuation(t *testing.T) {
 	c := &client{
 		name: "deepseek", apiKey: "k", baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
 		prefixChatURL: srv.URL + "/beta/chat/completions", model: "deepseek-v4-flash", deepseek: true,
-		effort: "high", http: srv.Client(), idleTimeout: defaultStreamIdleTimeout,
+		effort: "high", http: srv.Client(), idleTimeout: provider.DefaultStreamIdleTimeout,
 	}
 	ch, err := c.Stream(context.Background(), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "write"}}})
 	if err != nil {
@@ -465,7 +465,7 @@ func TestStreamDoesNotPrefixContinueToolCalls(t *testing.T) {
 	c := &client{
 		name: "deepseek", apiKey: "k", baseURL: srv.URL, chatURL: srv.URL + "/chat/completions",
 		prefixChatURL: srv.URL + "/beta/chat/completions", model: "deepseek-v4-flash", deepseek: true,
-		effort: "high", http: srv.Client(), idleTimeout: defaultStreamIdleTimeout,
+		effort: "high", http: srv.Client(), idleTimeout: provider.DefaultStreamIdleTimeout,
 	}
 	ch, err := c.Stream(context.Background(), provider.Request{})
 	if err != nil {

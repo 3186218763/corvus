@@ -74,8 +74,8 @@ func (d deleteRange) preview(args json.RawMessage) (diff.Change, error) {
 		EndAnchor   string `json:"end_anchor"`
 		Inclusive   *bool  `json:"inclusive"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return diff.Change{}, fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return diff.Change{}, err
 	}
 	if p.Path == "" {
 		return diff.Change{}, fmt.Errorf("path is required")

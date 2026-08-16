@@ -7,35 +7,10 @@ import (
 	"corvus/internal/provider"
 )
 
-// matchesVendorHost reports whether baseURL points at one of the canonical
-// hostnames (exact match, case-insensitive) or at any subdomain of apex.
-// Returns false on any parse error or empty host.
-//
-// We take the apex separately from the canonical because they differ: the
-// canonical (e.g. api.minimaxi.com) is the specific endpoint, but regional
-// subdomains like eu.minimaxi.com or us.minimaxi.com should also match —
-// the wire shape is the same, just hosted in a different region. The bare
-// apex (e.g. minimaxi.com) is intentionally rejected: it would only happen
-// if the user pointed their base_url at the apex domain, which is a
-// misconfiguration — not a path we want to silently accept.
-func matchesVendorHost(baseURL, apex string, canonical ...string) bool {
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		return false
-	}
-	host := strings.ToLower(u.Hostname())
-	for _, c := range canonical {
-		if host == c {
-			return true
-		}
-	}
-	return strings.HasSuffix(host, "."+apex)
-}
-
 // IsDeepSeek reports whether baseURL points at DeepSeek's API
 // (api.deepseek.com or any *.deepseek.com subdomain).
 func IsDeepSeek(baseURL string) bool {
-	return matchesVendorHost(baseURL, "deepseek.com", "api.deepseek.com")
+	return provider.MatchesVendorHost(baseURL, "deepseek.com", "api.deepseek.com")
 }
 
 // IsOpenAI reports whether baseURL points at OpenAI's official API host. Keep
@@ -116,7 +91,7 @@ func normalizeModelID(baseURL, model string) string {
 // The host string is matched exactly — the spelling is `minimaxi`, not
 // `minimax` — to avoid clashing with any future minimax-branded gateway.
 func IsMiniMax(baseURL string) bool {
-	return matchesVendorHost(baseURL, "minimaxi.com", "api.minimaxi.com")
+	return provider.MatchesVendorHost(baseURL, "minimaxi.com", "api.minimaxi.com")
 }
 
 // IsMiMo reports whether baseURL points at Xiaomi MiMo's OpenAI-compatible API.
@@ -133,8 +108,8 @@ func IsMiMo(baseURL string) bool {
 // `reasoning_effort` is silently ignored, so the client routes reasoning control
 // to the thinking knob for either host.
 func IsZhipu(baseURL string) bool {
-	return matchesVendorHost(baseURL, "bigmodel.cn", "open.bigmodel.cn") ||
-		matchesVendorHost(baseURL, "z.ai", "api.z.ai")
+	return provider.MatchesVendorHost(baseURL, "bigmodel.cn", "open.bigmodel.cn") ||
+		provider.MatchesVendorHost(baseURL, "z.ai", "api.z.ai")
 }
 
 // IsTokenRhythm reports whether baseURL points at Token Rhythm's official
@@ -152,7 +127,7 @@ func IsTokenRhythm(baseURL string) bool {
 // LongCat uses the OpenAI chat shape, but gates thinking with thinking.type
 // enabled|disabled rather than the generic reasoning_effort field.
 func IsLongCat(baseURL string) bool {
-	return matchesVendorHost(baseURL, "longcat.chat", "api.longcat.chat")
+	return provider.MatchesVendorHost(baseURL, "longcat.chat", "api.longcat.chat")
 }
 
 // IsKimiAPI reports whether baseURL is one of Moonshot's official Kimi direct
@@ -176,5 +151,5 @@ func IsKimiAPI(baseURL string) bool {
 // the hosted API accepts the reasoning_effort=max extension, while localhost
 // deployments vary by model/version.
 func IsOllamaCloud(baseURL string) bool {
-	return matchesVendorHost(baseURL, "ollama.com", "ollama.com")
+	return provider.MatchesVendorHost(baseURL, "ollama.com", "ollama.com")
 }

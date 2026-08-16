@@ -29,7 +29,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -37,13 +36,6 @@ import (
 	"corvus/internal/provider"
 	"corvus/internal/provider/openai"
 )
-
-// defaultStreamIdleTimeout caps how long a started SSE stream may go silent before
-// it's treated as a dropped connection — a half-open TCP connection (proxy switched
-// mid-stream) sends no RST, so scanner.Scan() would block forever. Generous on
-// purpose; live streams emit far more often. Stored per-client (client.idleTimeout)
-// so a test can shorten it without a shared global that races other watchdogs.
-const defaultStreamIdleTimeout = 120 * time.Second
 
 const (
 	// anthropicVersion is the required API version header value.
@@ -122,11 +114,11 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		vision:           vision,
 		mimo:             provider.IsMiMoEndpoint(root),
 		webSearch:        webSearch,
-		headers:          cleanCustomHeaders(headers),
+		headers:          provider.CleanCustomHeaders(headers, reservedCustomHeader, false),
 		authHeader:       authHeader,
 		defaultMaxTokens: maxOutputTokens,
 		http:             httpClient, // no overall timeout; lifecycle is ctx-driven
-		idleTimeout:      defaultStreamIdleTimeout,
+		idleTimeout:      provider.DefaultStreamIdleTimeout,
 	}, nil
 }
 
@@ -152,7 +144,7 @@ type client struct {
 	authHeader       bool // send Authorization: Bearer instead of Anthropic's x-api-key header
 	defaultMaxTokens int
 	http             *http.Client
-	idleTimeout      time.Duration // SSE stall watchdog window; defaultStreamIdleTimeout unless a test overrides
+	idleTimeout      time.Duration // SSE stall watchdog window; provider.DefaultStreamIdleTimeout unless a test overrides
 	authed           atomic.Bool   // a request has succeeded — gate transient-401 retry
 }
 
@@ -219,24 +211,6 @@ func (c *client) sendOpts() provider.SendOptions {
 	}
 }
 
-func cleanCustomHeaders(in map[string]string) map[string]string {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(in))
-	for name, value := range in {
-		name = strings.TrimSpace(name)
-		if name == "" || reservedCustomHeader(name) {
-			continue
-		}
-		out[name] = strings.TrimSpace(value)
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
 func reservedCustomHeader(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "content-type", "accept", "x-api-key", "authorization", "anthropic-version":
@@ -246,29 +220,17 @@ func reservedCustomHeader(name string) bool {
 	}
 }
 
-func applyCustomHeaders(h http.Header, headers map[string]string) {
-	for name, value := range cleanCustomHeaders(headers) {
-		h.Set(name, value)
-	}
-}
-
-// bufPool reuses byte buffers for JSON-marshalled request bodies, reducing GC
-// churn from repeated alloc/free of ~10-100KB buffers per turn.
-var bufPool = sync.Pool{
-	New: func() any { return new(bytes.Buffer) },
-}
-
 func (c *client) Stream(ctx context.Context, req provider.Request) (<-chan provider.Chunk, error) {
 	requestCtx := provider.WithRequestAttemptCounter(ctx)
-	buf := bufPool.Get().(*bytes.Buffer)
+	buf := provider.BodyBufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	if err := json.NewEncoder(buf).Encode(c.buildRequest(req)); err != nil {
-		bufPool.Put(buf)
+		provider.BodyBufPool.Put(buf)
 		return nil, fmt.Errorf("%s: marshal request: %w", c.name, err)
 	}
 	body := make([]byte, buf.Len())
 	copy(body, buf.Bytes())
-	bufPool.Put(buf)
+	provider.BodyBufPool.Put(buf)
 
 	newReq := func(ctx context.Context) (*http.Request, error) {
 		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/messages", bytes.NewReader(body))
@@ -283,7 +245,7 @@ func (c *client) Stream(ctx context.Context, req provider.Request) (<-chan provi
 			httpReq.Header.Set("x-api-key", c.apiKey)
 		}
 		httpReq.Header.Set("anthropic-version", anthropicVersion)
-		applyCustomHeaders(httpReq.Header, c.headers)
+		provider.ApplyCustomHeaders(httpReq.Header, c.headers, reservedCustomHeader, false)
 		return httpReq, nil
 	}
 	resp, err := provider.SendWithRetry(requestCtx, c.http, c.sendOpts(), newReq)
@@ -478,7 +440,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 	// race). A context cancel already unblocks the scan via the transport.
 	idleTimeout := c.idleTimeout
 	if idleTimeout <= 0 { // zero-value client (constructed without New)
-		idleTimeout = defaultStreamIdleTimeout
+		idleTimeout = provider.DefaultStreamIdleTimeout
 	}
 	done := make(chan struct{})
 	defer close(done)
@@ -511,7 +473,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 	}()
 
 	send := func(chunk provider.Chunk) bool {
-		return sendChunk(ctx, out, chunk)
+		return provider.SendChunk(ctx, out, chunk)
 	}
 
 	tools := map[int]*provider.ToolCall{} // tool_use blocks, keyed by content index
@@ -687,20 +649,6 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 		}
 	}
 	send(provider.Chunk{Type: provider.ChunkDone})
-}
-
-func sendChunk(ctx context.Context, out chan<- provider.Chunk, chunk provider.Chunk) bool {
-	select {
-	case out <- chunk:
-		return true
-	default:
-	}
-	select {
-	case <-ctx.Done():
-		return false
-	case out <- chunk:
-		return true
-	}
 }
 
 // mapStopReason translates Anthropic stop reasons to the OpenAI-style finish

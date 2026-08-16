@@ -41,20 +41,11 @@ func FormatSessionPromptCacheKey(sessionID, subID string) string {
 	return key
 }
 
-// IsDeepSeekShaped uses host rules aligned with openai.IsDeepSeek /
-// responses.DetectVendor. Host matching lives here (not via openai import)
-// to avoid provider ↔ openai import cycles.
+// IsDeepSeekShaped uses the host rule shared with openai.IsDeepSeek /
+// responses.DetectVendor (MatchesVendorHost below).
 func IsDeepSeekShaped(kind, baseURL string) bool {
-	u, err := url.Parse(strings.TrimSpace(baseURL))
-	if err != nil {
-		return false
-	}
-	host := strings.ToLower(u.Hostname())
-	if host == "api.deepseek.com" || strings.HasSuffix(host, ".deepseek.com") {
-		return true
-	}
 	_ = kind
-	return false
+	return MatchesVendorHost(strings.TrimSpace(baseURL), "deepseek.com", "api.deepseek.com")
 }
 
 // ProviderFingerprint returns a stable identity for a (kind, baseURL) pair used

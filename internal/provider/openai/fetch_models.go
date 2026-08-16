@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"corvus/internal/netclient"
+	"corvus/internal/provider"
 )
 
 type modelFetchStatusError struct {
@@ -73,7 +74,7 @@ func FetchModelsWithOptions(ctx context.Context, baseURL, apiKey string, opts Fe
 	}
 	applyModelFetchAPIKeyHeader(req.Header, baseURL, apiKey, opts.AuthMode)
 	req.Header.Set("Accept", "application/json")
-	applyCustomHeaders(req.Header, opts.Headers)
+	provider.ApplyCustomHeaders(req.Header, opts.Headers, reservedCustomHeader, true)
 
 	resp, err := cli.Do(req)
 	if err != nil {

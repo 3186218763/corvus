@@ -68,8 +68,8 @@ func (m multiEdit) Execute(ctx context.Context, args json.RawMessage) (string, e
 		Path  string     `json:"path"`
 		Edits []editStep `json:"edits"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", fmt.Errorf("invalid args: %w", err)
+	if err := decodeArgs(args, &p); err != nil {
+		return "", err
 	}
 	if p.Path == "" {
 		return "", fmt.Errorf("path is required")
