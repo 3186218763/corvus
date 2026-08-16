@@ -226,8 +226,11 @@ func TestNewTransportKnobs(t *testing.T) {
 }
 
 func TestEnvProxyResolution(t *testing.T) {
+	t.Setenv("http_proxy", "")
 	t.Setenv("HTTP_PROXY", "http://http-proxy.test:8080")
+	t.Setenv("https_proxy", "")
 	t.Setenv("HTTPS_PROXY", "http://https-proxy.test:8443")
+	t.Setenv("no_proxy", "")
 	t.Setenv("NO_PROXY", "bypass.test, sub.test")
 
 	pf, err := proxyFunc(ProxySpec{Mode: ModeEnv})

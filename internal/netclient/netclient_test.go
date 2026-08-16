@@ -60,7 +60,11 @@ func TestCustomProxyHonorsNoProxy(t *testing.T) {
 }
 
 func TestDirectHostsBypassProxy(t *testing.T) {
+	// Clear both cases: x/net ≥0.58 prefers lowercase env vars, so a
+	// developer's ambient https_proxy would otherwise leak into the test.
+	t.Setenv("https_proxy", "")
 	t.Setenv("HTTPS_PROXY", "http://proxy.example.com:8080")
+	t.Setenv("no_proxy", "")
 	t.Setenv("NO_PROXY", "")
 	pf, err := proxyFunc(ProxySpec{Mode: "auto", DirectHosts: []string{"token-plan-cn.xiaomimimo.com"}})
 	if err != nil {
@@ -85,7 +89,9 @@ func TestDirectHostsBypassProxy(t *testing.T) {
 }
 
 func TestNoDirectHostsKeepsEveryoneProxied(t *testing.T) {
+	t.Setenv("https_proxy", "")
 	t.Setenv("HTTPS_PROXY", "http://proxy.example.com:8080")
+	t.Setenv("no_proxy", "")
 	t.Setenv("NO_PROXY", "")
 	pf, err := proxyFunc(ProxySpec{Mode: "env"}) // no DirectHosts → nothing special-cased
 	if err != nil {
