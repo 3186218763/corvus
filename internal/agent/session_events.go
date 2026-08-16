@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"corvus/internal/fileutil"
@@ -326,6 +327,53 @@ func probeSessionEventHeader(r io.Reader) (schemaVersion int, eventType string, 
 // owns this log, and truncating it would discard that writer's data.
 func replaySessionEventLog(path string) (sessionEventReplay, error) {
 	return replaySessionEventLogWithLimits(path, defaultSessionReplayLimits)
+}
+
+// verifySessionEventRoundTrip re-derives the message set from the on-disk
+// event log and asserts it equals the live transcript the log was written
+// from. This is corvus's "model-visible means logged" runtime invariant: every
+// message a request could send must be reconstructable from the durable log.
+// The check is opt-in (CORVUS_SESSION_ASSERT=1) because it re-reads and
+// re-parses the whole log; the save path runs it right after the log is
+// durable and reports a mismatch loudly instead of failing a completed save.
+func verifySessionEventRoundTrip(path string, msgs []provider.Message) error {
+	if !sessionEventAssertEnabled() {
+		return nil
+	}
+	logPath := store.SessionEventLog(path)
+	if logPath == "" {
+		return errors.New("session assert: empty session path")
+	}
+	replay, err := replaySessionEventLogWithLimits(logPath, defaultSessionReplayLimits)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil // checkpoint-only session: the anchor is the log
+		}
+		return fmt.Errorf("session assert: replay %s: %w", logPath, err)
+	}
+	if replay.damaged {
+		return fmt.Errorf("session assert: %s is damaged", logPath)
+	}
+	want, _, err := digestAndSizeSessionMessages(msgs)
+	if err != nil {
+		return fmt.Errorf("session assert: digest live messages: %w", err)
+	}
+	got, _, err := digestAndSizeSessionMessages(replay.msgs)
+	if err != nil {
+		return fmt.Errorf("session assert: digest replayed messages: %w", err)
+	}
+	if !bytes.Equal(want[:], got[:]) {
+		return fmt.Errorf("session assert: event log %s rebuilds %d messages but the live transcript has %d",
+			logPath, len(replay.msgs), len(msgs))
+	}
+	return nil
+}
+
+// sessionEventAssertEnabled reports whether the round-trip invariant check is
+// armed. It is opt-in because every enabled save doubles its log I/O.
+func sessionEventAssertEnabled() bool {
+	v := os.Getenv("CORVUS_SESSION_ASSERT")
+	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "on")
 }
 
 func replaySessionEventLogWithLimits(path string, limits sessionReplayLimits) (sessionEventReplay, error) {

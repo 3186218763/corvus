@@ -463,6 +463,7 @@ func New(opts Options) *Controller {
 	}
 	if opts.Hooks != nil {
 		opts.Hooks.SetSessionID(agent.BranchID(opts.SessionPath))
+		opts.Hooks.SetAuditLog(store.SessionHookLog(opts.SessionPath))
 	}
 	c := &Controller{
 		bgCtx:                  bgCtx,

@@ -90,7 +90,7 @@ func (c *Controller) forkNamed(turn int, name string, switchToFork bool) (string
 	if switchToFork {
 		// See snapshotMu: the swap must not interleave with an in-flight save.
 		c.snapshotMu.Lock()
-		c.executor.SetSession(sess)
+		c.executor.BindSession(sess, newPath)
 		c.ResetPlannerSession()
 		c.mu.Lock()
 		c.sessionPath = newPath
@@ -173,7 +173,7 @@ func (c *Controller) Branch(name string) (string, error) {
 	}
 	// See snapshotMu: the swap must not interleave with an in-flight save.
 	c.snapshotMu.Lock()
-	c.executor.SetSession(sess)
+	c.executor.BindSession(sess, newPath)
 	c.ResetPlannerSession()
 	c.mu.Lock()
 	c.sessionPath = newPath
@@ -235,7 +235,7 @@ func (c *Controller) SwitchBranch(ref string) (agent.BranchInfo, error) {
 	// See snapshotMu: the swap must not interleave with an in-flight save.
 	c.snapshotMu.Lock()
 	if c.executor != nil {
-		c.executor.SetSession(loaded)
+		c.executor.BindSession(loaded, match.Path)
 	}
 	c.ResetPlannerSession()
 	c.mu.Lock()

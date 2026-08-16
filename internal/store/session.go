@@ -25,7 +25,8 @@ func IsSessionTranscriptName(name string) bool {
 	return strings.HasSuffix(name, ".jsonl") &&
 		!strings.HasSuffix(name, ".events.jsonl") &&
 		!strings.HasSuffix(name, ".conflicts.jsonl") &&
-		!strings.HasSuffix(name, ".guardian.jsonl")
+		!strings.HasSuffix(name, ".guardian.jsonl") &&
+		!strings.HasSuffix(name, ".hooks.jsonl")
 }
 
 // SessionRecoveryState is the persisted Auto-mode recovery checkpoint state
@@ -102,6 +103,16 @@ func SessionConflictLog(sessionPath string) string {
 	return sessionStem(sessionPath) + ".conflicts.jsonl"
 }
 
+// SessionHookLog is the hook audit sidecar (<id>.hooks.jsonl): one JSONL
+// record per hook invocation (log-only, best-effort diagnostics).
+func SessionHookLog(sessionPath string) string {
+	sessionPath = strings.TrimSpace(sessionPath)
+	if sessionPath == "" {
+		return ""
+	}
+	return sessionStem(sessionPath) + ".hooks.jsonl"
+}
+
 // SessionLockFile is the advisory save lock (<id>.jsonl.lock).
 func SessionLockFile(sessionPath string) string {
 	if sessionPath == "" {
@@ -172,6 +183,18 @@ func SessionSidecarFiles(sessionPath string) []string {
 		SessionEventLogDamaged(sessionPath),
 		SessionEventIndex(sessionPath),
 		SessionConflictLog(sessionPath),
+		SessionHookLog(sessionPath),
 		SessionRecoveryState(sessionPath),
 	}
+}
+
+// SessionSpillDir is the spill-artifact directory for oversized tool outputs
+// (<id>.spill). It is a directory artifact like checkpoints and jobs: removed
+// with the session, not listed in SessionSidecarFiles.
+func SessionSpillDir(sessionPath string) string {
+	sessionPath = strings.TrimSpace(sessionPath)
+	if sessionPath == "" {
+		return ""
+	}
+	return sessionStem(sessionPath) + ".spill"
 }

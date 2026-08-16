@@ -7,11 +7,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
-	"unicode/utf8"
 
+	"corvus/internal/compaction"
 	"corvus/internal/event"
 	"corvus/internal/provider"
 )
@@ -150,45 +149,15 @@ func (a *Agent) maybeCompact(ctx context.Context, u *provider.Usage) {
 // tokens to justify the summarization API call. It returns false when the
 // region is too small for the savings to outweigh the extra round-trip cost
 // and latency of calling the summarizer.
+
 func foldEconomics(region []provider.Message) bool {
-	const minFoldTokens = 400
-	return estimateMessagesTokens(region) >= minFoldTokens
+	return compaction.FoldEconomics(region)
 }
-
 func estimateMessagesTokens(msgs []provider.Message) int {
-	total := 0
-	for _, m := range msgs {
-		if m.LocalOnly {
-			continue
-		}
-		total += 4 // chat-message framing overhead
-		total += estimateTextTokens(m.Content)
-		total += estimateTextTokens(m.ReasoningContent)
-		total += estimateTextTokens(m.Name)
-		total += estimateTextTokens(m.ToolCallID)
-		for _, tc := range m.ToolCalls {
-			total += 8
-			total += estimateTextTokens(tc.ID)
-			total += estimateTextTokens(tc.Name)
-			total += estimateTextTokens(tc.Arguments)
-		}
-	}
-	return total
+	return compaction.EstimateMessagesTokens(msgs)
 }
-
 func estimateTextTokens(s string) int {
-	if s == "" {
-		return 0
-	}
-	// A conservative cross-language approximation: English-ish text trends near
-	// four bytes per token, while CJK-heavy text is closer to one rune per token.
-	bytes := len(s)
-	runes := utf8.RuneCountInString(s)
-	byBytes := (bytes + 3) / 4
-	if runes > byBytes {
-		return runes
-	}
-	return byBytes
+	return compaction.EstimateTextTokens(s)
 }
 
 // compact summarizes the older middle of the session and replaces it in place:
@@ -409,9 +378,9 @@ func splitLocalOnlyMessages(msgs []provider.Message) (model, localOnly []provide
 }
 
 // isCompactionSummary reports whether m is a rolling summary from a prior fold.
+
 func isCompactionSummary(m provider.Message) bool {
-	return m.Role == provider.RoleUser &&
-		strings.HasPrefix(strings.TrimLeft(m.Content, "\n "), summaryTagOpen)
+	return compaction.IsCompactionSummary(m)
 }
 
 // pinnedPrefixLen counts the leading messages a fold keeps verbatim: the system
@@ -452,115 +421,30 @@ func (a *Agent) pinnableUserTurn(m provider.Message) bool {
 // turns (a fact the user stated is never summarized away) and prior digests (so a
 // later fold never re-summarizes an earlier digest and drops the facts it already
 // captured) — and the rest, which folds. Order within each group is preserved.
+
 func (a *Agent) partitionFold(region []provider.Message) (kept, fold []provider.Message) {
-	policyKeep := keepIndexes(region, a.keepPolicy)
-	for i, m := range region {
-		if m.LocalOnly || policyKeep[i] || isCompactionSummary(m) || (m.Role == provider.RoleUser && a.pinnableUserTurn(m)) {
-			kept = append(kept, m)
-		} else {
-			fold = append(fold, m)
-		}
-	}
-	return kept, fold
+	return compaction.PartitionFold(region, a.keepPolicy, a.pinnableUserTurn)
 }
-
 func keepIndexes(region []provider.Message, policy KeepPolicy) []bool {
-	keep := make([]bool, len(region))
-	policyStart := 0
-	for i, m := range region {
-		if isCompactionSummary(m) {
-			policyStart = i + 1
-		}
-	}
-	// Retention applies only to messages since the latest digest; older kept
-	// messages are allowed to fold on the next pass so they cannot grow forever.
-	for i, m := range region {
-		if i >= policyStart && shouldKeepMessage(m, policy) {
-			keep[i] = true
-		}
-	}
-	for i, m := range region {
-		if !keep[i] {
-			continue
-		}
-		switch m.Role {
-		case provider.RoleTool:
-			if j := findToolCaller(region, i, m.ToolCallID); j >= 0 {
-				keepToolCallGroup(region, keep, j)
-			}
-		case provider.RoleAssistant:
-			keepToolCallGroup(region, keep, i)
-		}
-	}
-	return keep
+	return compaction.KeepIndexes(region, policy)
 }
-
 func keepToolCallGroup(region []provider.Message, keep []bool, assistantIndex int) {
-	if assistantIndex < 0 || assistantIndex >= len(region) {
-		return
-	}
-	m := region[assistantIndex]
-	if m.Role != provider.RoleAssistant || len(m.ToolCalls) == 0 {
-		return
-	}
-	keep[assistantIndex] = true
-	ids := toolCallIDs(m)
-	for j := assistantIndex + 1; j < len(region) && region[j].Role == provider.RoleTool; j++ {
-		if ids[region[j].ToolCallID] {
-			keep[j] = true
-		}
-	}
+	compaction.KeepToolCallGroup(region, keep, assistantIndex)
 }
-
 func shouldKeepMessage(m provider.Message, policy KeepPolicy) bool {
-	if policy&KeepErrors != 0 && isErrorMessage(m) {
-		return true
-	}
-	if policy&KeepUserMarked != 0 && isUserMarked(m) {
-		return true
-	}
-	return false
+	return compaction.ShouldKeepMessage(m, policy)
 }
-
 func isErrorMessage(m provider.Message) bool {
-	if m.Role != provider.RoleTool {
-		return false
-	}
-	s := strings.TrimSpace(strings.ToLower(m.Content))
-	return strings.HasPrefix(s, "error:") || strings.HasPrefix(s, "blocked:")
+	return compaction.IsErrorMessage(m)
 }
-
 func isUserMarked(m provider.Message) bool {
-	if m.Role != provider.RoleUser {
-		return false
-	}
-	content := strings.TrimSpace(strings.ToLower(m.Content))
-	return strings.HasPrefix(content, "[[keep]]") ||
-		strings.HasPrefix(content, "[keep]") ||
-		strings.HasPrefix(content, "<keep>") ||
-		strings.HasPrefix(content, "<!-- keep -->")
+	return compaction.IsUserMarked(m)
 }
-
 func findToolCaller(region []provider.Message, toolIndex int, id string) int {
-	for i := toolIndex - 1; i >= 0; i-- {
-		if region[i].Role != provider.RoleAssistant {
-			continue
-		}
-		for _, tc := range region[i].ToolCalls {
-			if tc.ID == id {
-				return i
-			}
-		}
-	}
-	return -1
+	return compaction.FindToolCaller(region, toolIndex, id)
 }
-
 func toolCallIDs(m provider.Message) map[string]bool {
-	ids := make(map[string]bool, len(m.ToolCalls))
-	for _, tc := range m.ToolCalls {
-		ids[tc.ID] = true
-	}
-	return ids
+	return compaction.ToolCallIDs(m)
 }
 
 // planCompaction locates the region to summarize. head is the count of leading
@@ -606,24 +490,9 @@ func (a *Agent) tailFloor() int {
 // minKeep messages), then aligns the boundary back off any tool result so the
 // tail never begins with an orphan whose assistant tool_calls were summarized
 // away.
+
 func tailStart(msgs []provider.Message, head, budgetTokens int, tokPerChar float64, minKeep int) int {
-	start := len(msgs)
-	acc := 0
-	for i := len(msgs) - 1; i > head; i-- {
-		c := int(float64(msgChars(msgs[i])) * tokPerChar)
-		if len(msgs)-i > minKeep && acc+c > budgetTokens {
-			break
-		}
-		acc += c
-		start = i
-	}
-	// start == len(msgs) when nothing fit the tail (a session too small to have a
-	// message after head); there is no msgs[start] to align off, and the caller's
-	// minCompactMessages check then no-ops the pass.
-	for start > head && start < len(msgs) && msgs[start].Role == provider.RoleTool {
-		start--
-	}
-	return start
+	return compaction.TailStart(msgs, head, budgetTokens, tokPerChar, minKeep)
 }
 
 // tokPerChar derives a tokens-per-character ratio from the last turn's real
@@ -645,23 +514,12 @@ func (a *Agent) tokPerChar() float64 {
 // msgChars counts the characters that ride to the provider for one message —
 // content plus tool-call names and arguments, but not reasoning (stripped on
 // send).
-func msgChars(m provider.Message) int {
-	if m.LocalOnly {
-		return 0
-	}
-	n := len(m.Content)
-	for _, tc := range m.ToolCalls {
-		n += len(tc.Name) + len(tc.Arguments)
-	}
-	return n
-}
 
+func msgChars(m provider.Message) int {
+	return compaction.MsgChars(m)
+}
 func charsOfMessages(msgs []provider.Message) int {
-	n := 0
-	for _, m := range msgs {
-		n += msgChars(m)
-	}
-	return n
+	return compaction.CharsOfMessages(msgs)
 }
 
 // summarize asks the executor's own provider (no tools) to distill the region
@@ -669,6 +527,11 @@ func charsOfMessages(msgs []provider.Message) int {
 // is appended to the system prompt as extra focus guidance (from /compact <focus>
 // and/or a PreCompact hook).
 func (a *Agent) summarize(ctx context.Context, region []provider.Message, instructions string) (string, error) {
+	if a.compactSummarizer != nil {
+		ctx, cancel := context.WithTimeout(ctx, summaryTimeout)
+		defer cancel()
+		return a.compactSummarizer.Summarize(ctx, region, instructions)
+	}
 	ctx, cancel := context.WithTimeout(ctx, summaryTimeout)
 	defer cancel()
 	ctx = provider.WithRequestAttemptCounter(ctx)
@@ -735,60 +598,24 @@ func (a *Agent) summarizeWithRetry(ctx context.Context, fold []provider.Message,
 // mechanicalFoldDigest is the deterministic stand-in used when the summarizer is
 // unreachable: the foldable region is already archived, so the digest just notes
 // the gap and points the model at the user for anything it needs from before it.
+
 func mechanicalFoldDigest(n int, archive string) string {
-	where := "."
-	if archive != "" {
-		where = " (archived to " + archive + ")."
-	}
-	return fmt.Sprintf("%d earlier message(s) were folded here to free context, but the automatic summary was unavailable%s Ask the user if you need details from before this point.", n, where)
+	return compaction.MechanicalFoldDigest(n, archive)
 }
 
 // renderTranscript flattens messages into a readable transcript for summarization.
+
 func renderTranscript(msgs []provider.Message) string {
-	var b strings.Builder
-	for _, m := range msgs {
-		if m.LocalOnly {
-			continue
-		}
-		switch m.Role {
-		case provider.RoleUser:
-			fmt.Fprintf(&b, "[user]\n%s\n\n", m.Content)
-		case provider.RoleAssistant:
-			if m.Content != "" {
-				fmt.Fprintf(&b, "[assistant]\n%s\n", m.Content)
-			}
-			for _, tc := range m.ToolCalls {
-				fmt.Fprintf(&b, "[assistant calls %s] %s\n", tc.Name, summarizeToolArgs(tc.Arguments))
-			}
-			b.WriteString("\n")
-		case provider.RoleTool:
-			fmt.Fprintf(&b, "[tool %s result]\n%s\n\n", m.Name, m.Content)
-		case provider.RoleSystem:
-			fmt.Fprintf(&b, "[system]\n%s\n\n", m.Content)
-		}
-	}
-	return b.String()
+	return compaction.RenderTranscript(msgs)
 }
 
 // summarizeToolArgs returns a short summary of tool-call arguments instead of
 // the full JSON. This prevents the summarizer from reproducing long argument
 // text (like sub-agent task prompts) in the compaction summary, which would
 // leak into the session as a user message (#4317).
+
 func summarizeToolArgs(args string) string {
-	if args == "" {
-		return "(no arguments)"
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal([]byte(args), &parsed); err != nil {
-		// Not valid JSON — return a length hint instead of raw text.
-		return fmt.Sprintf("(%d bytes)", len(args))
-	}
-	keys := make([]string, 0, len(parsed))
-	for k := range parsed {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return fmt.Sprintf("{%s} (%d keys)", strings.Join(keys, ", "), len(parsed))
+	return compaction.SummarizeToolArgs(args)
 }
 
 // archiveMessages writes the dropped originals to a timestamped .jsonl (one

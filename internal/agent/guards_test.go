@@ -110,17 +110,24 @@ func TestEmptyFinalNotice(t *testing.T) {
 // configurable and Execute sleeps a fixed duration so we can measure
 // serial vs parallel behaviour by wall-clock.
 type fakeTool struct {
-	name     string
-	readOnly bool
-	delay    time.Duration
-	err      error
-	calls    *int32 // shared counter to assert all dispatched
+	name            string
+	readOnly        bool
+	concurrencySafe func(args json.RawMessage) bool
+	delay           time.Duration
+	err             error
+	calls           *int32 // shared counter to assert all dispatched
 }
 
 func (f fakeTool) Name() string            { return f.name }
 func (f fakeTool) Description() string     { return "" }
 func (f fakeTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
 func (f fakeTool) ReadOnly() bool          { return f.readOnly }
+func (f fakeTool) ConcurrencySafe(args json.RawMessage) bool {
+	if f.concurrencySafe != nil {
+		return f.concurrencySafe(args)
+	}
+	return false
+}
 func (f fakeTool) Execute(ctx context.Context, _ json.RawMessage) (string, error) {
 	if f.calls != nil {
 		atomic.AddInt32(f.calls, 1)
@@ -372,5 +379,51 @@ func TestRunResetsEvidenceLedger(t *testing.T) {
 	}
 	if a.evidence.HasSuccessfulCommand("go test ./...") {
 		t.Fatal("new user turn should not inherit previous receipts")
+	}
+}
+
+// TestPartitionToolCallsConcurrencySafeWriterOptsIn verifies a writer tool
+// whose per-call classifier returns true joins the parallel run; a sibling the
+// classifier rejects becomes a serial barrier.
+func TestPartitionToolCallsConcurrencySafeWriterOptsIn(t *testing.T) {
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "ro", readOnly: true})
+	reg.Add(fakeTool{name: "rw", concurrencySafe: func(args json.RawMessage) bool {
+		return string(args) == `{"parallel":true}`
+	}})
+	calls := []provider.ToolCall{
+		{Name: "ro"},
+		{Name: "rw", Arguments: `{"parallel":true}`},
+		{Name: "rw", Arguments: `{"parallel":false}`},
+		{Name: "ro"},
+	}
+	got := partitionToolCalls(reg, calls)
+	want := []toolCallBatch{
+		{start: 0, end: 2, parallel: true},
+		{start: 2, end: 3},
+		{start: 3, end: 4, parallel: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("partitionToolCalls = %+v, want %+v", got, want)
+	}
+}
+
+// TestPartitionToolCallsClassifierPanicFailsClosed verifies a panicking
+// classifier keeps the call exclusive instead of crashing the scheduler.
+func TestPartitionToolCallsClassifierPanicFailsClosed(t *testing.T) {
+	reg := tool.NewRegistry()
+	reg.Add(fakeTool{name: "ro", readOnly: true})
+	reg.Add(fakeTool{name: "boom", concurrencySafe: func(args json.RawMessage) bool {
+		panic("bad classifier")
+	}})
+	calls := []provider.ToolCall{{Name: "ro"}, {Name: "boom"}, {Name: "ro"}}
+	got := partitionToolCalls(reg, calls)
+	want := []toolCallBatch{
+		{start: 0, end: 1, parallel: true},
+		{start: 1, end: 2},
+		{start: 2, end: 3, parallel: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("partitionToolCalls = %+v, want %+v", got, want)
 	}
 }

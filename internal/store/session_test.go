@@ -64,6 +64,7 @@ func TestIsSessionTranscriptName(t *testing.T) {
 		{"session.conflicts.jsonl", false},
 		{"session.guardian.jsonl", false},
 		{"session.guardian.events.jsonl", false},
+		{"session.hooks.jsonl", false},
 		{"session.events.jsonl.damaged", false},
 		{"session.jsonl.meta", false},
 		{"notes.txt", false},
@@ -86,6 +87,7 @@ func TestSessionSidecarFiles(t *testing.T) {
 		"/home/u/.corvus/sessions/abc.events.jsonl.damaged",
 		"/home/u/.corvus/sessions/abc.event-index.json",
 		"/home/u/.corvus/sessions/abc.conflicts.jsonl",
+		"/home/u/.corvus/sessions/abc.hooks.jsonl",
 		"/home/u/.corvus/sessions/abc.recovery.json",
 	}
 	if len(got) != len(want) {

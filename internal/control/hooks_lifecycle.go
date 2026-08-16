@@ -8,6 +8,7 @@ import (
 	"corvus/internal/event"
 	"corvus/internal/jobs"
 	"corvus/internal/provider"
+	"corvus/internal/store"
 )
 
 // lastAssistantText returns the content of the most recent assistant message with
@@ -62,6 +63,7 @@ func (c *Controller) Run(ctx context.Context, input string) (err error) {
 // fires it too (its first post-resume turn).
 func (c *Controller) maybeSessionStart(ctx context.Context) {
 	c.hooks.SetSessionID(c.parentSessionID())
+	c.hooks.SetAuditLog(store.SessionHookLog(c.SessionPath()))
 	c.mu.Lock()
 	if c.startedOnce {
 		c.mu.Unlock()

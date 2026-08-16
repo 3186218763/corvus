@@ -21,6 +21,7 @@ type Runner struct {
 	notify    func(string) // surface a non-blocking (warn/error) hook message; may be nil
 	mu        sync.RWMutex
 	sessionID string
+	auditPath string // guarded by mu; empty disables the audit sidecar
 }
 
 // SetSessionID updates the Claude-compatible session identifier used in hook
@@ -352,6 +353,7 @@ func (r *Runner) handle(rep Report) (bool, string) {
 			blockMsg = msg
 		}
 	}
+	r.audit(rep)
 	return rep.Blocked, blockMsg
 }
 

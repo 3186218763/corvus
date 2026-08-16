@@ -16,6 +16,7 @@ import (
 
 	"corvus/internal/capability"
 	"corvus/internal/checkpoint"
+	"corvus/internal/compaction"
 	"corvus/internal/diff"
 	"corvus/internal/event"
 	"corvus/internal/evidence"
@@ -27,6 +28,8 @@ import (
 	"corvus/internal/provider"
 	"corvus/internal/sandbox"
 	"corvus/internal/shellparse"
+	"corvus/internal/spill"
+	"corvus/internal/store"
 	"corvus/internal/tool"
 	"corvus/internal/workspacelease"
 )
@@ -227,7 +230,9 @@ type Agent struct {
 	prov               provider.Provider
 	tools              *tool.Registry
 	session            *Session
-	sessMu             sync.Mutex // guards the session pointer for external Session()/SetSession
+	sessMu             sync.Mutex  // guards the session pointer and spillDir for external Session()/SetSession/BindSession
+	spillDir           string      // guarded by sessMu; empty disables spill-to-file
+	spillStore         spill.Store // nil uses the local filesystem provider
 	maxSteps           int
 	maxStepsKey        string
 	reasoningByteLimit int
@@ -481,6 +486,11 @@ type Agent struct {
 	recentKeep          int
 	archiveDir          string
 	keepPolicy          KeepPolicy
+	// compactSummarizer, when non-nil, replaces the provider-backed summarizer
+	// for compaction passes — the compaction seam (internal/compaction).
+	// Tests and alternative backends plug in here; the loop owns timeout,
+	// retry, and the mechanical-fallback path.
+	compactSummarizer   compaction.Summarizer
 	compactStuck        bool
 	consecutiveCompacts int
 	// activeTurnCreatedAt identifies the real/synthetic user message that began
@@ -559,11 +569,11 @@ type repeatFailureRecord struct {
 
 // KeepPolicy is a bitmask controlling which messages are preserved beyond the
 // recent tail during compaction.
-type KeepPolicy int
+type KeepPolicy = compaction.KeepPolicy
 
 const (
-	KeepErrors KeepPolicy = 1 << iota
-	KeepUserMarked
+	KeepErrors     = compaction.KeepErrors
+	KeepUserMarked = compaction.KeepUserMarked
 )
 
 // SetPlanMode toggles the plan-first workflow flag. Ordinary calls still use
@@ -748,6 +758,23 @@ func (a *Agent) SetSession(s *Session) {
 	if s != nil {
 		a.rebuildTodoState(s.Snapshot())
 	}
+}
+
+// SetSpillDir points oversized tool outputs at a session spill directory.
+// Empty disables spilling and keeps the plain truncation path. Callers
+// serialise it against a running turn; sessMu guards the swap itself.
+func (a *Agent) SetSpillDir(dir string) {
+	a.sessMu.Lock()
+	a.spillDir = dir
+	a.sessMu.Unlock()
+}
+
+// BindSession swaps the session and its on-disk spill directory together, so
+// a session change can never leave the previous path's spill artifacts bound
+// to the fresh transcript.
+func (a *Agent) BindSession(s *Session, sessionPath string) {
+	a.SetSession(s)
+	a.SetSpillDir(store.SessionSpillDir(sessionPath))
 }
 
 // SetSessionCacheID updates the BranchID-derived sticky session id used for
@@ -3355,21 +3382,23 @@ type toolCallBatch struct {
 }
 
 // partitionToolCalls keeps provider order while letting contiguous known
-// read-only tools run together. Unknown and writer tools are single-call serial
-// batches so they cannot reorder around reads or produce surprising errors.
-// complete_step and todo_write read the turn's evidence ledger. wait and
-// bash_output can merge a background task's receipts into that ledger. These
-// evidence-sensitive tools never join a parallel run, so provider order stays
-// receipt order. use_capability is always serial because its provider-visible
-// read-only surface can resolve to a real MCP writer only inside executeOne;
-// batching it as a reader would let multiple database/API mutations race.
+// read-only tools — plus writer tools whose per-call ConcurrencySafe classifier
+// explicitly opts in — run together. Unknown tools and unclassified writers are
+// single-call serial batches so they cannot reorder around reads or produce
+// surprising errors. complete_step and todo_write read the turn's evidence
+// ledger. wait and bash_output can merge a background task's receipts into that
+// ledger. These evidence-sensitive tools never join a parallel run, so provider
+// order stays receipt order. use_capability is always serial because its
+// provider-visible read-only surface can resolve to a real MCP writer only
+// inside executeOne; batching it as a reader would let multiple database/API
+// mutations race.
 func partitionToolCalls(r *tool.Registry, calls []provider.ToolCall) []toolCallBatch {
 	var batches []toolCallBatch
 	for i := 0; i < len(calls); {
-		if parallelisable(r, calls[i].Name) {
+		if parallelisable(r, calls[i]) {
 			start := i
 			i++
-			for i < len(calls) && parallelisable(r, calls[i].Name) {
+			for i < len(calls) && parallelisable(r, calls[i]) {
 				i++
 			}
 			batches = append(batches, toolCallBatch{start: start, end: i, parallel: true})
@@ -3381,13 +3410,35 @@ func partitionToolCalls(r *tool.Registry, calls []provider.ToolCall) []toolCallB
 	return batches
 }
 
-func parallelisable(r *tool.Registry, name string) bool {
+func parallelisable(r *tool.Registry, call provider.ToolCall) bool {
+	name := call.Name
 	switch name {
 	case "complete_step", "todo_write", "wait", "bash_output", "use_capability":
 		return false
 	}
 	t, _, ambiguous := r.ResolveCall(name)
-	return t != nil && len(ambiguous) == 0 && t.ReadOnly()
+	if t == nil || len(ambiguous) != 0 {
+		return false
+	}
+	if t.ReadOnly() {
+		return true
+	}
+	cs, ok := t.(tool.ConcurrencySafe)
+	if !ok {
+		return false
+	}
+	// Fail closed like the deepseek contract: a panicking classifier keeps the
+	// call exclusive instead of crashing the scheduler.
+	safe := false
+	func() {
+		defer func() {
+			if recover() != nil {
+				safe = false
+			}
+		}()
+		safe = cs.ConcurrencySafe(json.RawMessage(call.Arguments))
+	}()
+	return safe
 }
 
 func runParallel(ctx context.Context, start, end int, run func(int)) int {
@@ -4146,6 +4197,37 @@ func truncateToolOutput(s string) (string, string) {
 	notice := fmt.Sprintf("tool output truncated: %d of %d bytes elided", omitted, len(s))
 	body := head + fmt.Sprintf("\n\n…[truncated %d of %d bytes — rerun with narrower args to see the middle]…\n\n", omitted, len(s)) + tail
 	return body, notice
+}
+
+// boundToolResult caps a tool result before it enters the model context.
+// Oversized results spill to the session spill directory when one is bound:
+// the model receives a short head plus a locator and retrieval guidance, and
+// the full text stays readable through ordinary tools instead of being
+// discarded. When spilling is disabled or fails, the plain truncation path
+// applies. Returns the bounded body plus a one-line user-facing notice when
+// bounding happened (empty when it didn't).
+func (a *Agent) boundToolResult(toolName, result string) (string, string) {
+	if len(result) <= maxToolOutputBytes || a == nil {
+		return result, ""
+	}
+	a.sessMu.Lock()
+	dir := a.spillDir
+	storeImpl := a.spillStore
+	a.sessMu.Unlock()
+	if dir != "" {
+		if storeImpl == nil {
+			storeImpl = spill.Local{}
+		}
+		if loc, err := storeImpl.SaveText(dir, toolName, toolName, result); err == nil {
+			keep := maxToolOutputBytes / 2
+			head := snapToRuneBoundary(result, 0, keep)
+			body := head + fmt.Sprintf("\n\n…[tool output is %d bytes — saved in full to %s; %s]…\n\n",
+				len(result), loc.Path, loc.RetrievalHint)
+			notice := fmt.Sprintf("tool output spilled: %d bytes saved to %s", len(result), loc.Path)
+			return body, notice
+		}
+	}
+	return truncateToolOutput(result)
 }
 
 // snapToRuneBoundary returns s[lo:hi] with the bounds nudged outward until

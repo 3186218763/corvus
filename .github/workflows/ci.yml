@@ -38,6 +38,8 @@ jobs:
             echo "$files"
             exit 1
           fi
+      - name: Catalog docs fresh
+        run: make verify-catalog
       - name: Test
         run: go test ./... -timeout 20m
       - name: Race (core packages)

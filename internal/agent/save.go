@@ -287,9 +287,15 @@ func (s *Session) save(path string, mode sessionSaveMode) error {
 					}
 				}
 				s.markPersisted(path, digest, version, revision, rewriteVersion)
+				if err := verifySessionEventRoundTrip(path, msgs); err != nil {
+					slog.Error("session assert", "err", err)
+				}
 				return nil
 			}
 			s.markPersisted(path, digest, version, decision.revision, rewriteVersion)
+			if err := verifySessionEventRoundTrip(path, msgs); err != nil {
+				slog.Error("session assert", "err", err)
+			}
 			return nil
 		}
 		if decision.appendOnly && probe.native {
@@ -327,6 +333,9 @@ func (s *Session) save(path string, mode sessionSaveMode) error {
 				slog.Warn("session: keeping save after event index write failure", "path", path, "err", err)
 			}
 			s.markPersisted(path, digest, version, revision, rewriteVersion)
+			if err := verifySessionEventRoundTrip(path, msgs); err != nil {
+				slog.Error("session assert", "err", err)
+			}
 			return nil
 		}
 		baseRevision = decision.revision

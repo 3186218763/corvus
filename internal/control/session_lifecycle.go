@@ -80,6 +80,7 @@ func (c *Controller) NewSession() error {
 		return err
 	}
 	c.hooks.SessionEnd(context.Background(), "clear")
+	c.hooks.SetAuditLog(store.SessionHookLog(c.SessionPath()))
 	// Hold snapshotMu across the swap so an in-flight save cannot pair the old
 	// path with the fresh session (or the fresh path with the old session).
 	c.snapshotMu.Lock()
@@ -90,7 +91,7 @@ func (c *Controller) NewSession() error {
 		c.mu.Unlock()
 	}
 	c.setActiveJobSession(c.SessionPath())
-	c.executor.SetSession(agent.NewSession(c.systemPrompt))
+	c.executor.BindSession(agent.NewSession(c.systemPrompt), c.sessionPath)
 	if c.guardianSess != nil {
 		c.guardianSess.Reset()
 	}
@@ -110,6 +111,7 @@ func (c *Controller) NewSession() error {
 	c.startedOnce = true // NewSession fires SessionStart itself; don't re-fire on the next turn
 	c.mu.Unlock()
 	c.hooks.SetSessionID(c.parentSessionID())
+	c.hooks.SetAuditLog(store.SessionHookLog(c.SessionPath()))
 	c.enqueueHookContexts(c.hooks.SessionStart(context.Background(), "clear"))
 	return nil
 }
@@ -165,7 +167,7 @@ func (c *Controller) ClearSession() error {
 		c.mu.Unlock()
 	}
 	c.setActiveJobSession(c.SessionPath())
-	c.executor.SetSession(agent.NewSession(c.systemPrompt))
+	c.executor.BindSession(agent.NewSession(c.systemPrompt), c.sessionPath)
 	if c.guardianSess != nil {
 		c.guardianSess.Reset()
 	}
@@ -235,6 +237,11 @@ func removeSessionArtifacts(path string) error {
 			return err
 		}
 	}
+	if dir := store.SessionSpillDir(path); dir != "" {
+		if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
 	if err := agent.DeleteSubagentsByParent(filepath.Dir(path), agent.BranchID(path)); err != nil {
 		return err
 	}
@@ -267,7 +274,7 @@ func (c *Controller) Resume(s *agent.Session, path string) {
 	// so they stay outside the locked section (snapshotMu is not reentrant).
 	c.snapshotMu.Lock()
 	if c.executor != nil {
-		c.executor.SetSession(s)
+		c.executor.BindSession(s, path)
 	}
 	c.ResetPlannerSession()
 	c.mu.Lock()
@@ -767,7 +774,7 @@ func (c *Controller) adoptDiskSession(path string) bool {
 	if err != nil || loaded == nil {
 		return false
 	}
-	c.executor.SetSession(loaded)
+	c.executor.BindSession(loaded, path)
 	c.ResetPlannerSession()
 	c.rebindCheckpoints(path)
 	c.setActiveJobSession(path)

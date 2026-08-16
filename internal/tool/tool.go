@@ -85,6 +85,27 @@ type PlanModeClassifier interface {
 	PlanModeSafe() bool
 }
 
+// ConcurrencySafe is an optional capability a writer Tool may implement to
+// declare, per call, that its Execute may overlap with sibling calls from the
+// same model batch. The classifier is unary and pure: it inspects only this
+// call's parsed raw arguments, performs no I/O, and mutates nothing. Only an
+// explicit true opts in — a missing classifier, invalid arguments, a panic,
+// or any other return value keeps the call exclusive (a serial barrier).
+//
+// Returning true is the tool's promise that this call may run alongside any
+// sibling call that also returned true, and that its body does not mutate
+// parent-session or other parent-owned state; outputs are committed in model
+// order by the loop regardless of completion order. The interface cannot
+// express relational rules (e.g. "safe only when paths differ from a
+// sibling's"), so such tools must keep returning false.
+//
+// ReadOnly tools are always parallelisable and never need this interface;
+// the scheduler consults it only for writer tools. Modeled on
+// deepseek-harness's isConcurrencySafe(args) contract.
+type ConcurrencySafe interface {
+	ConcurrencySafe(args json.RawMessage) bool
+}
+
 // ReadOnlyExecutionHostMutation marks a target that is logically read-only but
 // must first mutate host state to become executable, such as starting an
 // on-demand MCP process. Strict read-only agents reject these targets even when
