@@ -275,7 +275,7 @@ func TestMCPManagerFitsNarrowWidth(t *testing.T) {
 	p := &mcpManager{snapshot: mcpSnapshot{servers: []mcpServerView{{
 		Name: "managed-search-with-a-long-name", Transport: "stdio", Status: "connected", Tools: 4,
 	}}}}
-	out := p.render(width)
+	out := p.renderWithHeight(width, 0)
 	for i, line := range strings.Split(out, "\n") {
 		if got := visibleWidth(line); got > width {
 			t.Fatalf("MCP row %d width = %d, want <= %d: %q", i, got, width, ansi.Strip(line))

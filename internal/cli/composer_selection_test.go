@@ -529,7 +529,7 @@ func TestFailedImagePastePreservesComposerSelection(t *testing.T) {
 func TestComposerFieldStaysTransparent(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	view := "\x1b[2m› \x1b[0mhello\x1b[m"
 	got := renderComposerField(view, 12)
 	if got != view {
@@ -543,7 +543,7 @@ func TestComposerFieldStaysTransparent(t *testing.T) {
 func TestComposerFieldDoesNotPaintSurfaceBackground(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	rendered := renderComposerField("› draft", 20)
 	if strings.Contains(rendered, bgSGR(activeCLITheme.inputBoxBG)) {
@@ -557,7 +557,7 @@ func TestComposerFieldDoesNotPaintSurfaceBackground(t *testing.T) {
 func TestComposerFieldDoesNotLeakSurfaceIntoNextRow(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	view := "\x1b[2m› \x1b[0mhi\x1b[m"
 	menu := "\x1b[38;5;75m› \x1b[0m/compact"
 	joined := renderComposerField(view, 20) + "\n" + menu
@@ -572,7 +572,7 @@ func TestComposerFieldDoesNotLeakSurfaceIntoNextRow(t *testing.T) {
 func TestComposerFieldPreservesSelectionStyle(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	view := "abc\x1b[7mdef\x1b[0mghi"
 	got := renderComposerField(view, 9)
 	if !strings.Contains(got, "\x1b[7m") {
@@ -586,7 +586,7 @@ func TestComposerFieldPreservesSelectionStyle(t *testing.T) {
 func TestComposerFieldRespectsNoColor(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	view := "hello"
 	if got := renderComposerField(view, 10); got != view {
 		t.Fatalf("NO_COLOR field must pass through unchanged, got %q", got)
@@ -611,7 +611,7 @@ func TestComposerFieldStaysTransparentCrossTheme(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			activeColorProfile = tc.profile
-			configureCLITheme(tc.mode)
+			configureCLIThemeWithStyle(tc.mode, "")
 			view := "› draft text"
 			rendered := renderComposerField(view, 20)
 			if strings.Contains(rendered, bgSGR(activeCLITheme.inputBoxBG)) ||

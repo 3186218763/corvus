@@ -12,7 +12,7 @@ import (
 func TestBashToolCardHighlightsAndContinues(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	card := toolCard("bash", `{"command":"go build ./...\ngo test ./..."}`, 60)
 	lines := strings.Split(card, "\n")
@@ -103,7 +103,7 @@ func TestEditedCard(t *testing.T) {
 func TestExploredCardSingleRead(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	card := toolCard("read_file", `{"path":"toolcard.go"}`, 80)
 	plain := ansi.Strip(card)
@@ -206,7 +206,7 @@ func TestExploredCardMaxLeaves(t *testing.T) {
 func TestToolCardSemanticVerbColors(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	cases := []struct {
 		name, args string
 		color      cliColor

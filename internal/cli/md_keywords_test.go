@@ -11,7 +11,7 @@ import (
 func TestHighlightProseTextUsesSemanticColorsAndPreservesText(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	budget := newProseHighlightBudget()
 	input := "The renderer parsed the cache and passed the API check."
 	got := highlightProseText(input, &budget)
@@ -33,7 +33,7 @@ func TestHighlightProseTextUsesSemanticColorsAndPreservesText(t *testing.T) {
 func TestHighlightProseTextMatchesChineseAndStructuredTokens(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	budget := newProseHighlightBudget()
 	input := "通过 internal/cli/md.go 调用 Function() 和 pkg.Symbol，失败时重试。"
 	got := highlightProseText(input, &budget)
@@ -55,7 +55,7 @@ func TestHighlightProseTextMatchesChineseAndStructuredTokens(t *testing.T) {
 func TestHighlightProseTextMatchesCompleteFilenameAndAbsolutePath(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	budget := newProseHighlightBudget()
 	input := "Update theme.go before /srv/corvus/internal/cli/md.go."
 	got := highlightProseText(input, &budget)
@@ -75,7 +75,7 @@ func TestHighlightProseTextMatchesCompleteFilenameAndAbsolutePath(t *testing.T) 
 func TestHighlightProseTextPreservesUnicodeBeforeASCIIKeyword(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	budget := newProseHighlightBudget()
 	input := "\u212A renderer is ready."
 	got := highlightProseText(input, &budget)
@@ -90,7 +90,7 @@ func TestHighlightProseTextPreservesUnicodeBeforeASCIIKeyword(t *testing.T) {
 func TestHighlightProseTextCapsMatchesAndDeduplicates(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	budget := newProseHighlightBudget()
 	got := highlightProseText("renderer parser cache API TUI model tool renderer parser", &budget)
 	if gotCount := strings.Count(got, "\x1b[38;"); gotCount > maxProseHighlights {
@@ -104,7 +104,7 @@ func TestHighlightProseTextCapsMatchesAndDeduplicates(t *testing.T) {
 func TestHighlightProseTextNoColorIsExact(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	input := "renderer 通过 internal/cli/md.go"
 	if got := highlightProseText(input, nil); got != input {
 		t.Fatalf("NO_COLOR text changed: %q", got)
@@ -124,7 +124,7 @@ func TestHighlightProseTextAdaptsToLightAndTrueColor(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			activeColorProfile = tc.profile
-			configureCLITheme(tc.mode)
+			configureCLIThemeWithStyle(tc.mode, "")
 			budget := newProseHighlightBudget()
 			got := highlightProseText("renderer passed", &budget)
 			if !strings.Contains(got, fgSGR(activeCLITheme.secondary)+"renderer") {

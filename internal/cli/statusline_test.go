@@ -525,7 +525,7 @@ func TestEffortTagExplicitValueUsesThemeInfo(t *testing.T) {
 		{mode: "light", infoSGR: "\033[1;38;5;26m"},
 	} {
 		t.Run(tt.mode, func(t *testing.T) {
-			configureCLITheme(tt.mode)
+			configureCLIThemeWithStyle(tt.mode, "")
 			m := newTestChatTUI()
 			m.effortLevel = "max"
 			content := m.effortTag()

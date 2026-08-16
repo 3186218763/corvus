@@ -6,8 +6,6 @@ import (
 	"os"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
-
 	"corvus/internal/config"
 	"corvus/internal/control"
 	"corvus/internal/skill"
@@ -219,30 +217,10 @@ func (m *chatTUI) scheduleSkillSessionRefresh(reason, notice string) bool {
 	if notice != "" {
 		m.notice(notice)
 	}
-	oldCtrl := m.ctrl
-	build := m.buildController
-	ref := m.modelRef
-	m.modelSwitchPending = true
-	m.pendingModelSwitch = func() tea.Msg {
-		c, err := build(controllerBuildSpec{
-			ModelRef:         ref,
-			RuntimeProfile:   m.runtimeProfile,
-			ToolApprovalMode: oldCtrl.ToolApprovalMode(),
-			PlanMode:         oldCtrl.PlanMode(),
-		}, carried, prevPath, oldCtrl)
-		if err != nil {
-			return modelSwitchMsg{ref: ref, err: err}
-		}
-		return modelSwitchMsg{
-			ref:      ref,
-			ctrl:     c,
-			oldCtrl:  oldCtrl,
-			label:    c.Label(),
-			commands: c.Commands(),
-			skills:   c.SlashSkills(),
-			host:     c.Host(),
-		}
-	}
+	m.armControllerRebuild(controllerBuildSpec{
+		ModelRef:       m.modelRef,
+		RuntimeProfile: m.runtimeProfile,
+	}, carried, prevPath, modelSwitchMsg{ref: m.modelRef})
 	return true
 }
 

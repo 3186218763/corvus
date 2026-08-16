@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestFrameLines(t *testing.T) {
+func TestFrameLinesCalc(t *testing.T) {
 	tests := []struct {
 		name      string
 		filtered  int
@@ -64,24 +64,24 @@ func TestFrameLines(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FrameLines(tt.filtered, tt.termRows, tt.searching)
+			got := frameLines(tt.filtered, tt.termRows, tt.searching)
 			if got != tt.wantLines {
-				t.Errorf("FrameLines(%d, %d, %v) = %d, want %d",
+				t.Errorf("frameLines(%d, %d, %v) = %d, want %d",
 					tt.filtered, tt.termRows, tt.searching, got, tt.wantLines)
 			}
 		})
 	}
 }
 
-func TestFrameLinesNeverExceedsTerminal(t *testing.T) {
+func TestFrameLinesNeverExceedsTerminalCap(t *testing.T) {
 	// The frame must never print more lines than the terminal has rows.
 	// Otherwise the terminal scrolls and cursor repositioning drifts.
 	termRows := 24
 	for _, searching := range []bool{false, true} {
 		for n := 0; n <= 200; n++ {
-			lines := FrameLines(n, termRows, searching)
+			lines := frameLines(n, termRows, searching)
 			if lines > termRows {
-				t.Errorf("FrameLines(%d, %d, searching=%v) = %d, exceeds terminal",
+				t.Errorf("frameLines(%d, %d, searching=%v) = %d, exceeds terminal",
 					n, termRows, searching, lines)
 			}
 		}
@@ -108,19 +108,19 @@ func TestFilterMenuItems(t *testing.T) {
 		{name: "mimo-pro", desc: "MiMo Pro"},
 	}
 	// Empty query returns all.
-	if got := filterMenuItems(items, ""); len(got) != 3 {
+	if got, _ := filterItems(items, ""); len(got) != 3 {
 		t.Errorf("empty query: got %d, want 2", len(got))
 	}
 	// Case-insensitive match on name.
-	if got := filterMenuItems(items, "GPT"); len(got) != 1 || got[0].name != "gpt-4o" {
+	if got, _ := filterItems(items, "GPT"); len(got) != 1 || got[0].name != "gpt-4o" {
 		t.Errorf("GPT: got %v", got)
 	}
 	// Case-insensitive match on desc.
-	if got := filterMenuItems(items, "mimo"); len(got) != 1 || got[0].name != "mimo-pro" {
+	if got, _ := filterItems(items, "mimo"); len(got) != 1 || got[0].name != "mimo-pro" {
 		t.Errorf("mimo: got %v", got)
 	}
 	// No match.
-	if got := filterMenuItems(items, "claude"); len(got) != 0 {
+	if got, _ := filterItems(items, "claude"); len(got) != 0 {
 		t.Errorf("claude: got %d, want 0", len(got))
 	}
 }

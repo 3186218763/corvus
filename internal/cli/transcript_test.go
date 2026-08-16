@@ -16,7 +16,7 @@ import (
 func TestAssistantMarkdownHasIdentityAndIndentedBody(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	rendered := renderAssistantMarkdown("A concise answer that wraps across the available width.", 32, true)
 	lines := strings.Split(ansi.Strip(rendered), "\n")
@@ -47,7 +47,7 @@ func TestAssistantMarkdownHasIdentityAndIndentedBody(t *testing.T) {
 func TestReplaySectionsKeepAssistantIdentity(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	sections := replaySectionsFor([]provider.Message{
 		{Role: provider.RoleUser, Content: "Which version?"},
@@ -68,7 +68,7 @@ func TestReplaySectionsKeepAssistantIdentity(t *testing.T) {
 func TestReplaySectionsRestoreInterruptedLocalOutput(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	sections := replaySectionsFor([]provider.Message{
 		{Role: provider.RoleUser, Content: "change config"},
@@ -178,7 +178,7 @@ func TestSelectedTextPreservesExploreTreeFormatting(t *testing.T) {
 func TestSelectedTextRestoresMathWithoutReusingRawColumns(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.width = 80
@@ -232,7 +232,7 @@ func TestSelectedTextRestoresMathWithoutReusingRawColumns(t *testing.T) {
 func TestSelectedTextRestoresMathFromReplayBundle(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.width = 80
@@ -305,7 +305,7 @@ func TestSelectedTextRestoresMathFromReplayBundle(t *testing.T) {
 func TestSelectedTextPreservesProseAroundMath(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.width = 80
@@ -342,7 +342,7 @@ func TestSelectedTextPreservesProseAroundMath(t *testing.T) {
 func TestSelectedTextRestoresMathWrappedAcrossDisplayLinesOnce(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.width = 10
@@ -614,7 +614,7 @@ func TestEnsureBlankNoOpOnEmptyTranscript(t *testing.T) {
 func TestAssistantMarkdownHistoryDropsName(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	named := renderAssistantMarkdown("Live answer", 48, true)
 	if plain := ansi.Strip(named); !strings.HasPrefix(plain, "• Live answer") {
@@ -670,7 +670,7 @@ func TestSanitizeTerminalTextStripsControlSequences(t *testing.T) {
 func TestRenderEntryPointsSanitizeControlSequences(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.TrueColor
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	payload := "evil\x1b[2J\x1b[?25l\x1b]52;c;dGVzdA==\x07text"
 	if got := ansi.Strip(renderUserBubble(payload, 80, false, true)); strings.Contains(got, "\x1b") {
@@ -687,7 +687,7 @@ func TestRenderEntryPointsSanitizeControlSequences(t *testing.T) {
 func TestUserBubbleStaysSingleLineWhenColorOn(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.TrueColor
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	got := renderUserBubble("hello rhythm", 40, false, true)
 	if strings.Contains(got, bgSGR(activeCLITheme.userBubbleBG)) {
@@ -706,7 +706,7 @@ func TestUserBubbleStaysSingleLineWhenColorOn(t *testing.T) {
 func TestAltScreenTranscriptSourcesUseContentWidth(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.nativeScrollback = false
@@ -729,7 +729,7 @@ func TestAltScreenTranscriptSourcesUseContentWidth(t *testing.T) {
 func TestUserBubbleDoesNotPaintFullRowBackground(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	rendered := renderUserBubble("history prompt", 40, false, false)
 	if strings.Contains(rendered, bgSGR(activeCLITheme.userBubbleBG)) {
@@ -755,7 +755,7 @@ func TestUserBubbleNoPipeWhenColorOff(t *testing.T) {
 func TestUserBubbleFadedHistory(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	current := renderUserBubble("now", 80, false, true)
 	if !strings.Contains(current, fgSGR(activeCLITheme.accent)) {
@@ -773,7 +773,7 @@ func TestUserBubbleFadedHistory(t *testing.T) {
 func TestSecondExchangeDemotesFirst(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "first question"})
@@ -804,7 +804,7 @@ func TestSecondExchangeDemotesFirst(t *testing.T) {
 func TestNonLiveCommitsKeepMarkers(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q"})
@@ -822,7 +822,7 @@ func TestNonLiveCommitsKeepMarkers(t *testing.T) {
 func TestUnsendRegainsAssistantName(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q1"})
@@ -841,7 +841,7 @@ func TestUnsendRegainsAssistantName(t *testing.T) {
 func TestRemoveLastAnswerRetagsPrevious(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.commitTranscriptSource(transcriptSource{kind: transcriptSourceUser, raw: "q"})
@@ -859,7 +859,7 @@ func TestRemoveLastAnswerRetagsPrevious(t *testing.T) {
 func TestReflowPreservesMarkers(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.width = 80
@@ -886,7 +886,7 @@ func TestReflowPreservesMarkers(t *testing.T) {
 func TestReplayBundleInternalLiveness(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	history := []provider.Message{
 		{Role: provider.RoleUser, Content: "old question"},
@@ -944,7 +944,7 @@ func TestReplayBundleInternalLiveness(t *testing.T) {
 func TestCopyTranscriptDropsNameOnHistoryAnswers(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.width = 80
@@ -969,7 +969,7 @@ func TestCopyTranscriptDropsNameOnHistoryAnswers(t *testing.T) {
 func TestAssistantMarkdownBlankContentRendersNothing(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	for _, raw := range []string{"", "\n", "\n\n", "  ", "\t", "\r\n", "\u200b", "\ufeff"} {
 		if got := renderAssistantMarkdown(raw, 60, false); got != "" {

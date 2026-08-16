@@ -69,12 +69,6 @@ func cheatsheetSections() []cheatsheetSection {
 	}
 }
 
-// renderCheatsheet draws the static keyboard cheatsheet panel at the given
-// terminal width, framed like other bottom pickers (choicePanelStyle).
-func renderCheatsheet(width int) string {
-	return renderCheatsheetRows(width, 0)
-}
-
 func renderCheatsheetRows(width, maxRows int) string {
 	w := max(viewWidth(width), 10)
 	contentWidth := max(w-2, 1)

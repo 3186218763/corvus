@@ -48,7 +48,7 @@ func TestCheatsheetEscCloses(t *testing.T) {
 }
 
 func TestCheatsheetListsCriticalBindings(t *testing.T) {
-	body := ansi.Strip(renderCheatsheet(80))
+	body := ansi.Strip(renderCheatsheetRows(80, 0))
 	for _, want := range []string{"Ctrl+P", "Shift+Tab", "Ctrl+Y", "Ctrl+B", "Ctrl+O", "Esc", "/status", "?"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("cheatsheet missing %q:\n%s", want, body)
@@ -58,7 +58,7 @@ func TestCheatsheetListsCriticalBindings(t *testing.T) {
 
 func TestCheatsheetFitsNarrowWidth(t *testing.T) {
 	const width = 30
-	out := renderCheatsheet(width)
+	out := renderCheatsheetRows(width, 0)
 	for i, line := range strings.Split(out, "\n") {
 		if got := visibleWidth(line); got > width {
 			t.Fatalf("cheatsheet row %d width = %d, want <= %d: %q", i, got, width, ansi.Strip(line))

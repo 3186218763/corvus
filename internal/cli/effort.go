@@ -102,30 +102,11 @@ func (m *chatTUI) runEffortCommand(input string) tea.Cmd {
 		m.notice("effort: " + sessionLeaseHeldNotice(err))
 		return nil
 	}
-	oldCtrl := m.ctrl
-	build := m.buildController
-	m.modelSwitchPending = true
-	m.pendingModelSwitch = func() tea.Msg {
-		c, err := build(controllerBuildSpec{
-			ModelRef:         ref,
-			RuntimeProfile:   m.runtimeProfile,
-			ToolApprovalMode: oldCtrl.ToolApprovalMode(),
-			PlanMode:         oldCtrl.PlanMode(),
-			EffortOverride:   &effort,
-		}, carried, prevPath, oldCtrl)
-		if err != nil {
-			return modelSwitchMsg{ref: ref, err: err}
-		}
-		return modelSwitchMsg{
-			ref:      ref,
-			ctrl:     c,
-			oldCtrl:  oldCtrl,
-			label:    c.Label(),
-			commands: c.Commands(),
-			skills:   c.SlashSkills(),
-			host:     c.Host(),
-		}
-	}
+	m.armControllerRebuild(controllerBuildSpec{
+		ModelRef:       ref,
+		RuntimeProfile: m.runtimeProfile,
+		EffortOverride: &effort,
+	}, carried, prevPath, modelSwitchMsg{ref: ref})
 	m.notice(fmt.Sprintf("effort for %s set to %s", entry.Name, display))
 	return m.pendingModelSwitch
 }

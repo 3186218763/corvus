@@ -40,7 +40,7 @@ func TestSelectionIndexKey(t *testing.T) {
 func TestSelectionRowUsesLetters(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	sel := ansi.Strip(selectionRow(true, 0, "", "Yes, just this once", false))
 	if !strings.Contains(sel, "a.") || !strings.Contains(sel, "Yes") {

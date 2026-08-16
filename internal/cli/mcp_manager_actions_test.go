@@ -53,7 +53,7 @@ auto_start = false
 	writeConfig(cwdRoot, "cwd-token")
 	t.Chdir(cwdRoot)
 
-	ctrl, err := setupProfile(context.Background(), "", 0, false, event.Discard, "", controllerRoot)
+	ctrl, err := setupProfileWithOverrides(context.Background(), "", 0, false, event.Discard, "", cliBuildOverrides{WorkspaceRoot: controllerRoot})
 	if err != nil {
 		t.Fatalf("setupProfile: %v", err)
 	}

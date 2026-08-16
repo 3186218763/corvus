@@ -1580,7 +1580,7 @@ func TestUserBubbleEchoedImmediately(t *testing.T) {
 func TestUserBubbleIsLightweightTranscriptLine(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	got := renderUserBubble("hello world", 80, false, true)
 	plain := ansi.Strip(got)
@@ -1618,7 +1618,7 @@ func TestUserBubbleTransparentCrossTheme(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			activeColorProfile = tc.profile
-			configureCLITheme(tc.mode)
+			configureCLIThemeWithStyle(tc.mode, "")
 			got := renderUserBubble("hello world", 80, false, true)
 			if strings.Contains(got, bgSGR(activeCLITheme.inputBoxBG)) ||
 				strings.Contains(got, bgSGR(activeCLITheme.userBubbleBG)) {
@@ -4601,7 +4601,7 @@ func TestBottomPanelsFallbackWhenInvalid(t *testing.T) {
 func TestReplayBundleTrailingUserDemotesInternalAssistant(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	history := []provider.Message{
 		{Role: provider.RoleUser, Content: "q1"},

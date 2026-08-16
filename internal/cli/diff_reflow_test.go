@@ -17,7 +17,7 @@ import (
 func TestDiffSourceReflowsWithoutWrappingBars(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.TrueColor
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.width = 100

@@ -91,7 +91,7 @@ func TestSetupProfilePinsExplicitDirOverGitRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("workspaceRootForDir: %v", err)
 	}
-	ctrl, err := setupProfile(context.Background(), "", 0, false, event.Discard, "", workspaceRoot)
+	ctrl, err := setupProfileWithOverrides(context.Background(), "", 0, false, event.Discard, "", cliBuildOverrides{WorkspaceRoot: workspaceRoot})
 	if err != nil {
 		t.Fatalf("setupProfile with explicit --dir: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestSetupProfilePinsExplicitDirOverGitRoot(t *testing.T) {
 
 	// No --dir: still falls back to the nearest git root from the CWD (sub is
 	// still inside repo, which has the .git marker).
-	ctrlFallback, err := setupProfile(context.Background(), "", 0, false, event.Discard, "", "")
+	ctrlFallback, err := setupProfileWithOverrides(context.Background(), "", 0, false, event.Discard, "", cliBuildOverrides{WorkspaceRoot: ""})
 	if err != nil {
 		t.Fatalf("setupProfile with no --dir: %v", err)
 	}

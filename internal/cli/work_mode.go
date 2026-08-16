@@ -124,38 +124,16 @@ func (m *chatTUI) runWorkModeCommand(input string) tea.Cmd {
 	m.notice(fmt.Sprintf(i18n.M.WorkModeSwitchingFmt, display))
 	// Pre-action warning: work/token mode rebuilds the tools surface, which
 	// sits in the cacheable prefix and may reset hit rate after the switch.
-	m.noticeCacheInvalidation(CacheInvalidationReasonTokenMode)
-	oldCtrl := m.ctrl
-	build := m.buildController
-	ref := m.modelRef
-	m.modelSwitchPending = true
-	m.pendingModelSwitch = func() tea.Msg {
-		c, err := build(controllerBuildSpec{
-			ModelRef:         ref,
-			RuntimeProfile:   target,
-			ToolApprovalMode: oldCtrl.ToolApprovalMode(),
-			PlanMode:         oldCtrl.PlanMode(),
-		}, carried, resumePath, oldCtrl)
-		if err != nil {
-			return modelSwitchMsg{
-				ref:           ref,
-				profile:       target,
-				failurePrefix: "work-mode",
-				err:           err,
-			}
-		}
-		return modelSwitchMsg{
-			ref:           ref,
-			profile:       target,
-			ctrl:          c,
-			oldCtrl:       oldCtrl,
-			label:         c.Label(),
-			commands:      c.Commands(),
-			skills:        c.SlashSkills(),
-			host:          c.Host(),
-			successNotice: fmt.Sprintf(i18n.M.WorkModeSwitchedFmt, display),
-		}
-	}
+	m.noticeCacheInvalidation(cacheInvalidationReasonTokenMode)
+	m.armControllerRebuild(controllerBuildSpec{
+		ModelRef:       m.modelRef,
+		RuntimeProfile: target,
+	}, carried, resumePath, modelSwitchMsg{
+		ref:           m.modelRef,
+		profile:       target,
+		failurePrefix: "work-mode",
+		successNotice: fmt.Sprintf(i18n.M.WorkModeSwitchedFmt, display),
+	})
 	return m.pendingModelSwitch
 }
 

@@ -68,7 +68,7 @@ func TestQuickPickerVimKeysBecomeTextAfterSearchStarts(t *testing.T) {
 }
 
 func TestQuickPickerWindowTracksSelection(t *testing.T) {
-	start, end := quickPickerWindow(20, 18)
+	start, end := visibleRange(20, 18, quickPickerMaxVisible)
 	if start != 12 || end != 20 {
 		t.Fatalf("window = [%d,%d), want [12,20)", start, end)
 	}

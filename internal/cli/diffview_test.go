@@ -64,7 +64,7 @@ func TestDiffBlockNilWithoutDiff(t *testing.T) {
 func TestToolHeadUsesCategoryAndArgColors(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	head := toolHead("write_file", "x.go", 80)
 	if !strings.Contains(head, fgSGR(activeCLITheme.success)) {
@@ -216,7 +216,7 @@ func TestTokeniseBashLeavesOperatorTokens(t *testing.T) {
 func TestHighlightBashPreservesTextAndAddsColor(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	cmd := `git add . && git commit -m "fix" --no-verify`
 	got := highlightBash(cmd)
@@ -264,7 +264,7 @@ func TestFileVerb(t *testing.T) {
 func TestDiffBlockCodexHeader(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	d := event.FileDiff{Diff: "@@ -1 +1 @@\n-a\n+b\n", Added: 1, Removed: 1}
 	block := diffBlock("edit_file", `{"path":"pkg/x.go"}`, d, 80, 40)
@@ -302,7 +302,7 @@ func TestDiffBlockCodexHeaderPureDelete(t *testing.T) {
 func TestDiffBarDimsDeleteContent(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	line := diffBar('-', "const x = 1", "x.go", 40, bgSGR(activeCLITheme.diffDelBG), fgSGR(activeCLITheme.err), 1, 2)
 	if !strings.Contains(line, ansiDim) {
@@ -317,7 +317,7 @@ func TestDiffBarDimsDeleteContent(t *testing.T) {
 func TestDiffBarAddNotDimmed(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	line := diffBar('+', "func main() {}", "x.go", 40, bgSGR(activeCLITheme.diffAddBG), fgSGR(activeCLITheme.success), 1, 2)
 	if strings.Contains(line, ansiDim) {

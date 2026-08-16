@@ -28,12 +28,12 @@ func TestCountUntracked(t *testing.T) {
 }
 
 func TestGitStatusRender(t *testing.T) {
-	got := ansi.Strip(gitStatus{Repo: "mySkills", Branch: "main", Added: 15}.Render())
+	got := ansi.Strip(gitStatus{Repo: "mySkills", Branch: "main", Added: 15}.RenderRepo(accent("mySkills")))
 	if got != "mySkills@main  +15 -0" {
 		t.Fatalf("Render = %q", got)
 	}
 
-	got = ansi.Strip(gitStatus{Repo: "repo", Branch: "abc1234", Detached: true, Untracked: 2}.Render())
+	got = ansi.Strip(gitStatus{Repo: "repo", Branch: "abc1234", Detached: true, Untracked: 2}.RenderRepo(accent("repo")))
 	if got != "repo@abc1234  ?2" {
 		t.Fatalf("detached Render = %q", got)
 	}
@@ -43,47 +43,6 @@ func TestGitStatusRenderRepoUsesSuppliedRepoStyle(t *testing.T) {
 	got := ansi.Strip(gitStatus{Repo: "repo", Branch: "main"}.RenderRepo("[repo]"))
 	if got != "[repo]@main" {
 		t.Fatalf("RenderRepo = %q, want styled repo name only", got)
-	}
-}
-
-func TestGitStatusRenderWithinCompactsRepoBeforeBranch(t *testing.T) {
-	status := gitStatus{Repo: "VeryLongDeepSeekCorvusWorkspace", Branch: "codex/cli-tui-status-row"}
-
-	full := ansi.Strip(status.RenderWithin(80, statusAutoColor))
-	if full != "VeryLongDeepSeekCorvusWorkspace@codex/cli-tui-status-row" {
-		t.Fatalf("wide RenderWithin = %q", full)
-	}
-
-	got := ansi.Strip(status.RenderWithin(46, statusAutoColor))
-	if ansi.StringWidth(got) > 46 {
-		t.Fatalf("compacted status width = %d, want <= 46: %q", ansi.StringWidth(got), got)
-	}
-	if !strings.Contains(got, "@codex/cli-tui-status-row") {
-		t.Fatalf("branch should stay intact while repo can be compacted: %q", got)
-	}
-	if !strings.Contains(got, "…") {
-		t.Fatalf("long repo should be compacted with ellipsis: %q", got)
-	}
-}
-
-func TestGitStatusRenderWithinKeepsDirtySuffix(t *testing.T) {
-	status := gitStatus{
-		Repo:      "VeryLongDeepSeekCorvusWorkspace",
-		Branch:    "codex/cli-tui-status-row",
-		Added:     12,
-		Removed:   3,
-		Untracked: 4,
-	}
-
-	got := ansi.Strip(status.RenderWithin(35, statusAutoColor))
-	if ansi.StringWidth(got) > 35 {
-		t.Fatalf("compacted dirty status width = %d, want <= 35: %q", ansi.StringWidth(got), got)
-	}
-	if !strings.Contains(got, "+12 -3 ?4") {
-		t.Fatalf("dirty suffix should be preserved: %q", got)
-	}
-	if !strings.Contains(got, "@") || !strings.Contains(got, "…") {
-		t.Fatalf("identity should remain segmented and compacted: %q", got)
 	}
 }
 
@@ -119,7 +78,7 @@ func TestLoadGitStatus(t *testing.T) {
 	if status.Added != 2 || status.Removed != 1 || status.Untracked != 1 {
 		t.Fatalf("status changes = (+%d -%d ?%d), want (+2 -1 ?1)", status.Added, status.Removed, status.Untracked)
 	}
-	if plain := ansi.Strip(status.Render()); !strings.Contains(plain, filepath.Base(root)+"@main") || !strings.Contains(plain, "+2 -1 ?1") {
+	if plain := ansi.Strip(status.RenderRepo(accent(status.Repo))); !strings.Contains(plain, filepath.Base(root)+"@main") || !strings.Contains(plain, "+2 -1 ?1") {
 		t.Fatalf("rendered status = %q", plain)
 	}
 }

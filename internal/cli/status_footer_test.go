@@ -22,7 +22,7 @@ func TestCacheHitRateShowsOnlyRate(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	defer i18n.DetectLanguage("en")
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	i18n.DetectLanguage("zh")
 
 	got := renderCacheHitRate(900, 100)
@@ -45,7 +45,7 @@ func TestCacheHitRateShowsZeroPercent(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	defer i18n.DetectLanguage("en")
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	i18n.DetectLanguage("en")
 
 	got := renderCacheHitRate(0, 100)
@@ -75,7 +75,7 @@ func TestCacheHitRateAdaptsContrastAcrossThemes(t *testing.T) {
 		{mode: "light", labelSGR: "\033[38;5;240m", valueSGR: "\033[38;5;238m"},
 	} {
 		t.Run(tt.mode, func(t *testing.T) {
-			configureCLITheme(tt.mode)
+			configureCLIThemeWithStyle(tt.mode, "")
 			receipt := renderCacheHitRate(900, 100)
 			for _, want := range []string{tt.labelSGR + "cached", tt.valueSGR + "90.00%"} {
 				if !strings.Contains(receipt, want) {
@@ -99,7 +99,7 @@ func TestStatusFooterSemanticPaletteAcrossThemes(t *testing.T) {
 		{mode: "light", labelSGR: "\033[38;5;240m", valueSGR: "\033[38;5;238m", infoSGR: "\033[38;5;26m", secondarySGR: "\033[38;5;104m"},
 	} {
 		t.Run(tt.mode, func(t *testing.T) {
-			configureCLITheme(tt.mode)
+			configureCLIThemeWithStyle(tt.mode, "")
 			m := newTestChatTUI()
 			m.label = "deepseek-v4-flash"
 			m.effortLevel = "auto"
@@ -135,7 +135,7 @@ func TestStatusFooterThemesKeepIdenticalGeometry(t *testing.T) {
 
 	render := func(mode string, profile colorprofile.Profile) string {
 		activeColorProfile = profile
-		configureCLITheme(mode)
+		configureCLIThemeWithStyle(mode, "")
 		primary := m.primaryStatusLine(false, false)
 		return ansi.Strip(m.renderStatusBlock(primary, 132))
 	}
@@ -158,11 +158,11 @@ func TestStatusFooterGitAdaptsToTheme(t *testing.T) {
 		{mode: "light", gitSGR: "\033[38;5;136m"},
 	} {
 		t.Run(tt.mode, func(t *testing.T) {
-			configureCLITheme(tt.mode)
+			configureCLIThemeWithStyle(tt.mode, "")
 			// Git porcelain is off default chrome; color still applies when rendered
 			// for /status (gitTag) or other detail hosts.
 			git := gitStatus{Repo: "DeepSeek-Corvus", Branch: "db4be5e6", Detached: true}.
-				RenderWithin(80, activeCLITheme.warn)
+				RenderRepo(themeFg(activeCLITheme.warn, "DeepSeek-Corvus"))
 			if !strings.Contains(git, tt.gitSGR+"DeepSeek-Corvus") {
 				t.Fatalf("%s Git identity should use warm semantic colour: %q", tt.mode, git)
 			}
@@ -222,7 +222,7 @@ func TestSingleStatusLineRightAlignsWhenItFits(t *testing.T) {
 func TestContextFooterColorsOnlyValuesByUrgency(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	normal := strings.Join(renderContextStatusGroups(10, 100, .8), " ")
 	if !strings.Contains(normal, "\033[38;5;247mCTX") || !strings.Contains(normal, "\033[38;5;253m10 (10%)") {
@@ -243,7 +243,7 @@ func TestContextFooterColorsOnlyValuesByUrgency(t *testing.T) {
 func TestStatusFooterNoColorKeepsSemanticLabels(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	m := newTestChatTUI()
 	m.label = "deepseek-v4-flash"

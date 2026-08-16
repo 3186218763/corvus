@@ -20,7 +20,7 @@ func TestConfigureCLIThemeSwitchesModeAndDefaultStyle(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
 
-	configureCLITheme("light")
+	configureCLIThemeWithStyle("light", "")
 	if activeCLITheme.name != "light" || activeCLITheme.style != "codex-light" {
 		t.Fatalf("light theme = %s/%s, want light/codex-light", activeCLITheme.name, activeCLITheme.style)
 	}
@@ -28,7 +28,7 @@ func TestConfigureCLIThemeSwitchesModeAndDefaultStyle(t *testing.T) {
 		t.Fatalf("light default accent = %q, want codex-light xterm 62", got)
 	}
 
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	if activeCLITheme.name != "dark" || activeCLITheme.style != "codex" {
 		t.Fatalf("dark theme = %s/%s, want dark/codex", activeCLITheme.name, activeCLITheme.style)
 	}
@@ -51,7 +51,7 @@ func TestConfigureCLIThemeStyleOverride(t *testing.T) {
 		t.Fatalf("aurora accent = %q, want xterm 79", got)
 	}
 
-	configureCLITheme("glacier")
+	configureCLIThemeWithStyle("glacier", "")
 	if activeCLITheme.name != "light" || activeCLITheme.style != "glacier" {
 		t.Fatalf("theme style command resolved %s/%s, want light/glacier", activeCLITheme.name, activeCLITheme.style)
 	}
@@ -192,12 +192,12 @@ func TestAutoThemeFallsBackToColorFGBG(t *testing.T) {
 	activeColorProfile = colorprofile.NoTTY
 
 	t.Setenv("COLORFGBG", "0;15")
-	if got := resolveCLITheme("auto").name; got != "light" {
+	if got := resolveCLIThemeWithStyle("auto", "").name; got != "light" {
 		t.Fatalf("COLORFGBG light fallback resolved %q, want light", got)
 	}
 
 	t.Setenv("COLORFGBG", "15;0")
-	if got := resolveCLITheme("auto").name; got != "dark" {
+	if got := resolveCLIThemeWithStyle("auto", "").name; got != "dark" {
 		t.Fatalf("COLORFGBG dark fallback resolved %q, want dark", got)
 	}
 }
@@ -215,7 +215,7 @@ func TestApplyTextareaThemeClearsCursorLineBackground(t *testing.T) {
 			} else {
 				t.Setenv("COLORFGBG", "")
 			}
-			configureCLITheme(mode)
+			configureCLIThemeWithStyle(mode, "")
 
 			ti := textarea.New()
 			applyTextareaTheme(&ti)
@@ -245,7 +245,7 @@ func TestApplyTextareaThemeHonorsCursorShape(t *testing.T) {
 	prevShape := cliCursorShape
 	defer func() { cliCursorShape = prevShape }()
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	for _, tt := range []struct {
 		name string
@@ -280,7 +280,7 @@ func TestComposerTintAndCursorFollowTheme(t *testing.T) {
 
 	for _, theme := range cliThemeStyles {
 		t.Run(theme.name, func(t *testing.T) {
-			configureCLITheme(theme.name)
+			configureCLIThemeWithStyle(theme.name, "")
 			wantTint := cliColor{"#eceff4", 255}
 			if theme.mode == "dark" {
 				wantTint = cliColor{"#29292d", 235}
@@ -307,7 +307,7 @@ func TestComposerTintAndCursorFollowTheme(t *testing.T) {
 	}
 
 	activeColorProfile = colorprofile.NoTTY
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	if got := activeCLITheme.inputBoxBG; !reflect.DeepEqual(got, cliColor{"#29292d", 235}) {
 		t.Fatalf("dark theme must keep its tint slot even under NO_COLOR, got %v", got)
 	}
@@ -345,7 +345,7 @@ func TestRuntimeAutoThemeDoesNotProbeStdin(t *testing.T) {
 	}
 
 	withTerminalProbe(func() {
-		if got := resolveCLITheme("auto").name; got != "light" {
+		if got := resolveCLIThemeWithStyle("auto", "").name; got != "light" {
 			t.Fatalf("opted-in probe resolved %q, want light", got)
 		}
 	})
@@ -365,7 +365,7 @@ func TestThemeHierarchyBodyBrighterThanChromeBorder(t *testing.T) {
 
 	for _, mode := range []string{"dark", "light"} {
 		t.Run(mode, func(t *testing.T) {
-			configureCLITheme(mode)
+			configureCLIThemeWithStyle(mode, "")
 			th := activeCLITheme
 			if th.muted.hex == th.border.hex {
 				t.Fatalf("%s muted hex equals border hex %q — body and chrome must differ", mode, th.muted.hex)
@@ -585,12 +585,12 @@ func TestBuildCLIThemeTintUnderProbe(t *testing.T) {
 	terminalProbe = func() (terminalRGB, bool) { return terminalRGB{10, 12, 16}, true }
 
 	withTerminalProbe(func() {
-		got := resolveCLITheme("dark")
+		got := resolveCLIThemeWithStyle("dark", "")
 		want := inputBoxTintFromBackground(terminalRGB{10, 12, 16}, true)
 		if !reflect.DeepEqual(got.inputBoxBG, want) {
 			t.Fatalf("probed dark inputBoxBG = %v, want tint %v", got.inputBoxBG, want)
 		}
-		gotLight := resolveCLITheme("light")
+		gotLight := resolveCLIThemeWithStyle("light", "")
 		wantLight := inputBoxTintFromBackground(terminalRGB{10, 12, 16}, false)
 		if !reflect.DeepEqual(gotLight.inputBoxBG, wantLight) {
 			t.Fatalf("probed light inputBoxBG = %v, want tint %v", gotLight.inputBoxBG, wantLight)
@@ -598,10 +598,10 @@ func TestBuildCLIThemeTintUnderProbe(t *testing.T) {
 	})
 
 	// Outside the probe the curated fallback colors stay.
-	if got := resolveCLITheme("dark").inputBoxBG; !reflect.DeepEqual(got, cliColor{"#29292d", 235}) {
+	if got := resolveCLIThemeWithStyle("dark", "").inputBoxBG; !reflect.DeepEqual(got, cliColor{"#29292d", 235}) {
 		t.Fatalf("fallback dark inputBoxBG = %v, want #29292d/235", got)
 	}
-	if got := resolveCLITheme("light").inputBoxBG; !reflect.DeepEqual(got, cliColor{"#eceff4", 255}) {
+	if got := resolveCLIThemeWithStyle("light", "").inputBoxBG; !reflect.DeepEqual(got, cliColor{"#eceff4", 255}) {
 		t.Fatalf("fallback light inputBoxBG = %v, want #eceff4/255", got)
 	}
 }

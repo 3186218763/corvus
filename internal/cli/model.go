@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
-
 	"corvus/internal/config"
 	"corvus/internal/i18n"
 )
@@ -62,45 +60,12 @@ func (m *chatTUI) runModelSubcommand(input string) {
 	m.notice(fmt.Sprintf(i18n.M.ModelSwitchingFmt, ref))
 	// Pre-action warning: model identity is part of the provider-visible
 	// prompt-cache prefix; switching may force a full miss on the next turn.
-	m.noticeCacheInvalidation(CacheInvalidationReasonModel)
+	m.noticeCacheInvalidation(cacheInvalidationReasonModel)
 
-	// Capture old controller for cleanup after the async build succeeds.
-	oldCtrl := m.ctrl
-	build := m.buildController
-
-	// Fire the build off the event loop; the result arrives as a tea.Cmd.
-	// Both the build AND the old-controller close run in the goroutine so
-	// neither blocks the bubbletea event loop. The old controller's Close
-	// kills plugin subprocesses (incl. CodeGraph), which can disrupt the
-	// terminal's cancelReader if called synchronously inside Update — so it
-	// must happen here, before we hand the new controller back.
-	m.modelSwitchPending = true
-	m.pendingModelSwitch = func() tea.Msg {
-		c, err := build(controllerBuildSpec{
-			ModelRef:         ref,
-			RuntimeProfile:   m.runtimeProfile,
-			ToolApprovalMode: oldCtrl.ToolApprovalMode(),
-			PlanMode:         oldCtrl.PlanMode(),
-		}, carried, prevPath, oldCtrl)
-		if err != nil {
-			return modelSwitchMsg{ref: ref, err: err}
-		}
-		// Do NOT close the old controller here. Controller.Close() runs
-		// SessionEnd hooks (arbitrary shell commands) and kills plugin
-		// subprocesses — operations that corrupt bubbletea's terminal raw
-		// mode when executed from a goroutine. Instead, pass the old
-		// controller back in the message so the Update handler can defer
-		// its cleanup as a tea.Cmd that runs after the next render.
-		return modelSwitchMsg{
-			ref:      ref,
-			ctrl:     c,
-			oldCtrl:  oldCtrl,
-			label:    c.Label(),
-			commands: c.Commands(),
-			skills:   c.SlashSkills(),
-			host:     c.Host(),
-		}
-	}
+	m.armControllerRebuild(controllerBuildSpec{
+		ModelRef:       ref,
+		RuntimeProfile: m.runtimeProfile,
+	}, carried, prevPath, modelSwitchMsg{ref: ref})
 }
 
 func (m *chatTUI) openModelPicker() {

@@ -49,31 +49,13 @@ func (m *chatTUI) scheduleCurrentControllerRebuild(reason, successNotice string)
 		return nil
 	}
 
-	oldCtrl := m.ctrl
-	build := m.buildController
-	ref := m.modelRef
-	profile := m.runtimeProfile
-	m.modelSwitchPending = true
-	m.pendingModelSwitch = func() tea.Msg {
-		c, err := build(controllerBuildSpec{
-			ModelRef:         ref,
-			RuntimeProfile:   profile,
-			ToolApprovalMode: oldCtrl.ToolApprovalMode(),
-			PlanMode:         oldCtrl.PlanMode(),
-		}, carried, resumePath, oldCtrl)
-		if err != nil {
-			return modelSwitchMsg{ref: ref, failurePrefix: reason, err: err}
-		}
-		return modelSwitchMsg{
-			ref:           ref,
-			ctrl:          c,
-			oldCtrl:       oldCtrl,
-			label:         c.Label(),
-			commands:      c.Commands(),
-			skills:        c.SlashSkills(),
-			host:          c.Host(),
-			successNotice: successNotice,
-		}
-	}
+	m.armControllerRebuild(controllerBuildSpec{
+		ModelRef:       m.modelRef,
+		RuntimeProfile: m.runtimeProfile,
+	}, carried, resumePath, modelSwitchMsg{
+		ref:           m.modelRef,
+		failurePrefix: reason,
+		successNotice: successNotice,
+	})
 	return m.pendingModelSwitch
 }

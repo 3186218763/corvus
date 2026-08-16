@@ -411,6 +411,40 @@ type controllerBuildSpec struct {
 	EffortOverride   *string
 }
 
+// armControllerRebuild arms the async controller rebuild shared by every
+// in-session switch (model, effort, work mode, runtime rebuild, skill hooks):
+// approval and plan state carry over from the live controller, and both
+// outcomes land as one modelSwitchMsg. spec carries the per-site build inputs;
+// outcome carries the per-site result fields (ref, profile, failurePrefix,
+// successNotice). The returned tea.Cmd is also stored in pendingModelSwitch.
+func (m *chatTUI) armControllerRebuild(spec controllerBuildSpec, carried []provider.Message, resumePath string, outcome modelSwitchMsg) tea.Cmd {
+	oldCtrl := m.ctrl
+	build := m.buildController
+	m.modelSwitchPending = true
+	m.pendingModelSwitch = func() tea.Msg {
+		spec.ToolApprovalMode = oldCtrl.ToolApprovalMode()
+		spec.PlanMode = oldCtrl.PlanMode()
+		c, err := build(spec, carried, resumePath, oldCtrl)
+		if err != nil {
+			msg := outcome
+			msg.err = err
+			return msg
+		}
+		return modelSwitchMsg{
+			ref:           outcome.ref,
+			profile:       outcome.profile,
+			ctrl:          c,
+			oldCtrl:       oldCtrl,
+			label:         c.Label(),
+			commands:      c.Commands(),
+			skills:        c.SlashSkills(),
+			host:          c.Host(),
+			successNotice: outcome.successNotice,
+		}
+	}
+	return m.pendingModelSwitch
+}
+
 func (m *chatTUI) runtimeSwitchBusy() bool {
 	if m == nil || m.ctrl == nil {
 		return false
@@ -952,9 +986,9 @@ func (s *eventSink) Emit(e event.Event) {
 	}
 }
 
-// DroppedEvents reports how many ordinary events were shed because the TUI
+// droppedEvents reports how many ordinary events were shed because the TUI
 // event channel was full.
-func (s *eventSink) DroppedEvents() uint64 {
+func (s *eventSink) droppedEvents() uint64 {
 	if s == nil {
 		return 0
 	}

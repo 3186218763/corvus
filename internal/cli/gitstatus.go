@@ -10,7 +10,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/ansi"
 
 	"corvus/internal/gitcmd"
 )
@@ -117,10 +116,7 @@ func countUntracked(out string) int {
 }
 
 func (m chatTUI) gitTag() string {
-	if strings.TrimSpace(m.gitStatus.Repo) == "" || strings.TrimSpace(m.gitStatus.Branch) == "" {
-		return ""
-	}
-	return m.gitStatus.render(themeFg(m.statusModeColor(), m.gitStatus.Repo), m.gitStatus.Branch)
+	return m.gitStatus.RenderRepo(themeFg(m.statusModeColor(), m.gitStatus.Repo))
 }
 
 var (
@@ -143,71 +139,11 @@ func (m chatTUI) statusModeColor() cliColor {
 	}
 }
 
-func (s gitStatus) Render() string {
-	return s.RenderRepo(accent(s.Repo))
-}
-
 func (s gitStatus) RenderRepo(repo string) string {
 	if strings.TrimSpace(s.Repo) == "" || strings.TrimSpace(s.Branch) == "" {
 		return ""
 	}
 	return s.render(repo, s.Branch)
-}
-
-func (s gitStatus) RenderWithin(maxWidth int, repoColor cliColor) string {
-	if strings.TrimSpace(s.Repo) == "" || strings.TrimSpace(s.Branch) == "" {
-		return ""
-	}
-	repo, branch := s.compactIdentity(maxWidth)
-	out := s.render(themeFg(repoColor, repo), branch)
-	if maxWidth > 0 && visibleWidth(out) > maxWidth {
-		return ansi.Truncate(out, maxWidth, "…")
-	}
-	return out
-}
-
-func (s gitStatus) compactIdentity(maxWidth int) (repo, branch string) {
-	repo = strings.TrimSpace(s.Repo)
-	branch = strings.TrimSpace(s.Branch)
-	if maxWidth <= 0 {
-		return repo, branch
-	}
-	dirtyWidth := visibleWidth(s.dirtyPlain())
-	nameBudget := maxWidth - dirtyWidth - visibleWidth("@")
-	if nameBudget <= 2 {
-		return compactEnd(repo, max(1, nameBudget)), ""
-	}
-	repoWidth := visibleWidth(repo)
-	branchWidth := visibleWidth(branch)
-	if repoWidth+branchWidth <= nameBudget {
-		return repo, branch
-	}
-
-	minRepo := min(repoWidth, 8)
-	if repoBudget := nameBudget - branchWidth; repoBudget >= minRepo {
-		return compactMiddle(repo, repoBudget), branch
-	}
-
-	repoBudget := min(repoWidth, max(4, min(10, nameBudget/3)))
-	if nameBudget-repoBudget < 8 {
-		repoBudget = max(1, nameBudget-8)
-	}
-	branchBudget := max(1, nameBudget-repoBudget)
-	return compactMiddle(repo, repoBudget), compactMiddle(branch, branchBudget)
-}
-
-func (s gitStatus) dirtyPlain() string {
-	var parts []string
-	if s.Added > 0 || s.Removed > 0 {
-		parts = append(parts, fmt.Sprintf("+%d", s.Added), fmt.Sprintf("-%d", s.Removed))
-	}
-	if s.Untracked > 0 {
-		parts = append(parts, fmt.Sprintf("?%d", s.Untracked))
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return "  " + strings.Join(parts, " ")
 }
 
 func (s gitStatus) render(repo, branch string) string {

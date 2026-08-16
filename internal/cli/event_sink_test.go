@@ -25,7 +25,7 @@ func TestEventSinkDropsNoticeWhenChannelFull(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Notice Emit blocked on a full channel (stalled consumer)")
 	}
-	if got := s.DroppedEvents(); got != 1 {
+	if got := s.droppedEvents(); got != 1 {
 		t.Fatalf("dropped = %d, want 1", got)
 	}
 	if got := len(ch); got != 2 {
@@ -68,7 +68,7 @@ func TestEventSinkDeliversApprovalWhenChannelFull(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("ApprovalRequest Emit did not complete after delivery")
 	}
-	if got := s.DroppedEvents(); got != 0 {
+	if got := s.droppedEvents(); got != 0 {
 		t.Fatalf("dropped = %d, want 0 (approvals must never shed)", got)
 	}
 }

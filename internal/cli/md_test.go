@@ -129,7 +129,7 @@ func TestNarrowTableFitsRendererWidthWithoutLosingCells(t *testing.T) {
 func TestHighlightCodeLine(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 
 	cases := []struct {
 		name string
@@ -245,7 +245,7 @@ func TestInlineCodeSpanStillAccentOutsideTable(t *testing.T) {
 func TestMarkdownProseKeywordsSkipCodeSpansAndFences(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	r := newMarkdownRenderer(80)
 	got := r.Render("The renderer passed; use `renderer` here.\n\n```go\nrenderer()\n```")
 	secondaryEsc := fgSGR(activeCLITheme.secondary)
@@ -261,7 +261,7 @@ func TestMarkdownProseKeywordsSkipCodeSpansAndFences(t *testing.T) {
 func TestMarkdownProseKeywordBudgetResetsPerParagraph(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	r := newMarkdownRenderer(80)
 	got := r.Render("renderer parser cache API TUI model tool.\n\nrenderer is ready.")
 	secondaryEsc := fgSGR(activeCLITheme.secondary)
@@ -273,7 +273,7 @@ func TestMarkdownProseKeywordBudgetResetsPerParagraph(t *testing.T) {
 func TestMarkdownProseHighlightDoesNotChangeWidthOrCopyText(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.ANSI256
-	configureCLITheme("dark")
+	configureCLIThemeWithStyle("dark", "")
 	r := newMarkdownRenderer(18)
 	input := "renderer 通过 internal/cli/md.go"
 	view := r.Render(input)

@@ -100,10 +100,6 @@ func migrateMCPConfigForCLIWorkspace() {
 	}
 }
 
-func setupProfile(ctx context.Context, modelName string, maxStepsOverride int, requireKey bool, sink event.Sink, profile string, workspaceRoot string) (*control.Controller, error) {
-	return setupProfileWithOverrides(ctx, modelName, maxStepsOverride, requireKey, sink, profile, cliBuildOverrides{WorkspaceRoot: workspaceRoot})
-}
-
 type cliBuildOverrides struct {
 	Effort               *string
 	PermissionAllow      []string

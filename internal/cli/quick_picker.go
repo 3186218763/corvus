@@ -137,7 +137,7 @@ func (p *quickPicker) render(width int) string {
 	if len(items) == 0 {
 		b.WriteString(dim("  No matches") + "\n")
 	} else {
-		start, end := quickPickerWindow(len(items), p.selected)
+		start, end := visibleRange(len(items), p.selected, quickPickerMaxVisible)
 		if start > 0 {
 			b.WriteString(dim("  ↑ more") + "\n")
 		}
@@ -162,18 +162,4 @@ func (p *quickPicker) render(width int) string {
 	}
 	b.WriteString(dim(hint))
 	return selectionPanel(b.String(), w)
-}
-
-func quickPickerWindow(total, selected int) (int, int) {
-	if total <= quickPickerMaxVisible {
-		return 0, total
-	}
-	start := selected - quickPickerMaxVisible/2
-	if start < 0 {
-		start = 0
-	}
-	if maxStart := total - quickPickerMaxVisible; start > maxStart {
-		start = maxStart
-	}
-	return start, start + quickPickerMaxVisible
 }

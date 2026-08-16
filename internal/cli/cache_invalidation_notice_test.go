@@ -17,11 +17,11 @@ func TestCacheInvalidationNoticeCopy(t *testing.T) {
 		want   string
 	}{
 		{
-			reason: CacheInvalidationReasonModel,
+			reason: cacheInvalidationReasonModel,
 			want:   "Switching models may reset the provider prompt-cache prefix for this session.",
 		},
 		{
-			reason: CacheInvalidationReasonTokenMode,
+			reason: cacheInvalidationReasonTokenMode,
 			want:   "Switching work/token mode changes the tools surface and may reset the prompt-cache prefix.",
 		},
 		{
@@ -29,19 +29,19 @@ func TestCacheInvalidationNoticeCopy(t *testing.T) {
 			want:   "Switching work/token mode changes the tools surface and may reset the prompt-cache prefix.",
 		},
 		{
-			reason: CacheInvalidationReasonTools,
+			reason: cacheInvalidationReasonTools,
 			want:   "Tool definitions changed; the prompt-cache tools prefix may miss on the next turn.",
 		},
 		{reason: "", want: ""},
 		{reason: "unknown", want: ""},
 	} {
-		if got := CacheInvalidationNotice(tt.reason); got != tt.want {
-			t.Errorf("CacheInvalidationNotice(%q) = %q, want %q", tt.reason, got, tt.want)
+		if got := cacheInvalidationNotice(tt.reason); got != tt.want {
+			t.Errorf("cacheInvalidationNotice(%q) = %q, want %q", tt.reason, got, tt.want)
 		}
 	}
 }
 
-func TestModelSwitchEmitsCacheInvalidationNotice(t *testing.T) {
+func TestModelSwitchEmitscacheInvalidationNotice(t *testing.T) {
 	isolateUserConfig(t)
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{Label: "old", SessionDir: t.TempDir()})
@@ -55,13 +55,13 @@ func TestModelSwitchEmitsCacheInvalidationNotice(t *testing.T) {
 		t.Fatal("model switch did not schedule a rebuild")
 	}
 	joined := strings.Join(m.transcript, "\n")
-	want := CacheInvalidationNotice(CacheInvalidationReasonModel)
+	want := cacheInvalidationNotice(cacheInvalidationReasonModel)
 	if !strings.Contains(joined, want) {
 		t.Fatalf("model switch transcript missing cache invalidation notice %q:\n%s", want, joined)
 	}
 }
 
-func TestWorkModeSwitchEmitsCacheInvalidationNotice(t *testing.T) {
+func TestWorkModeSwitchEmitscacheInvalidationNotice(t *testing.T) {
 	m := newChatTUI(control.New(control.Options{Label: "model", SessionDir: t.TempDir()}), "", make(chan event.Event, 1), 100)
 	m.modelRef = "provider/model"
 	m.runtimeProfile = boot.TokenModeFull
@@ -74,7 +74,7 @@ func TestWorkModeSwitchEmitsCacheInvalidationNotice(t *testing.T) {
 		t.Fatal("work-mode switch did not schedule a rebuild")
 	}
 	joined := strings.Join(m.transcript, "\n")
-	want := CacheInvalidationNotice(CacheInvalidationReasonTokenMode)
+	want := cacheInvalidationNotice(cacheInvalidationReasonTokenMode)
 	if !strings.Contains(joined, want) {
 		t.Fatalf("work-mode switch transcript missing cache invalidation notice %q:\n%s", want, joined)
 	}

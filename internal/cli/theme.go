@@ -153,10 +153,6 @@ func noTerminalBackground() (terminalRGB, bool) { return terminalRGB{}, false }
 // and centered in the cell (bar is available via config for a slim caret).
 var cliCursorShape = "block"
 
-func configureCLITheme(mode string) {
-	configureCLIThemeWithStyle(mode, "")
-}
-
 func configureCLIThemeWithStyle(mode, style string) {
 	if env := strings.TrimSpace(os.Getenv("CORVUS_THEME")); env != "" {
 		if st, ok := cliThemeStyleByName(env); ok {
@@ -171,10 +167,6 @@ func configureCLIThemeWithStyle(mode, style string) {
 	}
 	activeCLITheme = resolveCLIThemeWithStyle(mode, style)
 	refreshCLIStyles()
-}
-
-func resolveCLITheme(mode string) cliPalette {
-	return resolveCLIThemeWithStyle(mode, "")
 }
 
 func resolveCLIThemeWithStyle(mode, style string) cliPalette {

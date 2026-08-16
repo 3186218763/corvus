@@ -17,10 +17,6 @@ func (m chatTUI) renderMCPManager() string {
 	return m.mcp.renderWithHeight(m.mainManagerWidth(), m.mainManagerBodyHeight())
 }
 
-func (p *mcpManager) render(width int) string {
-	return p.renderWithHeight(width, 0)
-}
-
 func (p *mcpManager) renderWithHeight(width, maxBodyRows int) string {
 	w := max(viewWidth(width), 10)
 	contentWidth := max(w-2, 1)

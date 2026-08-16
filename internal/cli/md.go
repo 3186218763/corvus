@@ -61,19 +61,7 @@ func italic(s string) string {
 // trailing newline. Empty input returns an empty string so callers can
 // reliably distinguish "nothing to draw" from "draw a blank line".
 func (r *mdRenderer) Render(input string) string {
-	if strings.TrimSpace(input) == "" {
-		return ""
-	}
-	input = fixCJKEmphasis(normalizeMath(input))
-	src := []byte(input)
-	doc := r.md.Parser().Parse(text.NewReader(src))
-	var buf strings.Builder
-	r.renderBlocks(&buf, doc, src, 0)
-	out := strings.TrimRight(buf.String(), "\n")
-	if out == "" {
-		return ""
-	}
-	return out + "\n"
+	return r.render(input, false, "")
 }
 
 // RenderCopy mirrors Render's visible output while surrounding math spans with
@@ -81,6 +69,14 @@ func (r *mdRenderer) Render(input string) string {
 // copies a transcript selection, so display wrapping and selection coordinates
 // stay identical without maintaining a second raw transcript.
 func (r *mdRenderer) RenderCopy(input, prefix string) string {
+	return r.render(input, true, prefix)
+}
+
+// render is the one markdown pipeline behind Render and RenderCopy: CJK
+// emphasis repair, math normalization, parse, block render, and the shared
+// empty/trimmed-output contract. copyMath arms the zero-width selection
+// markers; prefix labels their IDs.
+func (r *mdRenderer) render(input string, copyMath bool, prefix string) string {
 	if strings.TrimSpace(input) == "" {
 		return ""
 	}
@@ -88,9 +84,11 @@ func (r *mdRenderer) RenderCopy(input, prefix string) string {
 	src := []byte(input)
 	doc := r.md.Parser().Parse(text.NewReader(src))
 	var buf strings.Builder
-	r.copyMath = true
-	r.copyMathPrefix = prefix
-	r.nextCopyMathID = 0
+	r.copyMath = copyMath
+	if copyMath {
+		r.copyMathPrefix = prefix
+		r.nextCopyMathID = 0
+	}
 	r.renderBlocks(&buf, doc, src, 0)
 	r.copyMath = false
 	out := strings.TrimRight(buf.String(), "\n")
