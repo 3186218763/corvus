@@ -24,14 +24,6 @@ func NewBlobStore(dir string) *BlobStore {
 	return &BlobStore{dir: dir}
 }
 
-// Dir returns the blob directory.
-func (b *BlobStore) Dir() string {
-	if b == nil {
-		return ""
-	}
-	return b.dir
-}
-
 // Put stores data if not already present and returns the content digest.
 func (b *BlobStore) Put(data []byte) (string, error) {
 	if b == nil || b.dir == "" {
@@ -82,18 +74,6 @@ func (b *BlobStore) Has(ref string) bool {
 	}
 	_, err := b.Get(ref)
 	return err == nil
-}
-
-// Remove deletes a blob. Missing refs are ignored.
-func (b *BlobStore) Remove(ref string) error {
-	if b == nil || b.dir == "" || !validBlobRef(ref) {
-		return nil
-	}
-	err := os.Remove(b.path(ref))
-	if os.IsNotExist(err) {
-		return nil
-	}
-	return err
 }
 
 // Prune removes content-addressed blobs not present in live. It walks the

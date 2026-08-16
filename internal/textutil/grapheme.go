@@ -6,37 +6,6 @@ import (
 	"github.com/rivo/uniseg"
 )
 
-// FitGraphemeBytes returns the longest prefix that fits maxBytes without
-// splitting a grapheme cluster. If a single cluster is larger than maxBytes, it
-// returns that whole cluster so callers never emit malformed user-visible text.
-func FitGraphemeBytes(text string, maxBytes int) string {
-	if maxBytes <= 0 {
-		return ""
-	}
-	end := 0
-	used := 0
-	graphemes := uniseg.NewGraphemes(text)
-	for graphemes.Next() {
-		size := len(graphemes.Str())
-		if used > 0 && used+size > maxBytes {
-			break
-		}
-		end += size
-		used += size
-		if used >= maxBytes {
-			break
-		}
-	}
-	if end > 0 {
-		return text[:end]
-	}
-	graphemes = uniseg.NewGraphemes(text)
-	if !graphemes.Next() {
-		return ""
-	}
-	return graphemes.Str()
-}
-
 // ClipGraphemes truncates s to at most max grapheme clusters, counting suffix
 // inside the budget when suffix is used.
 func ClipGraphemes(s string, max int, suffix string) string {

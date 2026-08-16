@@ -64,55 +64,6 @@ type RecallResult struct {
 
 func (r RecallResult) Block() string { return r.block }
 
-// Override explains one project fact that shadows an equivalent global fact
-// during automatic recall. Both facts remain visible to management surfaces.
-type Override struct {
-	Project Memory
-	Global  Memory
-	Key     string
-}
-
-// FindOverrides returns the project-over-global decisions used by automatic
-// recall without changing the legacy List behavior.
-func FindOverrides(all []Memory) []Override {
-	projects := map[string]Memory{}
-	for _, fact := range all {
-		if NormalizeFactScope(string(fact.Scope)) != FactScopeProject {
-			continue
-		}
-		for _, key := range recallIdentityKeys(fact) {
-			projects[key] = fact
-		}
-	}
-	seen := map[string]bool{}
-	var out []Override
-	for _, fact := range all {
-		if NormalizeFactScope(string(fact.Scope)) != FactScopeGlobal {
-			continue
-		}
-		for _, key := range recallIdentityKeys(fact) {
-			project, ok := projects[key]
-			if !ok {
-				continue
-			}
-			pair := project.ID + "\x00" + fact.ID + "\x00" + project.Name + "\x00" + fact.Name
-			if seen[pair] {
-				break
-			}
-			seen[pair] = true
-			out = append(out, Override{Project: project, Global: fact, Key: key})
-			break
-		}
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Project.Name != out[j].Project.Name {
-			return out[i].Project.Name < out[j].Project.Name
-		}
-		return out[i].Global.ID < out[j].Global.ID
-	})
-	return out
-}
-
 // FreshnessFor exposes the same type-aware freshness classification used by
 // automatic recall to local management and diagnostic surfaces.
 func FreshnessFor(fact Memory, now time.Time) string {

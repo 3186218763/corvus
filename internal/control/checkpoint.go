@@ -129,7 +129,7 @@ func (m *checkpointManager) snapshot(ch diff.Change) {
 	store := m.store
 	m.mu.Unlock()
 	if store != nil {
-		store.Snapshot(ch)
+		store.CaptureBeforeFromChange(ch, checkpoint.CaptureBeforeOpts{Source: checkpoint.CapturePreviewer})
 	}
 }
 

@@ -78,11 +78,6 @@ type Session struct {
 	mu sync.Mutex // serializes concurrent reviews on one shared provider instance
 }
 
-// NewSession creates an Auto Guard reviewer with temperature 0 and MaxTokens 256.
-func NewSession(prov provider.Provider, pricing *provider.Pricing) *Session {
-	return NewSessionWithSink(prov, pricing, "", nil)
-}
-
 // NewSessionWithSink is like NewSession but records usage under recovery-reviewer.
 func NewSessionWithSink(prov provider.Provider, pricing *provider.Pricing, modelRef string, sink UsageSink) *Session {
 	return &Session{

@@ -106,7 +106,7 @@ func TestStructuredReviewReportGate(t *testing.T) {
 		"findings":[]
 	}`)
 	ledger.Record(Receipt{ToolName: "review_report", Args: raw, Success: true})
-	if !ledger.HasSuccessfulStructuredReviewAfter(ReviewKindReview, mutation, []string{"internal/a.go"}) {
+	if ok, blocking, _ := ledger.HasStructuredReviewAfter(ReviewKindReview, mutation, []string{"internal/a.go"}); !ok || blocking {
 		t.Fatal("expected structured review coverage")
 	}
 

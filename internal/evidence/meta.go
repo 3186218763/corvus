@@ -26,13 +26,3 @@ var nonMutationMetaTools = map[string]bool{
 func IsNonMutationMetaTool(toolName string) bool {
 	return nonMutationMetaTools[strings.TrimSpace(toolName)]
 }
-
-// IsReviewSkillTool reports whether toolName is a structured review subagent.
-func IsReviewSkillTool(toolName string) bool {
-	switch strings.TrimSpace(toolName) {
-	case "review", "security_review":
-		return true
-	default:
-		return false
-	}
-}

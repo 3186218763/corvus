@@ -50,7 +50,7 @@ func TestRecoveryWiringPreservesSuccessPathCacheShape(t *testing.T) {
 	}
 
 	// Reviewer uses an isolated policy prompt — must not leak into main agent.
-	reviewer := recovery.NewSession(nil, nil)
+	reviewer := recovery.NewSessionWithSink(nil, nil, "", nil)
 	if reviewer == nil {
 		t.Fatal("expected reviewer session")
 	}

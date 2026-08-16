@@ -130,24 +130,6 @@ func NewTransport(spec ProxySpec, opts TransportOptions) (*http.Transport, error
 	return tr, nil
 }
 
-// Summary returns a redacted, user-facing description for diagnostics.
-func Summary(spec ProxySpec) string {
-	switch NormalizeMode(spec.Mode) {
-	case ModeOff:
-		return "off (direct)"
-	case ModeEnv:
-		return "env"
-	case ModeCustom:
-		u, err := customProxyURL(spec)
-		if err != nil {
-			return "custom (invalid)"
-		}
-		return "custom (" + redactURL(u) + ")"
-	default:
-		return "auto (env)"
-	}
-}
-
 func defaultTransport() *http.Transport {
 	if base, ok := http.DefaultTransport.(*http.Transport); ok {
 		return base.Clone()
@@ -278,16 +260,4 @@ func validateProxyURL(u *url.URL) error {
 		return fmt.Errorf("network proxy_url host is required")
 	}
 	return nil
-}
-
-func redactURL(u *url.URL) string {
-	cp := *u
-	if cp.User != nil {
-		if name := cp.User.Username(); name != "" {
-			cp.User = url.User(name)
-		} else {
-			cp.User = nil
-		}
-	}
-	return cp.String()
 }

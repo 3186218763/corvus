@@ -126,16 +126,6 @@ func (gs *Session) Review(ctx context.Context, toolName string, args json.RawMes
 	return allow, reason, nil
 }
 
-// ReviewVerdict is Review for callers that must distinguish an authentic
-// verdict from an unavailable or indeterminate review. Transport errors,
-// timeouts, and unparseable assessments return a non-nil error (alongside the
-// same circuit-breaker bookkeeping); authentic allow/deny verdicts return a
-// nil error. auto_review uses this so a failed review degrades to a fresh
-// human decision instead of masquerading as a reviewer deny.
-func (gs *Session) ReviewVerdict(ctx context.Context, toolName string, args json.RawMessage, parentSession *agent.Session) (allow bool, reason string, err error) {
-	return gs.review(ctx, toolName, args, parentSession)
-}
-
 func (gs *Session) review(ctx context.Context, toolName string, args json.RawMessage, parentSession *agent.Session) (allow bool, reason string, failure error) {
 	reviewCtx, cancel := context.WithTimeout(ctx, reviewTimeout)
 	defer cancel()
@@ -432,10 +422,6 @@ func (gs *Session) Reset() {
 	gs.recentDenials = nil
 	gs.interruptTriggered = false
 }
-
-// Close shuts down the guardian session (no-op for now; the provider is owned
-// externally and shared with the executor).
-func (gs *Session) Close() {}
 
 // ResetTurn clears the per-turn circuit breaker state at the start of each turn.
 func (gs *Session) ResetTurn() {

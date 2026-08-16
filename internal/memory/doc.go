@@ -25,10 +25,9 @@ import (
 type Scope = instruction.Scope
 
 const (
-	ScopeUser     = instruction.ScopeUser     // ~/.corvus/CORVUS.md
-	ScopeAncestor = instruction.ScopeAncestor // an instruction file between workspace root and target
-	ScopeProject  = instruction.ScopeProject  // instruction file at the workspace root
-	ScopeLocal    = instruction.ScopeLocal    // *.local.md personal override
+	ScopeUser    = instruction.ScopeUser    // ~/.corvus/CORVUS.md
+	ScopeProject = instruction.ScopeProject // instruction file at the workspace root
+	ScopeLocal   = instruction.ScopeLocal   // *.local.md personal override
 )
 
 // docNames are the recognized memory filenames at each level, in load order.

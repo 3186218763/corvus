@@ -192,24 +192,6 @@ func (s *Store) Barrier() *MutationBarrier {
 	return s.barrier
 }
 
-// Blobs returns the content-addressed blob store (may be nil for in-memory).
-func (s *Store) Blobs() *BlobStore {
-	if s == nil {
-		return nil
-	}
-	return s.blobs
-}
-
-// SetSessionID records the owning session id on new checkpoints.
-func (s *Store) SetSessionID(id string) {
-	if s == nil {
-		return
-	}
-	s.mu.Lock()
-	s.sessionID = id
-	s.mu.Unlock()
-}
-
 // SetActiveWriters updates the active writer list mirrored into the current checkpoint.
 func (s *Store) SetActiveWriters(writers []ActiveWriter) {
 	if s == nil {
@@ -236,29 +218,6 @@ func (s *Store) activeWriterConflicts() []RewindConflict {
 		conflicts = append(conflicts, RewindConflict{Reason: ConflictBusyWriter})
 	}
 	return conflicts
-}
-
-// LastUndoTransactionID returns the committed transaction id available for undo.
-func (s *Store) LastUndoTransactionID() string {
-	if s == nil {
-		return ""
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.lastUndo == nil || s.lastUndo.State != TxCommitted {
-		return ""
-	}
-	return s.lastUndo.ID
-}
-
-// InvalidateUndo clears the last undo slot (new turn / new mutation / new rewind).
-func (s *Store) InvalidateUndo() {
-	if s == nil {
-		return
-	}
-	s.mu.Lock()
-	s.lastUndo = nil
-	s.mu.Unlock()
 }
 
 func (s *Store) load() {
@@ -357,15 +316,6 @@ func (s *Store) Bounds() map[int]int {
 		m[s.cur.Turn] = s.cur.MsgIndex
 	}
 	return m
-}
-
-// Snapshot records the pre-edit state of the file a writer is about to change.
-// Only the first touch of a path in the current turn is kept (that is its
-// turn-start content). A no-op before the first Begin.
-//
-// Legacy entry point used by SetPreEditHook; prefer CaptureBefore / MutationObserver.
-func (s *Store) Snapshot(ch diff.Change) {
-	s.CaptureBeforeFromChange(ch, CaptureBeforeOpts{Source: CapturePreviewer})
 }
 
 // CaptureBeforeFromChange records a preimage using a Previewer change when possible.
@@ -983,40 +933,6 @@ func (s *Store) TruncateFrom(fromTurn int) error {
 		s.seen = map[string]bool{}
 	}
 	return nil
-}
-
-// RestoreCode reverts the workspace to its state at the start of turn `fromTurn`
-// using a transactional prepare+commit. Legacy checkpoints are refused because
-// they cannot prove that a later manual edit is safe to overwrite. Returns the
-// paths written and deleted.
-//
-// On any failure after partial publish, compensation restores the pre-rewind
-// workspace. Unlike the pre-v2 loop, a mid-way error does not leave a half-applied
-// restore.
-func (s *Store) RestoreCode(fromTurn int) (written, deleted []string, err error) {
-	plan, err := s.PrepareRewind(fromTurn, RewindCode, 0, 0, false)
-	if err != nil {
-		return nil, nil, err
-	}
-	if plan.Legacy && len(plan.Files) > 0 {
-		return nil, nil, fmt.Errorf("legacy checkpoint cannot safely restore files without explicit conflict confirmation")
-	}
-	// When complete/partial with no conflicts, commit.
-	if !plan.CanFiles && !plan.Legacy {
-		if plan.DisabledReason != "" {
-			return nil, nil, fmt.Errorf("%s", plan.DisabledReason)
-		}
-		if len(plan.Conflicts) > 0 {
-			return nil, nil, fmt.Errorf("file conflicts detected")
-		}
-		// No files — success no-op.
-		return nil, nil, nil
-	}
-	result, err := s.CommitRewindWithForward(plan.PlanID, nil, nil, nil)
-	if err != nil {
-		return result.Written, result.Deleted, err
-	}
-	return result.Written, result.Deleted, nil
 }
 
 func (s *Store) detectCurrentEncoding(path string) *fileenc.Kind {

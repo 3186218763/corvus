@@ -1163,8 +1163,8 @@ func (g *Gate) decisionFromResolve(payload resolvePayload) (Decision, error) {
 	}
 }
 
-// RecordDiagnosis appends a diagnosis note while recovering.
-func (g *Gate) RecordDiagnosis(taskID, note string) {
+// recordDiagnosis appends a diagnosis note while recovering.
+func (g *Gate) recordDiagnosis(taskID, note string) {
 	if g == nil || strings.TrimSpace(note) == "" {
 		return
 	}

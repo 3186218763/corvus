@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"corvus/internal/evidence"
 	"corvus/internal/shellparse"
 	"corvus/internal/shellsafe"
 )
@@ -69,22 +68,6 @@ func transientFailureText(text string) bool {
 	return false
 }
 
-// IsVerificationCall reports whether the host recognizes the call as a
-// verification command (test/lint/build/typecheck/compile).
-func IsVerificationCall(tool string, args json.RawMessage, readOnly bool) bool {
-	tool = strings.TrimSpace(tool)
-	if tool == "bash" {
-		return evidence.IsDeliveryVerificationCommand(commandFromArgs(args))
-	}
-	// Project-check style tools are verification even when not bash.
-	switch tool {
-	case "complete_step":
-		return false
-	}
-	_ = readOnly
-	return false
-}
-
 // IsSafeVerificationRetry reports whether proposal is a first safe retry of the
 // same host-proven verification command that failed.
 // Callers must also consult the runtime safe-retry budget (safeRetryUsed /
@@ -109,22 +92,6 @@ func IsSafeVerificationRetry(failure *FailureEvent, proposal Proposal) bool {
 	}
 	return CallFingerprint(proposal.Tool, proposal.Subject, "", proposal.Args) ==
 		CallFingerprint(failure.Tool, failure.Subject, "", failure.Args)
-}
-
-// IsHighRiskMutation preserves the legacy execution-risk classifier for event
-// compatibility and focused policy tests. Auto no longer turns this result into
-// a human confirmation; permission, sandbox, and tool policy own that boundary.
-func IsHighRiskMutation(proposal Proposal) bool {
-	return riskBoundaryForProposal(proposal).highRisk
-}
-
-// TaskGrantKey returns the legacy semantic key used by persisted recovery cards.
-// New Auto decisions do not create execution-risk grants. Keys remain narrower
-// than a command name but broader than raw command bytes:
-// for example, ordinary pushes to the same Git remote destination share a key,
-// while a different ref, force push, or arbitrary HTTP/API mutation never does.
-func TaskGrantKey(proposal Proposal) string {
-	return riskBoundaryForProposal(proposal).taskGrantKey
 }
 
 type riskBoundary struct {
@@ -157,37 +124,6 @@ func riskBoundaryForProposal(proposal Proposal) riskBoundary {
 	// still own writes outside the workspace; this layer only adds hard-boundary
 	// confirmation for commands the host can classify deterministically.
 	return riskBoundary{}
-}
-
-// ClassifyEmptySearch reports whether a successful read-only search produced
-// no matches. Callers set Observation.EmptySearch from this.
-func ClassifyEmptySearch(tool string, success bool, readOnly bool, output string) bool {
-	if !success || !readOnly {
-		return false
-	}
-	switch strings.TrimSpace(tool) {
-	case "grep", "glob", "ls", "code_index", "codeindex":
-		// fall through
-	default:
-		return false
-	}
-	out := strings.TrimSpace(output)
-	if out == "" {
-		return true
-	}
-	lower := strings.ToLower(out)
-	for _, marker := range []string{
-		"no matches",
-		"no files found",
-		"0 matches",
-		"not found",
-		"no results",
-	} {
-		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-	return false
 }
 
 // IsDiagnosticSuccess reports a successful read-only diagnostic that must not

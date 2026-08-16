@@ -872,23 +872,6 @@ func (l *Ledger) HasSuccessfulTodoWrite() bool {
 	return false
 }
 
-// HasSuccessfulAcceptanceCriteria reports whether the current turn established
-// a non-empty task list. Delivery mode uses that list as its host-observable
-// acceptance contract before permitting state-changing work.
-func (l *Ledger) HasSuccessfulAcceptanceCriteria() bool {
-	if l == nil {
-		return false
-	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	for _, r := range l.receipts {
-		if r.Success && r.ToolName == "todo_write" && len(r.Todos) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // HasSuccessfulTodoProgressReceipt reports whether any successful receipt in
 // the turn reflects execution progress rather than read-only context gathering
 // or a bare todo snapshot.
@@ -1163,7 +1146,7 @@ func (l *Ledger) LatestSuccessfulMutationIndex() (int, bool) {
 	return latest, latest >= 0
 }
 
-func (l *Ledger) MatchLatestTodoStep(step string) (TodoStepMatch, bool) {
+func (l *Ledger) matchLatestTodoStep(step string) (TodoStepMatch, bool) {
 	step = strings.TrimSpace(step)
 	if l == nil || step == "" {
 		return TodoStepMatch{}, false

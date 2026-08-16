@@ -192,8 +192,8 @@ func TestHighRiskClassifierKeepsOrdinaryAndMCPPermissionPathsSeparate(t *testing
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsHighRiskMutation(tt.p); got != tt.want {
-				t.Fatalf("IsHighRiskMutation = %v, want %v", got, tt.want)
+			if got := riskBoundaryForProposal(tt.p).highRisk; got != tt.want {
+				t.Fatalf("riskBoundaryForProposal(%s).highRisk = %v, want %v", tt.name, got, tt.want)
 			}
 		})
 	}
@@ -254,17 +254,17 @@ func TestTaskGrantKeyRejectsRiskExpansionAndScopesExternalTarget(t *testing.T) {
 		"gh pr comment 12 --edit-last --body amended",
 		"gh pr comment --body current-target-is-implicit",
 	} {
-		if key := TaskGrantKey(proposal(command)); key != "" {
+		if key := riskBoundaryForProposal(proposal(command)).taskGrantKey; key != "" {
 			t.Errorf("TaskGrantKey(%q) = %q, want one-shot", command, key)
 		}
 	}
-	if a, b := TaskGrantKey(proposal("git push origin feature-a")), TaskGrantKey(proposal("git push origin feature-b")); a == "" || b == "" || a == b {
+	if a, b := riskBoundaryForProposal(proposal("git push origin feature-a")).taskGrantKey, riskBoundaryForProposal(proposal("git push origin feature-b")).taskGrantKey; a == "" || b == "" || a == b {
 		t.Fatalf("ref target keys = %q / %q, want distinct non-empty keys", a, b)
 	}
-	if a, b := TaskGrantKey(proposal("git push origin feature-a")), TaskGrantKey(proposal("git push -u origin feature-a")); a == "" || a != b {
+	if a, b := riskBoundaryForProposal(proposal("git push origin feature-a")).taskGrantKey, riskBoundaryForProposal(proposal("git push -u origin feature-a")).taskGrantKey; a == "" || a != b {
 		t.Fatalf("same target keys = %q / %q, want equal non-empty keys", a, b)
 	}
-	if a, b := TaskGrantKey(proposal("gh pr comment 12 --body ok")), TaskGrantKey(proposal("gh pr comment 13 --body ok")); a == "" || b == "" || a == b {
+	if a, b := riskBoundaryForProposal(proposal("gh pr comment 12 --body ok")).taskGrantKey, riskBoundaryForProposal(proposal("gh pr comment 13 --body ok")).taskGrantKey; a == "" || b == "" || a == b {
 		t.Fatalf("PR target keys = %q / %q, want distinct non-empty keys", a, b)
 	}
 }
@@ -366,7 +366,7 @@ func TestSnapshotDeepCopiesMutableFailureFields(t *testing.T) {
 		Args:       json.RawMessage(`{"command":"go test ./..."}`),
 		ErrSummary: "exit status 1",
 	})
-	g.RecordDiagnosis("root", "failure is isolated to package a")
+	g.recordDiagnosis("root", "failure is isolated to package a")
 	snap := g.Snapshot()
 	st := snap.Tasks["root"]
 	st.Failure.Args[0] = '['

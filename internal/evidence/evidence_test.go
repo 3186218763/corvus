@@ -343,7 +343,7 @@ func TestLedgerMatchesLatestSuccessfulTodoStep(t *testing.T) {
 	})
 
 	for _, step := range []string{"Add parser", "Adding parser", "2"} {
-		match, ok := ledger.MatchLatestTodoStep(step)
+		match, ok := ledger.matchLatestTodoStep(step)
 		if !ok {
 			t.Fatalf("latest todo receipt missing for %q", step)
 		}
@@ -355,7 +355,7 @@ func TestLedgerMatchesLatestSuccessfulTodoStep(t *testing.T) {
 		}
 	}
 
-	match, ok := ledger.MatchLatestTodoStep("Failed only")
+	match, ok := ledger.matchLatestTodoStep("Failed only")
 	if !ok {
 		t.Fatal("successful todo receipt should exist")
 	}
@@ -388,7 +388,7 @@ func TestMatchTodoStepToleratesCitationDrift(t *testing.T) {
 		"２":                   2,
 	}
 	for step, want := range matches {
-		match, ok := ledger.MatchLatestTodoStep(step)
+		match, ok := ledger.matchLatestTodoStep(step)
 		if !ok || !match.Found {
 			t.Fatalf("step %q should match todo %d, got found=%v", step, want, match.Found)
 		}
@@ -398,7 +398,7 @@ func TestMatchTodoStepToleratesCitationDrift(t *testing.T) {
 	}
 
 	for _, step := range []string{"deploy backend", "代码", "Phase 9：不存在的阶段"} {
-		if match, _ := ledger.MatchLatestTodoStep(step); match.Found {
+		if match, _ := ledger.matchLatestTodoStep(step); match.Found {
 			t.Errorf("step %q should not match, got todo %d (%q)", step, match.Index, match.Content)
 		}
 	}
@@ -414,10 +414,10 @@ func TestMatchTodoStepAmbiguousContainmentStaysUnmatched(t *testing.T) {
 			{Content: "Deploy backend worker", Status: "pending"},
 		},
 	})
-	if match, _ := ledger.MatchLatestTodoStep("Deploy backend"); match.Found {
+	if match, _ := ledger.matchLatestTodoStep("Deploy backend"); match.Found {
 		t.Fatalf("ambiguous citation should stay unmatched, got todo %d (%q)", match.Index, match.Content)
 	}
-	if match, _ := ledger.MatchLatestTodoStep("Deploy backend worker"); !match.Found || match.Index != 2 {
+	if match, _ := ledger.matchLatestTodoStep("Deploy backend worker"); !match.Found || match.Index != 2 {
 		t.Fatal("exact citation must still resolve despite shared prefix")
 	}
 }
@@ -1252,7 +1252,7 @@ func TestLedgerDeliverySignoffRequiresPostMutationVerificationAndReview(t *testi
 		"evidence":[{"kind":"verification","summary":"tests passed","command":"go test ./internal/..."}]
 	}`), true, true))
 
-	if !ledger.HasSuccessfulAcceptanceCriteria() {
+	if todos, ok := ledger.LatestTodos(); !ok || len(todos) == 0 {
 		t.Fatal("expected non-empty todo_write to establish acceptance criteria")
 	}
 	if !ledger.HasSuccessfulReviewAfter(mutation) {

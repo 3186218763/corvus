@@ -149,34 +149,6 @@ func TestCustomProxyURLComposition(t *testing.T) {
 	}
 }
 
-func TestSummaryVariants(t *testing.T) {
-	tests := []struct {
-		name string
-		spec ProxySpec
-		want string
-	}{
-		{"off", ProxySpec{Mode: ModeOff}, "off (direct)"},
-		{"off whitespace", ProxySpec{Mode: " off "}, "off (direct)"},
-		{"env", ProxySpec{Mode: ModeEnv}, "env"},
-		{"auto", ProxySpec{Mode: ModeAuto}, "auto (env)"},
-		{"custom url redacted", ProxySpec{Mode: ModeCustom, URL: "socks5://user:secret@proxy.example.com:1080"}, "custom (socks5://user@proxy.example.com:1080)"},
-		{"custom structured redacted", ProxySpec{Mode: ModeCustom, Type: "http", Server: "p.example.com", Port: 8080, Username: "alice", Password: "hunter2"}, "custom (http://alice@p.example.com:8080)"},
-		{"custom invalid", ProxySpec{Mode: ModeCustom, Type: "http"}, "custom (invalid)"},
-		{"custom invalid scheme", ProxySpec{Mode: ModeCustom, URL: "ftp://p:1"}, "custom (invalid)"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := Summary(tt.spec); got != tt.want {
-				t.Fatalf("Summary(%+v) = %q, want %q", tt.spec, got, tt.want)
-			}
-		})
-	}
-	// Passwords must never leak into the summary.
-	if got := Summary(ProxySpec{Mode: ModeCustom, URL: "http://u:pw@h:1"}); strings.Contains(got, "pw") {
-		t.Fatalf("summary leaked password: %q", got)
-	}
-}
-
 func TestNewHTTPClientErrorPropagation(t *testing.T) {
 	if c, err := NewHTTPClient(ProxySpec{Mode: ModeCustom, Type: "http"}, TransportOptions{}); err == nil || c != nil {
 		t.Fatalf("NewHTTPClient(invalid) = (%v, %v), want error", c, err)
@@ -362,20 +334,5 @@ func TestWithDirectHostsBehavior(t *testing.T) {
 	got, err := pf(req("direct.example.com:443"))
 	if err != nil || got != nil {
 		t.Fatalf("direct host with port = (%v, %v), want nil", got, err)
-	}
-}
-
-func TestRedactURL(t *testing.T) {
-	withCreds := mustURL("socks5://user:secret@proxy.test:1080")
-	if got := redactURL(withCreds); got != "socks5://user@proxy.test:1080" {
-		t.Errorf("redactURL with creds = %q", got)
-	}
-	userOnly := mustURL("http://alice@proxy.test:8080")
-	if got := redactURL(userOnly); got != "http://alice@proxy.test:8080" {
-		t.Errorf("redactURL username-only = %q", got)
-	}
-	noUser := mustURL("http://proxy.test:8080")
-	if got := redactURL(noUser); got != "http://proxy.test:8080" {
-		t.Errorf("redactURL without user = %q", got)
 	}
 }

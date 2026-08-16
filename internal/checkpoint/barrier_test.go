@@ -11,8 +11,8 @@ import (
 // instead of waiting forever in cond.Wait.
 func TestEnterWriteCtxCancelledWhileExclusive(t *testing.T) {
 	b := NewMutationBarrier()
-	if err := b.EnterExclusive(); err != nil {
-		t.Fatal(err)
+	if !b.TryEnterExclusive() {
+		t.Fatal("TryEnterExclusive on a fresh barrier failed")
 	}
 	defer b.ExitExclusive()
 
@@ -41,8 +41,8 @@ func TestEnterWriteCtxCancelledWhileExclusive(t *testing.T) {
 // EnterWrite must keep working as the non-cancellable alias.
 func TestEnterWriteCtxUnblocksOnExclusiveRelease(t *testing.T) {
 	b := NewMutationBarrier()
-	if err := b.EnterExclusive(); err != nil {
-		t.Fatal(err)
+	if !b.TryEnterExclusive() {
+		t.Fatal("TryEnterExclusive on a fresh barrier failed")
 	}
 
 	done := make(chan error, 1)
@@ -77,8 +77,8 @@ func TestRegisterWriterDoesNotFreezeRegistryWhileWaiting(t *testing.T) {
 	s := New("", root)
 	observer := NewMutationObserver(ObserverOptions{Store: s})
 	barrier := s.Barrier()
-	if err := barrier.EnterExclusive(); err != nil {
-		t.Fatal(err)
+	if !barrier.TryEnterExclusive() {
+		t.Fatal("TryEnterExclusive on a fresh barrier failed")
 	}
 
 	registered := make(chan error, 1)
@@ -123,7 +123,8 @@ func TestRegisterWriterDoesNotFreezeRegistryWhileWaiting(t *testing.T) {
 	// The registration completed after the preemptive unregister; clean up the
 	// barrier hold it acquired.
 	observer.UnregisterWriter("bg-1")
-	if barrier.Busy() {
+	if !barrier.TryEnterExclusive() {
 		t.Fatal("barrier still busy after writers unregistered")
 	}
+	barrier.ExitExclusive()
 }

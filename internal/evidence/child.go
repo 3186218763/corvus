@@ -68,10 +68,3 @@ func (l *Ledger) MergeChild(summary ChildEvidenceSummary) {
 		l.Record(r)
 	}
 }
-
-// MergeChildren merges multiple child summaries in the given order.
-func (l *Ledger) MergeChildren(summaries ...ChildEvidenceSummary) {
-	for _, s := range summaries {
-		l.MergeChild(s)
-	}
-}

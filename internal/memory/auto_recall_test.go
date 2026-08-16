@@ -77,31 +77,6 @@ func TestAutoRecallProjectFactOverridesGlobalDuplicate(t *testing.T) {
 	}
 }
 
-func TestFindOverridesExplainsProjectOverGlobalResolution(t *testing.T) {
-	all := []Memory{
-		{ID: "global", Name: "deploy-target", Title: "Deploy target", Scope: FactScopeGlobal},
-		{ID: "project", Name: "deploy-target", Title: "Deploy target", Scope: FactScopeProject},
-		{ID: "other", Name: "unrelated", Title: "Unrelated", Scope: FactScopeGlobal},
-	}
-	overrides := FindOverrides(all)
-	if len(overrides) != 1 {
-		t.Fatalf("overrides = %+v, want one", overrides)
-	}
-	if overrides[0].Project.ID != "project" || overrides[0].Global.ID != "global" || overrides[0].Key == "" {
-		t.Fatalf("override = %+v", overrides[0])
-	}
-}
-
-func TestFindOverridesExplainsProjectOverrideOfGlobalGuidance(t *testing.T) {
-	overrides := FindOverrides([]Memory{
-		{ID: "global", Name: "response-style", Scope: FactScopeGlobal, Type: TypeFeedback},
-		{ID: "project", Name: "response-style", Scope: FactScopeProject, Type: TypeProject},
-	})
-	if len(overrides) != 1 || overrides[0].Project.ID != "project" || overrides[0].Global.ID != "global" {
-		t.Fatalf("global guidance override = %+v, want project over global", overrides)
-	}
-}
-
 func TestFreshnessForUsesTypeSpecificWindows(t *testing.T) {
 	now := time.Date(2026, 7, 27, 0, 0, 0, 0, time.UTC)
 	if got := FreshnessFor(Memory{Type: TypeReference, UpdatedAt: now.Add(-60 * 24 * time.Hour)}, now); got != FreshnessStale {

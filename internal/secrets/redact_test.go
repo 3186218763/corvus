@@ -6,8 +6,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"corvus/internal/provider"
 )
 
 func TestRedactMasksCommonSecretShapes(t *testing.T) {
@@ -192,7 +190,7 @@ func TestRedactCredentialsForExternalErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := RedactError(tt.err)
+			got := RedactCredentials(tt.err.Error())
 			for _, leaked := range tt.leaked {
 				if strings.Contains(got, leaked) {
 					t.Fatalf("credential leaked %q in %q", leaked, got)
@@ -205,9 +203,6 @@ func TestRedactCredentialsForExternalErrors(t *testing.T) {
 				t.Fatalf("external error redaction not idempotent:\nonce:  %q\ntwice: %q", got, again)
 			}
 		})
-	}
-	if got := RedactError(nil); got != "" {
-		t.Fatalf("RedactError(nil) = %q, want empty", got)
 	}
 }
 
@@ -302,39 +297,5 @@ func TestProcessEnvAlwaysFiltersRegisteredCredentialKeys(t *testing.T) {
 	}
 	if !strings.Contains(joined, "CORVUS_TEST_BENIGN_ENV=visible") {
 		t.Fatalf("ordinary env was removed with opt-in filtering off:\n%s", joined)
-	}
-}
-
-func TestRedactMessagesDoesNotMutateInput(t *testing.T) {
-	const secret = "sk-real-secret-value-123456"
-	msgs := []provider.Message{
-		{
-			Role:    provider.RoleAssistant,
-			Content: "checking",
-			ToolCalls: []provider.ToolCall{
-				{ID: "call_1", Name: "bash", Arguments: `{"command":"echo DEEPSEEK_API_KEY=` + secret + `"}`},
-			},
-			MemoryCitations: []provider.MemoryCitation{{Note: "token " + secret}},
-		},
-		{Role: provider.RoleTool, ToolCallID: "call_1", Content: "DEEPSEEK_API_KEY=" + secret},
-	}
-
-	out := RedactMessages(msgs)
-
-	// The redacted copy must not carry the raw secret...
-	if strings.Contains(out[0].ToolCalls[0].Arguments, secret) || strings.Contains(out[1].Content, secret) {
-		t.Fatalf("redacted copy leaked secret: %+v", out)
-	}
-	// ...and the input — live session history the model still replays — must
-	// be untouched, including through the shared ToolCalls/MemoryCitations
-	// backing arrays.
-	if !strings.Contains(msgs[0].ToolCalls[0].Arguments, secret) {
-		t.Fatalf("RedactMessages mutated the caller's ToolCalls: %q", msgs[0].ToolCalls[0].Arguments)
-	}
-	if !strings.Contains(msgs[0].MemoryCitations[0].Note, secret) {
-		t.Fatalf("RedactMessages mutated the caller's MemoryCitations: %q", msgs[0].MemoryCitations[0].Note)
-	}
-	if !strings.Contains(msgs[1].Content, secret) {
-		t.Fatalf("RedactMessages mutated the caller's Content: %q", msgs[1].Content)
 	}
 }

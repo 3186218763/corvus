@@ -6,8 +6,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-
-	"corvus/internal/provider"
 )
 
 var (
@@ -200,15 +198,6 @@ func RedactCredentials(s string) string {
 	})
 }
 
-// RedactError returns an error string safe for an external log or diagnostic
-// boundary. A nil error produces an empty string.
-func RedactError(err error) string {
-	if err == nil {
-		return ""
-	}
-	return RedactCredentials(err.Error())
-}
-
 func redactKeyValues(s string) string {
 	var out strings.Builder
 	last := 0
@@ -337,46 +326,4 @@ func mask(value string) string {
 		return redactedValue
 	}
 	return value[:head] + strings.Repeat("*", len(value)-head-tail) + value[len(value)-tail:]
-}
-
-// RedactMessage returns a storage-safe copy of m with textual secret surfaces
-// masked. Images are left untouched because they are opaque data URLs.
-// ToolCalls and MemoryCitations are cloned before masking: m is passed by
-// value but its slices share backing arrays with the caller, and the save
-// path hands in live session messages — writing through would silently mutate
-// the model-visible history mid-conversation and churn the prompt cache.
-func RedactMessage(m provider.Message) provider.Message {
-	m.Content = Redact(m.Content)
-	m.ReasoningContent = Redact(m.ReasoningContent)
-	m.Original = Redact(m.Original)
-	if len(m.ToolCalls) > 0 {
-		calls := make([]provider.ToolCall, len(m.ToolCalls))
-		copy(calls, m.ToolCalls)
-		for i := range calls {
-			calls[i].Arguments = Redact(calls[i].Arguments)
-			calls[i].Diff = Redact(calls[i].Diff)
-		}
-		m.ToolCalls = calls
-	}
-	if len(m.MemoryCitations) > 0 {
-		cites := make([]provider.MemoryCitation, len(m.MemoryCitations))
-		copy(cites, m.MemoryCitations)
-		for i := range cites {
-			cites[i].Note = Redact(cites[i].Note)
-		}
-		m.MemoryCitations = cites
-	}
-	return m
-}
-
-// RedactMessages returns a redacted copy of msgs. The input slice and its
-// messages are never mutated.
-//
-//nolint:unused // RedactMessages 计划用于归档/导出路径的脱敏（见安全报告 D2）
-func RedactMessages(msgs []provider.Message) []provider.Message {
-	out := make([]provider.Message, len(msgs))
-	for i, m := range msgs {
-		out[i] = RedactMessage(m)
-	}
-	return out
 }

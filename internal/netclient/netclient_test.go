@@ -116,20 +116,6 @@ func TestOffProxyDisablesProxy(t *testing.T) {
 	}
 }
 
-func TestSummaryRedactsPassword(t *testing.T) {
-	got := Summary(ProxySpec{
-		Mode:     "custom",
-		Type:     "socks5",
-		Server:   "proxy.example.com",
-		Port:     1080,
-		Username: "user",
-		Password: "secret",
-	})
-	if got != "custom (socks5://user@proxy.example.com:1080)" {
-		t.Fatalf("Summary = %q", got)
-	}
-}
-
 // TestNewHTTPClientOverallTimeout pins the whole-request cap: clients built
 // for body-reading tools (web_search, web_fetch) must carry an overall Timeout
 // so a slow/infinite body can never hang the caller forever — per-phase

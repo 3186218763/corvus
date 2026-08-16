@@ -148,12 +148,6 @@ func filepathBase(p string) string {
 	return p
 }
 
-// ReviewReportReceipt is stored on the ledger when a review_report succeeds.
-type ReviewReportReceipt struct {
-	Report ReviewReport
-	After  int // mutation index this report claims to cover; -1 if unknown
-}
-
 // HasStructuredReviewAfter reports whether a successful structured review of
 // the given kind was recorded after the mutation, covering required paths, and
 // without a blocking verdict.
@@ -188,12 +182,6 @@ func (l *Ledger) HasStructuredReviewAfter(kind ReviewKind, after int, requiredPa
 		return true, false, &parsed
 	}
 	return false, false, nil
-}
-
-// HasSuccessfulStructuredReviewAfter is a convenience for non-blocking coverage.
-func (l *Ledger) HasSuccessfulStructuredReviewAfter(kind ReviewKind, after int, requiredPaths []string) bool {
-	ok, blocking, _ := l.HasStructuredReviewAfter(kind, after, requiredPaths)
-	return ok && !blocking
 }
 
 // HasSuccessfulReviewReportOfKind reports whether any successful review_report

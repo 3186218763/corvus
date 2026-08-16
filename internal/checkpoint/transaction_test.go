@@ -46,8 +46,8 @@ func TestRestoreCodeAllOrNothingOnMidPublishFailure(t *testing.T) {
 
 	s := New("", root)
 	s.Begin(0, "edit both", 0)
-	s.Snapshot(diffChange(a, "a0"))
-	s.Snapshot(diffChange(b, "b0"))
+	s.CaptureBeforeFromChange(diffChange(a, "a0"), CaptureBeforeOpts{Source: CapturePreviewer})
+	s.CaptureBeforeFromChange(diffChange(b, "b0"), CaptureBeforeOpts{Source: CapturePreviewer})
 	write(t, a, "a1")
 	write(t, b, "b1")
 
@@ -86,7 +86,7 @@ func TestRecoverCommittingTransaction(t *testing.T) {
 
 	s := New(dir, root)
 	s.Begin(0, "p", 0)
-	s.Snapshot(diffChange(a, "v0"))
+	s.CaptureBeforeFromChange(diffChange(a, "v0"), CaptureBeforeOpts{Source: CapturePreviewer})
 	write(t, a, "v1")
 
 	tx := &TransactionManifest{

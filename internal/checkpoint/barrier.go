@@ -100,20 +100,6 @@ func (b *MutationBarrier) EnterWriteCtx(ctx context.Context) error {
 	return nil
 }
 
-// TryEnterWrite is a non-blocking EnterWrite.
-func (b *MutationBarrier) TryEnterWrite() bool {
-	if b == nil {
-		return true
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.exclusive || b.closed {
-		return false
-	}
-	b.writers++
-	return true
-}
-
 // ExitWrite decrements the writer count and advances the workspace generation.
 // Plans prepared before a completed writer can therefore never authorize a
 // later commit without a fresh preview.
@@ -130,20 +116,6 @@ func (b *MutationBarrier) ExitWrite() {
 	if b.writers == 0 {
 		b.wakeLocked()
 	}
-}
-
-// EnterExclusive waits until no writers hold the barrier, then takes exclusive.
-func (b *MutationBarrier) EnterExclusive() error {
-	if b == nil {
-		return nil
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if err := b.waitLocked(context.Background(), func() bool { return b.exclusive || b.writers > 0 || b.closed }); err != nil {
-		return err
-	}
-	b.exclusive = true
-	return nil
 }
 
 // TryEnterExclusive is a non-blocking EnterExclusive.
@@ -170,16 +142,6 @@ func (b *MutationBarrier) ExitExclusive() {
 	b.exclusive = false
 	b.generation.Add(1)
 	b.wakeLocked()
-}
-
-// Busy reports whether exclusive is held or writers are active.
-func (b *MutationBarrier) Busy() bool {
-	if b == nil {
-		return false
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.exclusive || b.writers > 0
 }
 
 // Close rejects future enters (best-effort shutdown).

@@ -80,13 +80,6 @@ func (s *Set) DocPath(scope Scope) string {
 	return filepath.Join(dir, def)
 }
 
-// Empty reports whether the set carries nothing to inject, so Compose can leave
-// the base prompt byte-for-byte untouched (and the cache prefix maximal) when
-// there is no memory at all.
-func (s *Set) Empty() bool {
-	return s == nil || (len(s.Docs) == 0 && len(s.GlobalGuidance) == 0 && strings.TrimSpace(s.Index) == "")
-}
-
 // docScopes are the scopes the panel can target for a quick-add or a new doc.
 // Ordered broad → specific for display.
 var docScopes = []Scope{ScopeUser, ScopeProject, ScopeLocal}

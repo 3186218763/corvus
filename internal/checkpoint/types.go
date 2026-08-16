@@ -53,8 +53,6 @@ const (
 	CapturePreviewer      CaptureSource = "previewer"
 	CaptureBeforeMutation CaptureSource = "before_mutation"
 	CaptureAfterMutation  CaptureSource = "after_mutation"
-	CaptureLegacy         CaptureSource = "legacy"
-	CaptureManual         CaptureSource = "manual"
 )
 
 // FileRevision is the v2 per-file preimage plus last Corvus-owned after fingerprint.
@@ -74,19 +72,6 @@ type FileRevision struct {
 	// Inline content is only used for in-memory stores without a blob dir, and
 	// for legacy v1 migration paths. Persisted v2 checkpoints prefer BlobRef.
 	Content *string `json:"content,omitempty"`
-}
-
-// MutationRecord tracks one observed mutation for ownership and conflict detection.
-type MutationRecord struct {
-	Seq       int64         `json:"seq"`
-	Path      string        `json:"path"`
-	Tool      string        `json:"tool,omitempty"`
-	Source    CaptureSource `json:"source,omitempty"`
-	WriterID  string        `json:"writerId,omitempty"`
-	Turn      int           `json:"turn"`
-	BeforeSHA string        `json:"beforeSha,omitempty"`
-	AfterSHA  string        `json:"afterSha,omitempty"`
-	Time      time.Time     `json:"time,omitempty"`
 }
 
 // ActiveWriter describes a background writer that still owns open mutations.
@@ -125,13 +110,11 @@ const (
 	ConflictManualEdit      = "manual_edit"
 	ConflictExternalChange  = "external_change"
 	ConflictDeletedRecreate = "deleted_and_recreated"
-	ConflictTypeChange      = "type_change"
 	ConflictModeChange      = "mode_change"
 	ConflictMissingPayload  = "missing_payload"
 	ConflictPathUnsafe      = "path_unsafe"
 	ConflictBusyWriter      = "active_writer"
 	ConflictStalePlan       = "stale_plan"
-	ConflictBoundaryInvalid = "boundary_invalid"
 	ConflictCoverageLegacy  = "legacy_unverified"
 	ConflictExpired         = "expired_payload"
 )
