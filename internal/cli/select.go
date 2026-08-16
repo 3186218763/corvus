@@ -57,21 +57,6 @@ func renderSearchBar(w *os.File, query string) {
 	fmt.Fprintf(w, "\r\033[K%s %s\n", accent("🔍"), query+"_")
 }
 
-// filterMenuItems returns items whose name or desc contain the query (case-insensitive).
-func filterMenuItems(items []menuItem, query string) []menuItem {
-	if query == "" {
-		return items
-	}
-	lq := strings.ToLower(query)
-	var out []menuItem
-	for _, it := range items {
-		if strings.Contains(strings.ToLower(it.name), lq) || strings.Contains(strings.ToLower(it.desc), lq) {
-			out = append(out, it)
-		}
-	}
-	return out
-}
-
 // selectOne renders an interactive single-choice menu navigated with the arrow
 // keys (or j/k), confirmed with Enter, aborted with q or Ctrl-C. It puts the
 // terminal in raw mode, so it requires a TTY (callers gate on isInteractive).

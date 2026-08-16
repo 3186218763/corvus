@@ -153,12 +153,6 @@ func (a *Agent) maybeCompact(ctx context.Context, u *provider.Usage) {
 func foldEconomics(region []provider.Message) bool {
 	return compaction.FoldEconomics(region)
 }
-func estimateMessagesTokens(msgs []provider.Message) int {
-	return compaction.EstimateMessagesTokens(msgs)
-}
-func estimateTextTokens(s string) int {
-	return compaction.EstimateTextTokens(s)
-}
 
 // compact summarizes the older middle of the session and replaces it in place:
 // the session becomes system + summary + recent tail. The dropped originals are
@@ -428,23 +422,8 @@ func (a *Agent) partitionFold(region []provider.Message) (kept, fold []provider.
 func keepIndexes(region []provider.Message, policy KeepPolicy) []bool {
 	return compaction.KeepIndexes(region, policy)
 }
-func keepToolCallGroup(region []provider.Message, keep []bool, assistantIndex int) {
-	compaction.KeepToolCallGroup(region, keep, assistantIndex)
-}
-func shouldKeepMessage(m provider.Message, policy KeepPolicy) bool {
-	return compaction.ShouldKeepMessage(m, policy)
-}
 func isErrorMessage(m provider.Message) bool {
 	return compaction.IsErrorMessage(m)
-}
-func isUserMarked(m provider.Message) bool {
-	return compaction.IsUserMarked(m)
-}
-func findToolCaller(region []provider.Message, toolIndex int, id string) int {
-	return compaction.FindToolCaller(region, toolIndex, id)
-}
-func toolCallIDs(m provider.Message) map[string]bool {
-	return compaction.ToolCallIDs(m)
 }
 
 // planCompaction locates the region to summarize. head is the count of leading

@@ -109,12 +109,6 @@ func parseLegacyMCPSpec(raw string) (PluginEntry, bool) {
 	return PluginEntry{Name: name, Command: body}, true
 }
 
-// anonymousMCPName names a v0.x spec that carried no name= prefix (its tools
-// registered unprefixed in v0.x; v1+ plugins require a name).
-func anonymousMCPName(i int) string {
-	return fmt.Sprintf("mcp-%d", i+1)
-}
-
 func pluginEntryFromMCPSpec(name string, s mcpjson.ServerSpec) PluginEntry {
 	tier, _ := mcpjson.NormalizeTier(s.Tier)
 	e := PluginEntry{

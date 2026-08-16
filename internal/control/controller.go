@@ -642,15 +642,6 @@ func (c *Controller) runGuarded(body func(ctx context.Context) error) admissionR
 	return c.admitGuardedTurn(body, false)
 }
 
-// runGuardedOrPark admits like runGuarded but parks the body while another
-// turn is running instead of using the deliberately-silent running drop.
-// Reserved for inputs that are the user's own words (the steer fallback):
-// the FIFO drain in finishGuardedTurn delivers them the moment the current
-// turn finishes.
-func (c *Controller) runGuardedOrPark(body func(ctx context.Context) error) admissionResult {
-	return c.admitGuardedTurn(body, true)
-}
-
 func (c *Controller) admitGuardedTurn(body func(ctx context.Context) error, parkWhileRunning bool) admissionResult {
 	c.mu.Lock()
 	if c.closed {

@@ -162,28 +162,6 @@ func (m *memoryManager) quickAdd(scope memory.Scope, note string) (string, error
 	return path, nil
 }
 
-// saveDoc overwrites a recognized memory doc with body — the save side of the
-// desktop panel's in-place editor. Returns the file written.
-func (m *memoryManager) saveDoc(path, body string) (string, error) {
-	m.writeMu.Lock()
-	defer m.writeMu.Unlock()
-	mem := m.current()
-	if mem == nil {
-		return "", nil
-	}
-	written, err := mem.WriteDoc(path, body)
-	if err != nil {
-		return "", err
-	}
-	// Inject the new content once on the next turn: the cached prefix still holds
-	// the pre-edit version this session, so handing the model the current text
-	// avoids a stale-guidance gap until the next session re-folds it into the
-	// prefix. Trimmed to a single tail note (drained by Compose), not per-turn.
-	m.applyWrite(mem,
-		"Memory file "+written+" was just edited. Its current contents:\n"+strings.TrimSpace(body))
-	return written, nil
-}
-
 // saveMemory writes an active auto-memory fact and refreshes the in-session
 // snapshot. It is the explicit user-confirmed counterpart to the model-owned
 // remember tool, used by management surfaces that preview a candidate first.

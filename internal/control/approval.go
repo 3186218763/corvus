@@ -386,25 +386,6 @@ func (a *approvalManager) waitContext(ctx context.Context) (context.Context, con
 	return context.WithTimeout(ctx, a.approvalTimeout)
 }
 
-// snapshotPrompts copies the in-flight prompts for re-emission to a reconnected
-// frontend (ReplayPendingPrompts).
-func (a *approvalManager) snapshotPrompts() ([]event.Approval, []event.Ask) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	approvals := make([]event.Approval, 0, len(a.approvals))
-	for id, p := range a.approvals {
-		approvals = append(approvals, event.Approval{
-			ID: id, Tool: p.tool, Subject: p.subject, Reason: p.reason, RawInput: append(json.RawMessage(nil), p.rawInput...), Fresh: p.fresh,
-			Kind: p.kind, Recovery: p.recovery,
-		})
-	}
-	asks := make([]event.Ask, 0, len(a.asks))
-	for id, p := range a.asks {
-		asks = append(asks, event.Ask{ID: id, Questions: p.questions})
-	}
-	return approvals, asks
-}
-
 // --- decision helpers (caller holds a.mu) ---
 
 func (a *approvalManager) bypassAllowsLocked(tool, subject string, args json.RawMessage) bool {

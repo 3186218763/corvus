@@ -420,14 +420,6 @@ func CredentialStored(key string) bool {
 	return envFileHasValue(UserCredentialsPath(), key)
 }
 
-func credentialCurrentStoreHasKey(key string) bool {
-	key = strings.TrimSpace(key)
-	if key == "" {
-		return false
-	}
-	return envFileHasValue(UserCredentialsPath(), key)
-}
-
 func credentialCurrentStoreClearedKey(key string) bool {
 	key = strings.TrimSpace(key)
 	if key == "" {
