@@ -3026,7 +3026,7 @@ model = "x"
 	}
 }
 
-func TestBuildLegacyPlanModeReadOnlyCommandsDoesNotEmitGateWarning(t *testing.T) {
+func TestBuildLegacyPlanModeReadOnlyCommandsDoesNotEmitWarning(t *testing.T) {
 	isolateConfigHome(t)
 	dir := robustTempDir(t)
 	t.Chdir(dir)
@@ -3932,69 +3932,9 @@ allow = ["Bash(go test ./...)", "Bash(go build ./...)"]
 	}
 }
 
-func TestRememberPlanModeReadOnlyCommandUsesWorkspaceRoot(t *testing.T) {
-	home := robustTempDir(t)
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-	t.Setenv("AppData", filepath.Join(home, "AppData"))
-
-	cwd := robustTempDir(t)
-	workspace := robustTempDir(t)
-	t.Chdir(cwd)
-	writeFile(t, cwd, filepath.Join(".corvus", "config.toml"), `
-[agent]
-plan_mode_read_only_commands = ["cwd query"]
-`)
-	writeFile(t, workspace, filepath.Join(".corvus", "config.toml"), `
-[agent]
-plan_mode_read_only_commands = ["workspace query"]
-`)
-
-	res := rememberPlanModeReadOnlyCommand(workspace, "gh issue view")
-	if !res.Saved || res.Path != filepath.Join(workspace, ".corvus", "config.toml") {
-		t.Fatalf("remember result = %+v, want saved to workspace config", res)
-	}
-
-	cwdCfg := config.LoadForEdit(filepath.Join(cwd, ".corvus", "config.toml"))
-	if hasPlanModeReadOnlyCommand(cwdCfg.Agent.PlanModeReadOnlyCommands, "gh issue view") {
-		t.Fatalf("remembered command was written to cwd config: %v", cwdCfg.Agent.PlanModeReadOnlyCommands)
-	}
-	workspaceCfg := config.LoadForEdit(filepath.Join(workspace, ".corvus", "config.toml"))
-	if !hasPlanModeReadOnlyCommand(workspaceCfg.Agent.PlanModeReadOnlyCommands, "gh issue view") {
-		t.Fatalf("remembered command missing from workspace config: %v", workspaceCfg.Agent.PlanModeReadOnlyCommands)
-	}
-}
-
-func TestRememberPlanModeReadOnlyCommandSkipsCoveredPrefix(t *testing.T) {
-	workspace := robustTempDir(t)
-	writeFile(t, workspace, filepath.Join(".corvus", "config.toml"), `
-[agent]
-plan_mode_read_only_commands = ["gh issue view"]
-`)
-
-	res := rememberPlanModeReadOnlyCommand(workspace, "gh issue view 5867")
-	if res.Saved || res.CoveredBy != "gh issue view" {
-		t.Fatalf("remember result = %+v, want already covered", res)
-	}
-	cfg := config.LoadForEdit(filepath.Join(workspace, ".corvus", "config.toml"))
-	if len(cfg.Agent.PlanModeReadOnlyCommands) != 1 || cfg.Agent.PlanModeReadOnlyCommands[0] != "gh issue view" {
-		t.Fatalf("plan-mode read-only commands = %v, want only existing prefix", cfg.Agent.PlanModeReadOnlyCommands)
-	}
-}
-
 func hasPermissionRule(rules []string, want string) bool {
 	for _, rule := range rules {
 		if rule == want {
-			return true
-		}
-	}
-	return false
-}
-
-func hasPlanModeReadOnlyCommand(commands []string, want string) bool {
-	for _, cmd := range commands {
-		if strings.TrimSpace(cmd) == want {
 			return true
 		}
 	}

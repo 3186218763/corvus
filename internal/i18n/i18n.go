@@ -65,83 +65,75 @@ type Messages struct {
 	ResumePickHint  string // keyboard hint in the interactive resume picker
 
 	// chat TUI status line / approval banner.
-	ChatThinking                           string // live reasoning marker label, e.g. "thinking…"
-	ChatStatusThinkingFmt                  string // "%s thinking… (%ss …)" — %s = spinner, %s = fixed-width elapsed
-	ChatToolWorkingFmt                     string // "%s working · %ss" — %s = frame, %s = fixed-width elapsed
-	ChatStatusRetryingFmt                  string // "%s retrying (%d/%d)…" — %s = spinner, %d/%d = attempt/max
-	ChatStatusCancellingFmt                string // "%s stopping… (%ss · Ctrl+C exits)" — %s = spinner, %s = fixed-width elapsed
-	ChatStatusIdle                         string // shortcuts hint when idle
-	ChatStatusYoloIdle                     string // shortcuts hint when idle in YOLO/bypass mode
-	ChatCacheHitLabel                      string // cache-hit readout shown after each completed turn
-	ChatStatusModelLabel                   string
-	ChatStatusEffortLabel                  string
-	ChatStatusWorkLabel                    string
-	ChatStatusCacheLabel                   string
-	ChatStatusContextLabel                 string
-	ChatStatusCompactLabel                 string
-	ChatStatusJobsLabel                    string
-	ChatStatusBalanceLabel                 string
-	ChatStatusCacheNowFmt                  string // cache status tag, "%s" = latest-turn hit rate with percent sign
-	ChatStatusCacheAvgFmt                  string // cache status tag, "%s" = session-average hit rate with percent sign
-	ChatStatusPlanApproval                 string // shortcuts hint while a plan is pending
-	ChatStatusPlanApprovalCompact          string // compact short-screen plan approval hint
-	PlanApprovalPrompt                     string // one-line "plan above is ready" banner shown above the input
-	PlanApprovalChoices                    string // start / revise / exit-without-executing choice list
-	ChatStatusToolApproval                 string // shortcuts hint while a tool call awaits approval
-	ChatStatusToolApprovalCompact          string // compact short-screen tool approval hint
-	ToolApprovalPromptFmt                  string // approval banner — tool, subject suffix, source/intent detail, choices
-	ToolApprovalChoices                    string // standard approval choice list
-	BashPrefixChoices                      string // approval choice list when a bash prefix can be granted
-	PlanModeReadOnlyCommandChoices         string // approval choice list for plan-mode read-only command trust
-	FreshHumanApprovalChoices              string // approval choice list for prompts that cannot be remembered
-	RecoveryApprovalChoices                string // one-shot Auto Guard decision list
-	RecoveryPlanChangeChoices              string // material Auto plan transition decision list
-	RecoveryPlanDecisionPrompt             string // neutral title for a material Auto plan transition
-	RecoveryPlanBeforeFmt                  string // compact previous-plan line, one %s
-	RecoveryPlanAfterFmt                   string // compact proposed-plan line, one %s
-	RecoveryTaskGrantChoices               string // Auto Guard list with a current-task semantic grant
-	SandboxEscapeApprovalChoices           string // approval choice list for OS sandbox escape prompts
-	ApprovalNeededFmt                      string // notification text for a pending approval, tool only
-	ApprovalNeededWithSubjectFmt           string // notification text for a pending approval with subject
-	ToolApprovalSourceFmt                  string // "Source: %s" / "来源: %s"
-	ToolApprovalBuiltIn                    string // built-in tool source label
-	ToolApprovalImageUse                   string // image-understanding detail for understand_image-style tools
-	ApprovalToolLabelBash                  string // user-facing label for bash approvals
-	ApprovalToolLabelEditFile              string // user-facing label for edit_file approvals
-	ApprovalToolLabelWriteFile             string // user-facing label for write_file approvals
-	ApprovalToolLabelMultiEdit             string // user-facing label for multi_edit approvals
-	ApprovalToolLabelMoveFile              string // user-facing label for move_file approvals
-	ApprovalToolLabelWebFetch              string // user-facing label for web_fetch approvals
-	ApprovalToolLabelRunSkill              string // user-facing label for run_skill approvals
-	ApprovalToolLabelRemember              string // user-facing label for remember approvals
-	ApprovalToolLabelForget                string // user-facing label for forget approvals
-	ApprovalToolLabelSandboxEscape         string // user-facing label for OS sandbox escape approvals
-	ApprovalToolLabelPlanModeReadOnly      string // user-facing label for plan-mode read-only command trust approvals
-	MemoryApprovalSaveUpdate               string // subject prefix for remember approval
-	MemoryApprovalBodyLabel                string // label before the body excerpt in remember approval
-	MemoryApprovalArchiveFmt               string // subject for forget approval, %q = memory name
-	PlanModeBashTrustSubjectFmt            string // subject for bash read-only prefix trust approval, prefix + command
-	PlanModeBashTrustReason                string // reason for bash read-only prefix trust approval
-	PlanModeBashTrustDeclined              string // model-facing denial after bash read-only prefix rejection
-	SandboxEscapeSubjectFallback           string // fallback subject for a one-shot unconfined sandbox escape approval
-	SandboxEscapeSubjectPrefix             string // subject prefix before the shell command for one-shot unconfined escape approval
-	SandboxEscapeWrapReason                string // reason when no OS sandbox can wrap the command
-	SandboxEscapeRuntimeReason             string // fallback reason when an OS sandbox cannot start the command
-	SandboxEscapeDeclined                  string // model-facing denial when the user declines a one-shot unconfined retry
-	ApprovalToolLabelConfigWrite           string // user-facing label for Corvus-managed config write approvals
-	ConfigWriteSubjectPrefix               string // subject prefix before the config file path for managed config write approval
-	ConfigWriteReason                      string // reason shown for managed config write approval
-	ConfigWriteDeclined                    string // model-facing denial when the user declines a managed config write
-	ConfigWriteApprovalChoices             string // approval choice list for managed config write prompts
-	PermissionSavedFmt                     string // permission rule saved notice: path, rule
-	PermissionAlreadyAllowedFmt            string // permission rule already covered notice: path, rule
-	PermissionSaveFailedFmt                string // permission rule save failure notice: rule, error
-	PlanModeReadOnlyCommandTrustSavedFmt   string // plan-mode bash read-only prefix saved notice: path, prefix
-	PlanModeReadOnlyCommandTrustAlreadyFmt string // plan-mode bash read-only prefix already covered notice: path, prefix
-	PlanModeReadOnlyCommandTrustFailedFmt  string // plan-mode bash read-only prefix save failure notice: prefix, error
-	DiffFoldedFmt                          string // "… +%d more lines" footer when a writer diff is folded
-	DiffFoldEnabledFmt                     string // notice when /diff-fold enables folding, %d = line limit
-	DiffFoldDisabled                       string // notice when /diff-fold disables folding (shows all lines)
+	ChatThinking                   string // live reasoning marker label, e.g. "thinking…"
+	ChatStatusThinkingFmt          string // "%s thinking… (%ss …)" — %s = spinner, %s = fixed-width elapsed
+	ChatToolWorkingFmt             string // "%s working · %ss" — %s = frame, %s = fixed-width elapsed
+	ChatStatusRetryingFmt          string // "%s retrying (%d/%d)…" — %s = spinner, %d/%d = attempt/max
+	ChatStatusCancellingFmt        string // "%s stopping… (%ss · Ctrl+C exits)" — %s = spinner, %s = fixed-width elapsed
+	ChatStatusIdle                 string // shortcuts hint when idle
+	ChatStatusYoloIdle             string // shortcuts hint when idle in YOLO/bypass mode
+	ChatCacheHitLabel              string // cache-hit readout shown after each completed turn
+	ChatStatusModelLabel           string
+	ChatStatusEffortLabel          string
+	ChatStatusWorkLabel            string
+	ChatStatusCacheLabel           string
+	ChatStatusContextLabel         string
+	ChatStatusCompactLabel         string
+	ChatStatusJobsLabel            string
+	ChatStatusBalanceLabel         string
+	ChatStatusCacheNowFmt          string // cache status tag, "%s" = latest-turn hit rate with percent sign
+	ChatStatusCacheAvgFmt          string // cache status tag, "%s" = session-average hit rate with percent sign
+	ChatStatusPlanApproval         string // shortcuts hint while a plan is pending
+	ChatStatusPlanApprovalCompact  string // compact short-screen plan approval hint
+	PlanApprovalPrompt             string // one-line "plan above is ready" banner shown above the input
+	PlanApprovalChoices            string // start / revise / exit-without-executing choice list
+	ChatStatusToolApproval         string // shortcuts hint while a tool call awaits approval
+	ChatStatusToolApprovalCompact  string // compact short-screen tool approval hint
+	ToolApprovalPromptFmt          string // approval banner — tool, subject suffix, source/intent detail, choices
+	ToolApprovalChoices            string // standard approval choice list
+	BashPrefixChoices              string // approval choice list when a bash prefix can be granted
+	FreshHumanApprovalChoices      string // approval choice list for prompts that cannot be remembered
+	RecoveryApprovalChoices        string // one-shot Auto Guard decision list
+	RecoveryPlanChangeChoices      string // material Auto plan transition decision list
+	RecoveryPlanDecisionPrompt     string // neutral title for a material Auto plan transition
+	RecoveryPlanBeforeFmt          string // compact previous-plan line, one %s
+	RecoveryPlanAfterFmt           string // compact proposed-plan line, one %s
+	RecoveryTaskGrantChoices       string // Auto Guard list with a current-task semantic grant
+	SandboxEscapeApprovalChoices   string // approval choice list for OS sandbox escape prompts
+	ApprovalNeededFmt              string // notification text for a pending approval, tool only
+	ApprovalNeededWithSubjectFmt   string // notification text for a pending approval with subject
+	ToolApprovalSourceFmt          string // "Source: %s" / "来源: %s"
+	ToolApprovalBuiltIn            string // built-in tool source label
+	ToolApprovalImageUse           string // image-understanding detail for understand_image-style tools
+	ApprovalToolLabelBash          string // user-facing label for bash approvals
+	ApprovalToolLabelEditFile      string // user-facing label for edit_file approvals
+	ApprovalToolLabelWriteFile     string // user-facing label for write_file approvals
+	ApprovalToolLabelMultiEdit     string // user-facing label for multi_edit approvals
+	ApprovalToolLabelMoveFile      string // user-facing label for move_file approvals
+	ApprovalToolLabelWebFetch      string // user-facing label for web_fetch approvals
+	ApprovalToolLabelRunSkill      string // user-facing label for run_skill approvals
+	ApprovalToolLabelRemember      string // user-facing label for remember approvals
+	ApprovalToolLabelForget        string // user-facing label for forget approvals
+	ApprovalToolLabelSandboxEscape string // user-facing label for OS sandbox escape approvals
+	MemoryApprovalSaveUpdate       string // subject prefix for remember approval
+	MemoryApprovalBodyLabel        string // label before the body excerpt in remember approval
+	MemoryApprovalArchiveFmt       string // subject for forget approval, %q = memory name
+	SandboxEscapeSubjectFallback   string // fallback subject for a one-shot unconfined sandbox escape approval
+	SandboxEscapeSubjectPrefix     string // subject prefix before the shell command for one-shot unconfined escape approval
+	SandboxEscapeWrapReason        string // reason when no OS sandbox can wrap the command
+	SandboxEscapeRuntimeReason     string // fallback reason when an OS sandbox cannot start the command
+	SandboxEscapeDeclined          string // model-facing denial when the user declines a one-shot unconfined retry
+	ApprovalToolLabelConfigWrite   string // user-facing label for Corvus-managed config write approvals
+	ConfigWriteSubjectPrefix       string // subject prefix before the config file path for managed config write approval
+	ConfigWriteReason              string // reason shown for managed config write approval
+	ConfigWriteDeclined            string // model-facing denial when the user declines a managed config write
+	ConfigWriteApprovalChoices     string // approval choice list for managed config write prompts
+	PermissionSavedFmt             string // permission rule saved notice: path, rule
+	PermissionAlreadyAllowedFmt    string // permission rule already covered notice: path, rule
+	PermissionSaveFailedFmt        string // permission rule save failure notice: rule, error
+	DiffFoldedFmt                  string // "… +%d more lines" footer when a writer diff is folded
+	DiffFoldEnabledFmt             string // notice when /diff-fold enables folding, %d = line limit
+	DiffFoldDisabled               string // notice when /diff-fold disables folding (shows all lines)
 
 	// `ask` tool question card.
 	AskTypeSomething   string // the "type your own answer" option label

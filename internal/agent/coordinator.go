@@ -259,20 +259,6 @@ func (c *Coordinator) SetPlanMode(v bool) {
 	}
 }
 
-// SetPlanModeReadOnlyTrustGate propagates plan-mode bash read-only command
-// approvals to both tool-using agents in two-model mode.
-func (c *Coordinator) SetPlanModeReadOnlyTrustGate(g PlanModeReadOnlyTrustGate) {
-	if c == nil {
-		return
-	}
-	if c.plannerAgent != nil {
-		c.plannerAgent.SetPlanModeReadOnlyTrustGate(g)
-	}
-	if c.executor != nil {
-		c.executor.SetPlanModeReadOnlyTrustGate(g)
-	}
-}
-
 // SetSandboxEscapeApprover propagates one-shot shell sandbox escape approvals to
 // both tool-using agents in two-model mode.
 func (c *Coordinator) SetSandboxEscapeApprover(g sandbox.EscapeApprover) {

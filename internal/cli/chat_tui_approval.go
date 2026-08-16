@@ -78,9 +78,6 @@ func approvalChoiceLabels(a *event.Approval) []string {
 	if a.Tool == control.ManagedConfigWriteApprovalTool {
 		choices = i18n.M.ConfigWriteApprovalChoices
 	}
-	if a.Tool == agent.PlanModeReadOnlyCommandApprovalTool {
-		choices = i18n.M.PlanModeReadOnlyCommandChoices
-	}
 	if !fresh && a.Tool == "bash" && permission.BashCommandPrefix(a.Subject) != "" {
 		prefixRule := permission.RememberRuleForScope(a.Tool, a.Subject)
 		choices = fmt.Sprintf(i18n.M.BashPrefixChoices, prefixRule, prefixRule)
@@ -322,9 +319,6 @@ func compactApprovalPlan(plan string) string {
 // MCP tools are advertised as mcp__<server>__<tool>; showing the short tool name
 // first keeps the approval prompt readable while preserving the source.
 func approvalToolDetails(toolName string) (name, detail string) {
-	if toolName == agent.PlanModeReadOnlyCommandApprovalTool {
-		return i18n.M.ApprovalToolLabelPlanModeReadOnly, fmt.Sprintf(i18n.M.ToolApprovalSourceFmt, i18n.M.ToolApprovalBuiltIn)
-	}
 	if toolName == control.SandboxEscapeApprovalTool {
 		return i18n.M.ApprovalToolLabelSandboxEscape, fmt.Sprintf(i18n.M.ToolApprovalSourceFmt, i18n.M.ToolApprovalBuiltIn)
 	}

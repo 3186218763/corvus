@@ -24,7 +24,6 @@ import (
 	"corvus/internal/event"
 	"corvus/internal/guardian"
 	"corvus/internal/hook"
-	"corvus/internal/i18n"
 	"corvus/internal/jobs"
 	"corvus/internal/mcplaunch"
 	"corvus/internal/memory"
@@ -3427,40 +3426,6 @@ func TestPermissionRequestClaudeHookAutoDeniesFreshHumanApproval(t *testing.T) {
 	}
 }
 
-// TestPermissionRequestClaudeHookCannotAutoAllowOptsFreshOnlyDecision covers
-// the fresh-human protection's other branch: a tool that requestFreshApprovalDecision
-// marks fresh (opts.fresh=true) without being one of
-// RequiresFreshHumanApprovalTool's fixed cases. PlanModeReadOnlyCommandApprovalTool
-// is exactly that — the earlier tests only exercised tools protected via
-// requiresFreshApprovalTool(tool), not the opts.fresh flag alone.
-func TestPermissionRequestClaudeHookCannotAutoAllowOptsFreshOnlyDecision(t *testing.T) {
-	if RequiresFreshHumanApprovalTool(agent.PlanModeReadOnlyCommandApprovalTool) {
-		t.Fatal("test assumes this tool is fresh-only via opts.fresh, not RequiresFreshHumanApprovalTool")
-	}
-	allowJSON := `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}`
-	c, ids := wildcardClaudePermissionHookController(t, 0, allowJSON)
-	done := make(chan bool, 1)
-	go func() {
-		reply, err := c.requestFreshApprovalDecision(context.Background(), agent.PlanModeReadOnlyCommandApprovalTool, "ls", nil, "trust this read-only command prefix?")
-		if err != nil {
-			t.Errorf("requestFreshApprovalDecision error = %v", err)
-			return
-		}
-		done <- reply.allow
-	}()
-
-	id := waitApprovalID(t, ids)
-	c.Approve(id, true, false, false)
-	select {
-	case allow := <-done:
-		if !allow {
-			t.Fatal("manual approval should still allow")
-		}
-	case <-time.After(30 * time.Second):
-		t.Fatal("approval stayed blocked — a Claude hook allow should not have preempted this opts.fresh decision")
-	}
-}
-
 func waitApprovalID(t *testing.T, ids <-chan string) string {
 	t.Helper()
 	select {
@@ -3815,14 +3780,12 @@ func TestPermissionRequestHookDoesNotFireForSessionGrant(t *testing.T) {
 
 // TestSessionAuthorizationsCarryAcrossRebuild pins the fix for a rebuild
 // (model/effort/profile switch) dropping same-session "Allow for this
-// session" tool grants and Plan-mode read-only command trust: only the
-// ask/auto/yolo posture string used to survive a controller swap, so a user
-// who had already granted a tool this session was asked again after any
-// switch.
+// session" tool grants: only the ask/auto/yolo posture string used to
+// survive a controller swap, so a user who had already granted a tool this
+// session was asked again after any switch.
 func TestSessionAuthorizationsCarryAcrossRebuild(t *testing.T) {
 	old := New(Options{})
 	old.approval.grantSession("bash", "go test ./...")
-	old.approval.grantPlanModeReadOnlyCommand("go test ./...")
 
 	fresh := New(Options{})
 	fresh.RestoreSessionAuthorizations(old.SessionAuthorizations())
@@ -3830,9 +3793,6 @@ func TestSessionAuthorizationsCarryAcrossRebuild(t *testing.T) {
 	allow, _, err := fresh.requestApproval(context.Background(), "bash", "go test ./...", nil)
 	if err != nil || !allow {
 		t.Fatalf("session-granted approval after restore = (%v,%v), want allowed", allow, err)
-	}
-	if !fresh.approval.planModeReadOnlyCommandTrusted("go test ./...") {
-		t.Fatal("plan-mode read-only command trust did not carry across rebuild")
 	}
 }
 
@@ -4049,193 +4009,6 @@ func TestApprovalPersistenceFailureKeepsSessionGrant(t *testing.T) {
 	}
 	if len(notices) != 1 || notices[0].Level != event.LevelWarn || !strings.Contains(notices[0].Text, "disk unavailable") {
 		t.Fatalf("notices = %+v, want one persistence failure warning", notices)
-	}
-}
-
-func TestPlanModeReadOnlyTrustApprovalPersistsBashCommandTrust(t *testing.T) {
-	ids := make(chan string, 2)
-	var approval event.Approval
-	var notices []string
-	var rememberedPrefix string
-	prompts := 0
-	c := New(Options{
-		Sink: event.FuncSink(func(e event.Event) {
-			if e.Kind == event.ApprovalRequest {
-				prompts++
-				approval = e.Approval
-				ids <- e.Approval.ID
-			}
-			if e.Kind == event.Notice {
-				notices = append(notices, e.Text)
-			}
-		}),
-		OnRememberPlanModeReadOnlyCommand: func(prefix string) PlanModeReadOnlyCommandTrustResult {
-			rememberedPrefix = prefix
-			return PlanModeReadOnlyCommandTrustResult{Prefix: prefix, Path: filepath.Join(".corvus", "config.toml"), Saved: true}
-		},
-	})
-
-	go func() {
-		c.Approve(<-ids, true, true, true)
-	}()
-	req := agent.PlanModeReadOnlyTrustRequest{
-		ToolName: agent.PlanModeReadOnlyCommandApprovalTool,
-		Command:  "gh issue view 5867 --json title",
-		Prefix:   "gh issue view",
-		Args:     json.RawMessage(`{"command":"gh issue view 5867 --json title"}`),
-	}
-	allow, reason, err := planModeReadOnlyTrustApprover{c}.CheckPlanModeReadOnlyTrust(context.Background(), req)
-	if err != nil || !allow || reason != "" {
-		t.Fatalf("CheckPlanModeReadOnlyTrust = (%v,%q,%v), want allow", allow, reason, err)
-	}
-	if approval.Tool != agent.PlanModeReadOnlyCommandApprovalTool || !strings.Contains(approval.Subject, `Trust "gh issue view"`) || !strings.Contains(approval.Subject, "gh issue view 5867") || !strings.Contains(approval.Reason, "Auto/YOLO") {
-		t.Fatalf("approval = %+v, want plan-mode bash read-only command trust prompt", approval)
-	}
-	if rememberedPrefix != "gh issue view" {
-		t.Fatalf("remembered prefix = %q, want gh issue view", rememberedPrefix)
-	}
-	if len(notices) != 1 || !strings.Contains(notices[0], "gh issue view") {
-		t.Fatalf("notices = %v, want read-only command trust saved notice", notices)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-	allow, reason, err = planModeReadOnlyTrustApprover{c}.CheckPlanModeReadOnlyTrust(ctx, req)
-	if err != nil || !allow || reason != "" {
-		t.Fatalf("second CheckPlanModeReadOnlyTrust = (%v,%q,%v), want session grant", allow, reason, err)
-	}
-	if prompts != 1 {
-		t.Fatalf("approval prompts = %d, want 1", prompts)
-	}
-}
-
-func TestApprovalSubjectsUseChineseCatalog(t *testing.T) {
-	i18n.DetectLanguage("zh")
-	t.Cleanup(func() { i18n.DetectLanguage("en") })
-
-	rememberArgs := json.RawMessage(`{"name":"prefers-vitest","type":"user","description":"Preferred test framework","body":"Use Vitest for frontend tests."}`)
-	if got := approvalDisplaySubject(memoryRememberTool, "", rememberArgs); !strings.Contains(got, "保存/更新记忆") || !strings.Contains(got, "正文: Use Vitest") {
-		t.Fatalf("remember approval subject = %q, want Chinese labels", got)
-	}
-
-	forgetArgs := json.RawMessage(`{"name":"old-fact"}`)
-	if got := approvalDisplaySubject(memoryForgetTool, "", forgetArgs); got != `归档记忆 "old-fact"` {
-		t.Fatalf("forget approval subject = %q, want Chinese archive label", got)
-	}
-}
-
-func TestPlanModeReadOnlyTrustApprovalUsesChineseCatalog(t *testing.T) {
-	i18n.DetectLanguage("zh")
-	t.Cleanup(func() { i18n.DetectLanguage("en") })
-
-	approvalRequests := make(chan event.Approval, 1)
-	c := New(Options{
-		Sink: event.FuncSink(func(e event.Event) {
-			if e.Kind == event.ApprovalRequest {
-				approvalRequests <- e.Approval
-			}
-		}),
-	})
-	done := make(chan struct {
-		allow  bool
-		reason string
-		err    error
-	}, 1)
-	req := agent.PlanModeReadOnlyTrustRequest{
-		ToolName: agent.PlanModeReadOnlyCommandApprovalTool,
-		Command:  "gh issue view 5867 --json title",
-		Prefix:   "gh issue view",
-		Args:     json.RawMessage(`{"command":"gh issue view 5867 --json title"}`),
-	}
-	go func() {
-		allow, reason, err := planModeReadOnlyTrustApprover{c}.CheckPlanModeReadOnlyTrust(context.Background(), req)
-		done <- struct {
-			allow  bool
-			reason string
-			err    error
-		}{allow: allow, reason: reason, err: err}
-	}()
-
-	var approval event.Approval
-	select {
-	case approval = <-approvalRequests:
-	case <-time.After(30 * time.Second):
-		t.Fatal("plan-mode bash trust approval request was not emitted")
-	}
-	if !strings.Contains(approval.Subject, "在计划模式中信任") || !strings.Contains(approval.Subject, "gh issue view 5867") {
-		t.Fatalf("approval subject = %q, want Chinese plan-mode trust subject", approval.Subject)
-	}
-	if !strings.Contains(approval.Reason, "不在 Corvus 内置只读集合中") {
-		t.Fatalf("approval reason = %q, want Chinese plan-mode trust reason", approval.Reason)
-	}
-
-	c.Approve(approval.ID, false, false, false)
-	select {
-	case got := <-done:
-		if got.err != nil || got.allow || !strings.Contains(got.reason, "用户拒绝") {
-			t.Fatalf("rejected trust result = %+v, want Chinese denial", got)
-		}
-	case <-time.After(30 * time.Second):
-		t.Fatal("plan-mode bash trust approval stayed blocked after rejection")
-	}
-}
-
-func TestPlanModeReadOnlyCommandTrustApprovalIgnoresToolAutoApproval(t *testing.T) {
-	approvalRequests := make(chan event.Approval, 1)
-	c := New(Options{
-		Sink: event.FuncSink(func(e event.Event) {
-			if e.Kind == event.ApprovalRequest {
-				approvalRequests <- e.Approval
-			}
-		}),
-	})
-	c.SetAutoApproveTools(true)
-
-	type trustResult struct {
-		allow  bool
-		reason string
-		err    error
-	}
-	done := make(chan trustResult, 1)
-	req := agent.PlanModeReadOnlyTrustRequest{
-		ToolName: agent.PlanModeReadOnlyCommandApprovalTool,
-		Command:  "gh issue view 5867",
-		Prefix:   "gh issue view",
-		Args:     json.RawMessage(`{"command":"gh issue view 5867"}`),
-	}
-	go func() {
-		allow, reason, err := planModeReadOnlyTrustApprover{c}.CheckPlanModeReadOnlyTrust(context.Background(), req)
-		done <- trustResult{allow: allow, reason: reason, err: err}
-	}()
-
-	var approval event.Approval
-	select {
-	case approval = <-approvalRequests:
-	case <-time.After(30 * time.Second):
-		t.Fatal("plan-mode bash read-only command trust prompt was not emitted under tool auto-approval")
-	}
-	if approval.Tool != agent.PlanModeReadOnlyCommandApprovalTool || !strings.Contains(approval.Subject, `Trust "gh issue view"`) {
-		t.Fatalf("approval = %+v, want plan-mode bash read-only command trust prompt", approval)
-	}
-	select {
-	case got := <-done:
-		t.Fatalf("tool auto-approval must not answer plan-mode bash read-only command trust, got %+v", got)
-	case <-time.After(50 * time.Millisecond):
-	}
-
-	c.Approve(approval.ID, true, true, false)
-	select {
-	case got := <-done:
-		if got.err != nil || !got.allow || got.reason != "" {
-			t.Fatalf("CheckPlanModeReadOnlyTrust after approval = %+v, want allow", got)
-		}
-	case <-time.After(30 * time.Second):
-		t.Fatal("plan-mode bash read-only command trust prompt stayed blocked after Approve")
-	}
-
-	allow, reason, err := planModeReadOnlyTrustApprover{c}.CheckPlanModeReadOnlyTrust(context.Background(), req)
-	if err != nil || !allow || reason != "" {
-		t.Fatalf("session-granted plan-mode bash read-only command trust under YOLO = (%v,%q,%v), want allow", allow, reason, err)
 	}
 }
 

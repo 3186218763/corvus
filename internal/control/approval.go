@@ -30,12 +30,11 @@ type approvalManager struct {
 
 	// mu guards the prompt maps and posture fields; every critical section under
 	// it is short and non-blocking.
-	mu                       sync.Mutex
-	approvals                map[string]pendingApproval
-	asks                     map[string]pendingAsk
-	granted                  map[string]bool
-	planModeReadOnlyCommands map[string]bool
-	nextID                   int
+	mu        sync.Mutex
+	approvals map[string]pendingApproval
+	asks      map[string]pendingAsk
+	granted   map[string]bool
+	nextID    int
 	// toolApprovalMode is the runtime approval posture: "ask" prompts, "auto"
 	// lets the policy auto-approve the writer fallback while preserving ask/deny
 	// rules, and "yolo" skips ordinary tool prompts while deny rules and fresh
@@ -61,13 +60,12 @@ type approvalManager struct {
 
 func newApprovalManager(policy permission.Policy, mode string, timeout time.Duration) approvalManager {
 	return approvalManager{
-		policy:                   policy,
-		approvals:                map[string]pendingApproval{},
-		asks:                     map[string]pendingAsk{},
-		granted:                  map[string]bool{},
-		planModeReadOnlyCommands: map[string]bool{},
-		toolApprovalMode:         mode,
-		approvalTimeout:          timeout,
+		policy:           policy,
+		approvals:        map[string]pendingApproval{},
+		asks:             map[string]pendingAsk{},
+		granted:          map[string]bool{},
+		toolApprovalMode: mode,
+		approvalTimeout:  timeout,
 	}
 }
 
@@ -255,46 +253,16 @@ func (a *approvalManager) grantSession(tool, subject string) {
 	a.granted[permission.SessionGrantRuleForScope(tool, subject)] = true
 }
 
-func (a *approvalManager) planModeReadOnlyCommandTrusted(prefix string) bool {
-	prefix = normalizePlanModeReadOnlyCommandPrefix(prefix)
-	if prefix == "" {
-		return false
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.planModeReadOnlyCommands[prefix]
-}
-
-func (a *approvalManager) grantPlanModeReadOnlyCommand(prefix string) {
-	prefix = normalizePlanModeReadOnlyCommandPrefix(prefix)
-	if prefix == "" {
-		return
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.planModeReadOnlyCommands[prefix] = true
-}
-
-// SessionAuthorizations is the same-session tool-grant and Plan-mode
-// read-only command trust state a controller rebuild must carry forward; see
-// Controller.SessionAuthorizations / RestoreSessionAuthorizations.
 type SessionAuthorizations struct {
-	Grants                   []string
-	PlanModeReadOnlyCommands []string
+	Grants []string
 }
 
 func (a *approvalManager) snapshotSessionAuthorizations() SessionAuthorizations {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	auth := SessionAuthorizations{
-		Grants:                   make([]string, 0, len(a.granted)),
-		PlanModeReadOnlyCommands: make([]string, 0, len(a.planModeReadOnlyCommands)),
-	}
+	auth := SessionAuthorizations{Grants: make([]string, 0, len(a.granted))}
 	for rule := range a.granted {
 		auth.Grants = append(auth.Grants, rule)
-	}
-	for prefix := range a.planModeReadOnlyCommands {
-		auth.PlanModeReadOnlyCommands = append(auth.PlanModeReadOnlyCommands, prefix)
 	}
 	return auth
 }
@@ -304,9 +272,6 @@ func (a *approvalManager) restoreSessionAuthorizations(auth SessionAuthorization
 	defer a.mu.Unlock()
 	for _, rule := range auth.Grants {
 		a.granted[rule] = true
-	}
-	for _, prefix := range auth.PlanModeReadOnlyCommands {
-		a.planModeReadOnlyCommands[prefix] = true
 	}
 }
 
@@ -438,10 +403,6 @@ func (a *approvalManager) snapshotPrompts() ([]event.Approval, []event.Ask) {
 		asks = append(asks, event.Ask{ID: id, Questions: p.questions})
 	}
 	return approvals, asks
-}
-
-func normalizePlanModeReadOnlyCommandPrefix(prefix string) string {
-	return strings.Join(strings.Fields(strings.TrimSpace(prefix)), " ")
 }
 
 // --- decision helpers (caller holds a.mu) ---

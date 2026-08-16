@@ -684,15 +684,13 @@ func TestAdoptCarriedHistoryRefreshesLeadingSystemPrompt(t *testing.T) {
 }
 
 // TestAdoptCarriedHistoryRestoresSessionAuthorizations pins the fix for a
-// rebuild dropping same-session "Allow for this session" tool grants and
-// Plan-mode read-only command trust, forcing the user to re-approve
-// something already granted this session after every /model, /effort, or
-// /work-mode switch.
+// rebuild dropping same-session "Allow for this session" tool grants,
+// forcing the user to re-approve something already granted this session
+// after every /model, /effort, or /work-mode switch.
 func TestAdoptCarriedHistoryRestoresSessionAuthorizations(t *testing.T) {
 	old := control.New(control.Options{})
 	old.RestoreSessionAuthorizations(control.SessionAuthorizations{
-		Grants:                   []string{"bash|go test ./..."},
-		PlanModeReadOnlyCommands: []string{"go test ./..."},
+		Grants: []string{"bash|go test ./..."},
 	})
 
 	fresh := control.New(control.Options{
@@ -706,9 +704,6 @@ func TestAdoptCarriedHistoryRestoresSessionAuthorizations(t *testing.T) {
 	got := fresh.SessionAuthorizations()
 	if len(got.Grants) != 1 || got.Grants[0] != "bash|go test ./..." {
 		t.Fatalf("restored grants = %+v, want [\"bash|go test ./...\"]", got.Grants)
-	}
-	if len(got.PlanModeReadOnlyCommands) != 1 || got.PlanModeReadOnlyCommands[0] != "go test ./..." {
-		t.Fatalf("restored plan-mode read-only commands = %+v, want [\"go test ./...\"]", got.PlanModeReadOnlyCommands)
 	}
 }
 

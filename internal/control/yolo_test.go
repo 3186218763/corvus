@@ -584,64 +584,6 @@ func TestSetAutoApproveToolsDoesNotDrainPendingPlanApproval(t *testing.T) {
 	}
 }
 
-func TestSetAutoApproveToolsDoesNotDrainPendingPlanModeReadOnlyCommandTrust(t *testing.T) {
-	approvalRequests := make(chan event.Approval, 1)
-	c := New(Options{
-		Sink: event.FuncSink(func(e event.Event) {
-			if e.Kind == event.ApprovalRequest {
-				approvalRequests <- e.Approval
-			}
-		}),
-	})
-
-	type trustResult struct {
-		allow  bool
-		reason string
-		err    error
-	}
-	done := make(chan trustResult, 1)
-	req := agent.PlanModeReadOnlyTrustRequest{
-		ToolName: agent.PlanModeReadOnlyCommandApprovalTool,
-		Command:  "gh issue view 5867",
-		Prefix:   "gh issue view",
-	}
-	go func() {
-		allow, reason, err := planModeReadOnlyTrustApprover{c}.CheckPlanModeReadOnlyTrust(context.Background(), req)
-		done <- trustResult{allow: allow, reason: reason, err: err}
-	}()
-
-	var approval event.Approval
-	select {
-	case approval = <-approvalRequests:
-	case <-time.After(30 * time.Second):
-		t.Fatal("plan-mode bash read-only command trust approval request was not emitted")
-	}
-	if approval.Tool != agent.PlanModeReadOnlyCommandApprovalTool {
-		t.Fatalf("approval tool = %q, want %q", approval.Tool, agent.PlanModeReadOnlyCommandApprovalTool)
-	}
-
-	c.SetAutoApproveTools(true)
-
-	select {
-	case got := <-done:
-		t.Fatalf("SetAutoApproveTools must not auto-answer plan-mode bash read-only command trust; got %+v", got)
-	case <-time.After(50 * time.Millisecond):
-	}
-	if !c.AutoApproveTools() {
-		t.Fatal("tool auto-approval should turn on while plan-mode bash read-only command trust stays pending")
-	}
-
-	c.Approve(approval.ID, true, false, false)
-	select {
-	case got := <-done:
-		if got.err != nil || !got.allow || got.reason != "" {
-			t.Fatalf("manual plan-mode bash read-only command trust approval = %+v, want allow", got)
-		}
-	case <-time.After(30 * time.Second):
-		t.Fatal("plan-mode bash read-only command trust approval stayed blocked after Approve")
-	}
-}
-
 func TestSetAutoApproveToolsDoesNotDrainPendingMemoryApproval(t *testing.T) {
 	approvalRequests := make(chan event.Approval, 1)
 	c := New(Options{

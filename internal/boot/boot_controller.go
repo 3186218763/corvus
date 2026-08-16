@@ -185,9 +185,6 @@ func buildController(a *assembly) (*control.Controller, error) {
 		OnRemember: func(rule string) control.RememberResult {
 			return rememberPermissionRule(a.root, rule)
 		},
-		OnRememberPlanModeReadOnlyCommand: func(prefix string) control.PlanModeReadOnlyCommandTrustResult {
-			return rememberPlanModeReadOnlyCommand(a.root, prefix)
-		},
 		SessionRecoveryMeta: a.opts.SessionRecoveryMeta,
 		OnSessionRecovered:  a.opts.OnSessionRecovered,
 	}

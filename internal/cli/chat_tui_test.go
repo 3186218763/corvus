@@ -3848,7 +3848,7 @@ func TestFreshApprovalSessionChoiceIsLimitedToSandboxEscape(t *testing.T) {
 	if !freshApprovalAllowsSession(control.SandboxEscapeApprovalTool) {
 		t.Fatal("sandbox escape should allow an explicit session choice")
 	}
-	for _, toolName := range []string{"remember", "forget", planApprovalTool, agent.PlanModeReadOnlyCommandApprovalTool} {
+	for _, toolName := range []string{"remember", "forget", planApprovalTool} {
 		if freshApprovalAllowsSession(toolName) {
 			t.Fatalf("%s should not allow the sandbox escape session choice", toolName)
 		}

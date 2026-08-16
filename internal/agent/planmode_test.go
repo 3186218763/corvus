@@ -43,13 +43,6 @@ func (g *recordingPermissionGate) Check(_ context.Context, name string, _ json.R
 	return g.allow, g.reason, nil
 }
 
-type legacyPlanTrustGate struct{ calls int }
-
-func (g *legacyPlanTrustGate) CheckPlanModeReadOnlyTrust(context.Context, PlanModeReadOnlyTrustRequest) (bool, string, error) {
-	g.calls++
-	return true, "", nil
-}
-
 type annotatedMCPTool struct {
 	fakeTool
 	server           string
@@ -193,32 +186,6 @@ func TestPlanModeSafeWriterStillUsesWriterPermission(t *testing.T) {
 	}
 	if len(gate.calls) != 1 || gate.calls[0].readOnly {
 		t.Fatalf("phase-safe writer permission calls = %+v", gate.calls)
-	}
-}
-
-func TestPlanModeDoesNotInvokeLegacyBashTrustPrompt(t *testing.T) {
-	reg := tool.NewRegistry()
-	reg.Add(fakeTool{name: "bash"})
-	gate := &recordingPermissionGate{allow: true}
-	legacy := &legacyPlanTrustGate{}
-	a := New(nil, reg, NewSession(""), Options{
-		Gate:                      gate,
-		PlanModeReadOnlyTrustGate: legacy,
-	}, event.Discard)
-	a.SetPlanMode(true)
-
-	out := a.executeOne(context.Background(), provider.ToolCall{
-		Name:      "bash",
-		Arguments: `{"command":"gh issue view 6482"}`,
-	})
-	if out.blocked || out.errMsg != "" {
-		t.Fatalf("permission-approved bash outcome = %+v", out)
-	}
-	if legacy.calls != 0 {
-		t.Fatalf("obsolete Plan bash trust prompt was invoked %d times", legacy.calls)
-	}
-	if len(gate.calls) != 1 || gate.calls[0].readOnly {
-		t.Fatalf("bash must reach ordinary permission as declared writer, calls=%+v", gate.calls)
 	}
 }
 
