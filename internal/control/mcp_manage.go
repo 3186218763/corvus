@@ -65,13 +65,6 @@ func (c *Controller) AddMCPServer(e config.PluginEntry) (int, error) {
 	return n, nil
 }
 
-// ConnectMCPServer connects an MCP server entry for this session without writing
-// it to config. Desktop owns config placement so it can keep user-level settings
-// out of project .corvus/config.toml while preserving the CLI AddMCPServer semantics.
-func (c *Controller) ConnectMCPServer(e config.PluginEntry) (int, error) {
-	return c.connectMCPServer(e)
-}
-
 // RegisterMCPServerOnDemand restores a configured server's cached provider
 // surface without forcing a handshake. It is the durable-enable counterpart to
 // ConnectMCPServer, which remains the explicit install/retry operation.
@@ -361,15 +354,4 @@ func (c *Controller) DisconnectMCPServer(name string) bool {
 	disabled := false
 	c.syncCapabilityRuntimeFromConfig(name, &disabled)
 	return disconnected || removedPlaceholder > 0
-}
-
-// UnregisterMCPServerTools hides a shared MCP server from this controller only.
-// The desktop shared-host path uses this for per-tab connector toggles: the
-// shared client stays alive for sibling tabs, while this session's registry drops
-// the server's provider-visible tools before the next turn.
-func (c *Controller) UnregisterMCPServerTools(name string) bool {
-	if c.capabilityRuntime != nil {
-		c.capabilityRuntime.SetServerEnabled(name, false)
-	}
-	return c.mcp.suspendToolPrefix(name)
 }

@@ -31,17 +31,16 @@ import (
 )
 
 type toolResult struct {
-	reg              *tool.Registry
-	writeRoots       []string
-	networkEnabled   bool
-	forbidReadRoots  []string
-	managedConfig    builtin.ManagedConfigPaths
-	bashSpec         sandbox.Spec
-	sessionGuard     builtin.SessionDataGuard
-	searchSpec       builtin.SearchSpec
-	bashTimeout      time.Duration
-	readPathResolver *builtin.PathResolver
-	pluginHost       *plugin.Host
+	reg             *tool.Registry
+	writeRoots      []string
+	networkEnabled  bool
+	forbidReadRoots []string
+	managedConfig   builtin.ManagedConfigPaths
+	bashSpec        sandbox.Spec
+	sessionGuard    builtin.SessionDataGuard
+	searchSpec      builtin.SearchSpec
+	bashTimeout     time.Duration
+	pluginHost      *plugin.Host
 }
 
 // buildToolRegistry constructs the shared tool registry and registers the
@@ -90,7 +89,6 @@ func buildToolRegistry(cfg *config.Config, opts Options, root string, stderr io.
 	if tokenEconomy {
 		enabledBuiltins = tokenEconomyBuiltins(enabledBuiltins)
 	}
-	readPathResolver := builtin.NewPathResolver()
 	// The [network_policy] section compiles to the egress policy for web_fetch
 	// and the bash URL guard. A malformed section refuses startup rather than
 	// silently installing a policy that matches nothing.
@@ -106,7 +104,7 @@ func buildToolRegistry(cfg *config.Config, opts Options, root string, stderr io.
 		return nil, err
 	}
 	if !tokenEconomy || len(cfg.Tools.Enabled) == 0 || len(enabledBuiltins) > 0 {
-		addBuiltins(reg, enabledBuiltins, webSearchTool, writeRoots, bashSpec, bashTimeout, searchSpec, stderr, root, proxySpec, netPolicy, forbidReadRoots, readPathResolver, sessionGuard, managedConfig, opts.FileOverlay, opts.TerminalRunner)
+		addBuiltins(reg, enabledBuiltins, webSearchTool, writeRoots, bashSpec, bashTimeout, searchSpec, stderr, root, proxySpec, netPolicy, forbidReadRoots, sessionGuard, managedConfig, opts.FileOverlay, opts.TerminalRunner)
 	}
 	// Use the caller-supplied shared host when set, so controllers for the same
 	// workspace root reuse running MCP processes (e.g. one CodeGraph daemon
@@ -117,17 +115,16 @@ func buildToolRegistry(cfg *config.Config, opts Options, root string, stderr io.
 	}
 
 	return &toolResult{
-		reg:              reg,
-		writeRoots:       writeRoots,
-		networkEnabled:   networkEnabled,
-		forbidReadRoots:  forbidReadRoots,
-		managedConfig:    managedConfig,
-		bashSpec:         bashSpec,
-		sessionGuard:     sessionGuard,
-		searchSpec:       searchSpec,
-		bashTimeout:      bashTimeout,
-		readPathResolver: readPathResolver,
-		pluginHost:       pluginHost,
+		reg:             reg,
+		writeRoots:      writeRoots,
+		networkEnabled:  networkEnabled,
+		forbidReadRoots: forbidReadRoots,
+		managedConfig:   managedConfig,
+		bashSpec:        bashSpec,
+		sessionGuard:    sessionGuard,
+		searchSpec:      searchSpec,
+		bashTimeout:     bashTimeout,
+		pluginHost:      pluginHost,
 	}, nil
 }
 
@@ -649,7 +646,7 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 
 // buildToolSourceConnector registers the economy-mode connect_tool_source
 // connector that enables skill/task/MCP/LSP/session/memory sources on demand.
-func buildToolSourceConnector(ctx context.Context, opts Options, cfg *config.Config, root string, reg *tool.Registry, writeRoots []string, forbidReadRoots []string, bashSpec sandbox.Spec, bashTimeout time.Duration, searchSpec builtin.SearchSpec, proxySpec netclient.ProxySpec, readPathResolver *builtin.PathResolver, sessionGuard builtin.SessionDataGuard, managedConfig builtin.ManagedConfigPaths, addSkillTools func() string, addTaskTool func() string, addReadOnlyTaskTool func() string, addReadOnlySkillTools func() string, addInstallSourceTool func() string, addSlashCommandTool func(includeSkills bool) string, addLSPTools func() []string, lspMgr *lsp.Manager, addSessionTools func() string, addMemoryTools func() string, onDemandMCPSpecs map[string]plugin.Spec, onDemandMCPNames []string, pluginHost *plugin.Host, tokenEconomy bool) {
+func buildToolSourceConnector(ctx context.Context, opts Options, cfg *config.Config, root string, reg *tool.Registry, writeRoots []string, forbidReadRoots []string, bashSpec sandbox.Spec, bashTimeout time.Duration, searchSpec builtin.SearchSpec, proxySpec netclient.ProxySpec, sessionGuard builtin.SessionDataGuard, managedConfig builtin.ManagedConfigPaths, addSkillTools func() string, addTaskTool func() string, addReadOnlyTaskTool func() string, addReadOnlySkillTools func() string, addInstallSourceTool func() string, addSlashCommandTool func(includeSkills bool) string, addLSPTools func() []string, lspMgr *lsp.Manager, addSessionTools func() string, addMemoryTools func() string, onDemandMCPSpecs map[string]plugin.Spec, onDemandMCPNames []string, pluginHost *plugin.Host, tokenEconomy bool) {
 	if tokenEconomy {
 		addBuiltinSourceTools := func(source string, names ...string) string {
 			var missing []string
@@ -672,7 +669,6 @@ func buildToolSourceConnector(ctx context.Context, opts Options, cfg *config.Con
 				BashTimeout:     bashTimeout,
 				Search:          searchSpec,
 				ProxySpec:       proxySpec,
-				ReadPaths:       readPathResolver,
 				SessionGuard:    sessionGuard,
 				ManagedConfig:   managedConfig,
 				FileOverlay:     opts.FileOverlay,
@@ -799,12 +795,12 @@ func buildToolSourceConnector(ctx context.Context, opts Options, cfg *config.Con
 // and makes bash warn when a command references them. managedConfig names the
 // Corvus-owned config files writable outside writeRoots after a fresh
 // per-write human approval.
-func addBuiltins(reg *tool.Registry, enabled []string, webSearchTool tool.Tool, writeRoots []string, bashSpec sandbox.Spec, bashTimeout time.Duration, searchSpec builtin.SearchSpec, stderr io.Writer, workDir string, proxySpec netclient.ProxySpec, netPolicy netpolicy.Policy, forbidReadRoots []string, readPathResolver *builtin.PathResolver, sessionGuard builtin.SessionDataGuard, managedConfig builtin.ManagedConfigPaths, overlay builtin.FileOverlay, terminal builtin.TerminalRunner) {
+func addBuiltins(reg *tool.Registry, enabled []string, webSearchTool tool.Tool, writeRoots []string, bashSpec sandbox.Spec, bashTimeout time.Duration, searchSpec builtin.SearchSpec, stderr io.Writer, workDir string, proxySpec netclient.ProxySpec, netPolicy netpolicy.Policy, forbidReadRoots []string, sessionGuard builtin.SessionDataGuard, managedConfig builtin.ManagedConfigPaths, overlay builtin.FileOverlay, terminal builtin.TerminalRunner) {
 	// If a workspace directory is set, use workspace-bound tools that resolve
 	// paths relative to that directory. Otherwise fall back to the process-cwd
 	// compile-time builtins.
 	if workDir != "" {
-		ws := builtin.Workspace{Dir: workDir, WriteRoots: writeRoots, ForbidReadRoots: forbidReadRoots, Bash: bashSpec, BashTimeout: bashTimeout, Search: searchSpec, ProxySpec: proxySpec, NetPolicy: netPolicy, ReadPaths: readPathResolver, SessionGuard: sessionGuard, ManagedConfig: managedConfig, FileOverlay: overlay, Terminal: terminal}
+		ws := builtin.Workspace{Dir: workDir, WriteRoots: writeRoots, ForbidReadRoots: forbidReadRoots, Bash: bashSpec, BashTimeout: bashTimeout, Search: searchSpec, ProxySpec: proxySpec, NetPolicy: netPolicy, SessionGuard: sessionGuard, ManagedConfig: managedConfig, FileOverlay: overlay, Terminal: terminal}
 		for _, t := range ws.Tools(enabled...) {
 			if t.Name() == "web_search" {
 				continue

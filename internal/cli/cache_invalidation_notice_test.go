@@ -46,7 +46,7 @@ func TestModelSwitchEmitsCacheInvalidationNotice(t *testing.T) {
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{Label: "old", SessionDir: t.TempDir()})
 	m.modelRef = "provider/old-model"
-	m.buildController = func(controllerBuildSpec, []provider.Message, string, control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(controllerBuildSpec, []provider.Message, string, *control.Controller) (*control.Controller, error) {
 		return control.New(control.Options{Label: "new"}), nil
 	}
 
@@ -65,7 +65,7 @@ func TestWorkModeSwitchEmitsCacheInvalidationNotice(t *testing.T) {
 	m := newChatTUI(control.New(control.Options{Label: "model", SessionDir: t.TempDir()}), "", make(chan event.Event, 1), 100)
 	m.modelRef = "provider/model"
 	m.runtimeProfile = boot.TokenModeFull
-	m.buildController = func(controllerBuildSpec, []provider.Message, string, control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(controllerBuildSpec, []provider.Message, string, *control.Controller) (*control.Controller, error) {
 		return control.New(control.Options{Label: "new"}), nil
 	}
 

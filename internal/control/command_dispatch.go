@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"corvus/internal/event"
@@ -15,125 +14,13 @@ import (
 	"corvus/internal/skill"
 )
 
-// Submit is the one-call entry for a simple frontend: it takes raw user input
-// and does everything — slash-command dispatch, @-reference expansion, plan-mode
-// composition — emitting all output as events. The HTTP/SSE server uses this so
-// a browser client only POSTs the typed line.
-//
-// Slash commands route to the matching primitive: /compact, /new, and /clear
-// run their session op and emit a Notice; /mcp__server__prompt and custom /commands
-// resolve to a turn; an unknown slash emits a Notice. Anything else is a normal
-// turn with its @-references resolved first.
-func (c *Controller) Submit(input string) {
-	c.submit(input, "", "")
-}
-
-// SubmitHTTP accepts input from the unauthenticated localhost HTTP frontend. It
-// deliberately omits the trusted TUI-only "!cmd" shell shortcut and resolves file
-// references only through the controller's workspace root.
-func (c *Controller) SubmitHTTP(input string) {
-	c.submitHTTP(input, "")
-}
-
 // SubmitDisplay runs input as a turn while remembering the user-facing display
 // text for transcript replay when controller-side composition expands input.
 func (c *Controller) SubmitDisplay(display, input string) {
-	c.submit(input, display, "")
+	c.submit(input, display)
 }
 
-// SubmitDeliveryRecovery runs the same visible prompt path as SubmitDisplay but
-// first authorizes the executor to retain the immediately preceding exhausted
-// delivery ledger. The agent consumes that authorization once; if the card came
-// from an older/reloaded session this safely degrades to an ordinary turn.
-func (c *Controller) SubmitDeliveryRecovery(display, input string) {
-	c.runGuarded(func(ctx context.Context) error {
-		if c.executor != nil {
-			c.executor.PrepareDeliveryRecovery()
-		}
-		return c.runGoalLoopWithRawDisplay(ctx, input, input, display)
-	})
-}
-
-// SubmitInvocationDisplay executes composer-selected invocation entities
-// independently of slash-command parsing. Plain string submit entry points keep
-// their existing behavior for CLI, HTTP, and backward-compatible clients.
-func (c *Controller) SubmitInvocationDisplay(display, input string, invocations []InvocationRequest) {
-	c.submitInvocations(input, display, invocations)
-}
-
-func (c *Controller) submitInvocations(input, display string, requests []InvocationRequest) {
-	if len(requests) == 0 {
-		c.SubmitDisplay(display, input)
-		return
-	}
-	ordered := append([]InvocationRequest(nil), requests...)
-	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].Offset < ordered[j].Offset })
-	inline := make([]skill.Skill, 0, len(ordered))
-	subagents := make([]skill.Skill, 0, len(ordered))
-	for _, request := range ordered {
-		sk, _, ok := c.resolveSkillInvocation("/" + strings.TrimSpace(request.Name))
-		if !ok {
-			c.notice("unknown invocation: /" + strings.TrimSpace(request.Name))
-			return
-		}
-		kind := "skill"
-		if sk.RunAs == skill.RunSubagent {
-			kind = "subagent"
-		}
-		if request.Kind != kind {
-			c.notice(fmt.Sprintf("invocation /%s is %s, not %s", sk.SlashName(), kind, request.Kind))
-			return
-		}
-		if sk.RunAs == skill.RunSubagent {
-			subagents = append(subagents, sk)
-		} else {
-			inline = append(inline, sk)
-		}
-	}
-
-	parts := make([]string, 0, len(inline)+1)
-	for _, sk := range inline {
-		parts = append(parts, c.skills.render(sk, ""))
-	}
-	if strings.TrimSpace(input) != "" {
-		parts = append(parts, input)
-	}
-	composed := strings.Join(parts, "\n\n")
-	if len(subagents) == 0 {
-		c.runGuarded(func(ctx context.Context) error {
-			return c.runGoalLoopWithRawDisplay(ctx, composed, input, display)
-		})
-		return
-	}
-	if strings.TrimSpace(input) == "" {
-		c.notice("subagent invocation requires a task")
-		return
-	}
-	c.runGuarded(func(ctx context.Context) error {
-		planMode := c.PlanMode()
-		runner := c.skillRunner
-		if runner == nil {
-			return fmt.Errorf("subagent skill runner is unavailable")
-		}
-		return newTurnOrchestrator(c).runSubagentSkillTurnsGoalLoop(ctx, subagents, composed, input, display, runner, planMode)
-	})
-}
-
-// SubmitEditedDisplay is SubmitDisplay for an inline-edited prompt. The model
-// sees input; the saved user message also keeps the pre-edit prompt as local UI
-// metadata so the edit survives session rewrites.
-func (c *Controller) SubmitEditedDisplay(display, input, original string) {
-	c.submit(input, display, original)
-}
-
-// SubmitUserTurn starts a normal model turn without interpreting shell or slash
-// commands. It still resolves references, so callers can submit trusted
-// user-authored prompt text without expanding the command surface.
-func (c *Controller) SubmitUserTurn(input, display string) {
-	c.runRefTurn(input, display)
-}
-
-func (c *Controller) submit(input, display, editedOriginal string) {
+func (c *Controller) submit(input, display string) {
 	trimmed := strings.TrimSpace(input)
 	if note, ok := MemoryQuickAddNote(trimmed); ok {
 		c.rememberProjectNote(note)
@@ -150,48 +37,13 @@ func (c *Controller) submit(input, display, editedOriginal string) {
 		c.RunShell(trimmed[1:])
 		return
 	}
-	c.submitCommandOrTurn(trimmed, input, display, false, editedOriginal)
+	c.submitCommandOrTurn(trimmed, input, display)
 }
 
-func (c *Controller) submitHTTP(input, display string) {
-	trimmed := strings.TrimSpace(input)
-	if note, ok := MemoryQuickAddNote(trimmed); ok {
-		c.rememberProjectNote(note)
-		return
-	}
-	if note, ok := RememberCommandNote(trimmed); ok {
-		c.rememberProjectNote(note)
-		return
-	}
-	if c.applyGoalCommand(trimmed, display) {
-		return
-	}
-	if strings.HasPrefix(trimmed, "!") {
-		c.notice("shell commands are unavailable from this frontend")
-		return
-	}
-	c.submitCommandOrTurn(trimmed, input, display, true, "")
-}
-
-func (c *Controller) submitCommandOrTurn(trimmed, input, display string, scopedRefsOnly bool, editedOriginal string) {
+func (c *Controller) submitCommandOrTurn(trimmed, input, display string) {
 	runRefTurn := c.runRefTurn
 	runRefTurnWithRefs := c.runRefTurnWithRefs
 	runGoalLoop := c.runGoalLoopWithRawDisplay
-	if scopedRefsOnly {
-		runRefTurn = c.runScopedRefTurn
-		runRefTurnWithRefs = c.runScopedRefTurnWithRefs
-	}
-	if strings.TrimSpace(editedOriginal) != "" {
-		runRefTurn = func(input, display string) {
-			c.runEditedRefTurn(input, display, editedOriginal)
-		}
-		runRefTurnWithRefs = func(input, refLine, display string) {
-			c.runEditedRefTurnWithRefs(input, refLine, display, editedOriginal)
-		}
-		runGoalLoop = func(ctx context.Context, input, raw, display string) error {
-			return c.runEditedGoalLoopWithRawDisplay(ctx, input, raw, display, editedOriginal)
-		}
-	}
 	// Background slash commands (/compact /new /clear) run under the
 	// controller's background context and are tracked by bgWG so Close can
 	// cancel them and wait for the goroutines to unwind: a /new arriving after
@@ -495,14 +347,6 @@ func (c *Controller) runRefTurn(input, display string) {
 	c.runRefTurnWithRefs(input, input, display)
 }
 
-func (c *Controller) runEditedRefTurn(input, display, original string) {
-	c.runEditedRefTurnWithRefs(input, input, display, original)
-}
-
-func (c *Controller) runScopedRefTurn(input, display string) {
-	c.runScopedRefTurnWithRefs(input, input, display)
-}
-
 // runRefTurnWithRefs resolves references from refLine while preserving input as
 // the user's actual prompt text. This lets compiler diagnostics such as
 // "/path/File.kt:12: error" attach @/path/File.kt without rewriting the error.
@@ -510,27 +354,13 @@ func (c *Controller) runRefTurnWithRefs(input, refLine, display string) {
 	c.runRefTurnWithResolver(input, refLine, display, c.ResolveRefs)
 }
 
-func (c *Controller) runEditedRefTurnWithRefs(input, refLine, display, original string) {
-	c.runEditedRefTurnWithResolver(input, refLine, display, original, c.ResolveRefs)
-}
-
-func (c *Controller) runScopedRefTurnWithRefs(input, refLine, display string) {
-	c.runRefTurnWithResolver(input, refLine, display, c.ResolveScopedRefs)
-}
-
 func (c *Controller) runRefTurnWithResolver(input, refLine, display string, resolve func(context.Context, string) (string, []string)) {
 	c.runGuarded(func(ctx context.Context) error {
-		return c.runRefTurnWithResolverSync(ctx, input, refLine, display, "", resolve)
+		return c.runRefTurnWithResolverSync(ctx, input, refLine, display, resolve)
 	})
 }
 
-func (c *Controller) runEditedRefTurnWithResolver(input, refLine, display, original string, resolve func(context.Context, string) (string, []string)) {
-	c.runGuarded(func(ctx context.Context) error {
-		return c.runRefTurnWithResolverSync(ctx, input, refLine, display, original, resolve)
-	})
-}
-
-func (c *Controller) runRefTurnWithResolverSync(ctx context.Context, input, refLine, display, original string, resolve func(context.Context, string) (string, []string)) error {
+func (c *Controller) runRefTurnWithResolverSync(ctx context.Context, input, refLine, display string, resolve func(context.Context, string) (string, []string)) error {
 	block, errs := resolve(ctx, refLine)
 	for _, e := range errs {
 		c.notice(e)
@@ -538,9 +368,6 @@ func (c *Controller) runRefTurnWithResolverSync(ctx context.Context, input, refL
 	sent := input
 	if block != "" {
 		sent = "Referenced context:\n\n" + block + "\n\n" + input
-	}
-	if strings.TrimSpace(original) != "" {
-		return c.runEditedGoalLoopWithRawDisplay(ctx, sent, input, display, original)
 	}
 	return c.runGoalLoopWithRawDisplay(ctx, sent, input, display)
 }

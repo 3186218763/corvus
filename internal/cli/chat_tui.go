@@ -29,7 +29,7 @@ import (
 // normal buffer and commits finalized output to native scrollback via
 // tea.Println so taps can still focus the soft keyboard.
 type chatTUI struct {
-	ctrl    control.SessionAPI
+	ctrl    *control.Controller
 	label   string
 	missing string // missing-key warning surfaced once in the banner, "" when ready
 
@@ -330,7 +330,7 @@ type chatTUI struct {
 	// outgoing controller, passed through so the replacement can carry forward
 	// same-session tool grants and Plan-mode read-only command trust that
 	// don't travel through carry/resumePath (see Controller.RestoreSessionAuthorizations).
-	buildController func(spec controllerBuildSpec, carry []provider.Message, resumePath string, oldCtrl control.SessionAPI) (*control.Controller, error)
+	buildController func(spec controllerBuildSpec, carry []provider.Message, resumePath string, oldCtrl *control.Controller) (*control.Controller, error)
 	modelRef        string
 	runtimeProfile  string
 	effortLevel     string // "" when the current provider/model has no configurable effort
@@ -383,7 +383,7 @@ type chatTUI struct {
 	// and kills plugin subprocesses, both of which corrupt the terminal's
 	// raw mode). Instead they are closed at process exit when the terminal
 	// is already being restored.
-	oldControllers []control.SessionAPI
+	oldControllers []*control.Controller
 
 	// completion is the live autocomplete menu (slash commands; @-refs later).
 	completion completion
@@ -496,8 +496,8 @@ const statuslineCommandTimeout = 2 * time.Second
 type modelSwitchMsg struct {
 	ref           string
 	profile       string
-	ctrl          control.SessionAPI
-	oldCtrl       control.SessionAPI
+	ctrl          *control.Controller
+	oldCtrl       *control.Controller
 	label         string
 	commands      []command.Command
 	skills        []skill.Skill

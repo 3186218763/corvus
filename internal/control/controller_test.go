@@ -142,36 +142,6 @@ type startBackgroundJobTool struct {
 	release chan struct{}
 }
 
-func TestCancelJobCannotCrossSessionBoundary(t *testing.T) {
-	manager := jobs.NewManager(event.Discard)
-	t.Cleanup(manager.Close)
-	pathA := filepath.Join(t.TempDir(), "session-a.jsonl")
-	pathB := filepath.Join(t.TempDir(), "session-b.jsonl")
-	controllerA := New(Options{Jobs: manager})
-	controllerB := New(Options{Jobs: manager})
-	controllerA.sessionPath = pathA
-	controllerB.sessionPath = pathB
-
-	jobA := manager.StartForSession(agent.BranchID(pathA), "bash", "a", func(ctx context.Context, _ io.Writer) (string, error) {
-		<-ctx.Done()
-		return "", ctx.Err()
-	})
-	jobB := manager.StartForSession(agent.BranchID(pathB), "bash", "b", func(ctx context.Context, _ io.Writer) (string, error) {
-		<-ctx.Done()
-		return "", ctx.Err()
-	})
-
-	if controllerA.CancelJob(jobB.ID) {
-		t.Fatal("controller A cancelled controller B's job")
-	}
-	if !controllerA.CancelJob(jobA.ID) {
-		t.Fatal("controller A did not cancel its own job")
-	}
-	if !controllerB.CancelJob(jobB.ID) {
-		t.Fatal("controller B did not retain ownership of its job")
-	}
-}
-
 func (t startBackgroundJobTool) Name() string        { return "start_background_job" }
 func (t startBackgroundJobTool) Description() string { return "start background job" }
 func (t startBackgroundJobTool) Schema() json.RawMessage {
@@ -1151,45 +1121,6 @@ func TestSnapshotActivityPersistsOwnedCompactionRewrite(t *testing.T) {
 	}
 	if matches, err := filepath.Glob(filepath.Join(dir, "*-recovery-*.jsonl")); err != nil || len(matches) != 0 {
 		t.Fatalf("recovery branches after owned compaction rewrite = %v err=%v, want none", matches, err)
-	}
-}
-
-func TestEditedPromptMetadataAfterMidTurnSnapshotStaysOnOwnedSession(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "edited-mid-turn.jsonl")
-
-	sess := agent.NewSession("sys")
-	sess.Add(provider.Message{Role: provider.RoleUser, Content: "edited prompt"})
-	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "partial"})
-	if err := sess.Save(path); err != nil {
-		t.Fatalf("Save mid-turn transcript: %v", err)
-	}
-	// The model finishes after the periodic snapshot. Turn teardown then adds
-	// local inline-edit metadata to the already-persisted user message.
-	sess.Add(provider.Message{Role: provider.RoleAssistant, Content: "final"})
-	exec := agent.New(nil, nil, sess, agent.Options{}, event.Discard)
-	ctrl := New(Options{Executor: exec, SessionDir: dir, SessionPath: path, Label: "test"})
-	ctrl.markEditedForNewUser(1, "original prompt")
-
-	if err := ctrl.SnapshotActivity(); err != nil {
-		t.Fatalf("SnapshotActivity edited turn: %v", err)
-	}
-	if got := ctrl.SessionPath(); got != path {
-		t.Fatalf("edited turn moved to recovery path %q, want owned path %q", got, path)
-	}
-	loaded, err := agent.LoadSession(path)
-	if err != nil {
-		t.Fatalf("LoadSession: %v", err)
-	}
-	if got := len(loaded.Messages); got != 4 {
-		t.Fatalf("saved message count = %d, want 4: %+v", got, loaded.Messages)
-	}
-	user := loaded.Messages[1]
-	if !user.Edited || user.Original != "original prompt" || user.Content != "edited prompt" {
-		t.Fatalf("saved edited user metadata = %+v", user)
-	}
-	if matches, err := filepath.Glob(filepath.Join(dir, "*-recovery-*.jsonl")); err != nil || len(matches) != 0 {
-		t.Fatalf("spurious recovery branches = %v err=%v, want none", matches, err)
 	}
 }
 
@@ -2604,7 +2535,7 @@ func TestSubmitClearDiscardsCurrentContextWithoutSavingTranscript(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	c.submit("/clear", "", "")
+	c.submit("/clear", "")
 	select {
 	case <-cleared:
 	case <-time.After(30 * time.Second):
@@ -2736,12 +2667,12 @@ func TestControllerMCPHotLifecycleUpdatesCapabilityRuntime(t *testing.T) {
 		t.Fatalf("hot add list = %q, %v", listed, err)
 	}
 
-	if !ctrl.UnregisterMCPServerTools("hot") {
-		t.Fatal("UnregisterMCPServerTools returned false")
+	if !ctrl.DisconnectMCPServer("hot") {
+		t.Fatal("DisconnectMCPServer returned false")
 	}
 	listed, err = frontend.Execute(context.Background(), json.RawMessage(`{"action":"list"}`))
-	if err != nil || !strings.Contains(listed, `"status": "disabled"`) {
-		t.Fatalf("disabled list = %q, %v", listed, err)
+	if err != nil || strings.Contains(listed, `"name": "hot"`) {
+		t.Fatalf("disconnected runtime-only list = %q, %v", listed, err)
 	}
 
 	if _, err := ctrl.RegisterMCPServerOnDemand(entry); err != nil {
@@ -3133,8 +3064,8 @@ func TestConnectMCPServerAppliesConfiguredCallTimeouts(t *testing.T) {
 			entry.Name = fmt.Sprintf("timeout%d", i)
 			entry.Type = "http"
 			entry.URL = server.URL
-			if _, err := ctrl.ConnectMCPServer(entry); err != nil {
-				t.Fatalf("ConnectMCPServer: %v", err)
+			if _, err := ctrl.connectMCPServer(entry); err != nil {
+				t.Fatalf("connectMCPServer: %v", err)
 			}
 			connected, ok := reg.Get("mcp__" + entry.Name + "__slow")
 			if !ok {
@@ -3150,24 +3081,6 @@ func TestConnectMCPServerAppliesConfiguredCallTimeouts(t *testing.T) {
 				t.Fatalf("slow tool elapsed = %v, want configured 1s timeout", elapsed)
 			}
 		})
-	}
-}
-
-func TestUnregisterMCPServerToolsBlocksLateSharedHostSwap(t *testing.T) {
-	reg := tool.NewRegistry()
-	reg.Add(fakeControlTool{name: "mcp__mock__connect"})
-	c := New(Options{Host: plugin.NewHost(), Registry: reg})
-
-	if ok := c.UnregisterMCPServerTools("mock"); !ok {
-		t.Fatal("UnregisterMCPServerTools returned false")
-	}
-	reg.Add(fakeControlTool{name: "mcp__mock__echo"})
-	if _, found := reg.Get("mcp__mock__echo"); found {
-		t.Fatalf("late shared-host tool swap was accepted after unregister; names=%v", reg.Names())
-	}
-	reg.Add(fakeControlTool{name: "mcp__other__echo"})
-	if _, found := reg.Get("mcp__other__echo"); !found {
-		t.Fatalf("unregister blocked unrelated MCP tools; names=%v", reg.Names())
 	}
 }
 
@@ -4623,9 +4536,9 @@ func TestSendWhileRunningDoesNotInterleaveTurns(t *testing.T) {
 	})
 	defer c.autosaveWG.Wait()
 
-	c.Send("first")
+	c.SendWithRaw("first", "first")
 	waitForRunning(t, c)
-	c.Send("second")
+	c.SendWithRaw("second", "second")
 	close(release)
 	waitForTurnDone(t, events)
 
@@ -4668,7 +4581,7 @@ func TestMidTurnAutosavePersistsDuringLongTurn(t *testing.T) {
 	defer c.autosaveWG.Wait()
 	defer close(release)
 
-	c.Send("hello mid-turn persistence")
+	c.SendWithRaw("hello mid-turn persistence", "hello mid-turn persistence")
 
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {

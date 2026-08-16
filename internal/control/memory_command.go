@@ -48,7 +48,7 @@ func MemoryCompletionData(set *memory.Set) (refs, archives []string) {
 // MemoryCommandText executes one session /memory management command and returns
 // its diagnostic text. Both Submit-based frontends and the chat TUI use this
 // function so reads and explicit recovery mutations follow one protocol.
-func MemoryCommandText(api MemoryControl, input string) string {
+func MemoryCommandText(api *Controller, input string) string {
 	if api == nil {
 		return i18n.M.ListMemoryNone
 	}
@@ -227,7 +227,7 @@ func renderMemoryRecall(recall memory.RecallResult) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func renderMemoryRevisions(api MemoryControl, ref string) string {
+func renderMemoryRevisions(api *Controller, ref string) string {
 	set := api.Memory()
 	if set == nil {
 		return i18n.M.ListMemoryNone

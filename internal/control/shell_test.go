@@ -87,7 +87,7 @@ func TestSubmit_BangPrefix(t *testing.T) {
 	sink, done, events := collectSink()
 	ctrl := &Controller{sink: sink}
 
-	ctrl.Submit("!echo test")
+	ctrl.SubmitDisplay("", "!echo test")
 	waitForDone(t, done)
 
 	if len(*events) == 0 {
@@ -107,7 +107,7 @@ func TestSubmit_BangEmpty(t *testing.T) {
 	})
 
 	ctrl := &Controller{sink: sink}
-	ctrl.Submit("!")
+	ctrl.SubmitDisplay("", "!")
 
 	if len(notices) == 0 {
 		t.Fatal("expected a notice for bare !")

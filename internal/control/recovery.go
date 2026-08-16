@@ -222,36 +222,6 @@ func (c *Controller) saveRecoveryState(path string) {
 	}
 }
 
-// RecoveryMetrics returns content-free recovery counters for export/observation.
-func (c *Controller) RecoveryMetrics() recovery.Metrics {
-	if c == nil {
-		return recovery.Metrics{}
-	}
-	c.mu.Lock()
-	gate := c.recoveryGate
-	c.mu.Unlock()
-	if gate == nil {
-		return recovery.Metrics{}
-	}
-	return gate.Metrics()
-}
-
-// DrainRecoveryMetrics returns only counters recorded since the previous
-// drain. Desktop calls this once per completed turn to avoid re-emitting the
-// controller's cumulative lifetime totals.
-func (c *Controller) DrainRecoveryMetrics() recovery.Metrics {
-	if c == nil {
-		return recovery.Metrics{}
-	}
-	c.mu.Lock()
-	gate := c.recoveryGate
-	c.mu.Unlock()
-	if gate == nil {
-		return recovery.Metrics{}
-	}
-	return gate.DrainMetrics()
-}
-
 // ReplayUnresolvedRecoveries is retained for frontend/API compatibility.
 // Live prompts are replayed by the ordinary approval manager. After process
 // death, the next proposed action is classified again instead of replaying a

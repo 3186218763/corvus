@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"corvus/internal/agent"
 	"corvus/internal/checkpoint"
@@ -260,48 +259,5 @@ func TestRewindConversationSucceedsWithLiveBoundary(t *testing.T) {
 	}
 	if !ok {
 		t.Fatal("expected a conversation-rewind success notice")
-	}
-}
-
-func TestEditPromptPersistsOriginalPrompt(t *testing.T) {
-	c, ag, _ := runTwoTurns(t)
-
-	if err := c.Rewind(1, RewindConversation); err != nil {
-		t.Fatal(err)
-	}
-	c.SubmitEditedDisplay("edited prompt", "edited prompt", "second prompt")
-	defer c.autosaveWG.Wait()
-
-	var loaded *agent.Session
-	deadline := time.Now().Add(time.Second)
-	for {
-		var err error
-		loaded, err = agent.LoadSession(c.SessionPath())
-		if err == nil {
-			msgs := loaded.Snapshot()
-			if len(msgs) >= 2 {
-				last := msgs[len(msgs)-2]
-				if last.Role == provider.RoleUser && last.Content == "edited prompt" {
-					break
-				}
-			}
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("edited prompt was not persisted before deadline")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	msgs := loaded.Snapshot()
-	last := msgs[len(msgs)-2]
-	if last.Role != provider.RoleUser || last.Content != "edited prompt" {
-		t.Fatalf("last user message = %+v, want edited prompt", last)
-	}
-	if !last.Edited || last.Original != "second prompt" {
-		t.Fatalf("edit metadata = edited:%v original:%q, want edited:true original:%q", last.Edited, last.Original, "second prompt")
-	}
-	for _, m := range ag.Session().Snapshot() {
-		if m.Role == provider.RoleUser && m.Content == "second prompt" {
-			t.Fatalf("original prompt stayed as an active model turn: %+v", ag.Session().Snapshot())
-		}
 	}
 }

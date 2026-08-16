@@ -86,7 +86,7 @@ func (m *chatTUI) skillShow(name string) {
 	m.notice("unknown skill: " + name)
 }
 
-func managementSlashSkills(ctrl control.SessionAPI) []skill.Skill {
+func managementSlashSkills(ctrl *control.Controller) []skill.Skill {
 	if ctrl == nil {
 		return nil
 	}

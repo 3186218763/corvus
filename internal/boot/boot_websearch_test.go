@@ -16,7 +16,7 @@ import (
 func TestAddBuiltinsBindsToolSearchToRegistry(t *testing.T) {
 	reg := tool.NewRegistry()
 	var stderr bytes.Buffer
-	addBuiltins(reg, nil, nil, nil, sandbox.Spec{}, 0, builtin.SearchSpec{}, &stderr, "", netclient.ProxySpec{}, netpolicy.Policy{}, nil, nil, builtin.SessionDataGuard{}, builtin.ManagedConfigPaths{}, nil, nil)
+	addBuiltins(reg, nil, nil, nil, sandbox.Spec{}, 0, builtin.SearchSpec{}, &stderr, "", netclient.ProxySpec{}, netpolicy.Policy{}, nil, builtin.SessionDataGuard{}, builtin.ManagedConfigPaths{}, nil, nil)
 
 	ts, ok := reg.Get("tool_search")
 	if !ok {
@@ -35,7 +35,7 @@ func TestAddBuiltinsBindsToolSearchToRegistry(t *testing.T) {
 func TestAddBuiltinsOmitsWebSearchWhenUnconfigured(t *testing.T) {
 	reg := tool.NewRegistry()
 	var stderr bytes.Buffer
-	addBuiltins(reg, nil, nil, nil, sandbox.Spec{}, 0, builtin.SearchSpec{}, &stderr, "", netclient.ProxySpec{}, netpolicy.Policy{}, nil, nil, builtin.SessionDataGuard{}, builtin.ManagedConfigPaths{}, nil, nil)
+	addBuiltins(reg, nil, nil, nil, sandbox.Spec{}, 0, builtin.SearchSpec{}, &stderr, "", netclient.ProxySpec{}, netpolicy.Policy{}, nil, builtin.SessionDataGuard{}, builtin.ManagedConfigPaths{}, nil, nil)
 	if _, ok := reg.Get("web_search"); ok {
 		t.Fatalf("web_search registered without configuration; got %v", reg.Names())
 	}

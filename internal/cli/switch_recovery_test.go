@@ -33,7 +33,7 @@ func chatTUIWithRunningBackgroundJob(t *testing.T) chatTUI {
 	m.ctrl = ctrl
 	m.modelRef = "deepseek-flash/deepseek-v4-flash"
 	m.runtimeProfile = "full"
-	m.buildController = func(controllerBuildSpec, []provider.Message, string, control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(controllerBuildSpec, []provider.Message, string, *control.Controller) (*control.Controller, error) {
 		t.Fatal("runtime switch built a replacement while a background job was running")
 		return nil, nil
 	}
@@ -215,7 +215,7 @@ func TestModelSwitchCarriesRecoveryPathAfterSnapshotConflict(t *testing.T) {
 	m.ctrl = divergedSessionController(t, dir, originalPath)
 	m.modelRef = "old/old-model"
 	var gotResumePath string
-	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, resumePath string, _ control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, resumePath string, _ *control.Controller) (*control.Controller, error) {
 		gotResumePath = resumePath
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
@@ -245,7 +245,7 @@ func TestEffortSwitchCarriesRecoveryPathAfterSnapshotConflict(t *testing.T) {
 	m.ctrl = divergedSessionController(t, dir, originalPath)
 	m.modelRef = "deepseek-flash/deepseek-v4-flash"
 	var gotResumePath string
-	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, resumePath string, _ control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, resumePath string, _ *control.Controller) (*control.Controller, error) {
 		gotResumePath = resumePath
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
@@ -274,7 +274,7 @@ func TestSkillRefreshCarriesRecoveryPathAfterSnapshotConflict(t *testing.T) {
 	m.ctrl = divergedSessionController(t, dir, originalPath)
 	m.modelRef = "deepseek-flash/deepseek-v4-flash"
 	var gotResumePath string
-	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, resumePath string, _ control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, resumePath string, _ *control.Controller) (*control.Controller, error) {
 		gotResumePath = resumePath
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
@@ -306,7 +306,7 @@ func TestWorkModeSwitchCarriesRecoveryPathAndMovesLeaseBeforeRebuild(t *testing.
 		t.Fatalf("seed active lease: %v", err)
 	}
 	var gotResumePath, heldAtBuild string
-	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, resumePath string, _ control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, resumePath string, _ *control.Controller) (*control.Controller, error) {
 		gotResumePath = resumePath
 		heldAtBuild = m.leases.HeldPath()
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
@@ -511,7 +511,7 @@ func TestModelSwitchFailureKeepsLeaseOnRecoveryPathAfterSnapshotConflict(t *test
 	m := newTestChatTUI()
 	m.ctrl = divergedSessionController(t, dir, active)
 	m.modelRef = "old/old-model"
-	m.buildController = func(controllerBuildSpec, []provider.Message, string, control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(controllerBuildSpec, []provider.Message, string, *control.Controller) (*control.Controller, error) {
 		return nil, fmt.Errorf("build failed")
 	}
 	m.leases = control.NewSessionLeaseKeeper()
@@ -554,7 +554,7 @@ func TestModelSwitchMovesLeaseToRecoveryPathBeforeRebuild(t *testing.T) {
 		t.Fatalf("seed active lease: %v", err)
 	}
 	var heldAtBuild string
-	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ *control.Controller) (*control.Controller, error) {
 		heldAtBuild = m.leases.HeldPath()
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
@@ -584,7 +584,7 @@ func TestEffortSwitchMovesLeaseToRecoveryPathBeforeRebuild(t *testing.T) {
 		t.Fatalf("seed active lease: %v", err)
 	}
 	var heldAtBuild string
-	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ *control.Controller) (*control.Controller, error) {
 		heldAtBuild = m.leases.HeldPath()
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
@@ -613,7 +613,7 @@ func TestSkillRefreshMovesLeaseToRecoveryPathBeforeRebuild(t *testing.T) {
 		t.Fatalf("seed active lease: %v", err)
 	}
 	var heldAtBuild string
-	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ *control.Controller) (*control.Controller, error) {
 		heldAtBuild = m.leases.HeldPath()
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}

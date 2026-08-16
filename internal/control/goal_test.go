@@ -33,7 +33,7 @@ func TestGoalCommandAutoContinuesUntilComplete(t *testing.T) {
 		}),
 	})
 
-	c.Submit("/goal ship the redesign")
+	c.SubmitDisplay("", "/goal ship the redesign")
 	waitForTurnDone(t, events)
 
 	if prov.call != 2 {
@@ -90,7 +90,7 @@ func TestPlainInputWithStrongResearchSignalStaysNormal(t *testing.T) {
 		}),
 	})
 
-	c.Submit("持续排查这个线上卡顿直到根因明确，并验证修复")
+	c.SubmitDisplay("", "持续排查这个线上卡顿直到根因明确，并验证修复")
 	waitForTurnDone(t, events)
 
 	if prov.call != 1 {
@@ -129,7 +129,7 @@ func TestPlainInputWithStrongResearchSignalPreservesRefsWithoutStartingGoal(t *t
 		}),
 	})
 
-	c.Submit("持续排查直到根因明确，并验证 @notes.txt")
+	c.SubmitDisplay("", "持续排查直到根因明确，并验证 @notes.txt")
 	waitForTurnDone(t, events)
 
 	first := firstUserMessage(ag.Session().Messages)
@@ -177,7 +177,7 @@ func TestPlainAutoResearchTaskPathDoesNotResumeGoal(t *testing.T) {
 	c.ClearGoal()
 
 	input := "继续 .corvus/autoresearch/" + taskID + "/ 这个任务"
-	c.Submit(input)
+	c.SubmitDisplay("", input)
 	waitForTurnDone(t, events)
 
 	if prov.call != 1 {
@@ -393,7 +393,7 @@ func TestResearchGoalTurnAppendsAutoResearchHeartbeats(t *testing.T) {
 		}),
 	})
 
-	c.Submit("/goal --research fix the typo and add a test")
+	c.SubmitDisplay("", "/goal --research fix the typo and add a test")
 	waitForTurnDone(t, events)
 
 	data, err := os.ReadFile(goalStatePath(sessionPath))
@@ -440,7 +440,7 @@ func TestResearchGoalTurnUpdatesAutoResearchStaleProgress(t *testing.T) {
 		}),
 	})
 
-	c.Submit("/goal --research investigate stale progress")
+	c.SubmitDisplay("", "/goal --research investigate stale progress")
 	waitForTurnDone(t, events)
 
 	data, err := os.ReadFile(goalStatePath(sessionPath))
@@ -517,12 +517,12 @@ func TestControllerRecordsAutoResearchEvidence(t *testing.T) {
 	}
 	c := New(Options{WorkspaceRoot: root})
 	c.SetGoalWithResearchMode("verify the fix", GoalResearchOn)
+
 	taskID := c.goals.currentAutoResearchTaskID()
 	if taskID == "" {
 		t.Fatal("expected autoresearch task id")
 	}
-
-	err := c.RecordAutoResearchEvidence("objective_evidence", AutoResearchEvidenceInput{
+	err := c.recordAutoResearchEvidenceForTask(taskID, "objective_evidence", AutoResearchEvidenceInput{
 		ID:       "f-objective",
 		Kind:     "file",
 		Summary:  "implementation inspected",
@@ -531,9 +531,9 @@ func TestControllerRecordsAutoResearchEvidence(t *testing.T) {
 		Accepted: true,
 	})
 	if err != nil {
-		t.Fatalf("RecordAutoResearchEvidence objective_evidence: %v", err)
+		t.Fatalf("recordAutoResearchEvidenceForTask objective_evidence: %v", err)
 	}
-	err = c.RecordAutoResearchEvidence("verification", AutoResearchEvidenceInput{
+	err = c.recordAutoResearchEvidenceForTask(taskID, "verification", AutoResearchEvidenceInput{
 		ID:       "f-verification",
 		Kind:     "test",
 		Summary:  "go test passed",
@@ -542,7 +542,7 @@ func TestControllerRecordsAutoResearchEvidence(t *testing.T) {
 		Accepted: true,
 	})
 	if err != nil {
-		t.Fatalf("RecordAutoResearchEvidence verification: %v", err)
+		t.Fatalf("recordAutoResearchEvidenceForTask verification: %v", err)
 	}
 
 	report, err := c.autoResearch.Readiness(taskID)
@@ -696,7 +696,7 @@ func TestPlainInputWithWeakResearchSignalStaysNormal(t *testing.T) {
 		}),
 	})
 
-	c.Submit("长期来看这个模块怎么优化？")
+	c.SubmitDisplay("", "长期来看这个模块怎么优化？")
 	waitForTurnDone(t, events)
 
 	first := firstUserMessage(ag.Session().Messages)
@@ -745,7 +745,7 @@ func TestGoalRepeatedBlockedStopsAfterThreeTurns(t *testing.T) {
 		}),
 	})
 
-	c.Submit("/goal deploy the service")
+	c.SubmitDisplay("", "/goal deploy the service")
 	waitForTurnDone(t, events)
 
 	if prov.call != 3 {
@@ -796,13 +796,13 @@ func TestGoalRestartResetsBlockedAudit(t *testing.T) {
 		}),
 	})
 
-	c.Submit("/goal deploy the service")
+	c.SubmitDisplay("", "/goal deploy the service")
 	waitForTurnDone(t, events)
 	if got := c.GoalStatus(); got != GoalStatusBlocked {
 		t.Fatalf("first run GoalStatus() = %q, want blocked", got)
 	}
 
-	c.Submit("/goal deploy the service")
+	c.SubmitDisplay("", "/goal deploy the service")
 	waitForTurnDone(t, events)
 	if prov.call != 5 {
 		t.Fatalf("provider calls = %d, want 5 (3 blocked + 2 resumed)", prov.call)
@@ -886,7 +886,7 @@ func TestGoalInterceptsCompleteWithIncompleteTodos(t *testing.T) {
 		}),
 	})
 
-	c.Submit("/goal fix everything")
+	c.SubmitDisplay("", "/goal fix everything")
 	<-done // wait for the entire goal loop to finish
 	close(notices)
 
@@ -1000,7 +1000,7 @@ func TestGoalOverrideCompletesRemainingTodos(t *testing.T) {
 		}),
 	})
 
-	c.Submit("/goal do everything")
+	c.SubmitDisplay("", "/goal do everything")
 	<-done // wait for the goal loop to finish
 
 	if c.GoalStatus() != GoalStatusComplete {
@@ -1123,7 +1123,7 @@ func TestStrictGoalBlocksRepeatedComplete(t *testing.T) {
 
 	c := New(Options{Runner: ag, Executor: ag, Sink: event.Discard})
 
-	c.Submit("/goal --strict fix everything")
+	c.SubmitDisplay("", "/goal --strict fix everything")
 
 	// In strict mode the agent still has incomplete todos but only one
 	// turn was given (the provider recycles it). The goal loop keeps

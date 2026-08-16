@@ -21,7 +21,7 @@ import (
 // renders the events it emits. Model identity, label, history, host, and commands
 // are read from the controller, so explicit selections and resumed sessions stay
 // authoritative.
-func newChatTUI(ctrl control.SessionAPI, missing string, eventCh chan event.Event, termW int) chatTUI {
+func newChatTUI(ctrl *control.Controller, missing string, eventCh chan event.Event, termW int) chatTUI {
 	ti := textarea.New()
 	configureChatTextarea(&ti)
 

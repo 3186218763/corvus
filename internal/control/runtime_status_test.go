@@ -44,7 +44,7 @@ func TestCancelClearsPendingApprovalRuntimeStatus(t *testing.T) {
 	runner := &approvalBlockingRunner{c: c}
 	c.runner = runner
 
-	c.Send("needs approval")
+	c.SendWithRaw("needs approval", "needs approval")
 	select {
 	case <-approvals:
 	case <-time.After(30 * time.Second):
@@ -83,7 +83,7 @@ func TestCancelClearsPendingAskRuntimeStatus(t *testing.T) {
 	runner := &askBlockingRunner{c: c}
 	c.runner = runner
 
-	c.Send("ask user")
+	c.SendWithRaw("ask user", "ask user")
 	select {
 	case <-asks:
 	case <-time.After(30 * time.Second):
@@ -118,7 +118,7 @@ func TestCloseCancelsPendingAskRuntimeStatus(t *testing.T) {
 	})})
 	c.runner = &askBlockingRunner{c: c}
 
-	c.Send("ask user")
+	c.SendWithRaw("ask user", "ask user")
 	select {
 	case <-asks:
 	case <-time.After(time.Second):

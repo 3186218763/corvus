@@ -27,17 +27,14 @@ const (
 func init() { tool.RegisterBuiltin(readFile{}) }
 
 // readFile reads a text file. workDir, when non-empty, is the directory a
-// relative path is resolved against (see resolveIn). paths maps session-scoped
-// external read aliases to local roots without changing the model-visible tool
-// schema. forbidRoots lists directories the tool may not read from (resolved,
-// absolute paths).
+// relative path is resolved against (see resolveIn). forbidRoots lists
+// directories the tool may not read from (resolved, absolute paths).
 type readFile struct {
 	workDir     string
-	paths       *PathResolver
 	forbidRoots []string
 	// overlay, when non-nil, serves content from the host transport (unsaved
 	// editor buffers) before falling back to disk. Consulted only after path
-	// resolution and read confinement, and never for external alias paths.
+	// resolution and read confinement.
 	overlay FileOverlay
 }
 
@@ -83,15 +80,10 @@ func (r readFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 	if p.Path == "" {
 		return "", fmt.Errorf("path is required")
 	}
-	rp := resolveReadablePath(r.workDir, p.Path, r.paths)
-	p.Path = rp.Path
-	displayPath := rp.DisplayPath
+	p.Path = resolveIn(r.workDir, p.Path)
+	displayPath := p.Path
 	if confineRead(r.forbidRoots, p.Path) {
-		err := &os.PathError{Op: "open", Path: p.Path, Err: os.ErrNotExist}
-		if rp.External {
-			return "", fmt.Errorf("read %s: %s", displayPath, rp.ErrorText(err))
-		}
-		return "", err
+		return "", &os.PathError{Op: "open", Path: p.Path, Err: os.ErrNotExist}
 	}
 	if p.Offset < 0 {
 		p.Offset = 0
@@ -103,7 +95,7 @@ func (r readFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 	// The host overlay (unsaved editor buffers) wins over the disk when it can
 	// serve the path. Content arrives already decoded as text, so the encoding
 	// and binary-detection pipeline below applies to the disk fallback only.
-	if r.overlay != nil && !rp.External && filepath.IsAbs(p.Path) {
+	if r.overlay != nil && filepath.IsAbs(p.Path) {
 		if content, ok := r.overlay.ReadTextFile(ctx, p.Path); ok {
 			return r.scan(strings.NewReader(content), p.Offset, p.Limit)
 		}
@@ -118,9 +110,6 @@ func (r readFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 
 	f, err := os.Open(p.Path)
 	if err != nil {
-		if rp.External {
-			return "", fmt.Errorf("read %s: %s", displayPath, rp.ErrorText(err))
-		}
 		return "", fmt.Errorf("read %s: %w", displayPath, err)
 	}
 	defer f.Close()
@@ -141,9 +130,6 @@ func (r readFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 		// buffer it fully (these files are rare and usually small).
 		rest, rerr := io.ReadAll(f)
 		if rerr != nil {
-			if rp.External {
-				return "", fmt.Errorf("read %s: %s", displayPath, rp.ErrorText(rerr))
-			}
 			return "", fmt.Errorf("read %s: %w", displayPath, rerr)
 		}
 		all := append(peek, rest...)
@@ -164,9 +150,6 @@ func (r readFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 	if k, ok := fileenc.DetectUTF16NoBOM(peek); ok {
 		rest, rerr := io.ReadAll(f)
 		if rerr != nil {
-			if rp.External {
-				return "", fmt.Errorf("read %s: %s", displayPath, rp.ErrorText(rerr))
-			}
 			return "", fmt.Errorf("read %s: %w", displayPath, rerr)
 		}
 		all := append(peek, rest...)
@@ -174,9 +157,6 @@ func (r readFile) Execute(ctx context.Context, args json.RawMessage) (string, er
 	}
 
 	if bytes.IndexByte(peek, 0) >= 0 {
-		if rp.External {
-			return "", fmt.Errorf("binary file %s (NUL byte detected); not shown by read_file", displayPath)
-		}
 		return "", fmt.Errorf("binary file %s (NUL byte detected); use `bash hexdump` or another tool", displayPath)
 	}
 

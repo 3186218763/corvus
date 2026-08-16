@@ -14,12 +14,10 @@ import (
 func init() { tool.RegisterBuiltin(listDir{}) }
 
 // listDir lists a directory. workDir, when non-empty, is the directory a
-// relative path resolves against (see resolveIn). paths resolves session-scoped
-// read aliases for external folder refs. forbidRoots lists directories the tool
-// may not list or recurse into.
+// relative path resolves against (see resolveIn). forbidRoots lists
+// directories the tool may not list or recurse into.
 type listDir struct {
 	workDir     string
-	paths       *PathResolver
 	forbidRoots []string
 }
 
@@ -54,23 +52,19 @@ func (l listDir) Execute(ctx context.Context, args json.RawMessage) (string, err
 	if p.Path == "" {
 		p.Path = "."
 	}
-	rp := resolveReadablePath(l.workDir, p.Path, l.paths)
-	p.Path = rp.Path
+	p.Path = resolveIn(l.workDir, p.Path)
 	if confineRead(l.forbidRoots, p.Path) {
 		return "(empty directory)", nil
 	}
 
 	// Recursive mode: walk the whole tree depth-first.
 	if p.Recursive {
-		return l.listRecursive(p.Path, rp)
+		return l.listRecursive(p.Path)
 	}
 
 	entries, err := os.ReadDir(p.Path)
 	if err != nil {
-		if rp.External {
-			return "", fmt.Errorf("ls %s: %s", rp.DisplayPath, rp.ErrorText(err))
-		}
-		return "", fmt.Errorf("ls %s: %w", rp.DisplayPath, err)
+		return "", fmt.Errorf("ls %s: %w", p.Path, err)
 	}
 
 	var b strings.Builder
@@ -95,7 +89,7 @@ func (l listDir) Execute(ctx context.Context, args json.RawMessage) (string, err
 // grep/glob (ADR-0003): hidden entries, the shared noise-dir table, and
 // git-ignored entries are skipped, but listing a hidden or ignored directory
 // directly shows it in full. Depth is capped to guard against symlink loops.
-func (l listDir) listRecursive(root string, rp ResolvedPath) (string, error) {
+func (l listDir) listRecursive(root string) (string, error) {
 	var b strings.Builder
 	ig := newWalkIgnorer(root, l.forbidRoots)
 	err := filepath.WalkDir(root, func(p string, d os.DirEntry, wErr error) error {
@@ -134,10 +128,7 @@ func (l listDir) listRecursive(root string, rp ResolvedPath) (string, error) {
 		return nil
 	})
 	if err != nil {
-		if rp.External {
-			return "", fmt.Errorf("ls -R %s: %s", rp.DisplayPath, rp.ErrorText(err))
-		}
-		return "", fmt.Errorf("ls -R %s: %w", rp.DisplayPath, err)
+		return "", fmt.Errorf("ls -R %s: %w", root, err)
 	}
 	if b.Len() == 0 {
 		return "(empty directory tree)", nil

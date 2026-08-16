@@ -495,7 +495,7 @@ func chatREPL(args []string, version string) int {
 	// model (carrying the conversation). It must NOT touch the running model —
 	// runModelSubcommand performs the swap on the live copy. The same stable sink
 	// feeds the new controller, so events keep flowing to this TUI.
-	m.buildController = func(spec controllerBuildSpec, carry []provider.Message, resumePath string, oldCtrl control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(spec controllerBuildSpec, carry []provider.Message, resumePath string, oldCtrl *control.Controller) (*control.Controller, error) {
 		effectiveOverrides := overrides
 		if spec.EffortOverride != nil {
 			effectiveOverrides.Effort = spec.EffortOverride
@@ -573,7 +573,7 @@ func chatREPL(args []string, version string) int {
 	return 0
 }
 
-func adoptCarriedHistoryPreservingProfileAndGrants(c *control.Controller, carry []provider.Message, path string, oldCtrl control.SessionAPI) error {
+func adoptCarriedHistoryPreservingProfileAndGrants(c *control.Controller, carry []provider.Message, path string, prev *control.Controller) error {
 	if fresh := c.History(); len(fresh) > 0 && fresh[0].Role == provider.RoleSystem {
 		if len(carry) > 0 && carry[0].Role == provider.RoleSystem {
 			carry[0] = fresh[0]
@@ -582,7 +582,7 @@ func adoptCarriedHistoryPreservingProfileAndGrants(c *control.Controller, carry 
 		}
 	}
 	c.AdoptHistory(carry, path)
-	if prev, ok := oldCtrl.(*control.Controller); ok {
+	if prev != nil {
 		c.RestoreSessionAuthorizations(prev.SessionAuthorizations())
 	}
 	// Persist the adopted history now: the splice above only refreshed the new

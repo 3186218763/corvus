@@ -79,15 +79,15 @@ func TestRecoveryCheckpointScriptedE2E(t *testing.T) {
 		t.Fatalf("LoadSnapshot: err=%v tasks=%d", err, len(snap.Tasks))
 	}
 
-	m := c.RecoveryMetrics()
+	m := c.recoveryGate.Metrics()
 	if m.FailureEvents == 0 || m.HumanPrompts != 0 || m.HumanContinues != 0 {
 		t.Fatalf("metrics = %+v", m)
 	}
-	delta := c.DrainRecoveryMetrics()
+	delta := c.recoveryGate.DrainMetrics()
 	if delta.FailureEvents == 0 || delta.HumanPrompts != 0 || delta.HumanContinues != 0 {
 		t.Fatalf("drained metrics = %+v", delta)
 	}
-	if next := c.DrainRecoveryMetrics(); next != (recovery.Metrics{}) {
+	if next := c.recoveryGate.DrainMetrics(); next != (recovery.Metrics{}) {
 		t.Fatalf("second metrics drain = %+v, want zero delta", next)
 	}
 }

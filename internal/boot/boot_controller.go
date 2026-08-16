@@ -26,7 +26,6 @@ import (
 	"corvus/internal/sandbox"
 	"corvus/internal/skill"
 	"corvus/internal/tool"
-	"corvus/internal/tool/builtin"
 	"corvus/internal/workspacelease"
 )
 
@@ -144,7 +143,7 @@ func buildExecutorAndPlanner(ctx context.Context, opts Options, cfg *config.Conf
 // buildController assembles control.Options and constructs the controller,
 // attaching the guardian, recovery reviewer, capability proxy tools, and
 // Delivery/Economy/dual-model capability routing.
-func buildController(ctx context.Context, opts Options, cfg *config.Config, root string, sink event.Sink, policy permission.Policy, headlessGate *control.SharedHeadlessGate, label, modelRef, sysPrompt, sessionDir string, pluginHost *plugin.Host, cmds []command.Command, skills []skill.Skill, allSkills []skill.Skill, skillStore *skill.Store, allSkillStore *skill.Store, skillRunner func(context.Context, skill.Skill, string, skill.SubagentRunOptions) (string, error), readOnlySkillRunner func(context.Context, skill.Skill, string, skill.SubagentRunOptions) (string, error), skillProfile func(skill.Skill) *event.Profile, hookRunner *hook.Runner, mem *memory.Set, cleanup func(), entry *config.ProviderEntry, balanceClient *http.Client, jm *jobs.Manager, workspaceLease *workspacelease.Owner, reg *tool.Registry, pluginSpecOptions PluginSpecOptions, capRuntime *agent.MCPCapabilityRuntime, readPathResolver *builtin.PathResolver, shell sandbox.Shell, runtimeProfile capability.Profile, taskTool *agent.TaskTool, capSpecs []plugin.Spec, capAudit *capability.Audit, resolveSubagentProvider func(modelRef, effort string) (provider.Provider, *provider.Pricing, int, error), subagentIdentity func(modelRef, effort string) (string, string), execProv provider.Provider, proxySpec netclient.ProxySpec, tokenDelivery, tokenEconomy, dualModelPlanner bool, runner agent.Runner, executor *agent.Agent) (*control.Controller, error) {
+func buildController(ctx context.Context, opts Options, cfg *config.Config, root string, sink event.Sink, policy permission.Policy, headlessGate *control.SharedHeadlessGate, label, modelRef, sysPrompt, sessionDir string, pluginHost *plugin.Host, cmds []command.Command, skills []skill.Skill, allSkills []skill.Skill, skillStore *skill.Store, allSkillStore *skill.Store, skillRunner func(context.Context, skill.Skill, string, skill.SubagentRunOptions) (string, error), readOnlySkillRunner func(context.Context, skill.Skill, string, skill.SubagentRunOptions) (string, error), skillProfile func(skill.Skill) *event.Profile, hookRunner *hook.Runner, mem *memory.Set, cleanup func(), entry *config.ProviderEntry, balanceClient *http.Client, jm *jobs.Manager, workspaceLease *workspacelease.Owner, reg *tool.Registry, pluginSpecOptions PluginSpecOptions, capRuntime *agent.MCPCapabilityRuntime, shell sandbox.Shell, runtimeProfile capability.Profile, taskTool *agent.TaskTool, capSpecs []plugin.Spec, capAudit *capability.Audit, resolveSubagentProvider func(modelRef, effort string) (provider.Provider, *provider.Pricing, int, error), subagentIdentity func(modelRef, effort string) (string, string), execProv provider.Provider, proxySpec netclient.ProxySpec, tokenDelivery, tokenEconomy, dualModelPlanner bool, runner agent.Runner, executor *agent.Agent) (*control.Controller, error) {
 	ctrlOpts := control.Options{
 		Runner:                runner,
 		Executor:              executor,
@@ -190,7 +189,6 @@ func buildController(ctx context.Context, opts Options, cfg *config.Config, root
 		},
 		CapabilityRuntime:      capRuntime,
 		WorkspaceRoot:          root,
-		ExternalFolderToolRefs: readPathResolver,
 		ResponseLanguage:       cfg.ResponseLanguage(),
 		ReasoningLanguage:      cfg.ReasoningLanguage(),
 		DisableColdResumePrune: !cfg.ColdResumePruneEnabled(),

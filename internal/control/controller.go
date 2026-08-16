@@ -172,14 +172,6 @@ type Controller struct {
 	// surfaced to frontends via WorkspaceRoot().
 	workspaceRoot string
 
-	// externalFolderRefs maps session-generated @ tokens to user-dropped
-	// directories outside workspaceRoot. It is intentionally per-controller:
-	// dragging a folder authorizes that folder for this chat session only, without
-	// widening scoped @ resolution to arbitrary absolute paths.
-	externalFolderRefsMu   sync.RWMutex
-	externalFolderRefs     map[string]string
-	externalFolderToolRefs externalFolderToolRefs
-
 	// checkpoints owns the snapshot-based rewind bookkeeping (the per-session
 	// store, the monotonic turn counter, and the conversation-rewind boundary map)
 	// behind its own lock, off c.mu — so a boundary read for a rewind/fork never
@@ -362,10 +354,6 @@ type SessionRecoveryInfo struct {
 	Meta         agent.BranchMeta
 }
 
-type externalFolderToolRefs interface {
-	RegisterReadRoot(token, root string)
-}
-
 // Options carries the already-built pieces setup assembles. Lifecycle metadata
 // lets the controller mint and rotate session files; Host/Commands are surfaced
 // to frontends that resolve MCP prompts and slash commands.
@@ -435,8 +423,7 @@ type Options struct {
 	CapabilityRuntime *agent.MCPCapabilityRuntime
 	// WorkspaceRoot is the project root checkpoint restores are confined to ("" =
 	// no confinement). Frontends pass the cwd they launched the session in.
-	WorkspaceRoot          string
-	ExternalFolderToolRefs externalFolderToolRefs
+	WorkspaceRoot string
 	// ResponseLanguage controls final-answer language preference. Empty/auto
 	// means no transient injection because the stable language policy follows the
 	// current user turn.
@@ -536,7 +523,6 @@ func New(opts Options) *Controller {
 		capabilityRuntime:                 opts.CapabilityRuntime,
 		runtimeProfile:                    runtimeProfile,
 		workspaceRoot:                     opts.WorkspaceRoot,
-		externalFolderToolRefs:            opts.ExternalFolderToolRefs,
 		approval:                          newApprovalManager(opts.Policy, ToolApprovalAsk, opts.ApprovalTimeout),
 	}
 	if strings.TrimSpace(opts.WorkspaceRoot) != "" {
@@ -565,19 +551,6 @@ func (c *Controller) SetDisplayRecorder(fn func(content, display string)) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.displayRecorder = fn
-}
-
-// SetOnSessionRecovered installs the ownership handoff invoked before the
-// controller commits to an automatically created recovery branch. Frontends
-// that acquire their session owner after controller construction (for example
-// corvus serve) use this before publishing the controller.
-func (c *Controller) SetOnSessionRecovered(fn func(SessionRecoveryInfo) error) {
-	if c == nil {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.onSessionRecovered = fn
 }
 
 func (c *Controller) sessionRecoveredHandler() func(SessionRecoveryInfo) error {
@@ -611,33 +584,6 @@ func (c *Controller) recordDisplayForNewUser(startMessages int, display string) 
 			c.recordDisplay(m.Content, display)
 			return
 		}
-	}
-}
-
-func (c *Controller) markEditedForNewUser(startMessages int, original string) {
-	if strings.TrimSpace(original) == "" || c.executor == nil {
-		return
-	}
-	s := c.executor.Session()
-	msgs := s.Snapshot()
-	if startMessages > len(msgs) {
-		startMessages = len(msgs)
-	}
-	for i := startMessages; i < len(msgs); i++ {
-		if msgs[i].Role != provider.RoleUser {
-			continue
-		}
-		if agent.UserMessageText(msgs[i]) == original {
-			return
-		}
-		msgs[i].Edited = true
-		msgs[i].Original = original
-		// A periodic autosave may already contain this user message without its
-		// local edit metadata. Classify the prefix mutation atomically so the
-		// turn-end save performs an owned rewrite instead of forking a bogus
-		// same-revision recovery branch.
-		s.Rewrite(msgs)
-		return
 	}
 }
 
@@ -840,12 +786,6 @@ func turnOutcome(err error) string {
 	return ""
 }
 
-// Send starts a turn with an uncomposed message. The controller applies
-// plan-mode, memory, and background-job framing inside the async turn path.
-func (c *Controller) Send(input string) {
-	c.SendWithRaw(input, input)
-}
-
 // SendWithRaw starts a turn with separate model input and raw prompt text.
 func (c *Controller) SendWithRaw(input, raw string) {
 	c.runGuarded(func(ctx context.Context) error { return c.runGoalLoopWithRaw(ctx, input, raw) })
@@ -930,10 +870,6 @@ func (c *Controller) runGoalLoopWithRaw(ctx context.Context, input, raw string) 
 
 func (c *Controller) runGoalLoopWithRawDisplay(ctx context.Context, input, raw, display string) error {
 	return newTurnOrchestrator(c).runGoalLoopWithRawDisplay(ctx, input, raw, display)
-}
-
-func (c *Controller) runEditedGoalLoopWithRawDisplay(ctx context.Context, input, raw, display, original string) error {
-	return newTurnOrchestrator(c).runEditedGoalLoopWithRawDisplay(ctx, input, raw, display, original)
 }
 
 func (c *Controller) runTurnWithRawDisplay(ctx context.Context, input, raw, display string) error {
@@ -1244,52 +1180,6 @@ func (c *Controller) refreshInteractiveGate() {
 	}
 }
 
-// TrySteer queues mid-turn guidance only when the active agent turn accepts it.
-func (c *Controller) TrySteer(text string) bool {
-	c.mu.Lock()
-	exec := c.executor
-	running := c.running
-	c.mu.Unlock()
-	return running && exec != nil && exec.Steer(text)
-}
-
-// Steer is the compatibility path for callers that cannot observe admission.
-// Interactive hosts should call TrySteer so a rejected steer remains in their
-// draft/queue and can be retried as a regular follow-up.
-func (c *Controller) Steer(text string) {
-	if c.TrySteer(text) {
-		return
-	}
-	// No active turn accepted the steer: the frontend's runningRef was stale,
-	// the turn exited between our running check and the enqueue, or no
-	// executor is bound yet. Deliver it as a regular turn instead.
-	c.submitSteerFallback(text)
-}
-
-// submitSteerFallback records steer text that no active turn accepted as
-// unapplied guidance, not as a new task. This compatibility path deliberately
-// never opens a provider turn: replaying stale historical guidance as the
-// user's current request caused unintended code changes (#7045).
-func (c *Controller) submitSteerFallback(text string) admissionResult {
-	return c.runGuardedOrPark(func(context.Context) error {
-		if c.executor != nil {
-			c.executor.RecordUnappliedSteer(text)
-		}
-		return nil
-	})
-}
-
-// SteerConsumed returns true when the steer queue is empty after the last consume.
-func (c *Controller) SteerConsumed() bool {
-	c.mu.Lock()
-	exec := c.executor
-	c.mu.Unlock()
-	if exec != nil {
-		return exec.SteerConsumed()
-	}
-	return true
-}
-
 // Ask implements agent.Asker: it emits an AskRequest and blocks until
 // AnswerQuestion(ID, …) answers or ctx is cancelled. promptMu serialises it
 // against tool-approval prompts so at most one user prompt is outstanding.
@@ -1342,27 +1232,6 @@ func askAnswersHaveSelection(answers []event.AskAnswer) bool {
 		}
 	}
 	return false
-}
-
-// ReplayPendingPrompts re-emits the ApprovalRequest / AskRequest event for every
-// prompt currently blocking the run loop. A frontend that reconnected or reloaded
-// after the original event has no way to rebuild its approval/ask modal otherwise,
-// so the blocked gate goroutine stays stuck forever while the session shows a
-// "waiting" status with no actionable prompt. promptMu serialises Ask and
-// requestApproval, so in practice at most one prompt is outstanding; the loops
-// stay general so a future concurrent prompt would still replay correctly.
-func (c *Controller) ReplayPendingPrompts() {
-	approvals, asks := c.approval.snapshotPrompts()
-	for _, a := range approvals {
-		c.sink.Emit(c.approvalRequestEvent(a))
-	}
-	for _, a := range asks {
-		c.sink.Emit(event.Event{Kind: event.AskRequest, Ask: a})
-	}
-	// Retained compatibility hook; live Auto Guard cards are ordinary approvals.
-	if len(approvals) == 0 {
-		c.ReplayUnresolvedRecoveries()
-	}
 }
 
 // SetPlanMode flips the executor's plan-first workflow flag without touching the
@@ -1761,29 +1630,6 @@ func (c *Controller) imageInputEnabled() bool {
 	return ok && config.EffectiveVision(entry)
 }
 
-// ImageInputEnabled reports whether the current model accepts direct image
-// inputs, so frontends can gate image-only UX before a turn starts.
-func (c *Controller) ImageInputEnabled() bool { return c.imageInputEnabled() }
-
-// InheritLifecycleFrom carries same-session lifecycle state across controller
-// rebuilds, such as model switches that preserve the conversation.
-func (c *Controller) InheritLifecycleFrom(prev *Controller) {
-	if prev == nil {
-		return
-	}
-	prev.mu.Lock()
-	started := prev.startedOnce
-	turn := prev.turn
-	prev.mu.Unlock()
-
-	c.mu.Lock()
-	c.startedOnce = started
-	if c.turn < turn {
-		c.turn = turn
-	}
-	c.mu.Unlock()
-}
-
 // SessionAuthorizations snapshots this controller's same-session tool
 // grants ("Allow for this session") and Plan-mode read-only command trust,
 // for carrying into a replacement controller across a rebuild — see
@@ -1807,23 +1653,6 @@ func (c *Controller) Jobs() []jobs.View {
 		return nil
 	}
 	return c.jobs.RunningForSession(c.parentSessionID())
-}
-
-// CancelJob stops one background job owned by this controller's session.
-// Remote Workbench exposes this through its required jobCancel capability;
-// local callers may continue using the existing manager-backed lifecycle.
-func (c *Controller) CancelJob(id string) bool {
-	if c.jobs == nil {
-		return false
-	}
-	return c.jobs.KillForSession(c.parentSessionID(), id)
-}
-
-// WorkspaceLeaseState reports only whether this controller owns or is waiting
-// for the Delivery workspace writer lease. It never exposes filesystem or
-// process identity.
-func (c *Controller) WorkspaceLeaseState() workspacelease.State {
-	return c.workspaceLease.State()
 }
 
 // SetToolApprovalMode changes the runtime approval posture for permission-gated
@@ -1900,50 +1729,16 @@ func (c *Controller) SetAutoApproveTools(on bool) {
 	c.SetToolApprovalMode(ToolApprovalAsk)
 }
 
-// SetBypass is the legacy name for SetAutoApproveTools. Keep it for existing
-// desktop/serve bindings and CLI code that still uses the bypass wording.
-func (c *Controller) SetBypass(on bool) {
-	c.SetAutoApproveTools(on)
-}
-
-// SetMode applies the Plan workflow flag and tool auto-approval together so a turn
-// submitted right after a composer mode switch can't observe a half-applied
-// gate. Turning tool auto-approval on drains any pending tool approval.
-func (c *Controller) SetMode(plan, autoApproveTools bool) {
-	c.ApplyMode(plan, autoApproveTools)
-}
-
-// ApplyMode is SetMode reporting which pending approval prompt ids the tool
-// approval switch auto-allowed (see ApplyToolApprovalMode).
-func (c *Controller) ApplyMode(plan, autoApproveTools bool) []string {
-	c.applyPlanMode(plan)
-	if autoApproveTools {
-		return c.ApplyToolApprovalMode(ToolApprovalYolo)
-	}
-	return c.ApplyToolApprovalMode(ToolApprovalAsk)
-}
-
 // AutoApproveTools reports whether YOLO tool auto-approval is on,
 // for status indicators and mode persistence.
 func (c *Controller) AutoApproveTools() bool {
 	return c.ToolApprovalMode() == ToolApprovalYolo
 }
 
-// Bypass is the legacy name for AutoApproveTools.
-func (c *Controller) Bypass() bool {
-	return c.AutoApproveTools()
-}
-
 // QuickAdd appends a one-line note to the doc-memory file for scope (project
 // CORVUS.md by default) — the write side of "#<note>". Returns the file written.
 func (c *Controller) QuickAdd(scope memory.Scope, note string) (string, error) {
 	return c.memory.quickAdd(scope, note)
-}
-
-// SaveDoc overwrites a recognized memory doc with body — the save side of the
-// desktop panel's in-place editor. Returns the file written.
-func (c *Controller) SaveDoc(path, body string) (string, error) {
-	return c.memory.saveDoc(path, body)
 }
 
 // SaveMemory writes an active auto-memory fact and refreshes the in-session

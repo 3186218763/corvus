@@ -693,63 +693,6 @@ func TestSetAutoApproveToolsDoesNotDrainPendingMemoryApproval(t *testing.T) {
 	}
 }
 
-// TestSetModeYoloDrainsPendingApproval is the SetMode-path twin of the
-// SetAutoApproveTools case: applying YOLO atomically must also unblock an
-// approval already waiting.
-func TestSetModeYoloDrainsPendingApproval(t *testing.T) {
-	c, ids, _ := approvalIDs()
-
-	done := make(chan bool, 1)
-	go func() {
-		allow, _, _ := c.requestApproval(context.Background(), "multi_edit", "/tmp/file", nil)
-		done <- allow
-	}()
-
-	select {
-	case <-ids:
-	case <-time.After(30 * time.Second):
-		t.Fatal("approval request was not emitted")
-	}
-
-	c.SetMode(false, true)
-
-	select {
-	case allow := <-done:
-		if !allow {
-			t.Fatal("pending approval should be auto-allowed when SetMode turns YOLO on")
-		}
-	case <-time.After(30 * time.Second):
-		t.Fatal("pending approval stayed blocked after SetMode(false, true)")
-	}
-}
-
-// TestSetModeAppliesBothGates checks SetMode sets plan and tool auto-approval
-// together so the composer never has to sequence two calls and risk a
-// half-applied window.
-func TestSetModeAppliesBothGates(t *testing.T) {
-	c, _, _ := approvalIDs()
-
-	c.SetMode(true, false)
-	if !c.PlanMode() || c.AutoApproveTools() {
-		t.Fatalf("plan mode: plan=%v autoApproveTools=%v, want true/false", c.PlanMode(), c.AutoApproveTools())
-	}
-
-	c.SetMode(false, true)
-	if c.PlanMode() || !c.AutoApproveTools() {
-		t.Fatalf("yolo mode: plan=%v autoApproveTools=%v, want false/true", c.PlanMode(), c.AutoApproveTools())
-	}
-
-	c.SetMode(true, true)
-	if !c.PlanMode() || !c.AutoApproveTools() {
-		t.Fatalf("plan + yolo mode: plan=%v autoApproveTools=%v, want true/true", c.PlanMode(), c.AutoApproveTools())
-	}
-
-	c.SetMode(false, false)
-	if c.PlanMode() || c.AutoApproveTools() {
-		t.Fatalf("normal mode: plan=%v autoApproveTools=%v, want false/false", c.PlanMode(), c.AutoApproveTools())
-	}
-}
-
 type planModeCountingRunner struct {
 	calls int
 	last  bool
@@ -761,15 +704,15 @@ func (r *planModeCountingRunner) SetPlanMode(v bool) {
 	r.last = v
 }
 
-func TestApplyModeUsesRunnerPlanPropagationOnce(t *testing.T) {
+func TestSetPlanModePropagatesToRunnerOnce(t *testing.T) {
 	runner := &planModeCountingRunner{}
 	c := New(Options{Runner: runner})
-	c.ApplyMode(true, true)
+	c.SetPlanMode(true)
 	if runner.calls != 1 || !runner.last {
 		t.Fatalf("runner SetPlanMode calls=%d last=%v, want 1/true", runner.calls, runner.last)
 	}
-	if !c.PlanMode() || c.ToolApprovalMode() != ToolApprovalYolo {
-		t.Fatalf("controller plan=%v approval=%q, want true/yolo", c.PlanMode(), c.ToolApprovalMode())
+	if !c.PlanMode() {
+		t.Fatalf("controller plan=%v, want true", c.PlanMode())
 	}
 	c.SetPlanMode(false)
 	if runner.calls != 2 || runner.last {
@@ -777,7 +720,7 @@ func TestApplyModeUsesRunnerPlanPropagationOnce(t *testing.T) {
 	}
 }
 
-func TestApplyModePlanPropagationRunnerFallbacks(t *testing.T) {
+func TestSetPlanModeRunnerFallbacks(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		runner func(*agent.Agent) agent.Runner
@@ -798,7 +741,7 @@ func TestApplyModePlanPropagationRunnerFallbacks(t *testing.T) {
 			}}
 			executor := agent.New(prov, reg, agent.NewSession("executor"), agent.Options{}, event.Discard)
 			c := New(Options{Runner: tc.runner(executor), Executor: executor})
-			c.ApplyMode(true, true)
+			c.SetPlanMode(true)
 			if err := executor.Run(context.Background(), "try the execution-phase tool"); err != nil {
 				t.Fatalf("executor Run: %v", err)
 			}
@@ -823,7 +766,7 @@ func (t plannerUnsafeReadTool) Execute(context.Context, json.RawMessage) (string
 	return "executed", nil
 }
 
-func TestApplyModePropagatesPlanToCoordinatorPlannerAndKeepsYolo(t *testing.T) {
+func TestPlanModePropagatesToCoordinatorPlannerAndKeepsYolo(t *testing.T) {
 	plannerCalls := 0
 	plannerTools := tool.NewRegistry()
 	plannerTools.Add(plannerUnsafeReadTool{calls: &plannerCalls})
@@ -836,7 +779,8 @@ func TestApplyModePropagatesPlanToCoordinatorPlannerAndKeepsYolo(t *testing.T) {
 	coordinator := agent.NewCoordinator(planner, agent.NewSession("planner"), nil, plannerTools, agent.Options{}, executor, 0, event.Discard, nil)
 	c := New(Options{Runner: coordinator, Executor: executor})
 
-	c.ApplyMode(true, true)
+	c.SetPlanMode(true)
+	c.SetAutoApproveTools(true)
 	if err := c.Run(context.Background(), "prepare the change"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -942,7 +886,7 @@ func TestBypassDoesNotAutoAnswerAsk(t *testing.T) {
 			}
 		}),
 	})
-	c.SetBypass(true)
+	c.SetAutoApproveTools(true)
 
 	done := askController(t, c, sampleAskQuestions())
 	ask := waitAskRequest(t, askCh)
@@ -963,8 +907,8 @@ func TestAskPromptsAcrossInteractiveModes(t *testing.T) {
 		setup func(*Controller)
 	}{
 		{name: "normal"},
-		{name: "plan", setup: func(c *Controller) { c.SetMode(true, false) }},
-		{name: "yolo", setup: func(c *Controller) { c.SetMode(false, true) }},
+		{name: "plan", setup: func(c *Controller) { c.SetPlanMode(true) }},
+		{name: "yolo", setup: func(c *Controller) { c.SetAutoApproveTools(true) }},
 	}
 
 	for _, tt := range tests {
@@ -1184,7 +1128,7 @@ func TestAskSerializesBehindPromptLockEvenWithBypass(t *testing.T) {
 	}
 
 	// Enable bypass while Ask is queued behind promptMu.
-	c.SetBypass(true)
+	c.SetAutoApproveTools(true)
 	// Release the lock — Ask proceeds but must still emit an AskRequest.
 	c.approval.promptMu.Unlock()
 

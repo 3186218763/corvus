@@ -199,7 +199,7 @@ func TestSubmitBranchHonorsNumericTurnTarget(t *testing.T) {
 	c.checkpoints.bound[1] = 3 // displayed turn 2 starts before "second prompt"
 	c.checkpoints.mu.Unlock()
 
-	c.Submit("/branch 2 experiment")
+	c.SubmitDisplay("", "/branch 2 experiment")
 	if c.SessionPath() == rootPath {
 		t.Fatal("Submit /branch <turn> should switch to a forked session")
 	}
@@ -243,7 +243,7 @@ func TestSubmitSwitchEmitsErrorNotice(t *testing.T) {
 		}),
 	})
 
-	c.Submit("/switch")
+	c.SubmitDisplay("", "/switch")
 	if len(notices) == 0 {
 		t.Fatal("/switch with empty ref should emit an error notice")
 	}
@@ -252,7 +252,7 @@ func TestSubmitSwitchEmitsErrorNotice(t *testing.T) {
 	}
 
 	notices = notices[:0]
-	c.Submit("/switch nonexistent")
+	c.SubmitDisplay("", "/switch nonexistent")
 	if len(notices) == 0 {
 		t.Fatal("/switch with unknown ref should emit an error notice")
 	}
@@ -279,7 +279,7 @@ func TestSubmitBranchEmitsErrorNoticeWhileRunning(t *testing.T) {
 	c.running = true
 	c.mu.Unlock()
 
-	c.Submit("/branch experiment")
+	c.SubmitDisplay("", "/branch experiment")
 	if len(notices) == 0 {
 		t.Fatal("/branch while running should emit an error notice")
 	}

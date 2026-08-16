@@ -136,17 +136,6 @@ func (m *mcpManager) removeToolPrefix(name string) int {
 	return reg.RemovePrefix(plugin.ToolPrefix(name))
 }
 
-// suspendToolPrefix hides a server's tools from this session's registry while a
-// shared host keeps the client alive for sibling sessions.
-func (m *mcpManager) suspendToolPrefix(name string) bool {
-	reg := m.registry()
-	if reg == nil {
-		return false
-	}
-	reg.SuspendPrefix(plugin.ToolPrefix(name))
-	return true
-}
-
 // registerTool adds a built-in tool to the live registry (e.g. the slash-command
 // tool rebuilt by ReloadCommands). No-op when no registry is bound.
 func (m *mcpManager) registerTool(t tool.Tool) {

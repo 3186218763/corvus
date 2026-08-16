@@ -259,54 +259,6 @@ func (c *Controller) autoResearchReadinessFailure() string {
 	return "AutoResearch readiness check failed: " + strings.Join(parts, "; ")
 }
 
-func (c *Controller) AutoResearchSummary() (*autoresearch.Summary, bool) {
-	taskID := c.goals.currentAutoResearchTaskID()
-	if c.autoResearch == nil || strings.TrimSpace(taskID) == "" {
-		return nil, false
-	}
-	summary, err := c.autoResearch.Summary(taskID)
-	if err != nil {
-		return &autoresearch.Summary{
-			TaskID:  taskID,
-			Status:  autoresearch.StatusInvalid,
-			Blocker: err.Error(),
-		}, true
-	}
-	return summary, true
-}
-
-func (c *Controller) AutoResearchList() ([]autoresearch.Summary, bool) {
-	if c.autoResearch == nil {
-		return nil, false
-	}
-	summaries, err := c.autoResearch.ListSummaries()
-	if err != nil {
-		slog.Warn("controller: list autoresearch tasks", "err", err)
-		return nil, true
-	}
-	return summaries, true
-}
-
-func (c *Controller) AutoResearchFindings(limit int) ([]autoresearch.Finding, bool) {
-	taskID := c.goals.currentAutoResearchTaskID()
-	if c.autoResearch == nil || strings.TrimSpace(taskID) == "" {
-		return nil, false
-	}
-	findings, err := c.autoResearch.Findings(taskID, limit)
-	if err != nil {
-		return nil, true
-	}
-	return findings, true
-}
-
-func (c *Controller) RecordAutoResearchEvidence(criterionID string, input AutoResearchEvidenceInput) error {
-	taskID := c.goals.currentAutoResearchTaskID()
-	if c.autoResearch == nil || strings.TrimSpace(taskID) == "" {
-		return errors.New("autoresearch: no active task")
-	}
-	return c.recordAutoResearchEvidenceForTask(taskID, criterionID, input)
-}
-
 func (c *Controller) recordAutoResearchEvidenceForTask(taskID, criterionID string, input AutoResearchEvidenceInput) error {
 	if c.autoResearch == nil || strings.TrimSpace(taskID) == "" {
 		return errors.New("autoresearch: no active task")

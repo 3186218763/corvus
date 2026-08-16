@@ -3,9 +3,7 @@ package control
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"html"
 	"io"
@@ -18,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"corvus/internal/fileref"
 	"corvus/internal/instruction"
 	"corvus/internal/proc"
 	"corvus/internal/secrets"
@@ -60,20 +57,7 @@ type ref struct {
 	raw         string // the original token after '@', for labelling
 }
 
-// ExternalFolderRefEntry is a session-authorized entry under a dropped external
-// folder. Path is the opaque @ token path to submit; display fields are safe for
-// UI labels and transcripts.
-type ExternalFolderRefEntry struct {
-	Name        string
-	Path        string
-	DisplayName string
-	DisplayPath string
-	IsDir       bool
-}
-
 var pathLocationSuffixRe = regexp.MustCompile(`:\d+(?::\d+)?:?$`)
-
-const externalFolderRefPrefix = "__corvus_external_folder"
 
 // parseRefTokens extracts the deduped, punctuation-trimmed tokens following '@'
 // in a line. A token is a run of non-whitespace bytes, except that a
@@ -194,294 +178,6 @@ func isImageAttachmentRef(token string) bool {
 	return false
 }
 
-// RegisterExternalFolderRef authorizes one dropped directory outside the
-// workspace as a structured @reference for this controller session. The returned
-// token is path-like and whitespace-free so it survives the existing @ token
-// parser even when the real directory path contains spaces or Windows drive
-// punctuation.
-func (c *Controller) RegisterExternalFolderRef(path string) (token, displayPath string, err error) {
-	if c == nil {
-		return "", "", fmt.Errorf("controller is not ready")
-	}
-	abs, err := normalizeExternalFolderRoot(path)
-	if err != nil {
-		return "", "", err
-	}
-	token = externalFolderRefToken(abs)
-	c.externalFolderRefsMu.Lock()
-	if c.externalFolderRefs == nil {
-		c.externalFolderRefs = map[string]string{}
-	}
-	c.externalFolderRefs[token] = abs
-	c.externalFolderRefsMu.Unlock()
-	if c.externalFolderToolRefs != nil {
-		c.externalFolderToolRefs.RegisterReadRoot(token, abs)
-	}
-	return token, filepath.ToSlash(abs), nil
-}
-
-func normalizeExternalFolderRoot(path string) (string, error) {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "", os.ErrInvalid
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	abs = filepath.Clean(abs)
-	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
-		abs = filepath.Clean(resolved)
-	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		return "", err
-	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("%s is not a directory", path)
-	}
-	return abs, nil
-}
-
-func externalFolderRefToken(abs string) string {
-	sum := sha256.Sum256([]byte(filepath.Clean(abs)))
-	hash := hex.EncodeToString(sum[:])[:12]
-	name := safeExternalFolderRefComponent(filepath.Base(abs))
-	return externalFolderRefPrefix + "/" + hash + "/" + name
-}
-
-func safeExternalFolderRefComponent(name string) string {
-	name = strings.TrimSpace(name)
-	if name == "" || name == "." || name == string(filepath.Separator) {
-		return "folder"
-	}
-	var b strings.Builder
-	lastDash := false
-	for _, r := range name {
-		ok := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-'
-		if ok {
-			b.WriteRune(r)
-			lastDash = false
-			continue
-		}
-		if !lastDash {
-			b.WriteByte('-')
-			lastDash = true
-		}
-	}
-	out := strings.Trim(b.String(), ".-")
-	if out == "" {
-		return "folder"
-	}
-	return out
-}
-
-func normalizeExternalFolderRefToken(token string) string {
-	token = strings.TrimSpace(token)
-	token = strings.TrimPrefix(token, "@")
-	token = filepath.ToSlash(token)
-	token = strings.TrimRight(token, "/")
-	return token
-}
-
-func (c *Controller) externalFolderRef(token string) (ref, bool) {
-	_, rel, abs, ok := c.externalFolderRefTarget(token)
-	if !ok {
-		return ref{}, false
-	}
-	displayPath := externalFolderDisplayPath(abs, rel)
-	return ref{kind: refFile, path: rel, baseDir: abs, displayPath: displayPath, raw: token}, true
-}
-
-func (c *Controller) externalFolderRefTarget(token string) (rootToken, rel, abs string, ok bool) {
-	key := normalizeExternalFolderRefToken(token)
-	if !strings.HasPrefix(key, externalFolderRefPrefix+"/") {
-		return "", "", "", false
-	}
-	c.externalFolderRefsMu.RLock()
-	defer c.externalFolderRefsMu.RUnlock()
-	if abs, ok := c.externalFolderRefs[key]; ok {
-		return key, ".", abs, true
-	}
-	for registered, abs := range c.externalFolderRefs {
-		if !strings.HasPrefix(key, registered+"/") {
-			continue
-		}
-		sub, ok := cleanExternalFolderSubpath(strings.TrimPrefix(key, registered+"/"))
-		if !ok {
-			return "", "", "", false
-		}
-		return registered, sub, abs, true
-	}
-	return "", "", "", false
-}
-
-func cleanExternalFolderSubpath(sub string) (string, bool) {
-	sub = strings.TrimPrefix(filepath.ToSlash(strings.TrimSpace(sub)), "/")
-	if sub == "" || sub == "." {
-		return ".", true
-	}
-	cleaned := filepath.Clean(filepath.FromSlash(sub))
-	if cleaned == "." {
-		return ".", true
-	}
-	if !filepath.IsLocal(cleaned) {
-		return "", false
-	}
-	return filepath.ToSlash(cleaned), true
-}
-
-func externalFolderDisplayPath(abs, rel string) string {
-	if rel == "" || rel == "." {
-		return filepath.ToSlash(abs)
-	}
-	return filepath.ToSlash(filepath.Join(abs, filepath.FromSlash(rel)))
-}
-
-func externalFolderDisplayName(abs, rel string) string {
-	name := filepath.Base(abs)
-	if rel != "" && rel != "." {
-		name = filepath.ToSlash(filepath.Join(name, filepath.FromSlash(rel)))
-	}
-	return name
-}
-
-// ListExternalFolderRefDir lists one directory level under a registered
-// external folder token. handled is true only when tokenPath targets a
-// registered external folder; callers can fall back to workspace listing when it
-// is false.
-func (c *Controller) ListExternalFolderRefDir(tokenPath string) (entries []ExternalFolderRefEntry, handled bool) {
-	rootToken, rel, abs, ok := c.externalFolderRefTarget(tokenPath)
-	if !ok {
-		return nil, false
-	}
-	root, err := os.OpenRoot(abs)
-	if err != nil {
-		return nil, true
-	}
-	defer root.Close()
-	info, err := root.Stat(rel)
-	if err != nil || !info.IsDir() {
-		return nil, true
-	}
-	f, err := root.Open(rel)
-	if err != nil {
-		return nil, true
-	}
-	dirEntries, err := f.ReadDir(-1)
-	f.Close()
-	if err != nil {
-		return nil, true
-	}
-	dirs, files := []ExternalFolderRefEntry{}, []ExternalFolderRefEntry{}
-	for _, e := range dirEntries {
-		name := e.Name()
-		if skipRefDirEntry(name, e.IsDir()) {
-			continue
-		}
-		childRel := name
-		if rel != "." {
-			childRel = filepath.ToSlash(filepath.Join(rel, name))
-		}
-		item := ExternalFolderRefEntry{
-			Name:        name,
-			Path:        rootToken + "/" + childRel,
-			DisplayName: name,
-			DisplayPath: externalFolderDisplayPath(abs, childRel),
-			IsDir:       e.IsDir(),
-		}
-		if e.IsDir() {
-			dirs = append(dirs, item)
-			continue
-		}
-		info, err := e.Info()
-		if err != nil || !info.Mode().IsRegular() {
-			continue
-		}
-		files = append(files, item)
-	}
-	sortExternalFolderRefEntries(dirs)
-	sortExternalFolderRefEntries(files)
-	return append(dirs, files...), true
-}
-
-// SearchExternalFolderRefs finds entries under all registered external folders.
-// Returned Path values are opaque token paths, so selecting one stays within the
-// current session's authorization boundary.
-func (c *Controller) SearchExternalFolderRefs(query string, limit int) []ExternalFolderRefEntry {
-	query = strings.TrimSpace(query)
-	if limit <= 0 || len(query) < 2 || strings.ContainsAny(query, `/\`) {
-		return nil
-	}
-	c.externalFolderRefsMu.RLock()
-	roots := make([]struct {
-		token string
-		abs   string
-	}, 0, len(c.externalFolderRefs))
-	for token, abs := range c.externalFolderRefs {
-		roots = append(roots, struct {
-			token string
-			abs   string
-		}{token: token, abs: abs})
-	}
-	c.externalFolderRefsMu.RUnlock()
-	sort.Slice(roots, func(i, j int) bool {
-		return externalFolderDisplayPath(roots[i].abs, ".") < externalFolderDisplayPath(roots[j].abs, ".")
-	})
-	out := make([]ExternalFolderRefEntry, 0, limit)
-	queryLower := strings.ToLower(query)
-	for _, root := range roots {
-		if len(out) >= limit {
-			break
-		}
-		if info, err := os.Stat(root.abs); err != nil || !info.IsDir() {
-			continue
-		}
-		if strings.Contains(strings.ToLower(filepath.Base(root.abs)), queryLower) {
-			out = append(out, ExternalFolderRefEntry{
-				Name:        filepath.Base(root.abs),
-				Path:        root.token,
-				DisplayName: externalFolderDisplayName(root.abs, "."),
-				DisplayPath: externalFolderDisplayPath(root.abs, "."),
-				IsDir:       true,
-			})
-			if len(out) >= limit {
-				break
-			}
-		}
-		for _, result := range fileref.Search(root.abs, query, limit-len(out)) {
-			rel := filepath.ToSlash(result.Path)
-			out = append(out, ExternalFolderRefEntry{
-				Name:        rel,
-				Path:        root.token + "/" + rel,
-				DisplayName: externalFolderDisplayName(root.abs, rel),
-				DisplayPath: externalFolderDisplayPath(root.abs, rel),
-				IsDir:       result.IsDir,
-			})
-			if len(out) >= limit {
-				break
-			}
-		}
-	}
-	return out
-}
-
-// ExternalFolderRefLocalPath resolves a registered external-folder token path to
-// the local filesystem path authorized for this controller session.
-func (c *Controller) ExternalFolderRefLocalPath(tokenPath string) (path, displayPath string, ok bool) {
-	_, rel, abs, ok := c.externalFolderRefTarget(tokenPath)
-	if !ok {
-		return "", "", false
-	}
-	return filepath.Join(abs, filepath.FromSlash(rel)), externalFolderDisplayPath(abs, rel), true
-}
-
-func sortExternalFolderRefEntries(entries []ExternalFolderRefEntry) {
-	sort.Slice(entries, func(i, j int) bool {
-		return strings.ToLower(entries[i].DisplayName) < strings.ToLower(entries[j].DisplayName)
-	})
-}
-
 func skipRefDirEntry(name string, isDir bool) bool {
 	switch name {
 	case ".DS_Store", "Thumbs.db":
@@ -500,10 +196,6 @@ func skipRefDirEntry(name string, isDir bool) bool {
 // detectRefs finds the @references in a line: MCP resources for connected
 // servers, and local paths that exist on disk.
 func (c *Controller) detectRefs(line string) []ref {
-	return c.detectRefsMode(line, false)
-}
-
-func (c *Controller) detectRefsMode(line string, scopedOnly bool) []ref {
 	known := map[string]bool{}
 	for _, n := range c.mcp.serverNames() {
 		known[n] = true
@@ -515,10 +207,6 @@ func (c *Controller) detectRefsMode(line string, scopedOnly bool) []ref {
 			refs = append(refs, ref{kind: refResource, server: tok[:i], uri: tok[i+1:], raw: tok})
 			continue
 		}
-		if r, ok := c.externalFolderRef(tok); ok {
-			refs = append(refs, r)
-			continue
-		}
 		if c.workspaceRoot != "" {
 			if rel, ok := workspaceRefPath(tok, c.workspaceRoot); ok {
 				kind := refFile
@@ -527,9 +215,6 @@ func (c *Controller) detectRefsMode(line string, scopedOnly bool) []ref {
 				}
 				refs = append(refs, ref{kind: kind, path: rel, raw: tok})
 			}
-			continue
-		}
-		if scopedOnly {
 			continue
 		}
 		if r, ok := classifyRef(tok, known, func(p string) bool {
@@ -827,22 +512,8 @@ func workspaceRel(path, baseDir string) (rel, absPath, absBase string, ok bool) 
 	return rel, absPath, absBase, true
 }
 
-// ResolveRefs resolves the @references in a line into a single tagged context
-// block (file/dir contents, MCP resource bodies), plus per-reference error
-// strings for any that failed. An empty block means no references resolved.
-// Safe to call off a frontend's event loop; honours ctx for the resource reads.
 func (c *Controller) ResolveRefs(ctx context.Context, line string) (block string, errs []string) {
-	return c.resolveRefs(ctx, line, false)
-}
-
-// ResolveScopedRefs is the HTTP/frontend variant: file references are honored
-// only when they can be resolved under the controller workspace root.
-func (c *Controller) ResolveScopedRefs(ctx context.Context, line string) (block string, errs []string) {
-	return c.resolveRefs(ctx, line, true)
-}
-
-func (c *Controller) resolveRefs(ctx context.Context, line string, scopedOnly bool) (block string, errs []string) {
-	refs := c.detectRefsMode(line, scopedOnly)
+	refs := c.detectRefs(line)
 	refs = resolveBareNames(refs, c.workspaceRoot)
 	var b strings.Builder
 	includedInstructionPaths := map[string]bool{}

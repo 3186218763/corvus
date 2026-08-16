@@ -59,7 +59,7 @@ func TestSubmitCompactAfterCloseDoesNotRotateOrSnapshot(t *testing.T) {
 	c.Close()
 	before := c.SessionPath()
 
-	c.Submit("/compact")
+	c.SubmitDisplay("", "/compact")
 	c.bgWG.Wait()
 
 	if got := c.SessionPath(); got != before {
@@ -84,7 +84,7 @@ func TestSubmitNewAfterCloseDoesNotRotateSession(t *testing.T) {
 	c.Close()
 	before := c.SessionPath()
 
-	c.Submit("/new")
+	c.SubmitDisplay("", "/new")
 	c.bgWG.Wait()
 
 	if got := c.SessionPath(); got != before {
@@ -112,7 +112,7 @@ func TestCloseWaitsForInFlightCompact(t *testing.T) {
 	path := filepath.Join(dir, "session.jsonl")
 	c := New(Options{Executor: exec, SystemPrompt: "sys", SessionDir: dir, SessionPath: path, Label: "test"})
 
-	c.Submit("/compact")
+	c.SubmitDisplay("", "/compact")
 	select {
 	case <-prov.entered:
 	case <-time.After(5 * time.Second):

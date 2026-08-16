@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -9,26 +8,9 @@ import (
 
 	"corvus/internal/checkpoint"
 	"corvus/internal/control"
+	"corvus/internal/event"
 	"corvus/internal/i18n"
 )
-
-type rewindConfirmationController struct {
-	control.SessionAPI
-	plan    checkpoint.RewindPlan
-	commits []string
-}
-
-func (c *rewindConfirmationController) PrepareRewind(_ int, _ control.RewindScope) (checkpoint.RewindPlan, error) {
-	return c.plan, nil
-}
-
-func (c *rewindConfirmationController) CommitRewind(planID string) (checkpoint.RewindResult, error) {
-	c.commits = append(c.commits, planID)
-	return checkpoint.RewindResult{OK: true}, nil
-}
-
-func (c *rewindConfirmationController) SummarizeFrom(context.Context, int) error { return nil }
-func (c *rewindConfirmationController) SummarizeUpTo(context.Context, int) error { return nil }
 
 func TestOneLine(t *testing.T) {
 	i18n.DetectLanguage("en")
@@ -116,31 +98,57 @@ func TestPartialCoverageRequiresExplicitConfirmation(t *testing.T) {
 	}
 }
 
-func TestApplyRewindDoesNotCommitPartialCoverageBeforeConfirmation(t *testing.T) {
-	plan := checkpoint.RewindPlan{
-		PlanID: "plan-partial", Scope: checkpoint.RewindCode,
-		CanFiles: true, Coverage: checkpoint.CoveragePartial,
-		CoverageGaps: []checkpoint.CoverageGap{{Reason: checkpoint.GapBashSideEffect}},
-	}
-	ctrl := &rewindConfirmationController{plan: plan}
-	m := chatTUI{
-		ctrl:  ctrl,
-		width: 80,
-		rewind: &rewindPicker{
-			metas: []checkpoint.Meta{{Turn: 0, Prompt: "change files"}},
-			stage: 1,
-			scope: 2,
-		},
-	}
+// TestApplyRewindCommitRunsOnlyOnConfirmation drives the picker's commit
+// gate with a real controller: a failed prepare must close the picker without
+// touching the commit path, and 'y' on a prepared plan must commit exactly
+// once (observed as the single rewind failure notice for the unknown plan id).
+func TestApplyRewindCommitRunsOnlyOnConfirmation(t *testing.T) {
+	events := make(chan event.Event, 8)
+	ctrl := control.New(control.Options{
+		Sink: event.FuncSink(func(e event.Event) { events <- e }),
+	})
+	t.Cleanup(ctrl.Close)
+	metas := []checkpoint.Meta{{Turn: 0, Prompt: "change files"}}
 
+	m := chatTUI{ctrl: ctrl, width: 80, rewind: &rewindPicker{metas: metas, stage: 1, scope: 2}}
 	next, _ := m.handleRewindKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = next.(chatTUI)
-	if m.rewind == nil || m.rewind.stage != 2 || len(ctrl.commits) != 0 {
-		t.Fatalf("partial rewind should pause for confirmation: picker=%+v commits=%v", m.rewind, ctrl.commits)
+	if m.rewind != nil {
+		t.Fatalf("failed prepare should close the picker: %+v", m.rewind)
+	}
+	select {
+	case e := <-events:
+		if e.Kind != event.Notice {
+			t.Fatalf("prepare failure event = %+v, want a notice", e)
+		}
+	default:
+		t.Fatal("failed prepare should surface a notice")
+	}
+
+	m.rewind = &rewindPicker{
+		metas: metas,
+		stage: 2,
+		pendingPlan: checkpoint.RewindPlan{
+			PlanID: "plan-partial", Scope: checkpoint.RewindCode,
+			CanFiles: true, Coverage: checkpoint.CoveragePartial,
+		},
 	}
 	next, _ = m.handleRewindKey(tea.KeyPressMsg{Code: 'y'})
 	m = next.(chatTUI)
-	if m.rewind != nil || len(ctrl.commits) != 1 || ctrl.commits[0] != plan.PlanID {
-		t.Fatalf("confirmed rewind should commit once: picker=%+v commits=%v", m.rewind, ctrl.commits)
+	if m.rewind != nil {
+		t.Fatalf("confirmed rewind should close the picker: %+v", m.rewind)
+	}
+	select {
+	case e := <-events:
+		if e.Kind != event.Notice {
+			t.Fatalf("commit attempt event = %+v, want a notice", e)
+		}
+	default:
+		t.Fatal("confirmation should attempt exactly one commit")
+	}
+	select {
+	case e := <-events:
+		t.Fatalf("unexpected extra controller event: %+v", e)
+	default:
 	}
 }

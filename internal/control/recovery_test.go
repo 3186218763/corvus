@@ -81,7 +81,7 @@ func TestRecoveryExecutionRiskDoesNotPrompt(t *testing.T) {
 	if bash.runs != 2 {
 		t.Fatalf("bash runs = %d, want failed npx verification plus automatic svn diff", bash.runs)
 	}
-	if got := c.RecoveryMetrics().HumanPrompts; got != 0 {
+	if got := c.recoveryGate.Metrics().HumanPrompts; got != 0 {
 		t.Fatalf("execution risk prompts = %d, want 0", got)
 	}
 }
@@ -121,7 +121,7 @@ func TestRecoveryStaleEditCanReadAndRetryWithFreshAnchor(t *testing.T) {
 	if edit.runs != 2 || read.runs != 1 {
 		t.Fatalf("tool runs edit=%d read=%d, want edit=2 read=1", edit.runs, read.runs)
 	}
-	if got := c.RecoveryMetrics().HumanPrompts; got != 0 {
+	if got := c.recoveryGate.Metrics().HumanPrompts; got != 0 {
 		t.Fatalf("stale-anchor recovery prompts = %d, want 0", got)
 	}
 }

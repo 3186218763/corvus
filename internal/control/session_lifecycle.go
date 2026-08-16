@@ -362,15 +362,6 @@ func (c *Controller) Snapshot() error {
 	return c.snapshot(false, false, false)
 }
 
-// SnapshotForShutdown performs the final session snapshot and, only when the
-// compatibility file lock remains held for the full bounded wait, persists the
-// in-memory transcript to a distinct recovery branch before teardown proceeds.
-// Other snapshot errors retain their normal behavior and remain visible to the
-// caller.
-func (c *Controller) SnapshotForShutdown() error {
-	return c.snapshot(false, false, true)
-}
-
 // SnapshotActivity writes the active conversation and marks the session as
 // recently active. Use it only after a real user/model turn changes the
 // transcript; switch/close snapshots should call Snapshot so they do not reorder

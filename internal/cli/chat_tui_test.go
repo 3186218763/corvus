@@ -164,7 +164,7 @@ func saveTestImageAttachment(t *testing.T, root string) string {
 func TestEscCancelsRunningTurnWithCompletionOpen(t *testing.T) {
 	r := &blockingTurnRunner{started: make(chan struct{})}
 	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: t.TempDir(), Label: "test"})
-	ctrl.Send("hi")
+	ctrl.SendWithRaw("hi", "hi")
 	<-r.started // the turn is in flight and cancellable
 
 	m := newTestChatTUI()
@@ -2466,7 +2466,7 @@ func TestEffortCommandWritesCurrentDeepSeekProvider(t *testing.T) {
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{Label: "deepseek-flash"})
 	m.modelRef = "deepseek-flash/deepseek-v4-flash"
-	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ *control.Controller) (*control.Controller, error) {
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
 
@@ -2491,7 +2491,7 @@ func TestEffortCommandRejectsUnsupportedProvider(t *testing.T) {
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{Label: "mimo-pro"})
 	m.modelRef = "mimo-pro/mimo-v2.5-pro"
-	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ *control.Controller) (*control.Controller, error) {
 		return control.New(control.Options{Label: "mimo-pro"}), nil
 	}
 
@@ -2509,7 +2509,7 @@ func TestEffortCommandAutoClearsProviderEffort(t *testing.T) {
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{Label: "deepseek-flash"})
 	m.modelRef = "deepseek-flash/deepseek-v4-flash"
-	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ *control.Controller) (*control.Controller, error) {
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
 
@@ -2624,7 +2624,7 @@ func TestLanguageCommandRefreshesCurrentController(t *testing.T) {
 	m.modelRef = "deepseek-flash/deepseek-v4-flash"
 	m.runtimeProfile = "full"
 	var gotSpec controllerBuildSpec
-	m.buildController = func(spec controllerBuildSpec, _ []provider.Message, _ string, _ control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(spec controllerBuildSpec, _ []provider.Message, _ string, _ *control.Controller) (*control.Controller, error) {
 		gotSpec = spec
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
@@ -2656,7 +2656,7 @@ func TestCurrencyCommandPersistsAndRefreshesCurrentController(t *testing.T) {
 	m.modelRef = "deepseek-flash/deepseek-v4-flash"
 	m.runtimeProfile = "full"
 	var gotSpec controllerBuildSpec
-	m.buildController = func(spec controllerBuildSpec, _ []provider.Message, _ string, _ control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(spec controllerBuildSpec, _ []provider.Message, _ string, _ *control.Controller) (*control.Controller, error) {
 		gotSpec = spec
 		return control.New(control.Options{Label: "deepseek-flash"}), nil
 	}
@@ -2688,7 +2688,7 @@ func TestCurrencyRefreshFailureKeepsCurrentController(t *testing.T) {
 	m.ctrl = oldCtrl
 	m.modelRef = "deepseek-flash/deepseek-v4-flash"
 	m.runtimeProfile = "full"
-	m.buildController = func(controllerBuildSpec, []provider.Message, string, control.SessionAPI) (*control.Controller, error) {
+	m.buildController = func(controllerBuildSpec, []provider.Message, string, *control.Controller) (*control.Controller, error) {
 		return nil, errors.New("build failed")
 	}
 
@@ -3939,7 +3939,7 @@ func TestDoubleCtrlCQuit(t *testing.T) {
 func TestSecondCtrlCQuitsAfterCancelIsAlreadyRequested(t *testing.T) {
 	r := &stubbornTurnRunner{started: make(chan struct{}), release: make(chan struct{})}
 	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: t.TempDir(), Label: "test"})
-	ctrl.Send("hi")
+	ctrl.SendWithRaw("hi", "hi")
 	<-r.started
 	defer close(r.release)
 
@@ -3968,7 +3968,7 @@ func TestSecondCtrlCQuitsAfterCancelIsAlreadyRequested(t *testing.T) {
 func TestRunningStatusShowsCancelRequested(t *testing.T) {
 	r := &stubbornTurnRunner{started: make(chan struct{}), release: make(chan struct{})}
 	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: t.TempDir(), Label: "test"})
-	ctrl.Send("hi")
+	ctrl.SendWithRaw("hi", "hi")
 	<-r.started
 	defer close(r.release)
 
@@ -4235,15 +4235,6 @@ func TestEscInPlanModeDoesNotExitPlan(t *testing.T) {
 	}
 }
 
-// escCheckpointsController stubs SessionHistory.Checkpoints so double-Esc can
-// open the rewind picker without a full session/checkpoint store.
-type escCheckpointsController struct {
-	control.SessionAPI
-	metas []checkpoint.Meta
-}
-
-func (c *escCheckpointsController) Checkpoints() []checkpoint.Meta { return c.metas }
-
 // TestEscPriorityCompletionClosesBeforeCancelWhenIdle locks the modal if-chain
 // rule that an open completion menu consumes Esc first when idle (close only;
 // no cancel — there is no running turn).
@@ -4279,9 +4270,8 @@ func TestEscIdleClearsDraftDoesNotFlipPlan(t *testing.T) {
 // TestDoubleEscOpensRewindWithin600ms locks Claude-style double-Esc rewind arming.
 func TestDoubleEscOpensRewindWithin600ms(t *testing.T) {
 	m := newTestChatTUI()
-	m.ctrl = &escCheckpointsController{
-		metas: []checkpoint.Meta{{Turn: 0, Prompt: "first turn"}},
-	}
+	m.ctrl = newUsageCtrl(t, &provider.Usage{}) // one turn -> one rewind checkpoint
+
 	// Empty composer is required for the double-Esc rewind gesture.
 	if strings.TrimSpace(m.input.Value()) != "" {
 		t.Fatal("precondition: composer must be empty")
