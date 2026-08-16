@@ -263,7 +263,7 @@ type pendingApproval struct {
 	fresh        bool
 	requireHuman bool
 	autoDrain    bool
-	kind         string // tool | plan | recovery; empty = tool
+	kind         string // "" = tool; recovery.ApprovalKindRecovery = recovery card
 	recovery     *event.RecoveryApproval
 	reply        chan approvalReply
 }
@@ -299,14 +299,11 @@ type plannerAgentAccessor interface {
 
 // RuntimeStatus is the frontend-facing snapshot of foreground turn state. It is
 // intentionally more explicit than the legacy Running bool so UI code can
-// distinguish a cancellable foreground turn from pending prompts and background
-// jobs.
+// distinguish a foreground turn from pending prompts and background jobs.
 type RuntimeStatus struct {
-	Running         bool
-	PendingPrompt   bool
-	BackgroundJobs  int
-	CancelRequested bool
-	Cancellable     bool
+	Running        bool
+	PendingPrompt  bool
+	BackgroundJobs int
 }
 
 const (
@@ -853,14 +850,6 @@ func (c *Controller) runGoalLoopWithRaw(ctx context.Context, input, raw string) 
 	return c.runGoalLoopWithRawDisplay(ctx, input, raw, "")
 }
 
-func (c *Controller) runGoalLoopWithRawDisplay(ctx context.Context, input, raw, display string) error {
-	return newTurnOrchestrator(c).runGoalLoopWithRawDisplay(ctx, input, raw, display)
-}
-
-func (c *Controller) runTurnWithRawDisplay(ctx context.Context, input, raw, display string) error {
-	return newTurnOrchestrator(c).runTurnWithRawDisplay(ctx, input, raw, display)
-}
-
 func (c *Controller) runSubagentSkillSlash(sk skill.Skill, task, raw, display string) {
 	sk = c.skills.prepare(sk)
 	c.runGuarded(func(ctx context.Context) error {
@@ -869,7 +858,7 @@ func (c *Controller) runSubagentSkillSlash(sk skill.Skill, task, raw, display st
 		if runner == nil {
 			return fmt.Errorf("subagent skill runner is unavailable for /%s", sk.Name)
 		}
-		return newTurnOrchestrator(c).runSubagentSkillGoalLoop(ctx, sk, task, raw, display, runner, planMode)
+		return c.runSubagentSkillGoalLoop(ctx, sk, task, raw, display, runner, planMode)
 	})
 }
 

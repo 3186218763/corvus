@@ -492,7 +492,7 @@ func TestResearchGoalCompletionIsInterceptedWhenReadinessFails(t *testing.T) {
 
 	c.SetGoalWithResearchMode("identify the root cause", GoalResearchOn)
 
-	if err := newTurnOrchestrator(c).runGoalLoopWithRawDisplay(context.Background(), "start", "start", "start"); err != nil {
+	if err := c.runGoalLoopWithRawDisplay(context.Background(), "start", "start", "start"); err != nil {
 		t.Fatalf("runGoalLoopWithRawDisplay: %v", err)
 	}
 
@@ -608,7 +608,7 @@ func TestResearchGoalCompletionMarksAutoResearchTaskComplete(t *testing.T) {
 		t.Fatal("expected autoresearch task id")
 	}
 
-	if err := newTurnOrchestrator(c).runGoalLoopWithRawDisplay(context.Background(), "start", "start", "start"); err != nil {
+	if err := c.runGoalLoopWithRawDisplay(context.Background(), "start", "start", "start"); err != nil {
 		t.Fatalf("runGoalLoopWithRawDisplay: %v", err)
 	}
 
@@ -664,7 +664,7 @@ func TestResearchGoalBlockedMarksAutoResearchTaskBlocked(t *testing.T) {
 		t.Fatal("expected autoresearch task id")
 	}
 
-	if err := newTurnOrchestrator(c).runGoalLoopWithRawDisplay(context.Background(), "start", "start", "start"); err != nil {
+	if err := c.runGoalLoopWithRawDisplay(context.Background(), "start", "start", "start"); err != nil {
 		t.Fatalf("runGoalLoopWithRawDisplay: %v", err)
 	}
 

@@ -18,12 +18,9 @@ import (
 	"corvus/internal/tool"
 )
 
-// turnOrchestrator owns foreground turn execution while Controller keeps the
-// public ports, run-state guard, and session-scoped dependencies.
-type turnOrchestrator struct {
-	c *Controller
-}
-
+// This file owns foreground turn execution. The methods here are Controller
+// methods; Controller keeps the public ports, run-state guard, and
+// session-scoped dependencies in its own files.
 type orchestratedTurn struct {
 	input            string
 	raw              string
@@ -32,28 +29,24 @@ type orchestratedTurn struct {
 	goalContinuation *goalContinuationSnapshot
 }
 
-func newTurnOrchestrator(c *Controller) *turnOrchestrator {
-	return &turnOrchestrator{c: c}
+func (c *Controller) runTurnWithRawDisplay(ctx context.Context, input, raw, display string) error {
+	return c.runOrchestratedTurn(ctx, orchestratedTurn{input: input, raw: raw, display: display})
 }
 
-func (o *turnOrchestrator) runTurnWithRawDisplay(ctx context.Context, input, raw, display string) error {
-	return o.runOrchestratedTurn(ctx, orchestratedTurn{input: input, raw: raw, display: display})
+func (c *Controller) runSyntheticTurnWithRawDisplay(ctx context.Context, input, raw, display string) error {
+	return c.runOrchestratedTurn(ctx, orchestratedTurn{input: input, raw: raw, display: display, synthetic: true})
 }
 
-func (o *turnOrchestrator) runSyntheticTurnWithRawDisplay(ctx context.Context, input, raw, display string) error {
-	return o.runOrchestratedTurn(ctx, orchestratedTurn{input: input, raw: raw, display: display, synthetic: true})
-}
-
-func (o *turnOrchestrator) runGoalContinuationTurnWithRawDisplay(
+func (c *Controller) runGoalContinuationTurnWithRawDisplay(
 	ctx context.Context,
 	input, raw, display string,
 	res goalAdvanceResult,
 ) (bool, error) {
-	snapshot, ok := o.c.goals.admitContinuation(res)
+	snapshot, ok := c.goals.admitContinuation(res)
 	if !ok {
 		return false, nil
 	}
-	err := o.runOrchestratedTurn(ctx, orchestratedTurn{
+	err := c.runOrchestratedTurn(ctx, orchestratedTurn{
 		input:            input,
 		raw:              raw,
 		display:          display,
@@ -63,8 +56,7 @@ func (o *turnOrchestrator) runGoalContinuationTurnWithRawDisplay(
 	return true, err
 }
 
-func (o *turnOrchestrator) runComposedSyntheticTurn(ctx context.Context, text string) error {
-	c := o.c
+func (c *Controller) runComposedSyntheticTurn(ctx context.Context, text string) error {
 	ctx = agent.WithRawUserInput(ctx, text)
 	ctx = c.withPlannerTurnMetadata(ctx, text, true, c.messageCount())
 	return c.runner.Run(ctx, c.ComposeSynthetic(text))
@@ -73,27 +65,26 @@ func (o *turnOrchestrator) runComposedSyntheticTurn(ctx context.Context, text st
 // runSubagentSkillGoalLoop executes a slash-invoked runAs=subagent skill as a
 // real isolated child turn, then lets an active goal continue just as an inline
 // skill turn did before.
-func (o *turnOrchestrator) runSubagentSkillGoalLoop(ctx context.Context, sk skill.Skill, task, raw, display string, runner skill.SubagentRunner, planMode bool) error {
-	return o.runSubagentSkillTurnsGoalLoop(ctx, []skill.Skill{sk}, task, raw, display, runner, planMode)
+func (c *Controller) runSubagentSkillGoalLoop(ctx context.Context, sk skill.Skill, task, raw, display string, runner skill.SubagentRunner, planMode bool) error {
+	return c.runSubagentSkillTurnsGoalLoop(ctx, []skill.Skill{sk}, task, raw, display, runner, planMode)
 }
 
-func (o *turnOrchestrator) runSubagentSkillTurnsGoalLoop(ctx context.Context, skills []skill.Skill, task, raw, display string, runner skill.SubagentRunner, planMode bool) error {
-	expectedContinuationEpoch := o.c.goals.continuationToken()
-	if err := o.runSubagentSkillTurns(ctx, skills, task, raw, display, runner, planMode); err != nil {
+func (c *Controller) runSubagentSkillTurnsGoalLoop(ctx context.Context, skills []skill.Skill, task, raw, display string, runner skill.SubagentRunner, planMode bool) error {
+	expectedContinuationEpoch := c.goals.continuationToken()
+	if err := c.runSubagentSkillTurns(ctx, skills, task, raw, display, runner, planMode); err != nil {
 		if ctx.Err() != nil {
-			o.c.stopGoal(GoalStatusStopped)
+			c.stopGoal(GoalStatusStopped)
 		}
 		return err
 	}
-	return o.continueGoal(ctx, expectedContinuationEpoch)
+	return c.continueGoal(ctx, expectedContinuationEpoch)
 }
 
 // runSubagentSkillTurns records the composed user task and distilled child
 // answers only. Child reasoning and tool chatter stay out of the
 // provider-visible parent context while their UI events nest under synthetic
 // top-level run_skill cards.
-func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []skill.Skill, task, raw, display string, runner skill.SubagentRunner, planMode bool) (err error) {
-	c := o.c
+func (c *Controller) runSubagentSkillTurns(ctx context.Context, skills []skill.Skill, task, raw, display string, runner skill.SubagentRunner, planMode bool) (err error) {
 	c.maybeSessionStart(ctx)
 	parentSession := c.parentSessionID()
 	images := c.inputImages(raw)
@@ -170,8 +161,7 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 	return nil
 }
 
-func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchestratedTurn) (err error) {
-	c := o.c
+func (c *Controller) runOrchestratedTurn(ctx context.Context, turn orchestratedTurn) (err error) {
 	c.maybeSessionStart(ctx)
 	parentSession := c.parentSessionID()
 	ctx = agent.WithParentSession(ctx, parentSession)
@@ -324,7 +314,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	err = func() error {
 		c.markInFlightTurn(execStart, false)
 		defer c.clearInFlightTurn()
-		return o.runComposedSyntheticTurn(ctx, planApprovedMessage)
+		return c.runComposedSyntheticTurn(ctx, planApprovedMessage)
 	}()
 	if err != nil {
 		if errors.Is(err, context.Canceled) && c.CancelRequested() {
@@ -338,17 +328,17 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	return nil
 }
 
-func (o *turnOrchestrator) runGoalLoopWithRawDisplay(ctx context.Context, input, raw, display string) error {
-	expectedContinuationEpoch := o.c.goals.continuationToken()
-	if err := o.runTurnWithRawDisplay(ctx, input, raw, display); err != nil {
+func (c *Controller) runGoalLoopWithRawDisplay(ctx context.Context, input, raw, display string) error {
+	expectedContinuationEpoch := c.goals.continuationToken()
+	if err := c.runTurnWithRawDisplay(ctx, input, raw, display); err != nil {
 		if ctx.Err() != nil {
-			o.c.stopGoal(GoalStatusStopped)
+			c.stopGoal(GoalStatusStopped)
 		} else if goalShouldBlockOnError(err) {
-			o.c.stopGoal(GoalStatusBlocked)
+			c.stopGoal(GoalStatusBlocked)
 		}
 		return err
 	}
-	return o.continueGoal(ctx, expectedContinuationEpoch)
+	return c.continueGoal(ctx, expectedContinuationEpoch)
 }
 
 // goalShouldBlockOnError reports host pauses that permanently block a Goal
@@ -361,10 +351,9 @@ func goalShouldBlockOnError(err error) bool {
 	return errors.As(err, &readiness)
 }
 
-func (o *turnOrchestrator) continueGoal(ctx context.Context, expectedContinuationEpoch uint64) error {
-	c := o.c
+func (c *Controller) continueGoal(ctx context.Context, expectedContinuationEpoch uint64) error {
 	for {
-		res := o.advanceGoalAfterTurn(expectedContinuationEpoch)
+		res := c.advanceGoalAfterTurn(expectedContinuationEpoch)
 		if !res.cont {
 			return nil
 		}
@@ -385,7 +374,7 @@ func (o *turnOrchestrator) continueGoal(ctx context.Context, expectedContinuatio
 				c.noticeDetail("Goal still has unfinished task state; continuing the remaining work.", intercept)
 			}
 		}
-		admitted, err := o.runGoalContinuationTurnWithRawDisplay(ctx, turn, turn, "", res)
+		admitted, err := c.runGoalContinuationTurnWithRawDisplay(ctx, turn, turn, "", res)
 		if err != nil {
 			if ctx.Err() != nil {
 				c.stopGoal(GoalStatusStopped)
@@ -399,8 +388,7 @@ func (o *turnOrchestrator) continueGoal(ctx context.Context, expectedContinuatio
 	}
 }
 
-func (o *turnOrchestrator) advanceGoalAfterTurn(expectedContinuationEpoch uint64) goalAdvanceResult {
-	c := o.c
+func (c *Controller) advanceGoalAfterTurn(expectedContinuationEpoch uint64) goalAdvanceResult {
 	// Gather every input the FSM needs off the goal lock: parse the marker,
 	// snapshot the executor's todos + readiness, and check tool activity. None
 	// of these touch goal state, so the machine's critical section stays pure.

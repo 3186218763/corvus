@@ -26,18 +26,14 @@ func (c *Controller) PendingPrompt() bool {
 // RuntimeStatus reports the active work owned by the foreground controller.
 func (c *Controller) RuntimeStatus() RuntimeStatus {
 	c.mu.Lock()
-	running := c.running
-	active := running || c.finishing
-	canceling := c.canceling
+	active := c.running || c.finishing
 	c.mu.Unlock()
 	pending := c.approval.hasPending()
 	backgroundJobs := len(c.Jobs())
 	return RuntimeStatus{
-		Running:         active,
-		PendingPrompt:   pending,
-		BackgroundJobs:  backgroundJobs,
-		CancelRequested: canceling,
-		Cancellable:     running || pending,
+		Running:        active,
+		PendingPrompt:  pending,
+		BackgroundJobs: backgroundJobs,
 	}
 }
 

@@ -32,8 +32,7 @@ func TestCheckpointsReturnUserPromptWithoutComposedPrefixes(t *testing.T) {
 	composed := agent.ReasoningLanguageBlock("zh") + "\n\n" +
 		PlanModeMarker + "\n\n" +
 		typed
-	o := newTurnOrchestrator(c)
-	if err := o.runTurnWithRawDisplay(context.Background(), composed, typed, ""); err != nil {
+	if err := c.runTurnWithRawDisplay(context.Background(), composed, typed, ""); err != nil {
 		t.Fatal(err)
 	}
 

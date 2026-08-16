@@ -3952,8 +3952,8 @@ func TestSecondCtrlCQuitsAfterCancelIsAlreadyRequested(t *testing.T) {
 	if firstCmd != nil {
 		t.Fatal("first Ctrl+C while running should request cancel, not quit")
 	}
-	if st := ctrl.RuntimeStatus(); !st.Running || !st.CancelRequested {
-		t.Fatalf("first Ctrl+C status = %+v, want running cancel requested", st)
+	if st := ctrl.RuntimeStatus(); !st.Running || !ctrl.CancelRequested() {
+		t.Fatalf("first Ctrl+C status = %+v (cancelRequested=%v), want running cancel requested", st, ctrl.CancelRequested())
 	}
 
 	_, secondCmd := m.Update(ctrlC)
@@ -3965,7 +3965,7 @@ func TestSecondCtrlCQuitsAfterCancelIsAlreadyRequested(t *testing.T) {
 	}
 }
 
-func TestRunningStatusShowsCancelRequested(t *testing.T) {
+func TestRunningStatusShowsStoppingFeedbackAfterCancel(t *testing.T) {
 	r := &stubbornTurnRunner{started: make(chan struct{}), release: make(chan struct{})}
 	ctrl := control.New(control.Options{Runner: r, Sink: event.Discard, SessionDir: t.TempDir(), Label: "test"})
 	ctrl.SendWithRaw("hi", "hi")

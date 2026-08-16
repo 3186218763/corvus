@@ -50,7 +50,7 @@ func TestCancelClearsPendingApprovalRuntimeStatus(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("timed out waiting for approval request")
 	}
-	if st := c.RuntimeStatus(); !st.Running || !st.PendingPrompt || !st.Cancellable || st.CancelRequested {
+	if st := c.RuntimeStatus(); !st.Running || !st.PendingPrompt {
 		t.Fatalf("status before cancel = %+v, want running pending cancellable", st)
 	}
 
@@ -64,7 +64,7 @@ func TestCancelClearsPendingApprovalRuntimeStatus(t *testing.T) {
 	// RuntimeStatus it feeds) stays true until finishGuardedTurn's deferred
 	// clear runs. Wait for the gate to reopen before asserting idle.
 	waitIdle(t, c)
-	if st := c.RuntimeStatus(); st.Running || st.PendingPrompt || st.Cancellable || st.CancelRequested {
+	if st := c.RuntimeStatus(); st.Running || st.PendingPrompt {
 		t.Fatalf("status after turn done = %+v, want idle", st)
 	}
 }
@@ -89,7 +89,7 @@ func TestCancelClearsPendingAskRuntimeStatus(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("timed out waiting for ask request")
 	}
-	if st := c.RuntimeStatus(); !st.Running || !st.PendingPrompt || !st.Cancellable || st.CancelRequested {
+	if st := c.RuntimeStatus(); !st.Running || !st.PendingPrompt {
 		t.Fatalf("status before cancel = %+v, want running pending cancellable", st)
 	}
 
@@ -100,7 +100,7 @@ func TestCancelClearsPendingAskRuntimeStatus(t *testing.T) {
 	// RuntimeStatus it feeds) stays true until finishGuardedTurn's deferred
 	// clear runs. Wait for the gate to reopen before asserting idle.
 	waitIdle(t, c)
-	if st := c.RuntimeStatus(); st.Running || st.PendingPrompt || st.Cancellable || st.CancelRequested {
+	if st := c.RuntimeStatus(); st.Running || st.PendingPrompt {
 		t.Fatalf("status after turn done = %+v, want idle", st)
 	}
 }
@@ -136,7 +136,7 @@ func TestCloseCancelsPendingAskRuntimeStatus(t *testing.T) {
 		t.Fatal("Close did not cancel the pending ask waiter")
 	}
 	waitIdle(t, c)
-	if st := c.RuntimeStatus(); st.Running || st.PendingPrompt || st.Cancellable || st.CancelRequested {
+	if st := c.RuntimeStatus(); st.Running || st.PendingPrompt {
 		t.Fatalf("status after Close = %+v, want idle", st)
 	}
 }
@@ -163,7 +163,7 @@ func TestCloseDoesNotResurrectFinishingState(t *testing.T) {
 	}
 	defer close(releaseTurnDone)
 
-	if st := c.RuntimeStatus(); st.Running || st.PendingPrompt || st.Cancellable || st.CancelRequested {
+	if st := c.RuntimeStatus(); st.Running || st.PendingPrompt {
 		t.Fatalf("closed controller resurrected active state during TurnDone delivery: %+v", st)
 	}
 }
@@ -172,15 +172,6 @@ func assertCancelClearedPendingRuntimeStatus(t *testing.T, st RuntimeStatus) {
 	t.Helper()
 	if st.PendingPrompt {
 		t.Fatalf("status immediately after cancel = %+v, want pending prompt cleared", st)
-	}
-	if st.Running {
-		if !st.Cancellable || !st.CancelRequested {
-			t.Fatalf("status immediately after cancel = %+v, want running cancelling without pending prompt", st)
-		}
-		return
-	}
-	if st.Cancellable || st.CancelRequested {
-		t.Fatalf("status immediately after cancel = %+v, want idle when turn already completed", st)
 	}
 }
 
