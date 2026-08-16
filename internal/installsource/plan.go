@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"corvus/internal/skill"
+	"corvus/internal/textutil"
 )
 
 var githubAPIBaseURL = "https://api.github.com"
@@ -219,7 +220,7 @@ func (t *installSourceTool) planGitHubSkillRepo(ctx context.Context, req request
 		return nil, warnings, err
 	}
 	if len(cands) == 0 {
-		return nil, warnings, newErr(ErrManifestMissing, "no SKILL.md or <name>.md skills found under GitHub repo path %s", firstNonEmpty(src.Path, "."))
+		return nil, warnings, newErr(ErrManifestMissing, "no SKILL.md or <name>.md skills found under GitHub repo path %s", textutil.FirstNonBlank(src.Path, "."))
 	}
 	actions := make([]action, 0, len(cands))
 	for _, cand := range cands {

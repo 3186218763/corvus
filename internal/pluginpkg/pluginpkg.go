@@ -21,6 +21,7 @@ import (
 	fileencoding "corvus/internal/fileutil/encoding"
 	"corvus/internal/frontmatter"
 	"corvus/internal/mcpjson"
+	"corvus/internal/textutil"
 )
 
 const (
@@ -620,15 +621,6 @@ func cloneHookEnv(in map[string]string) map[string]string {
 	return out
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
-}
-
 func readJSONFile(path string, v any) error {
 	b, err := fileencoding.ReadFileUTF8(path)
 	if err != nil {
@@ -1018,7 +1010,7 @@ func (p Package) mcpServerRefs() []MCPServerRef {
 		server := p.Manifest.MCPServers[name]
 		out = append(out, MCPServerRef{
 			Name:        name,
-			DisplayName: firstNonEmpty(strings.TrimSpace(server.DisplayName), name),
+			DisplayName: textutil.FirstNonBlank(strings.TrimSpace(server.DisplayName), name),
 			Description: strings.TrimSpace(server.Description),
 			Transport:   pluginMCPTransport(server),
 			Command:     strings.TrimSpace(server.Command),

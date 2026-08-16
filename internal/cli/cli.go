@@ -12,6 +12,7 @@ import (
 	"corvus/internal/i18n"
 	"corvus/internal/provider"
 	"corvus/internal/provider/openai"
+	"corvus/internal/textutil"
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
@@ -301,7 +302,7 @@ func chatREPL(args []string, version string) int {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 2
 	}
-	allowedTools = uniqueStrings(append(allowedTools, permissions.allow...))
+	allowedTools = textutil.UniqueNonBlank(append(allowedTools, permissions.allow...))
 	if rc := chdirTo(*dir); rc != 0 {
 		return rc
 	}

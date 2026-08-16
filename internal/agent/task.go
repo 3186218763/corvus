@@ -20,6 +20,7 @@ import (
 	"corvus/internal/permission"
 	"corvus/internal/planmode"
 	"corvus/internal/provider"
+	"corvus/internal/textutil"
 	"corvus/internal/tool"
 	"corvus/internal/workspacelease"
 )
@@ -604,7 +605,7 @@ func (r *ReadOnlyTaskTool) Execute(ctx context.Context, args json.RawMessage) (s
 	releaseSlot, err := r.task.acquireSlot(ctx, AcquireRequest{
 		Writer: false,
 		Nested: SubagentDepth(ctx) > 0,
-		Label:  firstNonEmpty(p.Description, "read_only_task"),
+		Label:  textutil.FirstNonBlank(p.Description, "read_only_task"),
 	})
 	if err != nil {
 		return "", err
@@ -854,7 +855,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (st
 		Writer:     isWriter,
 		WritePaths: spec.WritePaths,
 		Nested:     spec.Nested,
-		Label:      firstNonEmpty(spec.Description, spec.Name, "task"),
+		Label:      textutil.FirstNonBlank(spec.Description, spec.Name, "task"),
 	}
 	// Defensive fallback for callers that manually construct a background spec
 	// instead of going through buildTaskSpec.
@@ -916,7 +917,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (st
 			releaseStart = func() {}
 		}
 		nested := subSinkFor(parentID, parent)
-		label := firstNonEmpty(spec.Description, spec.Name, "task")
+		label := textutil.FirstNonBlank(spec.Description, spec.Name, "task")
 		if t.transcripts != nil && run != nil && run.Ref != "" {
 			if err := t.transcripts.MarkRunning(run); err != nil {
 				releaseStart()
@@ -1078,7 +1079,7 @@ func (t *TaskTool) usageModelRef(modelRef, effort string) string {
 	if model != "" {
 		return model
 	}
-	return firstNonEmpty(modelRef, t.baseModel, t.subagentModel)
+	return textutil.FirstNonBlank(modelRef, t.baseModel, t.subagentModel)
 }
 
 func (t *TaskTool) effectiveModelIdentity(modelRef string) string {

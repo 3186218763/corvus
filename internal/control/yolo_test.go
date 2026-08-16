@@ -1170,9 +1170,9 @@ func TestApplyToolApprovalModeReportsDrainedIDs(t *testing.T) {
 		Policy: permission.New("ask", nil, []string{"bash(git commit*)"}, nil),
 	})
 
-	autoOKID, autoOKReply := c.approval.register("bash", "go test ./...", "")
-	askRuleID, askRuleReply := c.approval.register("bash", "git commit -m x", "")
-	planID, planReply := c.approval.registerDecision(planApprovalTool, "", "", true, false)
+	autoOKID, autoOKReply := c.approval.registerDecisionKindWithInput("bash", "go test ./...", "", nil, false, false, "", nil)
+	askRuleID, askRuleReply := c.approval.registerDecisionKindWithInput("bash", "git commit -m x", "", nil, false, false, "", nil)
+	planID, planReply := c.approval.registerDecisionKindWithInput(planApprovalTool, "", "", nil, true, false, "", nil)
 
 	drained := c.ApplyToolApprovalMode(ToolApprovalAuto)
 	if len(drained) != 1 || drained[0] != autoOKID {

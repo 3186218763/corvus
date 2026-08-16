@@ -1,8 +1,6 @@
 package installsource
 
 import (
-	"context"
-	"fmt"
 	"net"
 	"net/http"
 
@@ -27,34 +25,13 @@ func ssrfGuardClient(base *http.Client) *http.Client {
 		if inner == nil {
 			inner = (&net.Dialer{}).DialContext
 		}
-		ct.DialContext = ssrfDial(inner)
+		ct.DialContext = ssrfguard.GuardedDialContext(inner)
 		guarded.Transport = ct
 	} else {
 		// Non-*http.Transport (or nil Transport): build a fresh guarded transport.
 		// The real paths — tests' httptest clients — are always *http.Transport,
 		// so this branch only covers a bare &http.Client{}.
-		guarded.Transport = &http.Transport{DialContext: ssrfDial((&net.Dialer{}).DialContext)}
+		guarded.Transport = &http.Transport{DialContext: ssrfguard.GuardedDialContext((&net.Dialer{}).DialContext)}
 	}
 	return &guarded
-}
-
-func ssrfDial(inner func(context.Context, string, string) (net.Conn, error)) func(context.Context, string, string) (net.Conn, error) {
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		host, port, err := net.SplitHostPort(addr)
-		if err != nil {
-			return nil, err
-		}
-		ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-		if err != nil {
-			return nil, err
-		}
-		for _, ip := range ips {
-			if ssrfguard.BlockedIP(ip.IP) {
-				return nil, fmt.Errorf("refusing to fetch internal address %s (resolves to %s)", host, ip.IP)
-			}
-		}
-		// Dial the vetted IP, not the hostname, so the connection can't re-resolve
-		// to a different (internal) address (DNS rebinding).
-		return inner(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
-	}
 }

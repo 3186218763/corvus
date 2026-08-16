@@ -15,6 +15,7 @@ import (
 	fileencoding "corvus/internal/fileutil/encoding"
 	"corvus/internal/frontmatter"
 	"corvus/internal/mcpjson"
+	"corvus/internal/textutil"
 )
 
 const (
@@ -173,7 +174,7 @@ func appendClaudeHooksFile(root, rel string, manifest *Manifest) ([]string, []Co
 			continue
 		}
 		for _, block := range blocks {
-			match := firstNonEmpty(strings.TrimSpace(block.Matcher), strings.TrimSpace(block.Match))
+			match := textutil.FirstNonBlank(strings.TrimSpace(block.Matcher), strings.TrimSpace(block.Match))
 			for _, item := range block.Hooks {
 				typ := strings.TrimSpace(item.Type)
 				if typ != "" && typ != "command" {
@@ -240,7 +241,7 @@ func appendClaudeHooksFile(root, rel string, manifest *Manifest) ([]string, []Co
 					Shell:         shell,
 					Async:         item.Async,
 					PayloadFormat: "claude",
-					Description:   firstNonEmpty(strings.TrimSpace(item.Description), "Claude-compatible hook from "+rel),
+					Description:   textutil.FirstNonBlank(strings.TrimSpace(item.Description), "Claude-compatible hook from "+rel),
 					Timeout:       claudeTimeoutMillis(item.Timeout),
 					Cwd:           ".",
 					Env:           cloneHookEnv(item.Env),
@@ -387,7 +388,7 @@ func appendClaudeMCPFile(root string, manifest *Manifest) ([]string, []Compatibi
 				Title:                 strings.TrimSpace(spec.Title),
 				Description:           strings.TrimSpace(spec.Description),
 			},
-			DisplayName: firstNonEmpty(strings.TrimSpace(spec.Title), strings.TrimSpace(displayName)),
+			DisplayName: textutil.FirstNonBlank(strings.TrimSpace(spec.Title), strings.TrimSpace(displayName)),
 			Imported:    true,
 		}
 	}

@@ -51,13 +51,13 @@ func (rt roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	return guardedTransport(proxyURL).RoundTrip(req)
 }
 
-func guardedTransport(proxyURL string) *http.Transport {
-	dialer := &net.Dialer{Timeout: 15 * time.Second}
-
-	// directDialContext handles SSRF-protected direct connection (no proxy).
-	// It resolves DNS locally, checks resolved IPs against the SSRF blocklist,
-	// then dials the vetted IP directly to prevent DNS rebinding.
-	directDialContext := func(ctx context.Context, network, addr string) (net.Conn, error) {
+// GuardedDialContext wraps inner so a connection only ever dials a locally
+// resolved, blocklist-vetted IP: it resolves DNS itself, refuses when any
+// resolved address is blocked, then dials the vetted IP (not the hostname)
+// to prevent DNS rebinding. Exported so other packages can retrofit the same
+// guard onto a plain transport (see installsource.ssrfGuardClient).
+func GuardedDialContext(inner func(context.Context, string, string) (net.Conn, error)) func(context.Context, string, string) (net.Conn, error) {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(addr)
 		if err != nil {
 			return nil, err
@@ -71,11 +71,15 @@ func guardedTransport(proxyURL string) *http.Transport {
 				return nil, fmt.Errorf("refusing to fetch internal address %s (resolves to %s)", host, ip.IP)
 			}
 		}
-		return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
+		return inner(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
 	}
+}
+
+func guardedTransport(proxyURL string) *http.Transport {
+	dialer := &net.Dialer{Timeout: 15 * time.Second}
 
 	tr := &http.Transport{
-		DialContext: directDialContext,
+		DialContext: GuardedDialContext(dialer.DialContext),
 	}
 
 	if proxyURL != "" {

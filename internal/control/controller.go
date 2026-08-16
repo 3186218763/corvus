@@ -43,6 +43,7 @@ import (
 	"corvus/internal/sandbox"
 	"corvus/internal/skill"
 	"corvus/internal/store"
+	"corvus/internal/textutil"
 	"corvus/internal/tool"
 	"corvus/internal/workspacelease"
 )
@@ -1021,7 +1022,7 @@ func (p plannerPlanApprover) RunWithPlannerApproval(ctx context.Context, plan st
 		return nil
 	}
 	todoArgs := c.seedPlanTodos(plan)
-	execStart := c.sessionMessageCount()
+	execStart := c.messageCount()
 	c.approval.setPlanAutoApprove(true)
 	defer c.approval.setPlanAutoApprove(false)
 	if err := run(ctx); err != nil {
@@ -2013,7 +2014,7 @@ func rememberApprovalSubject(fallback string, args json.RawMessage) string {
 	if err := json.Unmarshal(args, &in); err != nil {
 		return fallback
 	}
-	name := approvalCompactText(firstNonEmpty(in.Name, in.Title))
+	name := approvalCompactText(textutil.FirstNonBlank(in.Name, in.Title))
 	desc := approvalTruncate(approvalCompactText(in.Description), 180)
 	body := approvalTruncate(approvalCompactText(in.Body), 240)
 	typ := string(memory.NormalizeType(in.Type))
@@ -2062,15 +2063,6 @@ func forgetApprovalSubject(fallback string, args json.RawMessage) string {
 		return fallback
 	}
 	return fmt.Sprintf(i18n.M.MemoryApprovalArchiveFmt, name)
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 func approvalCompactText(s string) string {
@@ -2211,11 +2203,7 @@ func (c *Controller) requestApprovalDecisionWithOptions(ctx context.Context, too
 
 	var id string
 	var reply chan approvalReply
-	if opts.fresh || opts.requireHuman {
-		id, reply = c.approval.registerDecisionWithInput(tool, subject, reason, args, opts.fresh, opts.requireHuman)
-	} else {
-		id, reply = c.approval.registerWithInput(tool, subject, reason, args)
-	}
+	id, reply = c.approval.registerDecisionKindWithInput(tool, subject, reason, args, opts.fresh, opts.requireHuman, "", nil)
 
 	c.sink.Emit(c.approvalRequestEvent(event.Approval{ID: id, Tool: tool, Subject: subject, Reason: reason, RawInput: append(json.RawMessage(nil), args...), Fresh: opts.fresh}))
 	// The agent now needs the user's attention; a Notification hook can ping an

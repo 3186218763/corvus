@@ -1,6 +1,7 @@
 package recovery
 
 import (
+	"cmp"
 	"encoding/json"
 	"time"
 
@@ -185,7 +186,7 @@ func ToEventApproval(id string, pending PendingProposal, failure *FailureEvent) 
 		FailedSummary:   pending.Failure,
 		Diagnosis:       pending.Diagnosis,
 		NextTool:        pending.Tool,
-		NextAction:      firstNonEmpty(pending.Proposed, pending.Subject, pending.Preview),
+		NextAction:      cmp.Or(pending.Proposed, pending.Subject, pending.Preview),
 		ChangeKind:      string(pending.ChangeKind),
 		ChangeRationale: pending.Rationale,
 		ReviewRationale: pending.Rationale,
@@ -203,8 +204,8 @@ func ToEventApproval(id string, pending PendingProposal, failure *FailureEvent) 
 			rec.SourceAgent = failure.SourceAgent
 		}
 	}
-	subject := firstNonEmpty(pending.Subject, pending.Preview, pending.Tool)
-	reason := firstNonEmpty(pending.Rationale, pending.Diagnosis, "Plan change requires confirmation")
+	subject := cmp.Or(pending.Subject, pending.Preview, pending.Tool)
+	reason := cmp.Or(pending.Rationale, pending.Diagnosis, "Plan change requires confirmation")
 	return event.Approval{
 		ID:       id,
 		Tool:     pending.Tool,
@@ -231,12 +232,3 @@ const (
 // DefaultReviseFeedback is injected when the user chooses "try another approach"
 // without optional free-text feedback.
 const DefaultReviseFeedback = "The pending mutation was rejected. Do not retry the same action. Summarize the failure cause, narrow the scope, and propose a safer alternative before attempting another mutation."
-
-func firstNonEmpty(vals ...string) string {
-	for _, v := range vals {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}

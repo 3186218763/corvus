@@ -127,10 +127,3 @@ func (c *Controller) Balance(ctx context.Context) (*billing.Balance, error) {
 	defer cancel()
 	return billing.FetchWithClient(ctx, c.balanceClient, c.balanceURL, c.balanceKey)
 }
-
-func (c *Controller) sessionMessageCount() int {
-	if c.executor == nil {
-		return 0
-	}
-	return c.executor.Session().Len()
-}

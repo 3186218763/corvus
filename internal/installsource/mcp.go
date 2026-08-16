@@ -8,6 +8,7 @@ import (
 	"corvus/internal/config"
 	fileencoding "corvus/internal/fileutil/encoding"
 	"corvus/internal/mcpjson"
+	"corvus/internal/textutil"
 )
 
 // mcpEntryAction assembles the DTO for a single MCP server install. The
@@ -29,7 +30,7 @@ func (t *installSourceTool) mcpEntryAction(req request, e config.PluginEntry, so
 	// Tier comes from the call (req.Tier) or the entry; either way we
 	// validate. An unrecognised tier is silently downgraded to "background" by
 	// normalizeTier — we capture the original value to surface a warning.
-	desired := firstNonEmpty(req.Tier, e.Tier)
+	desired := textutil.FirstNonBlank(req.Tier, e.Tier)
 	norm, ok := normalizeTier(desired)
 	e.Tier = norm
 	a := action{

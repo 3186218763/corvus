@@ -224,33 +224,12 @@ func (a *approvalManager) preApprovedForRequiredHuman(tool, subject string) bool
 	return a.toolApprovalMode == ToolApprovalYolo || a.sessionGrantAllowsLocked(tool, subject)
 }
 
-// register allocates an approval ID, records the pending prompt, and returns the
-// reply channel the resolve path will signal.
-func (a *approvalManager) register(tool, subject, reason string) (string, chan approvalReply) {
-	return a.registerWithInput(tool, subject, reason, nil)
-}
-
-func (a *approvalManager) registerWithInput(tool, subject, reason string, rawInput json.RawMessage) (string, chan approvalReply) {
-	return a.registerDecisionWithInput(tool, subject, reason, rawInput, false, false)
-}
-
-// registerDecision allocates an approval ID for either an ordinary tool
-// permission or a fresh user decision. Fresh decisions are not auto-drained when
-// the user switches to auto/yolo tool approval while the prompt is visible.
-func (a *approvalManager) registerDecision(tool, subject, reason string, fresh, requireHuman bool) (string, chan approvalReply) {
-	return a.registerDecisionWithInput(tool, subject, reason, nil, fresh, requireHuman)
-}
-
-func (a *approvalManager) registerDecisionWithInput(tool, subject, reason string, rawInput json.RawMessage, fresh, requireHuman bool) (string, chan approvalReply) {
-	return a.registerDecisionKindWithInput(tool, subject, reason, rawInput, fresh, requireHuman, "", nil)
-}
-
-// registerDecisionKind is registerDecision with optional Kind/Recovery payload
-// so Auto Guard cards survive ReplayPendingPrompts.
-func (a *approvalManager) registerDecisionKind(tool, subject, reason string, fresh, requireHuman bool, kind string, rec *event.RecoveryApproval) (string, chan approvalReply) {
-	return a.registerDecisionKindWithInput(tool, subject, reason, nil, fresh, requireHuman, kind, rec)
-}
-
+// registerDecisionKindWithInput allocates an approval ID, records the pending
+// prompt, and returns the reply channel the resolve path will signal. fresh
+// marks a user decision rather than an ordinary tool permission (fresh
+// decisions are not auto-drained when the user switches to auto/yolo while the
+// prompt is visible); kind/rec carry the Auto Guard Recovery payload so those
+// cards survive ReplayPendingPrompts.
 func (a *approvalManager) registerDecisionKindWithInput(tool, subject, reason string, rawInput json.RawMessage, fresh, requireHuman bool, kind string, rec *event.RecoveryApproval) (string, chan approvalReply) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

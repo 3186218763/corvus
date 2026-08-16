@@ -26,6 +26,7 @@ import (
 	"corvus/internal/fileutil"
 	fileencoding "corvus/internal/fileutil/encoding"
 	"corvus/internal/frontmatter"
+	"corvus/internal/textutil"
 	"corvus/internal/tool"
 )
 
@@ -887,7 +888,7 @@ func (s *Store) parseSkill(path, stem string, scope Scope, requireSkillMarker bo
 		Body:         loadBodyWithScripts(path, loadBodyWithReferences(path, strings.TrimSpace(body))),
 		Scope:        scope,
 		Path:         path,
-		AllowedTools: parseAllowedTools(firstNonEmptySkillValue(fm[skillFrontmatterAllowedTools], fm["tools"])),
+		AllowedTools: parseAllowedTools(textutil.FirstNonBlank(fm[skillFrontmatterAllowedTools], fm["tools"])),
 		RunAs:        parseRunAs(fm[skillFrontmatterRunAs], fm[skillFrontmatterContext], fm[skillFrontmatterAgent]),
 		Model:        strings.TrimSpace(fm[skillFrontmatterModel]),
 		Effort:       strings.TrimSpace(fm[skillFrontmatterEffort]),
@@ -905,15 +906,6 @@ func (s *Store) parseSkill(path, stem string, scope Scope, requireSkillMarker bo
 	}
 	sk.Profiles, sk.InvalidProfiles = parseProfilesFrontmatter(fm[skillFrontmatterProfiles])
 	return sk, true
-}
-
-func firstNonEmptySkillValue(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 func isClaudeModelAlias(model string) bool {

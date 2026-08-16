@@ -21,6 +21,7 @@ import (
 	fileencoding "corvus/internal/fileutil/encoding"
 	"corvus/internal/provider"
 	"corvus/internal/store"
+	"corvus/internal/textutil"
 )
 
 const (
@@ -753,7 +754,7 @@ func (s *Session) saveRecoveryBranchMeta(path string, opts RecoveryBranchOptions
 	meta := opts.BranchMeta
 	meta.ID = BranchID(path)
 	if strings.TrimSpace(meta.Name) == "" {
-		meta.Name = firstNonEmpty(strings.TrimSpace(opts.Name), RecoveryBranchDefaultName)
+		meta.Name = textutil.FirstNonBlank(strings.TrimSpace(opts.Name), RecoveryBranchDefaultName)
 	}
 	if strings.TrimSpace(meta.ParentID) == "" {
 		meta.ParentID = BranchID(opts.OriginalPath)
@@ -764,7 +765,7 @@ func (s *Session) saveRecoveryBranchMeta(path string, opts RecoveryBranchOptions
 	meta.Turns = turns
 	meta.SchemaVersion = BranchMetaCountsVersion
 	meta.Recovered = true
-	meta.RecoveryReason = firstNonEmpty(strings.TrimSpace(opts.Reason), "session snapshot conflict")
+	meta.RecoveryReason = textutil.FirstNonBlank(strings.TrimSpace(opts.Reason), "session snapshot conflict")
 	meta.RecoveryDigest = digest
 	// Always stamped from the parent chain, never trusted from opts: callers
 	// copy tab/session meta wholesale and would carry a stale depth.
@@ -847,15 +848,6 @@ func truncateUTF8Bytes(s string, max int) string {
 		used += size
 	}
 	return s
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 func (s *Session) ownsPersistedState(path string, existingDigest [sha256.Size]byte, existingRevision int64, existingLedgerDigest string, nextVersion uint64) bool {

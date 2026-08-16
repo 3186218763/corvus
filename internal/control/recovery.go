@@ -9,6 +9,7 @@ import (
 
 	"corvus/internal/agent"
 	"corvus/internal/recovery"
+	"corvus/internal/textutil"
 )
 
 // ResolveRecovery applies a user decision on an Auto Guard card.
@@ -240,10 +241,11 @@ func (c *Controller) emitRecoveryPrompt(ctx context.Context, taskID string, pend
 	// in the recovery gate on its own channel. We deliberately do not block here
 	// on the approval reply — ResolveRecovery unblocks the gate.
 	ev := recovery.ToEventApproval("", pending, failure)
-	id, reply := c.approval.registerDecisionKind(
+	id, reply := c.approval.registerDecisionKindWithInput(
 		pending.Tool,
-		recoveryFirstNonEmpty(pending.Subject, pending.Tool),
-		recoveryFirstNonEmpty(pending.Rationale, "Auto Guard"),
+		textutil.FirstNonBlank(pending.Subject, pending.Tool),
+		textutil.FirstNonBlank(pending.Rationale, "Auto Guard"),
+		nil,
 		true,
 		false,
 		recovery.ApprovalKindRecovery,
@@ -275,15 +277,6 @@ func (c *Controller) emitRecoveryPrompt(ctx context.Context, taskID string, pend
 		go c.hooks.Notification(ctx, "Auto Guard: confirm the next action", "permission_prompt")
 	}
 	return id, nil
-}
-
-func recoveryFirstNonEmpty(vals ...string) string {
-	for _, v := range vals {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
 }
 
 // beginRecoveryEpisode opens a fresh host-owned Recovery Episode. Failure,

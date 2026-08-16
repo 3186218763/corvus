@@ -7,6 +7,7 @@ import (
 
 	"corvus/internal/shellparse"
 	"corvus/internal/shellsafe"
+	"corvus/internal/textutil"
 )
 
 // QualifyingFailure reports whether an observation should arm the checkpoint.
@@ -187,7 +188,7 @@ func pathsFromArgs(args json.RawMessage) []string {
 			paths = append(paths, strings.TrimSpace(v))
 		}
 	}
-	return uniqueStrings(paths)
+	return textutil.UniqueNonBlank(paths)
 }
 
 func normalizeCommand(s string) string {
@@ -887,7 +888,7 @@ func WriteScopePaths(tool string, args json.RawMessage) []string {
 		// Best-effort: do not invent paths from free-form shell.
 		return paths
 	}
-	return uniqueStrings(paths)
+	return textutil.UniqueNonBlank(paths)
 }
 
 // ScopeExpanded reports whether the proposal writes outside the failure's
@@ -932,21 +933,4 @@ func ScopeExpanded(failure *FailureEvent, proposal Proposal) bool {
 func StrategyChanged(failure *FailureEvent, proposal Proposal) bool {
 	_ = failure
 	return proposal.StrategyChanged
-}
-
-func uniqueStrings(in []string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(in))
-	for _, s := range in {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		seen[s] = struct{}{}
-		out = append(out, s)
-	}
-	return out
 }

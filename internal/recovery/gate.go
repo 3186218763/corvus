@@ -1,6 +1,7 @@
 package recovery
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -1021,12 +1022,12 @@ func (g *Gate) askHuman(ctx context.Context, taskID, fp string, gen uint64, prop
 		Preview:     proposal.Preview,
 		Args:        append(json.RawMessage(nil), proposal.Args...),
 		Fingerprint: fp,
-		SourceAgent: firstNonEmpty(proposal.AgentID, failureSource),
+		SourceAgent: cmp.Or(proposal.AgentID, failureSource),
 		ChangeKind:  kind,
-		Rationale:   firstNonEmpty(rationale, userFacingReason(kind)),
+		Rationale:   cmp.Or(rationale, userFacingReason(kind)),
 		Diagnosis:   strings.Join(diagNotes, "\n"),
 		Failure:     failureSummary,
-		Proposed:    firstNonEmpty(proposal.Subject, proposal.Preview, proposal.Tool),
+		Proposed:    cmp.Or(proposal.Subject, proposal.Preview, proposal.Tool),
 		PlanBefore:  proposal.PlanBefore,
 		PlanAfter:   proposal.PlanAfter,
 	}
@@ -1204,7 +1205,7 @@ func diagnosticObservationNote(obs Observation) string {
 	if tool == "" {
 		tool = "diagnostic"
 	}
-	subject := clip(firstNonEmpty(obs.Subject, ArgsSummary(obs.Args, 160)), 160)
+	subject := clip(cmp.Or(obs.Subject, ArgsSummary(obs.Args, 160)), 160)
 	header := tool
 	if subject != "" && subject != tool {
 		header += " (" + subject + ")"
@@ -1288,7 +1289,7 @@ func headlessBlockerMessage(pending PendingProposal, failure *FailureEvent) stri
 	b.WriteString("blocked: Auto Guard requires human confirmation, but this environment has no decision channel.\n")
 	if failure != nil {
 		b.WriteString("Failure: ")
-		b.WriteString(firstNonEmpty(failure.ErrSummary, failure.Tool))
+		b.WriteString(cmp.Or(failure.ErrSummary, failure.Tool))
 		b.WriteString("\n")
 	}
 	if pending.Diagnosis != "" {
@@ -1297,7 +1298,7 @@ func headlessBlockerMessage(pending PendingProposal, failure *FailureEvent) stri
 		b.WriteString("\n")
 	}
 	b.WriteString("Proposed: ")
-	b.WriteString(firstNonEmpty(pending.Proposed, pending.Subject, pending.Tool))
+	b.WriteString(cmp.Or(pending.Proposed, pending.Subject, pending.Tool))
 	b.WriteString("\n")
 	if pending.Rationale != "" {
 		b.WriteString("Why confirm: ")
@@ -1315,7 +1316,7 @@ func (g *Gate) recordReviewBlock(taskID string, verdict ReviewVerdict) int {
 	}
 	blocks := int(g.episode.reviewRejects)
 	if st.lastFailure != nil {
-		note := "Auto Guard reviewer blocked the proposal: " + firstNonEmpty(verdict.Rationale, string(verdict.ChangeKind))
+		note := "Auto Guard reviewer blocked the proposal: " + cmp.Or(verdict.Rationale, string(verdict.ChangeKind))
 		appendDiagnosisNote(st.lastFailure, note)
 	}
 	g.mu.Unlock()
@@ -1324,7 +1325,7 @@ func (g *Gate) recordReviewBlock(taskID string, verdict ReviewVerdict) int {
 }
 
 func reviewerBlockerMessage(verdict ReviewVerdict, attempt, limit int) string {
-	reason := firstNonEmpty(verdict.Rationale, "the proposal could not be classified as a bounded plan continuation")
+	reason := cmp.Or(verdict.Rationale, "the proposal could not be classified as a bounded plan continuation")
 	return fmt.Sprintf(
 		"blocked: Auto plan reviewer could not accept this transition (attempt %d/%d): %s. Continue the current plan, propose a task-aligned plan, or ask the user about a genuine product choice.",
 		attempt, limit, reason,
@@ -1332,7 +1333,7 @@ func reviewerBlockerMessage(verdict ReviewVerdict, attempt, limit int) string {
 }
 
 func repeatedFailureStopMessage(failures int, proposal Proposal) string {
-	operation := clip(firstNonEmpty(proposal.Subject, proposal.Tool), 240)
+	operation := clip(cmp.Or(proposal.Subject, proposal.Tool), 240)
 	return fmt.Sprintf(
 		"blocked: Auto stopped repeating this operation after %d consecutive failures: %s. Do not retry the same operation in this turn. Diagnose it with read-only tools, then use a different task-aligned edit or verification approach; other operations remain available. Ask the user only for a genuine product or plan choice.",
 		failures, operation,
@@ -1340,7 +1341,7 @@ func repeatedFailureStopMessage(failures int, proposal Proposal) string {
 }
 
 func episodeStopMessage(reason StopReason, proposal Proposal) string {
-	operation := clip(firstNonEmpty(proposal.Subject, proposal.Tool), 240)
+	operation := clip(cmp.Or(proposal.Subject, proposal.Tool), 240)
 	switch reason {
 	case StopReasonReviewRejects:
 		return fmt.Sprintf(
@@ -1419,7 +1420,7 @@ func normalizeVerdict(v ReviewVerdict, failure *FailureEvent, proposal Proposal,
 		v.Diagnosis = strings.Join(diagNotes, "\n")
 	}
 	if strings.TrimSpace(v.ProposedAction) == "" {
-		v.ProposedAction = firstNonEmpty(proposal.Subject, proposal.Preview, proposal.Tool)
+		v.ProposedAction = cmp.Or(proposal.Subject, proposal.Preview, proposal.Tool)
 	}
 	if strings.TrimSpace(v.Rationale) == "" {
 		v.Rationale = userFacingReason(v.ChangeKind)

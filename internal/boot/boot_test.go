@@ -36,6 +36,7 @@ import (
 	"corvus/internal/sandbox"
 	"corvus/internal/secrets"
 	"corvus/internal/skill"
+	"corvus/internal/textutil"
 	"corvus/internal/tool"
 	"corvus/internal/tool/builtin"
 
@@ -1976,7 +1977,7 @@ model = "executor-model"%s
 
 func TestBuildInjectsEnvironmentBlockByDefaultAndEconomy(t *testing.T) {
 	for _, tokenMode := range []string{"", TokenModeEconomy} {
-		t.Run(firstNonEmpty(tokenMode, "default"), func(t *testing.T) {
+		t.Run(textutil.FirstNonBlank(tokenMode, "default"), func(t *testing.T) {
 			isolateConfigHome(t)
 			dir := robustTempDir(t)
 			t.Chdir(dir)

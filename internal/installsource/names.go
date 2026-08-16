@@ -209,15 +209,6 @@ func cleanMap(in map[string]string) map[string]string {
 
 func collapseSpaces(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-func firstNonEmpty(vs ...string) string {
-	for _, v := range vs {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
-}
-
 func normalizeKind(kind string) string {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case "skill", "mcp", "plugin":

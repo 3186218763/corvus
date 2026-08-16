@@ -12,6 +12,7 @@ import (
 	"corvus/internal/provider"
 	"corvus/internal/sandbox"
 	"corvus/internal/skill"
+	"corvus/internal/textutil"
 	"corvus/internal/tool"
 	"corvus/internal/workspacelease"
 )
@@ -76,8 +77,8 @@ func buildSubagentTools(cfg *config.Config, opts Options, entry *config.Provider
 	subagentIdentity := func(modelRef, effort string) (string, string) {
 		return subagentEffectiveIdentity(cfg, opts.ProviderResolver, modelName, entry, modelRef, effort)
 	}
-	taskModel := firstNonEmpty(cfg.Agent.SubagentModels["task"], cfg.Agent.SubagentModel)
-	taskEffort := firstNonEmpty(cfg.Agent.SubagentEfforts["task"], cfg.Agent.SubagentEffort)
+	taskModel := textutil.FirstNonBlank(cfg.Agent.SubagentModels["task"], cfg.Agent.SubagentModel)
+	taskEffort := textutil.FirstNonBlank(cfg.Agent.SubagentEfforts["task"], cfg.Agent.SubagentEffort)
 	maxSubagentDepth := agent.NormalizeMaxSubagentDepth(cfg.Agent.MaxSubagentDepth)
 	maxSubagentConcurrency, maxParallelWriters := agent.NormalizeConcurrencyLimits(
 		cfg.Agent.MaxSubagentConcurrency, cfg.Agent.MaxParallelWriters,
@@ -208,15 +209,6 @@ func buildSubagentTools(cfg *config.Config, opts Options, entry *config.Provider
 		capRuntimeGet:           capRuntimeGet,
 		capRuntimeSet:           capRuntimeSet,
 	}, nil
-}
-
-func firstNonEmpty(vals ...string) string {
-	for _, v := range vals {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
 }
 
 func subagentModelRef(cfg *config.Config, sk skill.Skill) string {

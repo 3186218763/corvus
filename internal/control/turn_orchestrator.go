@@ -312,7 +312,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	}
 	c.SetPlanMode(false)
 	todoArgs := c.seedPlanTodos(proposal)
-	execStart := c.sessionMessageCount()
+	execStart := c.messageCount()
 	// Starting plan execution is a real Recovery Episode boundary even though
 	// the follow-up turn is synthetic.
 	c.beginRecoveryEpisode()

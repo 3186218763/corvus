@@ -7,16 +7,8 @@ import (
 
 	"corvus/internal/agent"
 	"corvus/internal/control"
+	"corvus/internal/textutil"
 )
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			return value
-		}
-	}
-	return ""
-}
 
 // sessionLeaseResumeRefusal is the startup-time refusal for `corvus
 // [--resume|--continue]` and `corvus run --resume/--continue`: it names the
@@ -116,7 +108,7 @@ func copySessionForWriting(src string) (string, error) {
 		SchemaVersion:    agent.BranchMetaCountsVersion,
 		Model:            srcMeta.Model,
 	}
-	if title := strings.TrimSpace(firstNonEmpty(srcMeta.CustomTitle, srcMeta.TopicTitle)); title != "" {
+	if title := strings.TrimSpace(textutil.FirstNonBlank(srcMeta.CustomTitle, srcMeta.TopicTitle)); title != "" {
 		meta.CustomTitle = title + " (copy)"
 	}
 	if err := agent.SaveBranchMeta(newPath, meta); err != nil {

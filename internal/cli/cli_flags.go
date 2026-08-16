@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	"corvus/internal/agent"
+	"corvus/internal/textutil"
 )
 
 const resumePickerSentinel = "__corvus_resume_picker__"
@@ -53,24 +54,7 @@ func splitAllowedToolRules(values []string) ([]string, error) {
 		}
 		flush(len(value))
 	}
-	return uniqueStrings(rules), nil
-}
-
-func uniqueStrings(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
+	return textutil.UniqueNonBlank(rules), nil
 }
 
 // normalizeOptionalResumeArg gives pflag the optional-value behavior Claude's
