@@ -159,3 +159,57 @@ frontend，但 git 历史中从未存在：
   （从 4 个 main 做 RTA）双验；12 个中型包无反射使用，零引用即可证死。
 - 未覆盖：仅测试代码的质量问题（孤儿测试随对应死代码一并删除，未单独审计）。
 - 行号对应 2026-08-16 工作区（main @ 8582ea9）。
+
+---
+
+## 执行记录（2026-08-16 收尾，main @ 90d8377）
+
+14 个 commit（8582ea9..90d8377），净 **−7,853 行**（+2,933 / −10,786）。每批 gofmt + `go build` +
+分包 `go test` + `go vet` 后提交；收尾 `make check` 的 vet / fmt-check / 全量 test 通过
+（`-race` 需 cgo + gcc，本机 WSL 无 gcc，该腿由 CI 执行——环境限制，非代码问题）。
+
+| 批 | commit | 覆盖 |
+|---|---|---|
+| P0.1 | 3db5d2d | 死文件簇 + hook 检查器依赖簇（−2,122 净） |
+| P0.2 | 7fbfe39 | control 死 turn-entry API、port.go 子接口、scoped-ref 机器（−2,222 净） |
+| P0.3a | 1346656 | agent 测试专属面 + truncateRunes ADR-0002 修复（−655 净） |
+| P0.3b | 8e4787d | jobs/plugin 旧包装与死符号（−765 净） |
+| P0.3c | 79cc5e3 | 61 符号死导出表（checkpoint/evidence/recovery/guardian/memory…，−613 净） |
+| P0.4+P1 | 4aa2d6a | config 死导出、ADR-0008 base_url 收归用户、迁移三胞胎合一、TOML lexer 统一 |
+| P0.4+P1 | c62c5db | cli 死转发、select 引擎合一、modelSwitch 闭包、窗口计算去重 |
+| P1 | b7c01b5 | provider SSE 脚手架上收、vendor 嗅探合一、decodeArgs |
+| P1 | 69f9634 | firstNonEmpty 三语义收敛、GuardedDialContext 合一、审批望远镜折叠 |
+| P2 | 206058e | boot assembly 阶段总线（~120 个位置参数 → 嵌入字段提升） |
+| P2 | d0834f0 | PlanModeReadOnlyTrustGate 三包写死链删除 + turnOrchestrator 拍平（410da8c） |
+| P2 | 9cc6087 | TOML 每次加载只解码一次、dotenv 按 mtime+size 缓存、render 字节钉子测试 |
+| P3 | 90d8377 | 网络出口收口、死 setter 删除、文档化保留项 |
+
+### P3 决策结果
+
+| 项 | 结果 |
+|---|---|
+| `web_search` nil-client 兜底 | **已改**：构造时拒绝 nil（ADR-0004），Execute 的 nil 守卫排在引擎校验后供测试字面量 |
+| PyPI 解析 `http.DefaultClient` | **已改**：走 `netclient.NewHTTPClient`（代理用户可见的行为变化 = ADR-0004 意图） |
+| 死弃用 config 字段 | **删 setter 不删字段**：`SetAutoPlan`/`SetUIShortcutLayout` 删除；`MaxSteps`/`PlannerMaxSteps`/`RecoveryTemperature`/`AutoPlan*` 保留（删除会改变迁移 notice 出现时机）；`agent.temperature` 注释已改标 live |
+| `ui.shortcut_layout` | **保留**（用户可见文案：Auto vs Auto+Approve 标签），getter 归一化有测试钉住 |
+| `.scratch/dep-audit` | **待拍板**（D-3 沿袭上轮，未动） |
+| Makefile↔CI 双份列表 | **保留**：注释声明刻意镜像，收编价值一般 |
+| `Price`→`PriceForModel` | **误报拒绝**：`ResolveModel` 已跑 `applyModelPrice()`，boot 所有 `.Price` 读点（a.entry、subagent、descriptor）拿到的都是模型作用域价；`Descriptors()` 显式用 `PriceForModel(e.Model)`；render 双字段是有意序列化 |
+| 单消费者包 / 机械 unexport 大表 | **按"明确不动"清单保留**；61 符号表已在 P0.3c 执行，其余经 uses 图复核为活引用或负价值折叠 |
+
+### 误报与验证保留项（细节见各 commit message）
+
+- `capability.RecordRouterUsage`：审计误报——SemanticRouter 活引用（79cc5e3）。
+- secrets `RedactError/RedactMessage(s)`：其"保留理由"（security report D2 导出路径）在本仓不存在，已删（79cc5e3）。
+- anthropic 默认 TransportOptions client 与 openai/responses 共享调优 client 的不对称：改了会变行为，**documented keep**（b7c01b5）。
+- FINDINGS #8 mcpMeta embed：三个 MCP 适配器的元数据转发**不能**靠嵌入消掉——动态值需在包装层重新声明方法（b7c01b5）。
+- `readJSONFile` ×3、emitRemember/emitTrust 对、guardian subject 提取：三处各有真实差异（UTF-8/错误包装/os.Root、并行 i18n 键、审查提示词关注点），合一需要开关参数，**保留**（69f9634）。
+- config/fetch 的 uniqueStrings：**有意不 trim**，与 `textutil.UniqueNonBlank` 合并会改变匹配候选，保留（69f9634）。
+- cli 8 个底部 picker 的 j/k/enter 循环：handler 在阶段、键集、副作用上真实分叉，**不合并**（c62c5db）。
+- duck-typed runner 断言（`SetPlannerPlanApprover` 等仅 Coordinator 有）：改命名接口会失去"总是成功"语义，yolo_test.go:670 钉住，**保留**（d0834f0）。
+- turn-prelude 去重、goal-loop 双胞胎合并、`withCallContext`：验证后不成立或已消失，**拒绝**（410da8c）。
+- RenderTOML 表驱动重写：**拒绝**——两个序列化器输出风格真实不同（注解+回退+填充 vs 精简 delta），描述符行数 ≈ 新抽象行数；漂移风险改由 `TestRenderTOMLScopesAreByteStable` 钉住，该钉子测试还揪出两个真实字节不稳定 bug（并发 0 显式渲染、network_policy 空默认渲染）（9cc6087）。
+
+### 新增 ADR
+
+- **ADR-0008**（provider base_url 用户所有）：P0.4 批删除 `normalizeLegacyStepFunBaseURLs` 时记录——运行时不得改写用户配置的 base_url（4aa2d6a）。
