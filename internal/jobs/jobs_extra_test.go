@@ -18,10 +18,10 @@ func TestNewManagerTreatsTypedNilSinkAsDiscard(t *testing.T) {
 	m := NewManager(sink)
 	defer m.Close()
 
-	j := m.Start("bash", "typed nil sink", func(context.Context, io.Writer) (string, error) {
+	j := m.StartForSession("", "bash", "typed nil sink", func(context.Context, io.Writer) (string, error) {
 		return "done", nil
 	})
-	res := m.Wait(context.Background(), []string{j.ID}, 1000)
+	res := m.WaitForSession(context.Background(), "", []string{j.ID}, 1000)
 	if len(res) != 1 || res[0].Status != Done {
 		t.Fatalf("job result = %+v, want one done job", res)
 	}
@@ -33,12 +33,12 @@ func TestWaitTimeout(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()
 
-	j := m.Start("bash", "", func(ctx context.Context, _ io.Writer) (string, error) {
+	j := m.StartForSession("", "bash", "", func(ctx context.Context, _ io.Writer) (string, error) {
 		<-ctx.Done()
 		return "", ctx.Err()
 	})
 	// Wait with a very short timeout — the job won't finish in time.
-	res := m.Wait(context.Background(), []string{j.ID}, 1)
+	res := m.WaitForSession(context.Background(), "", []string{j.ID}, 1)
 	if len(res) != 1 {
 		t.Fatalf("want 1 result, got %d", len(res))
 	}
@@ -46,7 +46,7 @@ func TestWaitTimeout(t *testing.T) {
 	if res[0].Status != Running {
 		t.Errorf("status = %q, want running", res[0].Status)
 	}
-	m.Kill(j.ID)
+	m.KillForSession("", j.ID)
 }
 
 // --- Wait with empty ids waits for all running ---
@@ -59,15 +59,15 @@ func TestWaitAllRunning(t *testing.T) {
 	// "all running" set — instant-returning jobs could finish first and be missed,
 	// which is exactly the resolution this test must observe deterministically. A
 	// short timeout returns the still-running snapshot.
-	j1 := m.Start("bash", "", func(ctx context.Context, _ io.Writer) (string, error) {
+	j1 := m.StartForSession("", "bash", "", func(ctx context.Context, _ io.Writer) (string, error) {
 		<-ctx.Done()
 		return "", ctx.Err()
 	})
-	j2 := m.Start("bash", "", func(ctx context.Context, _ io.Writer) (string, error) {
+	j2 := m.StartForSession("", "bash", "", func(ctx context.Context, _ io.Writer) (string, error) {
 		<-ctx.Done()
 		return "", ctx.Err()
 	})
-	res := m.Wait(context.Background(), nil, 1)
+	res := m.WaitForSession(context.Background(), "", nil, 1)
 	if len(res) != 2 {
 		t.Fatalf("want 2 results, got %d", len(res))
 	}
@@ -75,8 +75,8 @@ func TestWaitAllRunning(t *testing.T) {
 	if !ids[j1.ID] || !ids[j2.ID] {
 		t.Errorf("results missing expected ids: %v", ids)
 	}
-	m.Kill(j1.ID)
-	m.Kill(j2.ID)
+	m.KillForSession("", j1.ID)
+	m.KillForSession("", j2.ID)
 }
 
 // --- Output with unknown id ---
@@ -85,7 +85,7 @@ func TestOutputUnknownID(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()
 
-	_, _, ok := m.Output("nonexistent-id")
+	_, _, ok := m.OutputForSession("", "nonexistent-id")
 	if ok {
 		t.Error("Output for unknown id should return ok=false")
 	}
@@ -97,7 +97,7 @@ func TestKillUnknownID(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()
 
-	if m.Kill("nonexistent-id") {
+	if m.KillForSession("", "nonexistent-id") {
 		t.Error("Kill for unknown id should return false")
 	}
 }
@@ -124,14 +124,14 @@ func TestDrainMultiple(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()
 
-	m.Start("bash", "", func(_ context.Context, _ io.Writer) (string, error) {
+	m.StartForSession("", "bash", "", func(_ context.Context, _ io.Writer) (string, error) {
 		return "", nil
 	})
-	m.Start("task", "label", func(_ context.Context, _ io.Writer) (string, error) {
+	m.StartForSession("", "task", "label", func(_ context.Context, _ io.Writer) (string, error) {
 		return "answer", nil
 	})
-	m.Wait(context.Background(), nil, 5)
-	note := m.DrainCompletedNote()
+	m.WaitForSession(context.Background(), "", nil, 5)
+	note := m.DrainCompletedNoteForSession("")
 	if note == "" {
 		t.Fatal("drain should not be empty after 2 completions")
 	}
@@ -141,7 +141,7 @@ func TestDrainMultiple(t *testing.T) {
 
 func TestCloseIdempotent(t *testing.T) {
 	m := NewManager(event.Discard)
-	m.Start("bash", "", func(_ context.Context, _ io.Writer) (string, error) {
+	m.StartForSession("", "bash", "", func(_ context.Context, _ io.Writer) (string, error) {
 		return "", nil
 	})
 	m.Close()
@@ -153,7 +153,7 @@ func TestCloseIdempotent(t *testing.T) {
 func TestRunningEmpty(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()
-	if r := m.Running(); len(r) != 0 {
+	if r := m.RunningForSession(""); len(r) != 0 {
 		t.Errorf("Running() = %d, want 0", len(r))
 	}
 }
@@ -164,10 +164,10 @@ func TestJobFailed(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()
 
-	j := m.Start("bash", "", func(_ context.Context, _ io.Writer) (string, error) {
+	j := m.StartForSession("", "bash", "", func(_ context.Context, _ io.Writer) (string, error) {
 		return "", io.ErrUnexpectedEOF
 	})
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res := m.WaitForSession(context.Background(), "", []string{j.ID}, 5)
 	if len(res) != 1 || res[0].Status != Failed {
 		t.Fatalf("want Failed, got %+v", res)
 	}
@@ -179,10 +179,10 @@ func TestJobWithResult(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()
 
-	j := m.Start("task", "", func(_ context.Context, _ io.Writer) (string, error) {
+	j := m.StartForSession("", "task", "", func(_ context.Context, _ io.Writer) (string, error) {
 		return "final answer", nil
 	})
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res := m.WaitForSession(context.Background(), "", []string{j.ID}, 5)
 	if len(res) != 1 || res[0].Status != Done {
 		t.Fatalf("want Done, got %+v", res)
 	}

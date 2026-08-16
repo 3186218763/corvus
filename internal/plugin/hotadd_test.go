@@ -58,10 +58,10 @@ func TestHostAddConnectedRejectsLateDuplicate(t *testing.T) {
 	defer h.Close()
 
 	spec := helperSpec()
-	if _, err := h.addConnected(ctx, spec); err != nil {
+	if _, err := h.addConnectedWithLifecycle(ctx, ctx, spec, 0); err != nil {
 		t.Fatalf("first addConnected: %v", err)
 	}
-	if _, err := h.addConnected(ctx, spec); !IsServerAlreadyConnected(err) {
+	if _, err := h.addConnectedWithLifecycle(ctx, ctx, spec, 0); !IsServerAlreadyConnected(err) {
 		t.Fatalf("second addConnected error = %v, want ErrServerAlreadyConnected", err)
 	}
 	if got := h.ServerNames(); len(got) != 1 || got[0] != spec.Name {

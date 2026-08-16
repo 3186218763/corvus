@@ -197,16 +197,6 @@ func WithStalledWarningAfter(d time.Duration) Option {
 	}
 }
 
-// WithTeardownGrace overrides the Close/destroy grace window. Tests can set a
-// short value; production uses DefaultTeardownGrace.
-func WithTeardownGrace(d time.Duration) Option {
-	return func(m *Manager) {
-		if d >= 0 {
-			m.teardownGrace = d
-		}
-	}
-}
-
 // WithJobStartObserver observes every registered background job before its
 // goroutine starts. Delivery uses this to retain a workspace writer lease until
 // the job is truly terminal. The callback must return quickly.
@@ -310,15 +300,6 @@ func (w jobWriter) Write(p []byte) (int, error) {
 		}
 	}
 	return len(p), nil
-}
-
-// Start launches run on a goroutine under the manager's session context and
-// returns the job immediately. run streams output to the writer and returns the
-// terminal result text (a task's final answer; a bash job streams everything to
-// the buffer and returns ""). The job is marked killed when its context was
-// cancelled, failed on any other error, else done.
-func (m *Manager) Start(kind, label string, run func(ctx context.Context, out io.Writer) (string, error)) *Job {
-	return m.StartForSession("", kind, label, run)
 }
 
 // validatePathSegment rejects values that would let parentSession or kind
@@ -858,12 +839,6 @@ func (m *Manager) findJobLocked(parentSession, id string) *Job {
 	return nil
 }
 
-// Output returns the job's output produced since the last Output call plus its
-// current status. ok is false when the id is unknown.
-func (m *Manager) Output(id string) (text string, status Status, ok bool) {
-	return m.OutputForSession("", id)
-}
-
 // OutputForSession returns output only when id belongs to parentSession. Empty
 // parentSession preserves the legacy unscoped behavior.
 func (m *Manager) OutputForSession(parentSession, id string) (text string, status Status, ok bool) {
@@ -956,12 +931,6 @@ func (j *Job) readArtifactAllLocked() string {
 	return string(b)
 }
 
-// Kill cancels a running job. Returns false when the id is unknown or the job has
-// already finished.
-func (m *Manager) Kill(id string) bool {
-	return m.KillForSession("", id)
-}
-
 // KillForSession cancels a running job only when it belongs to parentSession.
 // Empty parentSession preserves the legacy unscoped behavior.
 func (m *Manager) KillForSession(parentSession, id string) bool {
@@ -986,14 +955,6 @@ func (m *Manager) KillForSession(parentSession, id string) bool {
 	}
 	j.cancel()
 	return true
-}
-
-// Wait blocks until the named jobs (or every currently-running job when ids is
-// empty) reach a terminal state, or ctx is cancelled, or timeoutSec elapses
-// (0 = no timeout). It returns each target's snapshot regardless of why it
-// returned, so a timeout still reports partial progress.
-func (m *Manager) Wait(ctx context.Context, ids []string, timeoutSec int) []Result {
-	return m.WaitForSession(ctx, "", ids, timeoutSec)
 }
 
 // WaitForSession waits only on jobs owned by parentSession. Empty parentSession
@@ -1073,10 +1034,6 @@ func (m *Manager) results(targets []*Job) []Result {
 }
 
 // Running returns a snapshot of the still-running jobs (for the status bar).
-func (m *Manager) Running() []View {
-	return m.RunningForSession("")
-}
-
 // RunningForSession returns still-running jobs owned by parentSession. Empty
 // parentSession preserves the legacy unscoped behavior.
 func (m *Manager) RunningForSession(parentSession string) []View {
@@ -1174,10 +1131,6 @@ func (m *Manager) HasUnfinishedForSession(parentSession string) bool {
 // DrainCompletedNote returns (and clears) a one-line summary of jobs that
 // finished since the last drain, for the controller to fold into the next turn
 // so the model learns of completions. "" when nothing finished.
-func (m *Manager) DrainCompletedNote() string {
-	return m.DrainCompletedNoteForSession("")
-}
-
 // DrainCompletedNoteForSession drains completion notes for parentSession only.
 // Notes for other sessions stay queued until that session becomes active again.
 // Empty parentSession preserves the legacy unscoped behavior.
@@ -1206,14 +1159,6 @@ func (m *Manager) DrainCompletedNoteForSession(parentSession string) string {
 	}
 	return "Background job updates since your last message: " + strings.Join(c, "; ") +
 		". Read their output with bash_output or wait if you still need it."
-}
-
-// SetActiveSession controls which session receives lifecycle notices for jobs
-// that finish asynchronously. Empty active session preserves legacy behavior.
-func (m *Manager) SetActiveSession(parentSession string) {
-	m.mu.Lock()
-	m.active = strings.TrimSpace(parentSession)
-	m.mu.Unlock()
 }
 
 // validateTrustedSessionPath performs defense-in-depth syntax validation on a
@@ -1675,11 +1620,6 @@ func (m *Manager) BeginDestroySession(parentSession string) SessionTeardown {
 	return SessionTeardown{SessionID: parentSession, targets: targets}
 }
 
-// DestroySession preserves the legacy channel-based destroy API.
-func (m *Manager) DestroySession(parentSession string) []<-chan struct{} {
-	return m.BeginDestroySession(parentSession).DoneChannels()
-}
-
 // WaitTeardown waits for a destroy handle to unwind up to grace. A timed-out
 // result means the caller should defer physical cleanup until the jobs exit.
 func (m *Manager) WaitTeardown(ctx context.Context, h SessionTeardown, grace time.Duration) TeardownResult {
@@ -1961,21 +1901,6 @@ func PublishEvidence(ctx context.Context, summary evidence.ChildEvidenceSummary)
 	j.mu.Unlock()
 }
 
-// LeaseEvidenceForSession returns a copy of a terminal job's evidence without
-// consuming it. Collection is only provisional: the receipts merge into the
-// collecting turn's ledger, but that ledger is discarded if the turn is
-// cancelled, errors, or the process exits before the turn commits. Consuming
-// here would then lose the mutation for good — the parent's next turn resets its
-// ledger and this job would report nothing, so a background change would ship
-// unreviewed. The evidence is drained only by CommitEvidenceForSession, which
-// the agent calls after the collecting turn passes its delivery gates. A
-// committed job returns empty so a re-poll after successful delivery does not
-// re-demand review.
-func (m *Manager) LeaseEvidenceForSession(parentSession, id string) evidence.ChildEvidenceSummary {
-	summary, _ := m.tryLeaseEvidenceForSession(parentSession, id)
-	return summary
-}
-
 // TryLeaseEvidenceForSession is LeaseEvidenceForSession plus a ready flag that
 // separates "terminal evidence available" (possibly empty — a committed job or
 // one with no mutations) from "not ready to lease yet": unknown job, still
@@ -1987,10 +1912,6 @@ func (m *Manager) LeaseEvidenceForSession(parentSession, id string) evidence.Chi
 // lease before the evidence exists — noting it early would let a later commit
 // drain evidence nobody ever merged or reviewed.
 func (m *Manager) TryLeaseEvidenceForSession(parentSession, id string) (evidence.ChildEvidenceSummary, bool) {
-	return m.tryLeaseEvidenceForSession(parentSession, id)
-}
-
-func (m *Manager) tryLeaseEvidenceForSession(parentSession, id string) (evidence.ChildEvidenceSummary, bool) {
 	j := m.get(parentSession, id)
 	if j == nil {
 		return evidence.ChildEvidenceSummary{}, false

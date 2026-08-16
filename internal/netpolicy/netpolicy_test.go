@@ -19,23 +19,6 @@ func TestDecisionStringAndParse(t *testing.T) {
 			t.Errorf("Decision(%d).String() = %q, want %q", int(tc.d), got, tc.want)
 		}
 	}
-	for _, tc := range []struct {
-		s    string
-		want Decision
-	}{
-		{"allow", Allow},
-		{"ALLOW", Allow},
-		{" deny ", Deny},
-		{"Deny", Deny},
-		{"ask", Ask},
-		{"Ask", Ask},
-		{"", Ask},
-		{"banana", Ask},
-	} {
-		if got := ParseDecision(tc.s); got != tc.want {
-			t.Errorf("ParseDecision(%q) = %v, want %v", tc.s, got, tc.want)
-		}
-	}
 }
 
 func TestDecide(t *testing.T) {

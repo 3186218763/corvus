@@ -349,7 +349,7 @@ func TestAddWithLifecycleCoalescesConcurrentSameServer(t *testing.T) {
 			<-start
 			callCtx, cancelCall := context.WithTimeout(lifeCtx, 5*time.Second)
 			defer cancelCall()
-			tools, err := host.AddWithLifecycle(lifeCtx, callCtx, spec)
+			tools, err := host.addWithLifecycle(lifeCtx, callCtx, spec, 0)
 			errs[i] = err
 			toolCounts[i] = len(tools)
 		}(i)
@@ -1055,7 +1055,7 @@ func TestAddWithLifecycleSurvivesHandshakeCtxCancel(t *testing.T) {
 	lifeCtx, cancelLife := context.WithCancel(context.Background())
 	defer cancelLife()
 	handshakeCtx, cancelHandshake := context.WithTimeout(context.Background(), 5*time.Second)
-	tools, err := host.AddWithLifecycle(lifeCtx, handshakeCtx, spec)
+	tools, err := host.addWithLifecycle(lifeCtx, handshakeCtx, spec, 0)
 	cancelHandshake() // the proxy's deferred cancel fires right after connect
 	if err != nil {
 		t.Fatalf("AddWithLifecycle: %v", err)

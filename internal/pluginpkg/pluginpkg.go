@@ -314,22 +314,6 @@ func Remove(corvusHome, name string) (InstalledPlugin, bool, error) {
 	return InstalledPlugin{}, false, nil
 }
 
-func SetEnabled(corvusHome, name string, enabled bool) error {
-	stateMu.Lock()
-	defer stateMu.Unlock()
-	st, err := LoadState(corvusHome)
-	if err != nil {
-		return err
-	}
-	for i := range st.Plugins {
-		if st.Plugins[i].Name == name {
-			st.Plugins[i].Enabled = enabled
-			return SaveState(corvusHome, st)
-		}
-	}
-	return fmt.Errorf("plugin %q is not installed", name)
-}
-
 func LoadInstalled(corvusHome string) ([]InstalledPackage, []string) {
 	st, err := LoadState(corvusHome)
 	if err != nil {

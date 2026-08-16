@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"corvus/internal/event"
 	"corvus/internal/mcplaunch"
 	"corvus/internal/sandbox"
 	"corvus/internal/tool"
@@ -292,7 +291,29 @@ func TestClientCallTimeoutErrorNamesToolAndConfig(t *testing.T) {
 
 // TestStdioEndToEnd drives a real subprocess (this test binary re-invoked in
 // helper mode) through the full MCP handshake and a tool call, exercising
-// StartAll, tools/list, and tools/call over stdio JSON-RPC.
+// handshake, tools/list, and tools/call over stdio JSON-RPC.
+// connectSpecs is the test harness for the deleted batch-Start family: a serial
+// EnsureConnectedWithLifecycle per spec. abort=true stops at the first failure
+// and surfaces it (StartAll semantics); false records the failure on the host
+// and keeps going (StartAvailable semantics).
+func connectSpecs(ctx context.Context, specs []Spec, abort bool) (*Host, []tool.Tool, error) {
+	h := &Host{}
+	var tools []tool.Tool
+	for _, spec := range specs {
+		ts, err := h.EnsureConnectedWithLifecycle(ctx, ctx, spec, 0)
+		if err != nil {
+			wrapped := fmt.Errorf("start plugin %q: %w", spec.Name, err)
+			if abort {
+				return nil, nil, wrapped
+			}
+			h.RecordFailure(spec, wrapped)
+			continue
+		}
+		tools = append(tools, ts...)
+	}
+	return h, tools, nil
+}
+
 func TestStdioEndToEnd(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -304,9 +325,9 @@ func TestStdioEndToEnd(t *testing.T) {
 		Env:     map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
 	}
 
-	host, tools, err := StartAll(ctx, []Spec{spec})
+	host, tools, err := connectSpecs(ctx, []Spec{spec}, true)
 	if err != nil {
-		t.Fatalf("StartAll: %v", err)
+		t.Fatalf("connect: %v", err)
 	}
 	defer host.Close()
 
@@ -673,33 +694,6 @@ func TestApplyKnownOverridesPreservesConfiguredCodeGraphDaemonIdleTimeout(t *tes
 	}
 }
 
-func TestStartAvailableKeepsGoodServers(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	good := Spec{
-		Name:    "good",
-		Command: os.Args[0],
-		Args:    []string{"-test.run=TestHelperProcess", "--"},
-		Env:     map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
-	}
-	bad := Spec{Name: "bad", Command: "corvus-missing-mcp-binary"}
-
-	host, tools := StartAvailable(ctx, []Spec{bad, good})
-	defer host.Close()
-
-	if len(tools) != 2 {
-		t.Fatalf("want tools from the good server, got %d", len(tools))
-	}
-	if got := host.ServerNames(); len(got) != 1 || got[0] != "good" {
-		t.Fatalf("connected servers = %v, want [good]", got)
-	}
-	failures := host.Failures()
-	if len(failures) != 1 || failures[0].Name != "bad" {
-		t.Fatalf("failures = %+v, want bad", failures)
-	}
-}
-
 func TestRecordFailurePreservesLaunchApprovalAction(t *testing.T) {
 	host := NewHost()
 	host.RecordFailure(Spec{Name: "project", Type: "stdio"}, fmt.Errorf("connect project MCP: %w", &launchApprovalError{server: "project"}))
@@ -717,56 +711,16 @@ func TestRecordFailurePreservesLaunchApprovalAction(t *testing.T) {
 	}
 }
 
-// TestStartAllAllOrNothingOnFailure pins the strict StartAll contract the
-// parallel rewrite must preserve: any single plugin failing aborts the whole
-// set, returns no Host or tools, and tears down every server that did start —
-// including, under parallel start, a good server whose index sits after the
-// failing one ([bad, good]). On error the Host is nil, so callers never see a
-// half-built set; the started servers are closed before StartAll returns.
-func TestStartAllAllOrNothingOnFailure(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	good := Spec{
-		Name:    "good",
-		Command: os.Args[0],
-		Args:    []string{"-test.run=TestHelperProcess", "--"},
-		Env:     map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
-	}
-	bad := Spec{Name: "bad", Command: "corvus-missing-mcp-binary"}
-
-	for _, tc := range []struct {
-		name  string
-		specs []Spec
-	}{
-		{"failure first", []Spec{bad, good}},
-		{"failure last", []Spec{good, bad}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			host, tools, err := StartAll(ctx, tc.specs)
-			if err == nil {
-				if host != nil {
-					host.Close()
-				}
-				t.Fatal("StartAll should fail when a plugin can't start")
-			}
-			if host != nil || tools != nil {
-				t.Fatalf("failed StartAll must return nil host/tools, got host=%v tools=%d", host, len(tools))
-			}
-		})
-	}
-}
-
 func TestStdioFailureCapturesStderr(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	host, _ := StartAvailable(ctx, []Spec{{
+	host, _, _ := connectSpecs(ctx, []Spec{{
 		Name:    "stderr",
 		Command: os.Args[0],
 		Args:    []string{"-test.run=TestHelperProcess", "--"},
 		Env:     map[string]string{"GO_WANT_HELPER_STDERR_EXIT": "1"},
-	}})
+	}}, false)
 	defer host.Close()
 
 	failures := host.Failures()
@@ -796,7 +750,7 @@ func TestStartupFailureReportsStageElapsedAndRedactedStderr(t *testing.T) {
 			"GO_WANT_HELPER_STARTUP_STDERR": "Authorization: Bearer startup-secret-value",
 		},
 	}
-	_, err := host.AddWithLifecycle(lifeCtx, startupCtx, spec)
+	_, err := host.addWithLifecycle(lifeCtx, startupCtx, spec, 0)
 	if err == nil {
 		t.Fatal("slow initialize unexpectedly succeeded")
 	}
@@ -915,7 +869,7 @@ func TestStdioUsesConfiguredPATHForCommandLookup(t *testing.T) {
 	dir, command := helperLauncher(t, "mock-mcp")
 	t.Setenv("PATH", "")
 
-	host, tools, err := StartAll(ctx, []Spec{{
+	host, tools, err := connectSpecs(ctx, []Spec{{
 		Name:    "path",
 		Command: command,
 		Args:    []string{"-test.run=TestHelperProcess", "--"},
@@ -923,9 +877,9 @@ func TestStdioUsesConfiguredPATHForCommandLookup(t *testing.T) {
 			"GO_WANT_HELPER_PROCESS": "1",
 			"PATH":                   dir,
 		},
-	}})
+	}}, true)
 	if err != nil {
-		t.Fatalf("StartAll: %v", err)
+		t.Fatalf("connect: %v", err)
 	}
 	defer host.Close()
 	if len(tools) != 2 {
@@ -943,14 +897,14 @@ func TestStdioFallsBackToShellPATHForCommandLookup(t *testing.T) {
 	stdioShellPATH = func(context.Context) string { return dir }
 	t.Cleanup(func() { stdioShellPATH = old })
 
-	host, tools, err := StartAll(ctx, []Spec{{
+	host, tools, err := connectSpecs(ctx, []Spec{{
 		Name:    "shell-path",
 		Command: command,
 		Args:    []string{"-test.run=TestHelperProcess", "--"},
 		Env:     map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
-	}})
+	}}, true)
 	if err != nil {
-		t.Fatalf("StartAll: %v", err)
+		t.Fatalf("connect: %v", err)
 	}
 	defer host.Close()
 	if len(tools) != 2 {
@@ -967,7 +921,7 @@ func TestStdioCommandNotFoundSuggestsPATHFix(t *testing.T) {
 	stdioShellPATH = func(context.Context) string { return "" }
 	t.Cleanup(func() { stdioShellPATH = old })
 
-	host, _ := StartAvailable(ctx, []Spec{{Name: "missing", Command: "corvus-missing-mcp-binary"}})
+	host, _, _ := connectSpecs(ctx, []Spec{{Name: "missing", Command: "corvus-missing-mcp-binary"}}, false)
 	defer host.Close()
 
 	failures := host.Failures()
@@ -1028,195 +982,10 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
-// TestStartPolicyConcurrencyCap verifies the semaphore-style cap: with
-// Concurrency=1 the handshakes must serialise even though every spec runs
-// in its own goroutine. We sleep briefly inside each helper's initialize so
-// the goroutines have a chance to overlap if the cap is broken, then assert
-// that observed max-in-flight never exceeded 1.
-func TestStartPolicyConcurrencyCap(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	mk := func(name string) Spec {
-		return Spec{
-			Name:    name,
-			Command: os.Args[0],
-			Args:    []string{"-test.run=TestHelperProcess", "--"},
-			Env: map[string]string{
-				"GO_WANT_HELPER_PROCESS": "1",
-				"GO_WANT_HELPER_INIT_MS": "50",
-			},
-		}
-	}
-	specs := []Spec{mk("a"), mk("b"), mk("c"), mk("d")}
-	t0 := time.Now()
-	host, tools, err := Start(ctx, specs, StartPolicy{Concurrency: 1, AbortOnError: true})
-	if err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	defer host.Close()
-	elapsed := time.Since(t0)
-	// 4 specs × 50ms init each, serialised. Allow generous slack for CI.
-	if elapsed < 4*50*time.Millisecond {
-		t.Fatalf("with Concurrency=1, total time should be ≥ Σ(per-spec) but was %v", elapsed)
-	}
-	if len(tools) != 4*2 { // helper exposes 2 tools per server
-		t.Fatalf("want %d tools, got %d", 4*2, len(tools))
-	}
-}
-
-// TestStartPolicyPerPluginTimeout verifies that one slow plugin can't take
-// down the whole batch in StartAvailable mode: the slow spec times out and
-// gets recorded as a failure while the fast one connects.
-func TestStartPolicyPerPluginTimeout(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	fast := Spec{
-		Name:    "fast",
-		Command: os.Args[0],
-		Args:    []string{"-test.run=TestHelperProcess", "--"},
-		Env:     map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
-	}
-	slow := Spec{
-		Name:    "slow",
-		Command: os.Args[0],
-		Args:    []string{"-test.run=TestHelperProcess", "--"},
-		Env: map[string]string{
-			"GO_WANT_HELPER_PROCESS": "1",
-			"GO_WANT_HELPER_INIT_MS": "5000", // 5s, well past the 2s budget
-		},
-	}
-	host, tools, err := Start(ctx, []Spec{fast, slow}, StartPolicy{
-		PerPluginTimeout: 2 * time.Second,
-		Concurrency:      2,
-		AbortOnError:     false,
-	})
-	if err != nil {
-		t.Fatalf("Start should not return err in record-failure mode: %v", err)
-	}
-	defer host.Close()
-	// Regression: the per-plugin timeout context must NOT bound the long-lived
-	// stdio child. If transport was bound to cctx instead of the parent ctx, the
-	// goroutine's deferred cancel would kill `fast`'s subprocess at handshake
-	// success and this Execute would fail. We invoke it explicitly here so any
-	// future re-introduction of the bug breaks loudly.
-	if len(tools) > 0 {
-		if _, callErr := tools[0].Execute(ctx, json.RawMessage(`{"msg":"hi"}`)); callErr != nil {
-			t.Fatalf("fast plugin's subprocess was killed by deferred timeout cancel: %v", callErr)
-		}
-	}
-	if len(tools) != 2 { // fast contributes 2 tools
-		t.Fatalf("want only fast's 2 tools, got %d", len(tools))
-	}
-	failures := host.Failures()
-	if len(failures) != 1 || failures[0].Name != "slow" {
-		t.Fatalf("failures = %+v, want [slow]", failures)
-	}
-}
-
-func TestStartRecordsTimeoutStats(t *testing.T) {
-	withTempCache(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	slow := Spec{
-		Name:    "slow-stats",
-		Command: os.Args[0],
-		Args:    []string{"-test.run=TestHelperProcess", "--"},
-		Env: map[string]string{
-			"GO_WANT_HELPER_PROCESS": "1",
-			"GO_WANT_HELPER_INIT_MS": "300",
-		},
-	}
-	for i := 0; i < 3; i++ {
-		host, _, err := Start(ctx, []Spec{slow}, StartPolicy{
-			PerPluginTimeout: 50 * time.Millisecond,
-			Concurrency:      1,
-			AbortOnError:     false,
-		})
-		if err != nil {
-			t.Fatalf("Start #%d: %v", i, err)
-		}
-		host.Close()
-	}
-
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		rec := Recommend("slow-stats", 50*time.Millisecond, 3)
-		if rec.Demote {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("timeout samples did not trigger demote; stats=%+v rec=%+v", readStats(t, "slow-stats"), rec)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-// TestStartPhaseAReturnsBeforePhaseB pins the two-phase handshake contract.
-// The helper advertises prompts and stalls prompts/list by 200ms; StartAvailable
-// must return with tools ready while the prompts surface is still empty, and the
-// prompts must only materialise on Host after StartPhaseB has been called and
-// drained — proving prompts ride the background phase, not the boot critical path.
-func TestStartPhaseAReturnsBeforePhaseB(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	spec := Spec{
-		Name:    "mock",
-		Command: os.Args[0],
-		Args:    []string{"-test.run=TestHelperProcess", "--"},
-		Env: map[string]string{
-			"GO_WANT_HELPER_PROCESS":         "1",
-			"GO_WANT_HELPER_PROMPTS":         "1",
-			"GO_WANT_HELPER_PROMPT_DELAY_MS": "200",
-		},
-	}
-
-	host, tools := StartAvailable(ctx, []Spec{spec})
-	defer host.Close()
-
-	if len(tools) == 0 {
-		t.Fatalf("want tools from helper, got 0")
-	}
-	// Phase A returns with tools but the prompts surface must still be empty:
-	// StartAvailable never issues prompts/list (the helper stalls it 200ms), so
-	// prompts can only appear after StartPhaseB drains them below. We assert this
-	// deferral directly instead of timing StartAvailable — subprocess spawn plus
-	// the MCP handshake make a wall-clock threshold flaky on slow CI runners.
-	if got := host.Prompts(); len(got) != 0 {
-		t.Fatalf("phase A must not surface prompts yet, got %d", len(got))
-	}
-
-	// Drive phase B and wait for the surface-ready event. Use a buffered channel
-	// sink so the test never blocks the emitter — the event payload itself is
-	// our completion signal.
-	ready := make(chan event.Event, 4)
-	host.StartPhaseB(ctx, event.FuncSink(func(e event.Event) {
-		if e.Kind == event.MCPSurfaceReady {
-			select {
-			case ready <- e:
-			default:
-			}
-		}
-	}))
-
-	select {
-	case e := <-ready:
-		if !strings.Contains(e.Text, "prompts ready") {
-			t.Fatalf("phase B event text = %q, want it to mention prompts", e.Text)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("phase B never fired MCPSurfaceReady for prompts")
-	}
-
-	if got := host.Prompts(); len(got) != 1 || got[0].Raw != "hello" {
-		t.Fatalf("after phase B, prompts = %+v, want one named hello", got)
-	}
-}
-
-func TestStartPhaseBDoesNotBlockToolCalls(t *testing.T) {
+// TestSlowPromptsDoNotBlockToolCalls pins the live deferral property: the
+// connect path returns as soon as tools are listed, and the slow prompts/list
+// runs on a background goroutine, so tool calls never wait behind it.
+func TestSlowPromptsDoNotBlockToolCalls(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1231,7 +1000,7 @@ func TestStartPhaseBDoesNotBlockToolCalls(t *testing.T) {
 		},
 	}
 
-	host, tools := StartAvailable(ctx, []Spec{spec})
+	host, tools, _ := connectSpecs(ctx, []Spec{spec}, false)
 	defer host.Close()
 
 	var echo tool.Tool
@@ -1245,7 +1014,9 @@ func TestStartPhaseBDoesNotBlockToolCalls(t *testing.T) {
 		t.Fatal("missing echo tool")
 	}
 
-	host.StartPhaseB(ctx, event.Discard)
+	// The background prompts fetch (stalled 1s by the helper) is already in
+	// flight from the connect above; give it a beat so a blocking bug would
+	// trip deterministically.
 	time.Sleep(50 * time.Millisecond)
 
 	callCtx, callCancel := context.WithTimeout(ctx, 150*time.Millisecond)
@@ -1425,7 +1196,7 @@ func TestStdioWriterPreservesPersistentProcessByDefault(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	host, tools, err := StartAll(ctx, []Spec{spec})
+	host, tools, err := connectSpecs(ctx, []Spec{spec}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1507,7 +1278,7 @@ func TestProjectLaunchApprovalBlocksBeforeProcessStart(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if _, _, err := StartAll(ctx, []Spec{spec}); err == nil || !strings.Contains(err.Error(), "until the user authorizes") {
+	if _, _, err := connectSpecs(ctx, []Spec{spec}, true); err == nil || !strings.Contains(err.Error(), "until the user authorizes") {
 		t.Fatalf("unauthorized project start error = %v", err)
 	}
 	if got := readHelperCounter(t, startCount); got != 0 {
@@ -1519,7 +1290,7 @@ func TestProjectLaunchApprovalBlocksBeforeProcessStart(t *testing.T) {
 	if got := readHelperCounter(t, startCount); got != 0 {
 		t.Fatalf("launch authorization started project %d times, want 0", got)
 	}
-	host, tools, err := StartAll(ctx, []Spec{spec})
+	host, tools, err := connectSpecs(ctx, []Spec{spec}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1564,7 +1335,7 @@ func TestAuthorizeSpecLaunchRecordsInstallConsentWithoutStartingServer(t *testin
 	if err != nil || !authorized || changed {
 		t.Fatalf("installed launch grant = (authorized=%v changed=%v err=%v)", authorized, changed, err)
 	}
-	host, tools, err := StartAll(ctx, []Spec{spec})
+	host, tools, err := connectSpecs(ctx, []Spec{spec}, true)
 	if err != nil {
 		t.Fatalf("start installed project server: %v", err)
 	}
@@ -1701,7 +1472,7 @@ func TestReaderIntentRefusesDispatchAfterSafetyDrift(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	host, tools, err := StartAll(ctx, []Spec{spec})
+	host, tools, err := connectSpecs(ctx, []Spec{spec}, true)
 	if err != nil {
 		t.Fatal(err)
 	}

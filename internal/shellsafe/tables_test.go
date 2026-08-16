@@ -3,6 +3,8 @@ package shellsafe
 import (
 	"strings"
 	"testing"
+
+	"corvus/internal/shellparse"
 )
 
 // readOnlyPositive maps every ReadOnlyCommands entry to a typical read-only
@@ -321,8 +323,8 @@ func TestEveryReadOnlyCommandNegative(t *testing.T) {
 			if _, _, ok := CommandIsReadOnly(neg); ok {
 				t.Fatalf("CommandIsReadOnly(%q) = true, want false", neg)
 			}
-			if !ContainsShellSyntax(neg) {
-				t.Errorf("ContainsShellSyntax(%q) = false, want true", neg)
+			if !shellparse.ContainsShellSyntax(neg) {
+				t.Errorf("shellparse.ContainsShellSyntax(%q) = false, want true", neg)
 			}
 		})
 	}
@@ -379,8 +381,8 @@ func TestContainsShellSyntaxSmugglingPatterns(t *testing.T) {
 		for _, p := range patterns {
 			cmd := base + p
 			t.Run(cmd, func(t *testing.T) {
-				if !ContainsShellSyntax(cmd) {
-					t.Errorf("ContainsShellSyntax(%q) = false, want true", cmd)
+				if !shellparse.ContainsShellSyntax(cmd) {
+					t.Errorf("shellparse.ContainsShellSyntax(%q) = false, want true", cmd)
 				}
 				if _, _, ok := CommandIsReadOnly(cmd); ok {
 					t.Errorf("CommandIsReadOnly(%q) = true, want false", cmd)
@@ -404,8 +406,8 @@ func TestContainsShellSyntaxQuotedOperatorsAreInert(t *testing.T) {
 		`find . -name '*.go' -print`,
 	}
 	for _, c := range inert {
-		if ContainsShellSyntax(c) {
-			t.Errorf("ContainsShellSyntax(%q) = true, want false", c)
+		if shellparse.ContainsShellSyntax(c) {
+			t.Errorf("shellparse.ContainsShellSyntax(%q) = true, want false", c)
 		}
 	}
 }

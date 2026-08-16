@@ -166,7 +166,16 @@ func TestCommandDirsIncludePluginPackageCommands(t *testing.T) {
 		t.Fatalf("CommandRootsForRoot = %#v, want plugin ownership on first root", roots)
 	}
 
-	if err := pluginpkg.SetEnabled(home, "pwf", false); err != nil {
+	st, err := pluginpkg.LoadState(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range st.Plugins {
+		if st.Plugins[i].Name == "pwf" {
+			st.Plugins[i].Enabled = false
+		}
+	}
+	if err := pluginpkg.SaveState(home, st); err != nil {
 		t.Fatal(err)
 	}
 	for _, dir := range CommandDirsForRoot(t.TempDir()) {

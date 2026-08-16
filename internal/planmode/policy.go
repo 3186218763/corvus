@@ -41,15 +41,6 @@ type Decision struct {
 	Message string
 }
 
-// ReadOnlyCommandTrust is retained for source compatibility with the legacy
-// Plan bash trust bridge. Decide no longer produces this request: bash safety is
-// classified by Permissions, and read-only subagents enforce their own runner
-// boundary directly.
-type ReadOnlyCommandTrust struct {
-	Command string
-	Prefix  string
-}
-
 // Policy is retained so existing config/assembly code can carry legacy
 // plan_mode_* fields without breaking old data. Those fields no longer grant or
 // revoke execution in the main Plan workflow.

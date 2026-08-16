@@ -140,13 +140,13 @@ func TestLegacySSETransportSupportsRootsToolsAndProgress(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	host, tools, err := StartAll(ctx, []Spec{{
+	host, tools, err := connectSpecs(ctx, []Spec{{
 		Name:          "legacy",
 		Type:          "sse",
 		URL:           server.URL + "/sse",
 		Headers:       map[string]string{"Authorization": "Bearer secret"},
 		WorkspaceRoot: workspaceRoot,
-	}})
+	}}, true)
 	if err != nil {
 		t.Fatalf("StartAll legacy SSE: %v", err)
 	}

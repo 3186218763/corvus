@@ -25,7 +25,7 @@ func chatTUIWithRunningBackgroundJob(t *testing.T) chatTUI {
 	manager := jobs.NewManager(event.Discard)
 	ctrl := control.New(control.Options{Jobs: manager})
 	t.Cleanup(ctrl.Close)
-	manager.Start("task", "running", func(ctx context.Context, _ io.Writer) (string, error) {
+	manager.StartForSession("", "task", "running", func(ctx context.Context, _ io.Writer) (string, error) {
 		<-ctx.Done()
 		return "", ctx.Err()
 	})

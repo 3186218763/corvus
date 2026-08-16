@@ -29,7 +29,7 @@ func TestBackgroundBashWaitAndOutput(t *testing.T) {
 	}
 
 	// The job is registered and running synchronously before Execute returns.
-	running := m.Running()
+	running := m.RunningForSession("")
 	if len(running) != 1 {
 		t.Fatalf("want 1 running job, got %d", len(running))
 	}
@@ -156,7 +156,7 @@ func TestBackgroundKill(t *testing.T) {
 	if _, err := (bash{}).Execute(ctx, []byte(`{"command":"sleep 120","run_in_background":true}`)); err != nil {
 		t.Fatalf("bash background: %v", err)
 	}
-	id := m.Running()[0].ID
+	id := m.RunningForSession("")[0].ID
 
 	kout, err := killShell{}.Execute(ctx, []byte(`{"job_id":"`+id+`"}`))
 	if err != nil {
@@ -170,7 +170,7 @@ func TestBackgroundKill(t *testing.T) {
 	// process-tree teardown (up to ~bashWaitDelay) still fits, while a genuinely
 	// broken kill trips the 40s timeout. Pairing the sleep with the timeout (as
 	// 10/10 did) raced natural completion against the reap.
-	res := m.Wait(ctx, []string{id}, 40)
+	res := m.WaitForSession(ctx, "", []string{id}, 40)
 	if len(res) != 1 || res[0].Status != jobs.Killed {
 		t.Fatalf("want killed, got %+v", res)
 	}

@@ -53,7 +53,7 @@ func isReadOnlyBashSubject(subject string) bool {
 // containsShellSyntax delegates to the shared classifier; retained for the other
 // permission call sites (permission.go).
 func containsShellSyntax(cmd string) bool {
-	return shellsafe.ContainsShellSyntax(cmd)
+	return shellparse.ContainsShellSyntax(cmd)
 }
 
 func hasUnsafeReadOnlyArgs(base string, args []string) bool {

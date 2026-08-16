@@ -25,21 +25,21 @@ func TestManagerConcurrentAccess(t *testing.T) {
 			for i := 0; i < 200; i++ {
 				switch (w + i) % 6 {
 				case 0:
-					j := m.Start("bash", "x", func(ctx context.Context, out io.Writer) (string, error) {
+					j := m.StartForSession("", "bash", "x", func(ctx context.Context, out io.Writer) (string, error) {
 						_, _ = out.Write([]byte("tick"))
 						return "done", nil
 					})
-					_, _, _ = m.Output(j.ID)
+					_, _, _ = m.OutputForSession("", j.ID)
 				case 1:
-					_ = m.Running()
+					_ = m.RunningForSession("")
 				case 2:
-					_ = m.DrainCompletedNote()
+					_ = m.DrainCompletedNoteForSession("")
 				case 3:
-					_ = m.Wait(context.Background(), nil, 0) // non-blocking-ish: returns running snapshot
+					_ = m.WaitForSession(context.Background(), "", nil, 0) // non-blocking-ish: returns running snapshot
 				case 4:
-					m.Kill("bash-1")
+					m.KillForSession("", "bash-1")
 				case 5:
-					_, _, _ = m.Output("bash-2")
+					_, _, _ = m.OutputForSession("", "bash-2")
 				}
 			}
 		}(w)

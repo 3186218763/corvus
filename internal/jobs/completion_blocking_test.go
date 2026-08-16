@@ -37,7 +37,7 @@ func TestCompletionClosesDoneBeforeBlockingNoticeEmit(t *testing.T) {
 		m.Close()
 	}()
 
-	j := m.Start("bash", "stalled sink", func(context.Context, io.Writer) (string, error) {
+	j := m.StartForSession("", "bash", "stalled sink", func(context.Context, io.Writer) (string, error) {
 		return "finished", nil
 	})
 
@@ -58,7 +58,7 @@ func TestCompletionClosesDoneBeforeBlockingNoticeEmit(t *testing.T) {
 	if len(res) != 1 || res[0].Status != Done {
 		t.Fatalf("WaitForSession = %+v, want one Done result", res)
 	}
-	if note := m.DrainCompletedNote(); note == "" || !strings.Contains(note, j.ID) {
+	if note := m.DrainCompletedNoteForSession(""); note == "" || !strings.Contains(note, j.ID) {
 		t.Fatalf("completion note = %q, want it queued before done closed", note)
 	}
 }

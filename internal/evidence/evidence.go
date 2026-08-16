@@ -1635,7 +1635,7 @@ func bashMayMutate(command string) bool {
 	}
 	for _, segment := range segments {
 		normalized, safeRedirects := shellsafe.NormalizeBashSafeRedirectsForMatch(segment)
-		if !safeRedirects || shellsafe.ContainsShellSyntax(normalized) {
+		if !safeRedirects || shellparse.ContainsShellSyntax(normalized) {
 			return true
 		}
 		fields, malformed := shellparse.StaticFields(normalized)

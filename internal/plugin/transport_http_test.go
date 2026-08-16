@@ -103,14 +103,14 @@ func runHTTPTransportTest(t *testing.T, sse bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	host, tools, err := StartAll(ctx, []Spec{{
+	host, tools, err := connectSpecs(ctx, []Spec{{
 		Name:    "h",
 		Type:    "http",
 		URL:     srv.URL,
 		Headers: map[string]string{"Authorization": "Bearer secret"},
-	}})
+	}}, true)
 	if err != nil {
-		t.Fatalf("StartAll: %v", err)
+		t.Fatalf("connect: %v", err)
 	}
 	defer host.Close()
 
@@ -290,9 +290,9 @@ func TestHTTPTransportReinitializesExpiredSession(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	host, tools, err := StartAll(ctx, []Spec{{Name: "h", Type: "http", URL: srv.URL}})
+	host, tools, err := connectSpecs(ctx, []Spec{{Name: "h", Type: "http", URL: srv.URL}}, true)
 	if err != nil {
-		t.Fatalf("StartAll: %v", err)
+		t.Fatalf("connect: %v", err)
 	}
 	defer host.Close()
 	host.mu.RLock()
@@ -350,7 +350,7 @@ func TestHTTPTransportRPCError(t *testing.T) {
 	defer srv.Close()
 
 	ctx := context.Background()
-	_, _, err := StartAll(ctx, []Spec{{Name: "e", Type: "http", URL: srv.URL}})
+	_, _, err := connectSpecs(ctx, []Spec{{Name: "e", Type: "http", URL: srv.URL}}, true)
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("want initialize to fail with rpc error, got %v", err)
 	}
@@ -359,7 +359,7 @@ func TestHTTPTransportRPCError(t *testing.T) {
 // TestSSETransportUnsupported documents that the legacy sse transport is
 // recognised but deferred with a clear, actionable error.
 func TestSSETransportUnsupported(t *testing.T) {
-	_, _, err := StartAll(context.Background(), []Spec{{Name: "legacy", Type: "sse", URL: "http://x"}})
+	_, _, err := connectSpecs(context.Background(), []Spec{{Name: "legacy", Type: "sse", URL: "http://x"}}, true)
 	if err == nil || !strings.Contains(err.Error(), "http") {
 		t.Fatalf("sse should error pointing to http, got %v", err)
 	}

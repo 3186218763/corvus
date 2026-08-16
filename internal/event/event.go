@@ -74,10 +74,10 @@ const (
 	// ToolResult for long tools like bash so a frontend can show live progress.
 	// Appended last to keep the Kind values before it wire-stable.
 	ToolProgress
-	// MCPSurfaceReady fires once per server when its background-loaded surface
-	// (prompts or resources) finishes after startup. Lets UIs refresh /mcp
-	// status without polling. Text carries "<server>: <surface> ready (<count>
-	// items)". Appended last to keep the Kind values before it wire-stable.
+	// MCPSurfaceReady used to fire when a server's background-loaded surface
+	// (prompts or resources) finished after startup; no producer emits it since
+	// the batch-start flow was replaced by lazy connect. The slot is kept so
+	// the Kind values after it stay wire-stable for serialized events.
 	MCPSurfaceReady
 	// Retrying fires before each backoff sleep while the provider re-attempts the
 	// connection+header phase after a transient failure (RetryAttempt of RetryMax).

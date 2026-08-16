@@ -90,7 +90,7 @@ func TestCloseRacingStartForSession(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		m := NewManager(event.Discard)
 		release := make(chan struct{})
-		j := m.Start("bash", "x", func(ctx context.Context, _ io.Writer) (string, error) {
+		j := m.StartForSession("", "bash", "x", func(ctx context.Context, _ io.Writer) (string, error) {
 			select {
 			case <-ctx.Done():
 				return "", ctx.Err()
@@ -110,7 +110,7 @@ func TestCloseRacingStartForSession(t *testing.T) {
 		// the closing flag under m.mu.
 		close(release)
 		for k := 0; k < 200; k++ {
-			m.Start("bash", "y", func(context.Context, io.Writer) (string, error) { return "z", nil })
+			m.StartForSession("", "bash", "y", func(context.Context, io.Writer) (string, error) { return "z", nil })
 		}
 		<-closing
 	}
@@ -251,23 +251,23 @@ func TestLeaseEvidenceWaitsForKilledJobExit(t *testing.T) {
 	if !m.KillForSession("session-a", j.ID) {
 		t.Fatal("KillForSession did not find running job")
 	}
-	if early := m.LeaseEvidenceForSession("session-a", j.ID); len(early.Receipts) != 0 {
+	if early, _ := m.TryLeaseEvidenceForSession("session-a", j.ID); len(early.Receipts) != 0 {
 		t.Fatalf("collected evidence before killed job exited: %+v", early)
 	}
 	close(exit)
 	if res := m.WaitForSession(context.Background(), "session-a", []string{j.ID}, 5); len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("killed job result = %+v", res)
 	}
-	if got := m.LeaseEvidenceForSession("session-a", j.ID); !got.HasMutation() {
+	if got, _ := m.TryLeaseEvidenceForSession("session-a", j.ID); !got.HasMutation() {
 		t.Fatalf("partial evidence lost after killed job exit: %+v", got)
 	}
 	// Lease does not consume: a second lease still returns the receipts, and a
 	// commit is required to drain them.
-	if again := m.LeaseEvidenceForSession("session-a", j.ID); !again.HasMutation() {
+	if again, _ := m.TryLeaseEvidenceForSession("session-a", j.ID); !again.HasMutation() {
 		t.Fatalf("lease consumed evidence without a commit: %+v", again)
 	}
 	m.CommitEvidenceForSession("session-a", j.ID)
-	if after := m.LeaseEvidenceForSession("session-a", j.ID); len(after.Receipts) != 0 {
+	if after, _ := m.TryLeaseEvidenceForSession("session-a", j.ID); len(after.Receipts) != 0 {
 		t.Fatalf("committed evidence still leasable: %+v", after)
 	}
 }
@@ -361,7 +361,7 @@ func TestStalledWarningIgnoresReturnedJobBeforeTerminalStatusPublished(t *testin
 		m.Close()
 	}()
 
-	j := m.Start("bash", "", func(context.Context, io.Writer) (string, error) {
+	j := m.StartForSession("", "bash", "", func(context.Context, io.Writer) (string, error) {
 		return "", nil
 	})
 	select {
@@ -371,7 +371,7 @@ func TestStalledWarningIgnoresReturnedJobBeforeTerminalStatusPublished(t *testin
 	}
 
 	time.Sleep(50 * time.Millisecond)
-	note := m.DrainCompletedNote()
+	note := m.DrainCompletedNoteForSession("")
 	if strings.Contains(note, "may be stalled") {
 		t.Fatalf("got false stalled warning for already-returned job %s: %q", j.ID, note)
 	}
@@ -386,22 +386,22 @@ func TestStartWaitDoneAndDrain(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()
 
-	j := m.Start("bash", "echo", func(_ context.Context, out io.Writer) (string, error) {
+	j := m.StartForSession("", "bash", "echo", func(_ context.Context, out io.Writer) (string, error) {
 		io.WriteString(out, "hello\n")
 		return "", nil
 	})
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res := m.WaitForSession(context.Background(), "", []string{j.ID}, 5)
 	if len(res) != 1 || res[0].Status != Done {
 		t.Fatalf("want one Done result, got %+v", res)
 	}
 	if !strings.Contains(res[0].Output, "hello") {
 		t.Errorf("output = %q, want it to contain hello", res[0].Output)
 	}
-	note := m.DrainCompletedNote()
+	note := m.DrainCompletedNoteForSession("")
 	if !strings.Contains(note, j.ID) {
 		t.Errorf("note = %q, want it to mention %s", note, j.ID)
 	}
-	if again := m.DrainCompletedNote(); again != "" {
+	if again := m.DrainCompletedNoteForSession(""); again != "" {
 		t.Errorf("second drain = %q, want empty", again)
 	}
 }
@@ -412,7 +412,7 @@ func TestOutputStreamsIncrementally(t *testing.T) {
 	defer m.Close()
 
 	release := make(chan struct{})
-	j := m.Start("bash", "", func(_ context.Context, out io.Writer) (string, error) {
+	j := m.StartForSession("", "bash", "", func(_ context.Context, out io.Writer) (string, error) {
 		io.WriteString(out, "first\n")
 		<-release
 		io.WriteString(out, "second\n")
@@ -420,13 +420,13 @@ func TestOutputStreamsIncrementally(t *testing.T) {
 	})
 
 	waitFor(t, func() bool {
-		txt, _, _ := m.Output(j.ID)
+		txt, _, _ := m.OutputForSession("", j.ID)
 		return strings.Contains(txt, "first")
 	})
 	close(release)
-	m.Wait(context.Background(), []string{j.ID}, 5)
+	m.WaitForSession(context.Background(), "", []string{j.ID}, 5)
 
-	txt, st, ok := m.Output(j.ID)
+	txt, st, ok := m.OutputForSession("", j.ID)
 	if !ok || st != Done {
 		t.Fatalf("Output after done: ok=%v status=%s", ok, st)
 	}
@@ -440,18 +440,18 @@ func TestKill(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()
 
-	j := m.Start("bash", "", func(ctx context.Context, _ io.Writer) (string, error) {
+	j := m.StartForSession("", "bash", "", func(ctx context.Context, _ io.Writer) (string, error) {
 		<-ctx.Done()
 		return "", ctx.Err()
 	})
-	if !m.Kill(j.ID) {
+	if !m.KillForSession("", j.ID) {
 		t.Fatal("Kill on a running job returned false")
 	}
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res := m.WaitForSession(context.Background(), "", []string{j.ID}, 5)
 	if len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("want Killed, got %+v", res)
 	}
-	if m.Kill(j.ID) {
+	if m.KillForSession("", j.ID) {
 		t.Error("Kill on a finished job should return false")
 	}
 }
@@ -461,10 +461,10 @@ func TestJobPanicRecoveredAsFailed(t *testing.T) {
 	m := NewManager(sink)
 	defer m.Close()
 
-	j := m.Start("task", "panic", func(context.Context, io.Writer) (string, error) {
+	j := m.StartForSession("", "task", "panic", func(context.Context, io.Writer) (string, error) {
 		panic("boom")
 	})
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res := m.WaitForSession(context.Background(), "", []string{j.ID}, 5)
 	if len(res) != 1 || res[0].Status != Failed {
 		t.Fatalf("want Failed result after panic, got %+v", res)
 	}
@@ -488,11 +488,11 @@ func TestStalledWarningEmitsNoticeAndDrainNote(t *testing.T) {
 	m := NewManager(sink, WithStalledWarningAfter(20*time.Millisecond))
 	defer m.Close()
 
-	j := m.Start("bash", "quiet", func(ctx context.Context, _ io.Writer) (string, error) {
+	j := m.StartForSession("", "bash", "quiet", func(ctx context.Context, _ io.Writer) (string, error) {
 		<-ctx.Done()
 		return "", ctx.Err()
 	})
-	defer m.Kill(j.ID)
+	defer m.KillForSession("", j.ID)
 
 	waitFor(t, func() bool {
 		for _, text := range sink.texts() {
@@ -502,16 +502,16 @@ func TestStalledWarningEmitsNoticeAndDrainNote(t *testing.T) {
 		}
 		return false
 	})
-	if _, st, ok := m.Output(j.ID); !ok || st != Running {
+	if _, st, ok := m.OutputForSession("", j.ID); !ok || st != Running {
 		t.Fatalf("stalled job output status = %q ok=%v, want running", st, ok)
 	}
-	note := m.DrainCompletedNote()
+	note := m.DrainCompletedNoteForSession("")
 	if !strings.Contains(note, "may be stalled") || !strings.Contains(note, j.ID) {
 		t.Fatalf("stalled drain note = %q, want stalled update for %s", note, j.ID)
 	}
 	// The warning is once per job.
 	time.Sleep(30 * time.Millisecond)
-	if again := m.DrainCompletedNote(); again != "" {
+	if again := m.DrainCompletedNoteForSession(""); again != "" {
 		t.Fatalf("second stalled drain note = %q, want empty", again)
 	}
 }
@@ -525,28 +525,28 @@ func TestKillStatusObservableBeforeGoroutineReturns(t *testing.T) {
 	defer m.Close()
 
 	release := make(chan struct{})
-	j := m.Start("bash", "", func(ctx context.Context, _ io.Writer) (string, error) {
+	j := m.StartForSession("", "bash", "", func(ctx context.Context, _ io.Writer) (string, error) {
 		<-ctx.Done()
 		<-release // simulate a teardown that hasn't returned yet
 		return "", ctx.Err()
 	})
-	if !m.Kill(j.ID) {
+	if !m.KillForSession("", j.ID) {
 		t.Fatal("Kill on a running job returned false")
 	}
 
 	// Short timeout: the goroutine is still blocked, so Wait can only know the
 	// status if Kill set it synchronously.
-	res := m.Wait(context.Background(), []string{j.ID}, 1)
+	res := m.WaitForSession(context.Background(), "", []string{j.ID}, 1)
 	if len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("want Killed before the goroutine returns, got %+v", res)
 	}
-	if n := len(m.Running()); n != 1 {
+	if n := len(m.RunningForSession("")); n != 1 {
 		t.Fatalf("a killed-but-unwinding job must remain operationally running, got %d", n)
 	}
 
 	close(release)
-	m.Wait(context.Background(), []string{j.ID}, 5)
-	if n := len(m.Running()); n != 0 {
+	m.WaitForSession(context.Background(), "", []string{j.ID}, 5)
+	if n := len(m.RunningForSession("")); n != 0 {
 		t.Fatalf("job remained operationally running after goroutine exit, got %d", n)
 	}
 }
@@ -556,7 +556,7 @@ func TestCloseCancels(t *testing.T) {
 	m := NewManager(event.Discard)
 
 	started := make(chan struct{})
-	j := m.Start("task", "", func(ctx context.Context, _ io.Writer) (string, error) {
+	j := m.StartForSession("", "task", "", func(ctx context.Context, _ io.Writer) (string, error) {
 		close(started)
 		<-ctx.Done()
 		return "", ctx.Err()
@@ -564,7 +564,7 @@ func TestCloseCancels(t *testing.T) {
 	<-started
 	m.Close()
 
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res := m.WaitForSession(context.Background(), "", []string{j.ID}, 5)
 	if len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("want Killed after Close, got %+v", res)
 	}
@@ -576,17 +576,17 @@ func TestRunning(t *testing.T) {
 	defer m.Close()
 
 	release := make(chan struct{})
-	j := m.Start("task", "label", func(ctx context.Context, _ io.Writer) (string, error) {
+	j := m.StartForSession("", "task", "label", func(ctx context.Context, _ io.Writer) (string, error) {
 		<-release
 		return "answer", nil
 	})
-	waitFor(t, func() bool { return len(m.Running()) == 1 })
-	if r := m.Running()[0]; r.ID != j.ID || r.Label != "label" {
+	waitFor(t, func() bool { return len(m.RunningForSession("")) == 1 })
+	if r := m.RunningForSession("")[0]; r.ID != j.ID || r.Label != "label" {
 		t.Errorf("running view = %+v, want id=%s label=label", r, j.ID)
 	}
 	close(release)
-	m.Wait(context.Background(), []string{j.ID}, 5)
-	waitFor(t, func() bool { return len(m.Running()) == 0 })
+	m.WaitForSession(context.Background(), "", []string{j.ID}, 5)
+	waitFor(t, func() bool { return len(m.RunningForSession("")) == 0 })
 }
 
 func TestSessionScopedOperations(t *testing.T) {
@@ -646,7 +646,7 @@ func TestSessionScopedNoticesUseActiveSession(t *testing.T) {
 	sink := &recordingSink{}
 	m := NewManager(sink)
 	defer m.Close()
-	m.SetActiveSession("session-a")
+	m.SetActiveSessionPath("session-a", "")
 
 	releaseA := make(chan struct{})
 	releaseB := make(chan struct{})
@@ -659,7 +659,7 @@ func TestSessionScopedNoticesUseActiveSession(t *testing.T) {
 		return "", nil
 	})
 	close(releaseB)
-	m.Wait(context.Background(), []string{b.ID}, 5)
+	m.WaitForSession(context.Background(), "", []string{b.ID}, 5)
 	for _, text := range sink.texts() {
 		if strings.Contains(text, b.ID) {
 			t.Fatalf("inactive session job notice leaked: %q", text)
@@ -667,7 +667,7 @@ func TestSessionScopedNoticesUseActiveSession(t *testing.T) {
 	}
 
 	close(releaseA)
-	m.Wait(context.Background(), []string{a.ID}, 5)
+	m.WaitForSession(context.Background(), "", []string{a.ID}, 5)
 	waitFor(t, func() bool {
 		for _, text := range sink.texts() {
 			if strings.Contains(text, a.ID) {
@@ -690,9 +690,9 @@ func TestDestroySessionCancelsOwnedJobsAndSuppressesCompletion(t *testing.T) {
 	})
 	<-started
 
-	done := m.DestroySession("session-a")
+	done := m.BeginDestroySession("session-a").DoneChannels()
 	if len(done) != 1 {
-		t.Fatalf("DestroySession returned %d done channels, want 1", len(done))
+		t.Fatalf("BeginDestroySession returned %d done channels, want 1", len(done))
 	}
 	if !m.IsDestroying("session-a") {
 		t.Fatal("session-a should be marked destroying")
@@ -733,9 +733,9 @@ func TestDestroySessionWaitsForAlreadyKilledJobs(t *testing.T) {
 		return ok && status == Killed
 	})
 
-	done := m.DestroySession("session-a")
+	done := m.BeginDestroySession("session-a").DoneChannels()
 	if len(done) != 1 {
-		t.Fatalf("DestroySession returned %d done channels, want 1", len(done))
+		t.Fatalf("BeginDestroySession returned %d done channels, want 1", len(done))
 	}
 	if !m.IsDestroying("session-a") {
 		t.Fatal("session-a should be marked destroying")
@@ -830,7 +830,7 @@ func TestCloseWithGraceTimesOutForNonCooperativeJob(t *testing.T) {
 	}()
 
 	started := make(chan struct{})
-	j := m.Start("task", "cleanup", func(ctx context.Context, _ io.Writer) (string, error) {
+	j := m.StartForSession("", "task", "cleanup", func(ctx context.Context, _ io.Writer) (string, error) {
 		close(started)
 		<-ctx.Done()
 		<-release
@@ -850,16 +850,16 @@ func TestCloseWithGraceTimesOutForNonCooperativeJob(t *testing.T) {
 	if got := result.TimedOut[0]; got.ID != j.ID || got.Kind != "task" || got.Label != "cleanup" || got.Waited <= 0 {
 		t.Fatalf("timed out job = %+v, want id=%s kind=task label=cleanup waited>0", got, j.ID)
 	}
-	if running := m.Running(); len(running) != 1 || running[0].ID != j.ID {
+	if running := m.RunningForSession(""); len(running) != 1 || running[0].ID != j.ID {
 		t.Fatalf("timed-out close job must remain operationally running, got %+v", running)
 	}
 
 	releaseJob()
-	res := m.Wait(context.Background(), []string{j.ID}, 5)
+	res := m.WaitForSession(context.Background(), "", []string{j.ID}, 5)
 	if len(res) != 1 || res[0].Status != Killed {
 		t.Fatalf("want killed after delayed close cleanup, got %+v", res)
 	}
-	if running := m.Running(); len(running) != 0 {
+	if running := m.RunningForSession(""); len(running) != 0 {
 		t.Fatalf("close job remained running after delayed cleanup, got %+v", running)
 	}
 }

@@ -9,6 +9,25 @@ import (
 	"testing"
 )
 
+// setEnabled flips a plugin's enabled flag the way every in-package state
+// writer must: read-modify-write under stateMu. The deleted SetEnabled wrapper
+// did exactly this; the lock tests keep the shape locally.
+func setEnabled(corvusHome, name string, enabled bool) error {
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	st, err := LoadState(corvusHome)
+	if err != nil {
+		return err
+	}
+	for i := range st.Plugins {
+		if st.Plugins[i].Name == name {
+			st.Plugins[i].Enabled = enabled
+			return SaveState(corvusHome, st)
+		}
+	}
+	return fmt.Errorf("plugin %q not found", name)
+}
+
 // TestStateConcurrentUpsertAndSetEnabled pins that concurrent load-modify-save
 // cycles on the state file don't clobber each other: every plugin upserted by a
 // racing goroutine must survive, with the enabled flag it was last given.
@@ -26,7 +45,7 @@ func TestStateConcurrentUpsertAndSetEnabled(t *testing.T) {
 				t.Errorf("Upsert(%s): %v", name, err)
 				return
 			}
-			if err := SetEnabled(home, name, true); err != nil {
+			if err := setEnabled(home, name, true); err != nil {
 				t.Errorf("SetEnabled(%s): %v", name, err)
 			}
 		}()
@@ -102,7 +121,7 @@ func TestStateLoadDuringSaveNeverSeesTornFile(t *testing.T) {
 	go func() {
 		defer close(done)
 		for i := range 100 {
-			if err := SetEnabled(home, "seed", i%2 == 0); err != nil {
+			if err := setEnabled(home, "seed", i%2 == 0); err != nil {
 				t.Errorf("SetEnabled: %v", err)
 				return
 			}

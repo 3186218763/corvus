@@ -1,6 +1,10 @@
 package shellsafe
 
-import "testing"
+import (
+	"testing"
+
+	"corvus/internal/shellparse"
+)
 
 func TestCommandIsReadOnly(t *testing.T) {
 	readOnly := []string{
@@ -75,13 +79,13 @@ func TestCommandIsWorkspaceNonMutatingKeepsNetworkProbeOutOfPermissionReaders(t 
 
 func TestContainsShellSyntax(t *testing.T) {
 	for _, c := range []string{"a && b", "a || b", "a | b", "a; b", "a > f", "a < f", "a & ", "$(x)", "`x`", "a\nb"} {
-		if !ContainsShellSyntax(c) {
-			t.Errorf("ContainsShellSyntax(%q) = false, want true", c)
+		if !shellparse.ContainsShellSyntax(c) {
+			t.Errorf("shellparse.ContainsShellSyntax(%q) = false, want true", c)
 		}
 	}
 	for _, c := range []string{"git status", "ls -la", "grep foo bar.go", `grep 'a|b' file`, `echo "a && b"`} {
-		if ContainsShellSyntax(c) {
-			t.Errorf("ContainsShellSyntax(%q) = true, want false", c)
+		if shellparse.ContainsShellSyntax(c) {
+			t.Errorf("shellparse.ContainsShellSyntax(%q) = true, want false", c)
 		}
 	}
 }

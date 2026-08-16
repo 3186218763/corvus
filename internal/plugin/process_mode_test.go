@@ -54,7 +54,7 @@ func TestHostModeEnsureConnectedSkipsCommandSandboxAndSharesProcess(t *testing.T
 	ch := make(chan result, 3)
 	for i := 0; i < 3; i++ {
 		go func() {
-			tools, err := host.EnsureConnected(ctx, spec)
+			tools, err := host.EnsureConnectedWithLifecycle(ctx, ctx, spec, 0)
 			ch <- result{len(tools), err}
 		}()
 	}
@@ -102,7 +102,7 @@ func TestEnsureConnectedCancelWaitDoesNotKillSharedProcess(t *testing.T) {
 	ownerDone := make(chan error, 1)
 	go func() {
 		close(ownerStarted)
-		_, err := host.EnsureConnected(ctx, spec)
+		_, err := host.EnsureConnectedWithLifecycle(ctx, ctx, spec, 0)
 		ownerDone <- err
 	}()
 	<-ownerStarted
@@ -110,7 +110,7 @@ func TestEnsureConnectedCancelWaitDoesNotKillSharedProcess(t *testing.T) {
 	time.Sleep(30 * time.Millisecond)
 
 	waitCtx, waitCancel := context.WithTimeout(ctx, 40*time.Millisecond)
-	_, waitErr := host.EnsureConnected(waitCtx, spec)
+	_, waitErr := host.EnsureConnectedWithLifecycle(waitCtx, waitCtx, spec, 0)
 	waitCancel()
 	if waitErr == nil {
 		t.Fatal("cancelled waiter should return an error")

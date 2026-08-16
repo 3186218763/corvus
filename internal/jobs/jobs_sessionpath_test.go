@@ -145,7 +145,7 @@ func TestSetActiveSessionPath_InvalidPathUpdatesActiveAndClearsBinding(t *testin
 	defer m.Close()
 
 	m.SetActiveSessionPath("session-x", filepath.Join(t.TempDir(), "old.jsonl"))
-	m.SetActiveSession("old-session")
+	m.SetActiveSessionPath("old-session", "")
 	m.SetActiveSessionPath("session-x", filepath.Join(t.TempDir(), "bad\npath.jsonl"))
 
 	m.mu.Lock()

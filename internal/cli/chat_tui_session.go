@@ -401,12 +401,6 @@ func (m *chatTUI) ingestEvent(e event.Event) {
 		m.finalizeStreamed()
 		m.chooser = newChooser(e.Ask)
 
-	case event.MCPSurfaceReady:
-		if m.ctrl != nil {
-			m.host = m.ctrl.Host()
-		}
-		m.refreshMCPManager()
-
 	case event.TurnDone:
 		// The turn settled — freeze anything still streaming, surface a real error,
 		// and gate a plan-mode proposal on the user's approval. Autosave already

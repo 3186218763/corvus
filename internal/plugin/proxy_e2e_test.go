@@ -115,7 +115,7 @@ func TestUseCapabilitySharedHostSnapshot(t *testing.T) {
 	callCtx, cancelCall := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelCall()
 	// "Tab A" connects directly (not through any proxy).
-	if _, err := host.AddWithLifecycle(lifeCtx, callCtx, mockSpec()); err != nil {
+	if _, err := host.EnsureConnectedWithLifecycle(lifeCtx, callCtx, mockSpec(), 0); err != nil {
 		t.Fatalf("tab A connect: %v", err)
 	}
 

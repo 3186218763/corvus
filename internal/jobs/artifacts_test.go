@@ -102,83 +102,6 @@ func TestJobArtifactMetadataPreservesLabel(t *testing.T) {
 	}
 }
 
-func TestListArtifactViewsVerifiesTerminalArtifactPresence(t *testing.T) {
-	sessionPath := filepath.Join(t.TempDir(), "session.jsonl")
-	dir := ArtifactDir(sessionPath)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	type artifactCase struct {
-		id       string
-		status   Status
-		metaOK   bool
-		metaErr  string
-		artifact string
-		legacy   bool
-		want     bool
-	}
-	cases := []artifactCase{
-		{id: "task-running", status: Running, metaOK: true, artifact: "file", want: false},
-		{id: "task-unknown", status: Status("future"), metaOK: true, artifact: "file", want: false},
-		{id: "task-missing", status: Done, metaOK: true, want: false},
-		{id: "task-error", status: Done, metaOK: true, metaErr: "write failed", artifact: "file", want: false},
-		{id: "task-directory", status: Done, metaOK: true, artifact: "directory", want: false},
-		{id: "task-complete", status: Done, metaOK: true, artifact: "file", want: true},
-		{id: "task-legacy", status: Done, metaOK: true, artifact: "file", legacy: true, want: true},
-	}
-	for _, tc := range cases {
-		logName := tc.id + jobLogExt
-		metaLogPath := logName
-		if tc.legacy {
-			metaLogPath = ""
-		}
-		if err := writeMeta(filepath.Join(dir, tc.id+jobMetaExt), artifactMeta{
-			ID:               tc.id,
-			Kind:             "task",
-			Status:           tc.status,
-			StartedAt:        time.Now().Add(-time.Minute).UnixMilli(),
-			FinishedAt:       time.Now().UnixMilli(),
-			ArtifactComplete: tc.metaOK,
-			ArtifactError:    tc.metaErr,
-			LogPath:          metaLogPath,
-		}); err != nil {
-			t.Fatalf("write %s metadata: %v", tc.id, err)
-		}
-		switch tc.artifact {
-		case "file":
-			if err := os.WriteFile(filepath.Join(dir, logName), []byte("persisted output"), 0o600); err != nil {
-				t.Fatalf("write %s artifact: %v", tc.id, err)
-			}
-		case "directory":
-			if err := os.Mkdir(filepath.Join(dir, logName), 0o700); err != nil {
-				t.Fatalf("create %s artifact directory: %v", tc.id, err)
-			}
-		}
-	}
-
-	views, err := ListArtifactViews(sessionPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := make(map[string]bool, len(views))
-	for _, view := range views {
-		got[view.ID] = view.ArtifactComplete
-	}
-	if len(got) != len(cases) {
-		t.Fatalf("artifact views = %+v, want %d entries", views, len(cases))
-	}
-	for _, tc := range cases {
-		complete, ok := got[tc.id]
-		if !ok {
-			t.Errorf("%s artifact view is missing", tc.id)
-			continue
-		}
-		if complete != tc.want {
-			t.Errorf("%s artifact complete = %v, want %v", tc.id, complete, tc.want)
-		}
-	}
-}
-
 func TestJobArtifactUsesPrivatePermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows file ACLs are not represented by Unix permission bits")
@@ -249,7 +172,7 @@ func TestRestoreSessionArtifactsAndAdvanceSequence(t *testing.T) {
 	if got := second.WaitForSession(context.Background(), "session", nil, 1); len(got) != 0 {
 		t.Fatalf("wait without ids should ignore restored completed artifacts, got %+v", got)
 	}
-	if got := second.LeaseEvidenceForSession("session", j.ID); len(got.Receipts) != 0 {
+	if got, _ := second.TryLeaseEvidenceForSession("session", j.ID); len(got.Receipts) != 0 {
 		t.Fatalf("mutation-free task restored mutation evidence: %+v", got)
 	}
 
@@ -561,7 +484,7 @@ func TestTaskMutationEvidencePersistsWithoutSensitiveReceiptData(t *testing.T) {
 	second := NewManager(event.Discard)
 	defer second.Close()
 	second.SetActiveSessionPath("session", sessionPath)
-	summary := second.LeaseEvidenceForSession("session", j.ID)
+	summary, _ := second.TryLeaseEvidenceForSession("session", j.ID)
 	if len(summary.Receipts) != 1 {
 		t.Fatalf("restored evidence = %+v, want one synthetic mutation", summary)
 	}
@@ -587,11 +510,11 @@ func TestTaskMutationEvidencePersistsWithoutSensitiveReceiptData(t *testing.T) {
 	}
 	// Lease does not consume: the receipts stay available until the collecting
 	// turn commits. Only then is the persisted summary drained.
-	if again := second.LeaseEvidenceForSession("session", j.ID); len(again.Receipts) != 1 {
+	if again, _ := second.TryLeaseEvidenceForSession("session", j.ID); len(again.Receipts) != 1 {
 		t.Fatalf("restored evidence not re-leasable before commit: %+v", again)
 	}
 	second.CommitEvidenceForSession("session", j.ID)
-	if afterCommit := second.LeaseEvidenceForSession("session", j.ID); len(afterCommit.Receipts) != 0 {
+	if afterCommit, _ := second.TryLeaseEvidenceForSession("session", j.ID); len(afterCommit.Receipts) != 0 {
 		t.Fatalf("committed evidence still leasable: %+v", afterCommit)
 	}
 
@@ -600,7 +523,7 @@ func TestTaskMutationEvidencePersistsWithoutSensitiveReceiptData(t *testing.T) {
 	third := NewManager(event.Discard)
 	defer third.Close()
 	third.SetActiveSessionPath("session", sessionPath)
-	if thirdLease := third.LeaseEvidenceForSession("session", j.ID); len(thirdLease.Receipts) != 0 {
+	if thirdLease, _ := third.TryLeaseEvidenceForSession("session", j.ID); len(thirdLease.Receipts) != 0 {
 		t.Fatalf("committed evidence resurrected after restart: %+v", thirdLease)
 	}
 }
@@ -654,7 +577,7 @@ func TestLegacyTaskArtifactRecoversAsOpaqueHighRiskMutation(t *testing.T) {
 	m := NewManager(event.Discard)
 	defer m.Close()
 	m.SetActiveSessionPath("session", sessionPath)
-	summary := m.LeaseEvidenceForSession("session", "task-1")
+	summary, _ := m.TryLeaseEvidenceForSession("session", "task-1")
 	if len(summary.Receipts) != 1 || !summary.HasMutation() || len(summary.MutationPaths()) != 0 {
 		t.Fatalf("legacy task evidence = %+v, want one opaque mutation", summary)
 	}
@@ -703,7 +626,7 @@ func TestLeasedEvidenceResurrectsUntilCommitted(t *testing.T) {
 	})
 	<-j.done
 	// Lease without committing (the turn never delivered), then restart.
-	if leased := first.LeaseEvidenceForSession("session", j.ID); !leased.HasMutation() {
+	if leased, _ := first.TryLeaseEvidenceForSession("session", j.ID); !leased.HasMutation() {
 		t.Fatalf("live lease = %+v, want the published mutation", leased)
 	}
 	first.Close()
@@ -719,7 +642,7 @@ func TestLeasedEvidenceResurrectsUntilCommitted(t *testing.T) {
 	second := NewManager(event.Discard)
 	defer second.Close()
 	second.SetActiveSessionPath("session", sessionPath)
-	if summary := second.LeaseEvidenceForSession("session", j.ID); !summary.HasMutation() {
+	if summary, _ := second.TryLeaseEvidenceForSession("session", j.ID); !summary.HasMutation() {
 		t.Fatalf("uncommitted evidence lost after restart: %+v", summary)
 	}
 	// Committing after the restart drains it; a further restart offers nothing.
@@ -728,7 +651,7 @@ func TestLeasedEvidenceResurrectsUntilCommitted(t *testing.T) {
 	third := NewManager(event.Discard)
 	defer third.Close()
 	third.SetActiveSessionPath("session", sessionPath)
-	if summary := third.LeaseEvidenceForSession("session", j.ID); len(summary.Receipts) != 0 {
+	if summary, _ := third.TryLeaseEvidenceForSession("session", j.ID); len(summary.Receipts) != 0 {
 		t.Fatalf("committed evidence resurrected after restart: %+v", summary)
 	}
 }
@@ -742,7 +665,7 @@ func TestFinishDestroySessionPurgesOwnedJobs(t *testing.T) {
 	})
 	<-j.done
 
-	done := m.DestroySession("session")
+	done := m.BeginDestroySession("session").DoneChannels()
 	if len(done) != 0 {
 		t.Fatalf("finished job should not need destroy wait, got %d handles", len(done))
 	}

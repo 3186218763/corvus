@@ -897,7 +897,7 @@ func TestTaskToolBackgroundSalvagePublishesEvidenceForCollection(t *testing.T) {
 		t.Fatal("background goroutine wrote directly into the parent turn ledger")
 	}
 
-	summary := jm.LeaseEvidenceForSession("parent-session", jobID)
+	summary, _ := jm.TryLeaseEvidenceForSession("parent-session", jobID)
 	if !summary.HasMutation() {
 		t.Fatal("terminal background task did not publish its mutation evidence")
 	}
@@ -907,11 +907,11 @@ func TestTaskToolBackgroundSalvagePublishesEvidenceForCollection(t *testing.T) {
 	}
 	// Lease does not consume: the evidence stays available until the collecting
 	// turn commits, so a cancelled/errored turn can re-collect it.
-	if again := jm.LeaseEvidenceForSession("parent-session", jobID); !again.HasMutation() {
+	if again, _ := jm.TryLeaseEvidenceForSession("parent-session", jobID); !again.HasMutation() {
 		t.Fatalf("lease consumed background evidence without a commit: %+v", again)
 	}
 	jm.CommitEvidenceForSession("parent-session", jobID)
-	if after := jm.LeaseEvidenceForSession("parent-session", jobID); len(after.Receipts) != 0 {
+	if after, _ := jm.TryLeaseEvidenceForSession("parent-session", jobID); len(after.Receipts) != 0 {
 		t.Fatalf("committed background evidence still leasable: %+v", after)
 	}
 }
@@ -968,7 +968,7 @@ func TestBackgroundEvidenceNotCommittedWhenTurnFails(t *testing.T) {
 		t.Fatalf("turn = %v, want readiness exhaustion on the uncollected sign-off", err)
 	}
 	// The failed turn must not have consumed the evidence.
-	if leased := jm.LeaseEvidenceForSession("parent-session", jobID); !leased.HasMutation() {
+	if leased, _ := jm.TryLeaseEvidenceForSession("parent-session", jobID); !leased.HasMutation() {
 		t.Fatalf("failed delivery turn consumed the background evidence: %+v", leased)
 	}
 }
@@ -997,7 +997,7 @@ func TestBackgroundEvidenceCommittedWhenTurnDelivers(t *testing.T) {
 	if err := a.Run(ctx, "collect the background task"); err != nil {
 		t.Fatalf("delivering turn failed: %v", err)
 	}
-	if leased := jm.LeaseEvidenceForSession("parent-session", jobID); len(leased.Receipts) != 0 {
+	if leased, _ := jm.TryLeaseEvidenceForSession("parent-session", jobID); len(leased.Receipts) != 0 {
 		t.Fatalf("delivered turn did not commit the background lease: %+v", leased)
 	}
 }
@@ -1034,7 +1034,7 @@ func TestFailedTurnBackgroundMutationForcesReadinessOnNextRunWithoutWait(t *test
 	if err := a.Run(ctx, "collect and finish the background task"); !errors.As(err, &readiness) {
 		t.Fatalf("first turn = %v, want readiness exhaustion on the uncollected sign-off", err)
 	}
-	if leased := jm.LeaseEvidenceForSession("parent-session", jobID); !leased.HasMutation() {
+	if leased, _ := jm.TryLeaseEvidenceForSession("parent-session", jobID); !leased.HasMutation() {
 		t.Fatalf("first failed turn consumed the background evidence: %+v", leased)
 	}
 
@@ -1042,7 +1042,7 @@ func TestFailedTurnBackgroundMutationForcesReadinessOnNextRunWithoutWait(t *test
 	if err := a.Run(ctx, "never mind, just answer directly"); !errors.As(err, &readiness) {
 		t.Fatalf("second turn (no wait call) = %v, want readiness exhaustion on the still-pending mutation", err)
 	}
-	if leased := jm.LeaseEvidenceForSession("parent-session", jobID); !leased.HasMutation() {
+	if leased, _ := jm.TryLeaseEvidenceForSession("parent-session", jobID); !leased.HasMutation() {
 		t.Fatalf("second failed turn consumed the background evidence: %+v", leased)
 	}
 }
@@ -1086,7 +1086,7 @@ func TestRestartRecoversPendingBackgroundMutationForcesReadinessWithoutWait(t *t
 	if err := a.Run(ctx, "what's the status?"); !errors.As(err, &readiness) {
 		t.Fatalf("post-restart turn = %v, want readiness exhaustion on the recovered mutation", err)
 	}
-	if leased := second.LeaseEvidenceForSession("parent-session", j.ID); !leased.HasMutation() {
+	if leased, _ := second.TryLeaseEvidenceForSession("parent-session", j.ID); !leased.HasMutation() {
 		t.Fatalf("recovered evidence lost after the failed post-restart turn: %+v", leased)
 	}
 }

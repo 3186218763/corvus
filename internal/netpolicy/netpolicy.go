@@ -61,19 +61,6 @@ func (d Decision) String() string {
 	}
 }
 
-// ParseDecision maps a config string to a Decision. Unknown / empty input
-// defaults to Ask, the conservative posture, mirroring internal/permission.
-func ParseDecision(s string) Decision {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "allow":
-		return Allow
-	case "deny":
-		return Deny
-	default:
-		return Ask
-	}
-}
-
 // Policy is a set of hostname glob rules plus the fallback decision. The zero
 // value is safe: no rules and a Default of Allow, which reproduces today's
 // unconfined web_fetch behaviour.

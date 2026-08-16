@@ -85,13 +85,6 @@ var ReadOnlyPrefixes = map[string]map[string]bool{
 	"python3": {"--version": true, "-v": true, "-V": true},
 }
 
-// ContainsShellSyntax reports whether a command uses shell operators or
-// substitution — chaining/redirection/expansion can smuggle a write past a
-// read-only base-word check, so any such command is treated as not read-only.
-func ContainsShellSyntax(cmd string) bool {
-	return shellparse.ContainsShellSyntax(cmd)
-}
-
 // CommandIsReadOnly reports whether the command's base/subcommand is in the
 // read-only tables, ignoring argument rigor (which each consumer applies). It
 // returns the base and subcommand so callers can run their own arg checks.
