@@ -207,23 +207,36 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The late builders (skills, on-demand tool sources, executor/planner,
+	// controller) read everything through the assembly stage bus instead of
+	// 25-45 positional arguments each.
+	a := &assembly{
+		ctx: ctx, opts: opts, sink: sink,
+		configResult: cfgResult, toolResult: toolResult, jobsResult: jobsResult,
+		promptResult: promptResult, pluginResult: pluginResult, lspResult: lspResult,
+		hookResult: hookResult, subagentResult: subagentResult,
+		sessionMemoryResult: sessionMemoryResult,
+	}
 	// Skill sub-agent runners, slash commands, install_source, skills sources.
-	skillToolsResult, err := buildSkillTools(ctx, cfgResult.cfg, opts, cfgResult.entry, cfgResult.root, toolResult.reg, jobsResult.proxySpec, pluginResult.pluginSpecOptions, toolResult.pluginHost, jobsResult.execProv, lspResult.maxSteps, lspResult.subagentStore, hookResult.headlessGate, cfgResult.keepPolicy, subagentResult.maxSubagentDepth, subagentResult.subagentScheduler, cfgResult.tokenDelivery, jobsResult.workspaceLease, subagentResult.capRuntimeGet, promptResult.skillStore, promptResult.skills, subagentResult.resolveSubagentProvider, subagentResult.subagentIdentity, cfgResult.tokenEconomy)
+	skillToolsResult, err := buildSkillTools(a)
 	if err != nil {
 		return nil, err
 	}
+	a.skillToolsResult = skillToolsResult
 	// Economy-mode on-demand tool sources.
-	buildToolSourceConnector(ctx, opts, cfgResult.cfg, cfgResult.root, toolResult.reg, toolResult.writeRoots, toolResult.forbidReadRoots, toolResult.bashSpec, toolResult.bashTimeout, toolResult.searchSpec, jobsResult.proxySpec, toolResult.sessionGuard, toolResult.managedConfig, skillToolsResult.addSkillTools, subagentResult.addTaskTool, subagentResult.addReadOnlyTaskTool, skillToolsResult.addReadOnlySkillTools, skillToolsResult.addInstallSourceTool, skillToolsResult.addSlashCommandTool, lspResult.addLSPTools, lspResult.lspMgr, sessionMemoryResult.addSessionTools, sessionMemoryResult.addMemoryTools, pluginResult.onDemandMCPSpecs, pluginResult.onDemandMCPNames, toolResult.pluginHost, cfgResult.tokenEconomy)
+	buildToolSourceConnector(a)
 	// Session-shared MCP capability runtime + Delivery/dual-model frontends.
 	capabilityResult, err := buildCapabilityRuntime(ctx, cfgResult.cfg, opts, cfgResult.root, toolResult.reg, promptResult.skillStore, toolResult.pluginHost, pluginResult.pluginSpecOptions, pluginResult.enabledMCPNames, cfgResult.runtimeProfile, cfgResult.tokenEconomy, cfgResult.tokenDelivery, cfgResult.entry, subagentResult.capRuntimeGet, subagentResult.capRuntimeSet)
 	if err != nil {
 		return nil, err
 	}
+	a.capabilityResult = capabilityResult
 	// Executor (+ optional planner coordinator).
-	runnerResult, err := buildExecutorAndPlanner(ctx, opts, cfgResult.cfg, cfgResult.entry, cfgResult.modelRef, jobsResult.execProv, toolResult.reg, promptResult.sysPrompt, sink, hookResult.headlessGate, hookResult.hookRunner, jobsResult.jm, subagentResult.subagentScheduler, cfgResult.root, promptResult.projectChecks, cfgResult.tokenDelivery, jobsResult.workspaceLease, capabilityResult.capLedger, capabilityResult.capAudit, cfgResult.keepPolicy, subagentResult.maxSubagentDepth, lspResult.maxSteps, promptResult.mem, capabilityResult.capRuntime, cfgResult.tokenEconomy, jobsResult.proxySpec)
+	runnerResult, err := buildExecutorAndPlanner(a)
 	if err != nil {
 		return nil, err
 	}
+	a.runnerResult = runnerResult
 	// Controller assembly (guardian, recovery reviewer, capability routing).
-	return buildController(ctx, opts, cfgResult.cfg, cfgResult.root, sink, hookResult.policy, hookResult.headlessGate, runnerResult.label, cfgResult.modelRef, promptResult.sysPrompt, jobsResult.sessionDir, toolResult.pluginHost, skillToolsResult.cmds, promptResult.skills, promptResult.allSkills, promptResult.skillStore, promptResult.allSkillStore, skillToolsResult.skillRunner, skillToolsResult.readOnlySkillRunner, skillToolsResult.skillProfile, hookResult.hookRunner, promptResult.mem, lspResult.cleanup, cfgResult.entry, jobsResult.balanceClient, jobsResult.jm, jobsResult.workspaceLease, toolResult.reg, pluginResult.pluginSpecOptions, capabilityResult.capRuntime, jobsResult.shell, cfgResult.runtimeProfile, subagentResult.taskTool, capabilityResult.capSpecs, capabilityResult.capAudit, subagentResult.resolveSubagentProvider, subagentResult.subagentIdentity, jobsResult.execProv, jobsResult.proxySpec, cfgResult.tokenDelivery, cfgResult.tokenEconomy, capabilityResult.dualModelPlanner, runnerResult.runner, runnerResult.executor)
+	return buildController(a)
 }

@@ -11,7 +11,6 @@ import (
 	"corvus/internal/agent"
 	"corvus/internal/command"
 	"corvus/internal/config"
-	"corvus/internal/control"
 	"corvus/internal/event"
 	"corvus/internal/history"
 	"corvus/internal/installsource"
@@ -27,7 +26,6 @@ import (
 	"corvus/internal/tool"
 	"corvus/internal/tool/builtin"
 	"corvus/internal/tool/sessiontool"
-	"corvus/internal/workspacelease"
 )
 
 type toolResult struct {
@@ -255,7 +253,7 @@ type skillToolsResult struct {
 // buildSkillTools wires the skill sub-agent runners, slash commands,
 // install_source, and the read-only/full skills sources, then enables them in
 // non-economy mode.
-func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entry *config.ProviderEntry, root string, reg *tool.Registry, proxySpec netclient.ProxySpec, pluginSpecOptions PluginSpecOptions, pluginHost *plugin.Host, execProv provider.Provider, maxSteps int, subagentStore *agent.SubagentStore, headlessGate *control.SharedHeadlessGate, keepPolicy agent.KeepPolicy, maxSubagentDepth int, subagentScheduler *agent.SubagentScheduler, tokenDelivery bool, workspaceLease *workspacelease.Owner, capRuntimeGet func() *agent.MCPCapabilityRuntime, skillStore *skill.Store, skills []skill.Skill, resolveSubagentProvider func(modelRef, effort string) (provider.Provider, *provider.Pricing, int, error), subagentIdentity func(modelRef, effort string) (string, string), tokenEconomy bool) (*skillToolsResult, error) {
+func buildSkillTools(a *assembly) (*skillToolsResult, error) {
 	// Skill tools: read_only_skill is a narrow explicitly read-only entry point; the
 	// full skills source adds run_skill / install_skill plus the dedicated
 	// subagent wrappers (explore / research / review / security_review). Read-only
@@ -271,35 +269,35 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 	subagentSkillOptions := func(sctx context.Context, steps int, price *provider.Pricing, ctxWin, childDepth int, sessionCacheID, subRef string) agent.Options {
 		opts := agent.Options{
 			MaxSteps:            steps,
-			Temperature:         cfg.Agent.Temperature,
+			Temperature:         a.cfg.Agent.Temperature,
 			Pricing:             price,
 			UsageSource:         event.UsageSourceSubagent,
-			Gate:                headlessGate,
+			Gate:                a.headlessGate,
 			ContextWindow:       ctxWin,
-			RecentKeep:          cfg.Agent.RecentKeep,
-			SoftCompactRatio:    cfg.Agent.SoftCompactRatio,
-			ToolResultSnipRatio: cfg.Agent.ToolResultSnipRatio,
-			CompactRatio:        cfg.Agent.CompactRatio,
-			CompactForceRatio:   cfg.Agent.CompactForceRatio,
+			RecentKeep:          a.cfg.Agent.RecentKeep,
+			SoftCompactRatio:    a.cfg.Agent.SoftCompactRatio,
+			ToolResultSnipRatio: a.cfg.Agent.ToolResultSnipRatio,
+			CompactRatio:        a.cfg.Agent.CompactRatio,
+			CompactForceRatio:   a.cfg.Agent.CompactForceRatio,
 			ArchiveDir:          config.ArchiveDir(),
-			KeepPolicy:          keepPolicy,
+			KeepPolicy:          a.keepPolicy,
 			ResponseLanguage:    agent.ResponseLanguageFromContext(sctx),
 			ReasoningLanguage:   agent.ReasoningLanguageFromContext(sctx),
 			SubagentDepth:       childDepth,
-			MaxSubagentDepth:    maxSubagentDepth,
-			DeliveryProfile:     tokenDelivery,
-			WorkspaceLease:      workspaceLease,
+			MaxSubagentDepth:    a.maxSubagentDepth,
+			DeliveryProfile:     a.tokenDelivery,
+			WorkspaceLease:      a.workspaceLease,
 		}
 		// Parent entry kind/URL: skill sub-agents that override the model still
 		// inherit the parent's sticky-key host policy for Phase 1.
-		promptCacheOptions(cfg, entry, sessionCacheID, subRef).apply(&opts)
+		promptCacheOptions(a.cfg, a.entry, sessionCacheID, subRef).apply(&opts)
 		return opts
 	}
 	readOnlySkillRunner := func(sctx context.Context, sk skill.Skill, task string, runOpts skill.SubagentRunOptions) (string, error) {
 		if strings.TrimSpace(runOpts.ContinueFrom) != "" || strings.TrimSpace(runOpts.ForkFrom) != "" {
 			return "", fmt.Errorf("read_only_skill does not support continue_from/fork_from")
 		}
-		releaseSlot, err := subagentScheduler.Acquire(sctx, agent.AcquireRequest{
+		releaseSlot, err := a.subagentScheduler.Acquire(sctx, agent.AcquireRequest{
 			Writer: false,
 			Nested: agent.SubagentDepth(sctx) > 0,
 			Label:  sk.Name,
@@ -308,22 +306,22 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 			return "", err
 		}
 		defer releaseSlot()
-		sk = skill.WithCodeGraphTools(sk, skill.CodeGraphReadTools(reg))
-		prov, price, ctxWin := execProv, entry.Price, entry.ContextWindow
-		modelRef := subagentModelRef(cfg, sk)
-		effortRef := subagentEffortRef(cfg, sk)
+		sk = skill.WithCodeGraphTools(sk, skill.CodeGraphReadTools(a.reg))
+		prov, price, ctxWin := a.execProv, a.entry.Price, a.entry.ContextWindow
+		modelRef := subagentModelRef(a.cfg, sk)
+		effortRef := subagentEffortRef(a.cfg, sk)
 		if modelRef != "" || effortRef != "" {
-			p, pr, cw, err := resolveSubagentProvider(modelRef, effortRef)
+			p, pr, cw, err := a.resolveSubagentProvider(modelRef, effortRef)
 			if err != nil {
 				return "", fmt.Errorf("read-only subagent skill %q profile: %w", sk.Name, err)
 			}
 			prov, price, ctxWin = p, pr, cw
 		}
 		childDepth := agent.SubagentDepth(sctx) + 1
-		if childDepth > maxSubagentDepth {
-			return "", fmt.Errorf("subagent delegation depth limit reached (max_subagent_depth=%d)", maxSubagentDepth)
+		if childDepth > a.maxSubagentDepth {
+			return "", fmt.Errorf("subagent delegation depth limit reached (max_subagent_depth=%d)", a.maxSubagentDepth)
 		}
-		subReg := agent.ReadOnlySubagentToolRegistryForDepthWithRuntime(reg, sk.AllowedTools, childDepth, maxSubagentDepth, capRuntimeGet())
+		subReg := agent.ReadOnlySubagentToolRegistryForDepthWithRuntime(a.reg, sk.AllowedTools, childDepth, a.maxSubagentDepth, a.capRuntimeGet())
 		if subReg.Len() == 0 {
 			return "", fmt.Errorf("read_only_skill: skill %q has no read-only tools available", sk.Name)
 		}
@@ -331,7 +329,7 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 		case "review", "security-review", "security_review":
 			agent.AttachReviewReportTool(subReg)
 		}
-		steps := maxSteps
+		steps := a.maxSteps
 		if steps > 0 {
 			if steps /= 2; steps < 5 {
 				steps = 5
@@ -346,7 +344,7 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 		// Read-only skill runner is always ephemeral (empty Ref). Parent BranchID
 		// still sticks the key when a session is active; empty parent omits it.
 		runOptions := subagentSkillOptions(sctx, steps, price, ctxWin, childDepth, agent.ParentSession(sctx), "")
-		usageModelRef, _ := subagentIdentity(modelRef, effortRef)
+		usageModelRef, _ := a.subagentIdentity(modelRef, effortRef)
 		runOptions.ModelRef = usageModelRef
 		// Delivery risk gates consume typed reports; outside Delivery a casual
 		// /review run may finish with prose only.
@@ -370,31 +368,31 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 			Label:  sk.Name,
 		}
 		if !sk.ReadOnly {
-			whole, werr := agent.WholeWorkspaceWriteClaim(root)
+			whole, werr := agent.WholeWorkspaceWriteClaim(a.root)
 			if werr != nil {
 				return "", fmt.Errorf("subagent skill %q write claim: %w", sk.Name, werr)
 			}
 			acq.WritePaths = whole
 		}
-		releaseSlot, err := subagentScheduler.Acquire(sctx, acq)
+		releaseSlot, err := a.subagentScheduler.Acquire(sctx, acq)
 		if err != nil {
 			return "", err
 		}
 		defer releaseSlot()
-		sk = skill.WithCodeGraphTools(sk, skill.CodeGraphReadTools(reg))
-		prov, price, ctxWin := execProv, entry.Price, entry.ContextWindow
-		modelRef := subagentModelRef(cfg, sk)
-		effortRef := subagentEffortRef(cfg, sk)
+		sk = skill.WithCodeGraphTools(sk, skill.CodeGraphReadTools(a.reg))
+		prov, price, ctxWin := a.execProv, a.entry.Price, a.entry.ContextWindow
+		modelRef := subagentModelRef(a.cfg, sk)
+		effortRef := subagentEffortRef(a.cfg, sk)
 		if modelRef != "" || effortRef != "" {
-			p, pr, cw, err := resolveSubagentProvider(modelRef, effortRef)
+			p, pr, cw, err := a.resolveSubagentProvider(modelRef, effortRef)
 			if err != nil {
 				return "", fmt.Errorf("subagent skill %q profile: %w", sk.Name, err)
 			}
 			prov, price, ctxWin = p, pr, cw
 		}
 		childDepth := agent.SubagentDepth(sctx) + 1
-		if childDepth > maxSubagentDepth {
-			return "", fmt.Errorf("subagent delegation depth limit reached (max_subagent_depth=%d)", maxSubagentDepth)
+		if childDepth > a.maxSubagentDepth {
+			return "", fmt.Errorf("subagent delegation depth limit reached (max_subagent_depth=%d)", a.maxSubagentDepth)
 		}
 		// A read-only skill (builtin review/security-review, or frontmatter
 		// `read-only: true`) gets its promise enforced at the tool boundary:
@@ -404,9 +402,9 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 		// the mismatch).
 		var subReg *tool.Registry
 		if sk.ReadOnly {
-			subReg = agent.ReadOnlySubagentToolRegistryForDepthWithRuntime(reg, sk.AllowedTools, childDepth, maxSubagentDepth, capRuntimeGet())
+			subReg = agent.ReadOnlySubagentToolRegistryForDepthWithRuntime(a.reg, sk.AllowedTools, childDepth, a.maxSubagentDepth, a.capRuntimeGet())
 		} else {
-			subReg = agent.SubagentToolRegistryForDepthWithRuntime(reg, sk.AllowedTools, childDepth, maxSubagentDepth, capRuntimeGet())
+			subReg = agent.SubagentToolRegistryForDepthWithRuntime(a.reg, sk.AllowedTools, childDepth, a.maxSubagentDepth, a.capRuntimeGet())
 		}
 		// Delivery risk gates require structured review_report from review
 		// subagents only — never expose it on the parent tool surface.
@@ -425,7 +423,7 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 		}
 		parentSession := agent.ParentSession(sctx)
 		var run *agent.SubagentRun
-		if subagentStore == nil || parentSession == "" {
+		if a.subagentStore == nil || parentSession == "" {
 			// Headless runs (e.g. `corvus run`) have no persistent session to
 			// own a transcript. Run the skill sub-agent ephemerally, as before
 			// persisted transcripts existed, instead of failing. Continuation needs
@@ -435,11 +433,11 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 			}
 			run = agent.EphemeralSubagentRun(sk.Body)
 		} else {
-			identityModel, identityEffort := subagentIdentity(modelRef, effortRef)
+			identityModel, identityEffort := a.subagentIdentity(modelRef, effortRef)
 			spec := agent.SubagentSpec{
 				Kind:             "skill",
 				Name:             sk.Name,
-				WorkspaceRoot:    root,
+				WorkspaceRoot:    a.root,
 				ParentSession:    parentSession,
 				ParentToolCallID: parentID,
 				SystemPrompt:     sk.Body,
@@ -449,18 +447,18 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 			}
 			var prepErr error
 			if continueFrom != "" {
-				run, prepErr = subagentStore.PrepareContinue(continueFrom, spec)
+				run, prepErr = a.subagentStore.PrepareContinue(continueFrom, spec)
 			} else if legacyForkFrom != "" {
-				run, prepErr = subagentStore.PrepareLegacyForkFrom(legacyForkFrom, spec)
+				run, prepErr = a.subagentStore.PrepareLegacyForkFrom(legacyForkFrom, spec)
 			} else {
-				run, prepErr = subagentStore.PrepareFresh(spec)
+				run, prepErr = a.subagentStore.PrepareFresh(spec)
 			}
 			if prepErr != nil {
 				return "", prepErr
 			}
 		}
 		defer run.Release()
-		steps := maxSteps
+		steps := a.maxSteps
 		if steps > 0 {
 			if steps /= 2; steps < 5 {
 				steps = 5
@@ -469,7 +467,7 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 		// SessionCacheID = parent BranchID; SubagentCacheID = transcript Ref
 		// (empty for ephemeral headless runs without a parent session).
 		runOptions := subagentSkillOptions(sctx, steps, price, ctxWin, childDepth, parentSession, run.Ref)
-		usageModelRef, _ := subagentIdentity(modelRef, effortRef)
+		usageModelRef, _ := a.subagentIdentity(modelRef, effortRef)
 		runOptions.ModelRef = usageModelRef
 		// Delivery risk gates consume typed reports; outside Delivery a casual
 		// /review run may finish with prose only.
@@ -485,15 +483,15 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 				runOptions, agent.NestedSink(sctx, event.Discard))
 		}
 		if err != nil {
-			return "", errors.Join(err, subagentStore.SaveFailed(run))
+			return "", errors.Join(err, a.subagentStore.SaveFailed(run))
 		}
-		if err := subagentStore.SaveCompleted(run); err != nil {
-			return "", errors.Join(err, subagentStore.SaveFailed(run))
+		if err := a.subagentStore.SaveCompleted(run); err != nil {
+			return "", errors.Join(err, a.subagentStore.SaveFailed(run))
 		}
 		return agent.FormatSubagentRunResult(answer, run, false), nil
 	}
 	skillProfile := func(sk skill.Skill) *event.Profile {
-		model, effort := subagentModelRef(cfg, sk), subagentEffortRef(cfg, sk)
+		model, effort := subagentModelRef(a.cfg, sk), subagentEffortRef(a.cfg, sk)
 		if model == "" && effort == "" {
 			return nil
 		}
@@ -501,7 +499,7 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 	}
 	// Custom slash commands (.corvus/commands + user dir). Best-effort: a malformed
 	// file is skipped, and a load error never blocks the session.
-	cmds, _ := command.LoadRoots(config.CommandRootsForRoot(root)...)
+	cmds, _ := command.LoadRoots(config.CommandRootsForRoot(a.root)...)
 	slashCommandAdded := false
 	slashCommandIncludesSkills := false
 	addSlashCommandTool := func(includeSkills bool) string {
@@ -512,12 +510,12 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 		// mode skills join this list only after the skills source is enabled.
 		var slashEntries []command.SlashEntry
 		if includeSkills {
-			for _, sk := range skillStore.SlashList() {
+			for _, sk := range a.skillStore.SlashList() {
 				sk := sk
 				slashEntries = append(slashEntries, command.SlashEntry{
 					Name:        sk.SlashName(),
 					Description: sk.Description,
-					Render:      func(args []string) string { return skillStore.Render(sk, strings.Join(args, " ")) },
+					Render:      func(args []string) string { return a.skillStore.Render(sk, strings.Join(args, " ")) },
 				})
 			}
 		}
@@ -533,7 +531,7 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 				Render:      func(args []string) string { return cmd.Render(args) },
 			})
 		}
-		reg.Add(command.NewSlashCommandTool(slashEntries))
+		a.reg.Add(command.NewSlashCommandTool(slashEntries))
 		slashCommandAdded = true
 		slashCommandIncludesSkills = slashCommandIncludesSkills || includeSkills
 		return "enabled slash_command."
@@ -544,13 +542,13 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 			return "install_source is already enabled."
 		}
 		installSourceAdded = true
-		reg.Add(installsource.NewTool(installsource.Options{
-			ProjectRoot: root,
-			Proxy:       proxySpec,
+		a.reg.Add(installsource.NewTool(installsource.Options{
+			ProjectRoot: a.root,
+			Proxy:       a.proxySpec,
 			ConnectMCP: func(e config.PluginEntry) (installsource.MCPConnectResult, error) {
-				spec := pluginSpecFromEntryWithOptions(e, root, pluginSpecOptions)
-				if opts.Stderr != nil {
-					spec.Stderr = opts.Stderr
+				spec := pluginSpecFromEntryWithOptions(e, a.root, a.pluginSpecOptions)
+				if a.opts.Stderr != nil {
+					spec.Stderr = a.opts.Stderr
 				}
 				// Applying an install plan is already an explicit user decision.
 				// Project-scoped installs retain project provenance, but record the
@@ -558,12 +556,12 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 				// next session asks the user to authorize the same install again.
 				launchAuthorized := false
 				if spec.RequireLaunchApproval {
-					if err := plugin.AuthorizeSpecLaunch(ctx, spec); err != nil {
+					if err := plugin.AuthorizeSpecLaunch(a.ctx, spec); err != nil {
 						return installsource.MCPConnectResult{}, err
 					}
 					launchAuthorized = true
 				}
-				tools, err := pluginHost.Add(ctx, spec)
+				tools, err := a.pluginHost.Add(a.ctx, spec)
 				if err != nil {
 					// The install did not complete, so do not retain consent for a
 					// server that never connected. Replacement rollback reauthorizes
@@ -573,15 +571,15 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 					}
 					return installsource.MCPConnectResult{}, err
 				}
-				reg.RemovePrefix(plugin.ToolPrefix(spec.Name))
+				a.reg.RemovePrefix(plugin.ToolPrefix(spec.Name))
 				for _, t := range tools {
-					reg.Add(t)
+					a.reg.Add(t)
 				}
 				// Disconnect closes the server and drops its namespaced tools.
 				// Used by the install_source rollback path when SaveTo fails.
 				disconnect := func() {
-					if prefix, ok := pluginHost.Remove(spec.Name); ok {
-						reg.RemovePrefix(prefix)
+					if prefix, ok := a.pluginHost.Remove(spec.Name); ok {
+						a.reg.RemovePrefix(prefix)
 					}
 					if spec.LaunchManager != nil {
 						_ = spec.LaunchManager.Revoke(spec.Name)
@@ -593,8 +591,8 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 				}, nil
 			},
 			OnDisconnect: func(serverName string) bool {
-				if prefix, ok := pluginHost.Remove(serverName); ok {
-					reg.RemovePrefix(prefix)
+				if prefix, ok := a.pluginHost.Remove(serverName); ok {
+					a.reg.RemovePrefix(prefix)
 					return true
 				}
 				return false
@@ -605,29 +603,29 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 	readOnlySkillToolsAdded := false
 	addReadOnlySkillTools := func() string {
 		if readOnlySkillToolsAdded {
-			return "read_only_skill tool is already enabled.\n\n" + skill.ReadOnlyIndexBlock(skills)
+			return "read_only_skill tool is already enabled.\n\n" + skill.ReadOnlyIndexBlock(a.skills)
 		}
 		readOnlySkillToolsAdded = true
-		reg.Add(skill.NewReadOnlySkillTool(skillStore, readOnlySkillRunner, skillProfile))
-		return "enabled read_only_skill. Use read_only_skill for inline skills or read-only subagent skills on the next model request.\n\n" + skill.ReadOnlyIndexBlock(skills)
+		a.reg.Add(skill.NewReadOnlySkillTool(a.skillStore, readOnlySkillRunner, skillProfile))
+		return "enabled read_only_skill. Use read_only_skill for inline skills or read-only subagent skills on the next model request.\n\n" + skill.ReadOnlyIndexBlock(a.skills)
 	}
 	skillToolsAdded := false
 	addSkillTools := func() string {
 		if skillToolsAdded {
-			return "skills are already enabled.\n\n" + skill.IndexBlock(skills)
+			return "skills are already enabled.\n\n" + skill.IndexBlock(a.skills)
 		}
 		skillToolsAdded = true
 		addReadOnlySkillTools()
-		reg.Add(skill.NewRunSkillTool(skillStore, skillRunner, skillProfile))
-		reg.Add(skill.NewReadSkillTool(skillStore))
-		reg.Add(skill.NewInstallSkillTool(skillStore, nil))
-		for _, t := range skill.BuiltinSubagentTools(skillStore, skillRunner, skillProfile) {
-			reg.Add(t)
+		a.reg.Add(skill.NewRunSkillTool(a.skillStore, skillRunner, skillProfile))
+		a.reg.Add(skill.NewReadSkillTool(a.skillStore))
+		a.reg.Add(skill.NewInstallSkillTool(a.skillStore, nil))
+		for _, t := range skill.BuiltinSubagentTools(a.skillStore, skillRunner, skillProfile) {
+			a.reg.Add(t)
 		}
 		addSlashCommandTool(true)
-		return "enabled skills. Use run_skill/read_skill/read_only_skill or the dedicated skill tools on the next model request.\n\n" + skill.IndexBlock(skills)
+		return "enabled skills. Use run_skill/read_skill/read_only_skill or the dedicated skill tools on the next model request.\n\n" + skill.IndexBlock(a.skills)
 	}
-	if !tokenEconomy {
+	if !a.tokenEconomy {
 		addInstallSourceTool()
 		addSkillTools()
 	}
@@ -646,63 +644,63 @@ func buildSkillTools(ctx context.Context, cfg *config.Config, opts Options, entr
 
 // buildToolSourceConnector registers the economy-mode connect_tool_source
 // connector that enables skill/task/MCP/LSP/session/memory sources on demand.
-func buildToolSourceConnector(ctx context.Context, opts Options, cfg *config.Config, root string, reg *tool.Registry, writeRoots []string, forbidReadRoots []string, bashSpec sandbox.Spec, bashTimeout time.Duration, searchSpec builtin.SearchSpec, proxySpec netclient.ProxySpec, sessionGuard builtin.SessionDataGuard, managedConfig builtin.ManagedConfigPaths, addSkillTools func() string, addTaskTool func() string, addReadOnlyTaskTool func() string, addReadOnlySkillTools func() string, addInstallSourceTool func() string, addSlashCommandTool func(includeSkills bool) string, addLSPTools func() []string, lspMgr *lsp.Manager, addSessionTools func() string, addMemoryTools func() string, onDemandMCPSpecs map[string]plugin.Spec, onDemandMCPNames []string, pluginHost *plugin.Host, tokenEconomy bool) {
-	if tokenEconomy {
+func buildToolSourceConnector(a *assembly) {
+	if a.tokenEconomy {
 		addBuiltinSourceTools := func(source string, names ...string) string {
 			var missing []string
 			for _, name := range names {
-				if !builtinToolEnabled(cfg.Tools.Enabled, name) {
+				if !builtinToolEnabled(a.cfg.Tools.Enabled, name) {
 					continue
 				}
-				if _, exists := reg.Get(name); !exists {
+				if _, exists := a.reg.Get(name); !exists {
 					missing = append(missing, name)
 				}
 			}
 			if len(missing) == 0 {
 				return source + " tools are already enabled or disabled by [tools].enabled."
 			}
-			installed := addTools(reg, builtin.Workspace{
-				Dir:             root,
-				WriteRoots:      writeRoots,
-				ForbidReadRoots: forbidReadRoots,
-				Bash:            bashSpec,
-				BashTimeout:     bashTimeout,
-				Search:          searchSpec,
-				ProxySpec:       proxySpec,
-				SessionGuard:    sessionGuard,
-				ManagedConfig:   managedConfig,
-				FileOverlay:     opts.FileOverlay,
-				Terminal:        opts.TerminalRunner,
+			installed := addTools(a.reg, builtin.Workspace{
+				Dir:             a.root,
+				WriteRoots:      a.writeRoots,
+				ForbidReadRoots: a.forbidReadRoots,
+				Bash:            a.bashSpec,
+				BashTimeout:     a.bashTimeout,
+				Search:          a.searchSpec,
+				ProxySpec:       a.proxySpec,
+				SessionGuard:    a.sessionGuard,
+				ManagedConfig:   a.managedConfig,
+				FileOverlay:     a.opts.FileOverlay,
+				Terminal:        a.opts.TerminalRunner,
 			}.Tools(missing...))
 			return "enabled " + strings.Join(installed, ", ") + "."
 		}
-		reg.Add(&toolSourceConnector{
+		a.reg.Add(&toolSourceConnector{
 			skills: func(context.Context) (string, error) {
-				return addSkillTools(), nil
+				return a.addSkillTools(), nil
 			},
 			task: func(context.Context) (string, error) {
-				return addTaskTool(), nil
+				return a.addTaskTool(), nil
 			},
 			readOnlyTask: func(context.Context) (string, error) {
-				return addReadOnlyTaskTool(), nil
+				return a.addReadOnlyTaskTool(), nil
 			},
 			readOnlySkill: func(context.Context) (string, error) {
-				return addReadOnlySkillTools(), nil
+				return a.addReadOnlySkillTools(), nil
 			},
 			install: func(context.Context) (string, error) {
-				return addInstallSourceTool(), nil
+				return a.addInstallSourceTool(), nil
 			},
 			webFetch: func(context.Context) (string, error) {
-				if !builtinToolEnabled(cfg.Tools.Enabled, "web_fetch") {
+				if !builtinToolEnabled(a.cfg.Tools.Enabled, "web_fetch") {
 					return "web_fetch is disabled by [tools].enabled.", nil
 				}
-				names := addTools(reg, builtin.Workspace{
-					Dir:         root,
-					WriteRoots:  writeRoots,
-					Bash:        bashSpec,
-					BashTimeout: bashTimeout,
-					Search:      searchSpec,
-					ProxySpec:   proxySpec,
+				names := addTools(a.reg, builtin.Workspace{
+					Dir:         a.root,
+					WriteRoots:  a.writeRoots,
+					Bash:        a.bashSpec,
+					BashTimeout: a.bashTimeout,
+					Search:      a.searchSpec,
+					ProxySpec:   a.proxySpec,
 				}.Tools("web_fetch"))
 				if len(names) == 0 {
 					return "web_fetch is already enabled or unavailable.", nil
@@ -710,23 +708,23 @@ func buildToolSourceConnector(ctx context.Context, opts Options, cfg *config.Con
 				return "enabled " + strings.Join(names, ", ") + ".", nil
 			},
 			lsp: func(context.Context) (string, error) {
-				if lspMgr == nil {
+				if a.lspMgr == nil {
 					return "", fmt.Errorf("LSP is disabled in config")
 				}
-				names := addLSPTools()
+				names := a.addLSPTools()
 				if len(names) == 0 {
 					return "LSP tools are already enabled.", nil
 				}
 				return "enabled " + strings.Join(names, ", ") + ".", nil
 			},
 			sessions: func(context.Context) (string, error) {
-				return addSessionTools(), nil
+				return a.addSessionTools(), nil
 			},
 			memory: func(context.Context) (string, error) {
-				return addMemoryTools(), nil
+				return a.addMemoryTools(), nil
 			},
 			commands: func(context.Context) (string, error) {
-				return addSlashCommandTool(false), nil
+				return a.addSlashCommandTool(false), nil
 			},
 			search: func(context.Context) (string, error) {
 				return addBuiltinSourceTools("search", "code_index", "glob", "grep", "ls"), nil
@@ -745,25 +743,25 @@ func buildToolSourceConnector(ctx context.Context, opts Options, cfg *config.Con
 				return addBuiltinSourceTools("workflow", "complete_step", "todo_write"), nil
 			},
 			mcp: func(_ context.Context, name string) (string, error) {
-				spec, ok := onDemandMCPSpecs[name]
+				spec, ok := a.onDemandMCPSpecs[name]
 				if !ok {
 					return "", fmt.Errorf("no configured MCP server named %q", name)
 				}
-				if opts.Stderr != nil {
-					spec.Stderr = opts.Stderr
+				if a.opts.Stderr != nil {
+					spec.Stderr = a.opts.Stderr
 				}
-				tools, err := pluginHost.Add(ctx, spec)
+				tools, err := a.pluginHost.Add(a.ctx, spec)
 				if err != nil {
 					// On a shared host the server may already be connected
 					// (e.g. another tab started it). Fall back to fetching
 					// its tools from the existing client.
 					if errors.Is(err, plugin.ErrServerAlreadyConnected) || errors.Is(err, plugin.ErrSpawningInFlight) {
-						tools, err2 := pluginHost.ToolsFor(ctx, spec.Name)
+						tools, err2 := a.pluginHost.ToolsFor(a.ctx, spec.Name)
 						if err2 != nil {
 							return "", err2
 						}
-						reg.RemovePrefix(plugin.ToolPrefix(spec.Name))
-						names := addTools(reg, tools)
+						a.reg.RemovePrefix(plugin.ToolPrefix(spec.Name))
+						names := addTools(a.reg, tools)
 						if len(names) == 0 {
 							return fmt.Sprintf("MCP server %q connected but exposed no tools.", spec.Name), nil
 						}
@@ -771,14 +769,14 @@ func buildToolSourceConnector(ctx context.Context, opts Options, cfg *config.Con
 					}
 					return "", err
 				}
-				reg.RemovePrefix(plugin.ToolPrefix(spec.Name))
-				names := addTools(reg, tools)
+				a.reg.RemovePrefix(plugin.ToolPrefix(spec.Name))
+				names := addTools(a.reg, tools)
 				if len(names) == 0 {
 					return fmt.Sprintf("MCP server %q connected but exposed no tools.", spec.Name), nil
 				}
 				return fmt.Sprintf("enabled MCP server %q tools: %s.", spec.Name, strings.Join(names, ", ")), nil
 			},
-			mcpNames: onDemandMCPNames,
+			mcpNames: a.onDemandMCPNames,
 		})
 	}
 }

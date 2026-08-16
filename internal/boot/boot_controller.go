@@ -1,32 +1,19 @@
 package boot
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"strings"
 
 	"corvus/internal/agent"
 	"corvus/internal/capability"
-	"corvus/internal/command"
 	"corvus/internal/config"
 	"corvus/internal/control"
 	"corvus/internal/event"
 	"corvus/internal/guardian"
-	"corvus/internal/hook"
-	"corvus/internal/instruction"
-	"corvus/internal/jobs"
-	"corvus/internal/memory"
-	"corvus/internal/netclient"
-	"corvus/internal/permission"
 	"corvus/internal/plugin"
 	"corvus/internal/provider"
 	"corvus/internal/recovery"
-	"corvus/internal/sandbox"
-	"corvus/internal/skill"
-	"corvus/internal/tool"
-	"corvus/internal/workspacelease"
 )
 
 type runnerResult struct {
@@ -37,99 +24,99 @@ type runnerResult struct {
 
 // buildExecutorAndPlanner constructs the executor session/options and, when a
 // distinct planner_model is configured, wraps it in a two-model Coordinator.
-func buildExecutorAndPlanner(ctx context.Context, opts Options, cfg *config.Config, entry *config.ProviderEntry, modelRef string, execProv provider.Provider, reg *tool.Registry, sysPrompt string, sink event.Sink, headlessGate *control.SharedHeadlessGate, hookRunner *hook.Runner, jm *jobs.Manager, subagentScheduler *agent.SubagentScheduler, root string, projectChecks []instruction.VerifyCheck, tokenDelivery bool, workspaceLease *workspacelease.Owner, capLedger *capability.Ledger, capAudit *capability.Audit, keepPolicy agent.KeepPolicy, maxSubagentDepth, maxSteps int, mem *memory.Set, capRuntime *agent.MCPCapabilityRuntime, tokenEconomy bool, proxySpec netclient.ProxySpec) (*runnerResult, error) {
-	execSess := agent.NewSession(sysPrompt)
+func buildExecutorAndPlanner(a *assembly) (*runnerResult, error) {
+	execSess := agent.NewSession(a.sysPrompt)
 	// Session path is bound later via Controller.SetSessionPath / NewSession /
 	// Resume, which call SetSessionCacheID(BranchID). Boot leaves it empty so
 	// headless runs without a path correctly omit the sticky key.
 	execOpts := agent.Options{
-		MaxSteps:    maxSteps,
-		MaxStepsKey: opts.MaxStepsKey,
-		Temperature: cfg.Agent.Temperature,
-		Pricing:     entry.Price,
-		ModelRef:    modelRef,
-		Gate:        headlessGate,
-		Hooks:       hookRunner,
-		Jobs:        jm,
+		MaxSteps:    a.maxSteps,
+		MaxStepsKey: a.opts.MaxStepsKey,
+		Temperature: a.cfg.Agent.Temperature,
+		Pricing:     a.entry.Price,
+		ModelRef:    a.modelRef,
+		Gate:        a.headlessGate,
+		Hooks:       a.hookRunner,
+		Jobs:        a.jm,
 		// Parent write reservation at the executor entry covers all writers
 		// (including late Economy/MCP adds) without wrapping tool schemas.
-		WriteScheduler:               subagentScheduler,
-		WriteWorkspaceRoot:           root,
-		ProjectChecks:                projectChecks,
-		DeliveryProfile:              tokenDelivery,
-		WorkspaceLease:               workspaceLease,
-		CapabilityLedger:             capLedger,
-		CapabilityAudit:              capAudit,
-		ContextWindow:                entry.ContextWindow,
-		SoftCompactRatio:             cfg.Agent.SoftCompactRatio,
-		ToolResultSnipRatio:          cfg.Agent.ToolResultSnipRatio,
-		CompactRatio:                 cfg.Agent.CompactRatio,
-		CompactForceRatio:            cfg.Agent.CompactForceRatio,
-		RecentKeep:                   cfg.Agent.RecentKeep,
+		WriteScheduler:               a.subagentScheduler,
+		WriteWorkspaceRoot:           a.root,
+		ProjectChecks:                a.projectChecks,
+		DeliveryProfile:              a.tokenDelivery,
+		WorkspaceLease:               a.workspaceLease,
+		CapabilityLedger:             a.capLedger,
+		CapabilityAudit:              a.capAudit,
+		ContextWindow:                a.entry.ContextWindow,
+		SoftCompactRatio:             a.cfg.Agent.SoftCompactRatio,
+		ToolResultSnipRatio:          a.cfg.Agent.ToolResultSnipRatio,
+		CompactRatio:                 a.cfg.Agent.CompactRatio,
+		CompactForceRatio:            a.cfg.Agent.CompactForceRatio,
+		RecentKeep:                   a.cfg.Agent.RecentKeep,
 		ArchiveDir:                   config.ArchiveDir(),
-		KeepPolicy:                   keepPolicy,
-		ReasoningLanguage:            cfg.ReasoningLanguage(),
-		PlanModeReadOnlyCommands:     cfg.Agent.PlanModeReadOnlyCommands,
+		KeepPolicy:                   a.keepPolicy,
+		ReasoningLanguage:            a.cfg.ReasoningLanguage(),
+		PlanModeReadOnlyCommands:     a.cfg.Agent.PlanModeReadOnlyCommands,
 		SubagentDepth:                0,
-		MaxSubagentDepth:             maxSubagentDepth,
+		MaxSubagentDepth:             a.maxSubagentDepth,
 		MissingReasoningWarnStateDir: config.MissingReasoningWarnStateDir(),
 	}
-	promptCacheOptions(cfg, entry, "", "").apply(&execOpts)
-	executor := agent.New(execProv, reg, execSess, execOpts, sink)
+	promptCacheOptions(a.cfg, a.entry, "", "").apply(&execOpts)
+	executor := agent.New(a.execProv, a.reg, execSess, execOpts, a.sink)
 
 	var runner agent.Runner = executor
-	label := entry.Model
+	label := a.entry.Model
 	// Two-model collaboration: a distinct planner_model wraps the executor in a
 	// Coordinator with its own session, kept separate for cache stability. The
 	// planner gets the same standing memory context and a filtered read-only
 	// research tool set, so it can inspect rules/code without side effects.
-	if pm := effectivePlannerModel(cfg, opts, tokenEconomy); pm != "" {
-		pe, ok := resolveOptionalEntry(opts, cfg, pm)
+	if pm := effectivePlannerModel(a.cfg, a.opts, a.tokenEconomy); pm != "" {
+		pe, ok := resolveOptionalEntry(a.opts, a.cfg, pm)
 		if !ok {
 			return nil, fmt.Errorf("planner_model %q is not a configured provider", pm)
 		}
-		if pe.Model != entry.Model {
-			plannerProv, err := resolveProvider(opts, cfg, proxySpec, provider.Selection{Ref: modelRefFromEntry(pe)})
+		if pe.Model != a.entry.Model {
+			plannerProv, err := resolveProvider(a.opts, a.cfg, a.proxySpec, provider.Selection{Ref: modelRefFromEntry(pe)})
 			if err != nil {
 				return nil, fmt.Errorf("planner %q: %w", pm, err)
 			}
-			plannerSess := agent.NewSession(agent.PlannerPromptWithContext(mem.Block()))
+			plannerSess := agent.NewSession(agent.PlannerPromptWithContext(a.mem.Block()))
 			// Planner owns an independent ledger/audit and use_capability frontend
 			// so its MCP calls cannot satisfy or poison Executor Delivery gates.
 			plannerLedger := capability.NewLedger()
 			plannerAudit := &capability.Audit{}
-			plannerTools := agent.PlannerToolRegistry(reg)
-			if capRuntime != nil {
+			plannerTools := agent.PlannerToolRegistry(a.reg)
+			if a.capRuntime != nil {
 				// Replace any cloned parent frontend with one bound to the
 				// planner ledger (PlannerToolRegistry clones with nil ledger).
 				if _, ok := plannerTools.Get("use_capability"); ok {
 					plannerTools.RemovePrefix("use_capability")
 				}
-				plannerTools.Add(capRuntime.NewFrontend(plannerLedger, plannerAudit))
+				plannerTools.Add(a.capRuntime.NewFrontend(plannerLedger, plannerAudit))
 			}
 			plannerOpts := agent.Options{
 				MaxSteps:                     0,
-				Gate:                         headlessGate,
+				Gate:                         a.headlessGate,
 				ModelRef:                     modelRefFromEntry(pe),
 				ContextWindow:                pe.ContextWindow,
-				SoftCompactRatio:             cfg.Agent.SoftCompactRatio,
-				ToolResultSnipRatio:          cfg.Agent.ToolResultSnipRatio,
-				CompactRatio:                 cfg.Agent.CompactRatio,
-				CompactForceRatio:            cfg.Agent.CompactForceRatio,
-				RecentKeep:                   cfg.Agent.RecentKeep,
+				SoftCompactRatio:             a.cfg.Agent.SoftCompactRatio,
+				ToolResultSnipRatio:          a.cfg.Agent.ToolResultSnipRatio,
+				CompactRatio:                 a.cfg.Agent.CompactRatio,
+				CompactForceRatio:            a.cfg.Agent.CompactForceRatio,
+				RecentKeep:                   a.cfg.Agent.RecentKeep,
 				ArchiveDir:                   config.ArchiveDir(),
-				KeepPolicy:                   keepPolicy,
-				ReasoningLanguage:            cfg.ReasoningLanguage(),
-				PlanModeReadOnlyCommands:     cfg.Agent.PlanModeReadOnlyCommands,
+				KeepPolicy:                   a.keepPolicy,
+				ReasoningLanguage:            a.cfg.ReasoningLanguage(),
+				PlanModeReadOnlyCommands:     a.cfg.Agent.PlanModeReadOnlyCommands,
 				CapabilityLedger:             plannerLedger,
 				CapabilityAudit:              plannerAudit,
 				MissingReasoningWarnStateDir: config.MissingReasoningWarnStateDir(),
 			}
 			// Same sticky-key policy as executor; SessionCacheID refreshed with
 			// the executor when the controller rebinds the session path.
-			promptCacheOptions(cfg, pe, "", "").apply(&plannerOpts)
-			runner = agent.NewCoordinatorWithPlannerPolicy(plannerProv, plannerSess, pe.Price, plannerTools, plannerOpts, executor, cfg.Agent.Temperature, sink, control.NewPlannerPolicy())
-			label = entry.Model + " + planner " + pe.Model
+			promptCacheOptions(a.cfg, pe, "", "").apply(&plannerOpts)
+			runner = agent.NewCoordinatorWithPlannerPolicy(plannerProv, plannerSess, pe.Price, plannerTools, plannerOpts, executor, a.cfg.Agent.Temperature, a.sink, control.NewPlannerPolicy())
+			label = a.entry.Model + " + planner " + pe.Model
 		}
 	}
 
@@ -143,101 +130,101 @@ func buildExecutorAndPlanner(ctx context.Context, opts Options, cfg *config.Conf
 // buildController assembles control.Options and constructs the controller,
 // attaching the guardian, recovery reviewer, capability proxy tools, and
 // Delivery/Economy/dual-model capability routing.
-func buildController(ctx context.Context, opts Options, cfg *config.Config, root string, sink event.Sink, policy permission.Policy, headlessGate *control.SharedHeadlessGate, label, modelRef, sysPrompt, sessionDir string, pluginHost *plugin.Host, cmds []command.Command, skills []skill.Skill, allSkills []skill.Skill, skillStore *skill.Store, allSkillStore *skill.Store, skillRunner func(context.Context, skill.Skill, string, skill.SubagentRunOptions) (string, error), readOnlySkillRunner func(context.Context, skill.Skill, string, skill.SubagentRunOptions) (string, error), skillProfile func(skill.Skill) *event.Profile, hookRunner *hook.Runner, mem *memory.Set, cleanup func(), entry *config.ProviderEntry, balanceClient *http.Client, jm *jobs.Manager, workspaceLease *workspacelease.Owner, reg *tool.Registry, pluginSpecOptions PluginSpecOptions, capRuntime *agent.MCPCapabilityRuntime, shell sandbox.Shell, runtimeProfile capability.Profile, taskTool *agent.TaskTool, capSpecs []plugin.Spec, capAudit *capability.Audit, resolveSubagentProvider func(modelRef, effort string) (provider.Provider, *provider.Pricing, int, error), subagentIdentity func(modelRef, effort string) (string, string), execProv provider.Provider, proxySpec netclient.ProxySpec, tokenDelivery, tokenEconomy, dualModelPlanner bool, runner agent.Runner, executor *agent.Agent) (*control.Controller, error) {
+func buildController(a *assembly) (*control.Controller, error) {
 	ctrlOpts := control.Options{
-		Runner:                runner,
-		Executor:              executor,
-		Sink:                  sink,
-		Policy:                policy,
-		SubagentGate:          headlessGate,
-		Label:                 label,
-		ModelRef:              modelRef,
-		SystemPrompt:          sysPrompt,
-		SessionDir:            sessionDir,
-		Host:                  pluginHost,
-		Commands:              cmds,
-		Skills:                skills,
-		AllSkills:             allSkills,
-		SkillStore:            skillStore,
-		AllSkillStore:         allSkillStore,
-		SkillRunner:           skillRunner,
-		ReadOnlySkillRunner:   readOnlySkillRunner,
-		SkillProfile:          skillProfile,
-		Hooks:                 hookRunner,
-		Memory:                mem,
-		Cleanup:               cleanup,
-		BalanceURL:            entry.BalanceURL,
-		BalanceKey:            entry.EffectiveAPIKey(),
-		BalanceClient:         balanceClient,
-		Jobs:                  jm,
-		WorkspaceLease:        workspaceLease,
-		Registry:              reg,
-		PluginCtx:             ctx,
-		MCPDefaultCallTimeout: pluginSpecOptions.DefaultCallTimeout,
+		Runner:                a.runner,
+		Executor:              a.executor,
+		Sink:                  a.sink,
+		Policy:                a.policy,
+		SubagentGate:          a.headlessGate,
+		Label:                 a.label,
+		ModelRef:              a.modelRef,
+		SystemPrompt:          a.sysPrompt,
+		SessionDir:            a.sessionDir,
+		Host:                  a.pluginHost,
+		Commands:              a.cmds,
+		Skills:                a.skills,
+		AllSkills:             a.allSkills,
+		SkillStore:            a.skillStore,
+		AllSkillStore:         a.allSkillStore,
+		SkillRunner:           a.skillRunner,
+		ReadOnlySkillRunner:   a.readOnlySkillRunner,
+		SkillProfile:          a.skillProfile,
+		Hooks:                 a.hookRunner,
+		Memory:                a.mem,
+		Cleanup:               a.cleanup,
+		BalanceURL:            a.entry.BalanceURL,
+		BalanceKey:            a.entry.EffectiveAPIKey(),
+		BalanceClient:         a.balanceClient,
+		Jobs:                  a.jm,
+		WorkspaceLease:        a.workspaceLease,
+		Registry:              a.reg,
+		PluginCtx:             a.ctx,
+		MCPDefaultCallTimeout: a.pluginSpecOptions.DefaultCallTimeout,
 		MCPConfigureSpec: func(spec *plugin.Spec) {
 			if spec == nil {
 				return
 			}
-			spec.LaunchManager = pluginSpecOptions.LaunchManager
+			spec.LaunchManager = a.pluginSpecOptions.LaunchManager
 			if strings.TrimSpace(spec.ConfigSource) == "" {
-				spec.ConfigSource = pluginSpecOptions.ConfigSource
+				spec.ConfigSource = a.pluginSpecOptions.ConfigSource
 			}
 			if spec.DefaultStartupTimeout <= 0 {
-				spec.DefaultStartupTimeout = pluginSpecOptions.DefaultStartupTimeout
+				spec.DefaultStartupTimeout = a.pluginSpecOptions.DefaultStartupTimeout
 			}
-			applyMCPIsolation(spec, root, pluginSpecOptions)
+			applyMCPIsolation(spec, a.root, a.pluginSpecOptions)
 		},
-		CapabilityRuntime:      capRuntime,
-		WorkspaceRoot:          root,
-		ResponseLanguage:       cfg.ResponseLanguage(),
-		ReasoningLanguage:      cfg.ReasoningLanguage(),
-		DisableColdResumePrune: !cfg.ColdResumePruneEnabled(),
-		Shell:                  shell,
-		ApprovalTimeout:        opts.ApprovalTimeout,
-		RuntimeProfile:         runtimeProfile,
+		CapabilityRuntime:      a.capRuntime,
+		WorkspaceRoot:          a.root,
+		ResponseLanguage:       a.cfg.ResponseLanguage(),
+		ReasoningLanguage:      a.cfg.ReasoningLanguage(),
+		DisableColdResumePrune: !a.cfg.ColdResumePruneEnabled(),
+		Shell:                  a.shell,
+		ApprovalTimeout:        a.opts.ApprovalTimeout,
+		RuntimeProfile:         a.runtimeProfile,
 		OnRemember: func(rule string) control.RememberResult {
-			return rememberPermissionRule(root, rule)
+			return rememberPermissionRule(a.root, rule)
 		},
 		OnRememberPlanModeReadOnlyCommand: func(prefix string) control.PlanModeReadOnlyCommandTrustResult {
-			return rememberPlanModeReadOnlyCommand(root, prefix)
+			return rememberPlanModeReadOnlyCommand(a.root, prefix)
 		},
-		SessionRecoveryMeta: opts.SessionRecoveryMeta,
-		OnSessionRecovered:  opts.OnSessionRecovered,
+		SessionRecoveryMeta: a.opts.SessionRecoveryMeta,
+		OnSessionRecovered:  a.opts.OnSessionRecovered,
 	}
 	// Guardian: when guardian_model is configured, spawn an LLM safety reviewer
 	// that can auto-allow safe Ask decisions and annotate risky ones before
 	// escalating to the human approval prompt.
-	if guardianModel := cfg.Agent.GuardianModel; guardianModel != "" {
-		ge, ok := resolveOptionalEntry(opts, cfg, guardianModel)
+	if guardianModel := a.cfg.Agent.GuardianModel; guardianModel != "" {
+		ge, ok := resolveOptionalEntry(a.opts, a.cfg, guardianModel)
 		if !ok {
 			slog.Warn("guardian model is not a configured provider — guardian disabled", "model", guardianModel)
-			sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Guardian was disabled because its model was not found.", Detail: fmt.Sprintf("guardian_model %q not found — guardian disabled", guardianModel)})
+			a.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Guardian was disabled because its model was not found.", Detail: fmt.Sprintf("guardian_model %q not found — guardian disabled", guardianModel)})
 		} else {
-			pProv, err := resolveProvider(opts, cfg, proxySpec, provider.Selection{Ref: modelRefFromEntry(ge)})
+			pProv, err := resolveProvider(a.opts, a.cfg, a.proxySpec, provider.Selection{Ref: modelRefFromEntry(ge)})
 			if err != nil {
 				slog.Warn("guardian provider construction failed — guardian disabled", "model", guardianModel, "err", err)
-				sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Guardian was disabled because it could not start.", Detail: fmt.Sprintf("guardian construction failed: %v — guardian disabled", err)})
+				a.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: "Guardian was disabled because it could not start.", Detail: fmt.Sprintf("guardian construction failed: %v — guardian disabled", err)})
 			} else {
-				guardianReg := agent.FilterReadOnlyRegistry(reg, agent.SubagentMetaTools()...)
-				ctrlOpts.Guardian = guardian.NewSession(pProv, guardianReg, guardian.PolicyPrompt(), modelRefFromEntry(ge), cfg.Agent.GuardianTemperature, ge.Price, sink)
-				sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: fmt.Sprintf("guardian enabled · model=%s", ge.Model)})
+				guardianReg := agent.FilterReadOnlyRegistry(a.reg, agent.SubagentMetaTools()...)
+				ctrlOpts.Guardian = guardian.NewSession(pProv, guardianReg, guardian.PolicyPrompt(), modelRefFromEntry(ge), a.cfg.Agent.GuardianTemperature, ge.Price, a.sink)
+				a.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: fmt.Sprintf("guardian enabled · model=%s", ge.Model)})
 			}
 		}
 	}
 	// Recovery reviewer: prefer recovery_model, then guardian_model, then the
 	// active main model with an isolated session/policy.
 	{
-		recoveryModel := strings.TrimSpace(cfg.Agent.RecoveryModel)
+		recoveryModel := strings.TrimSpace(a.cfg.Agent.RecoveryModel)
 		if recoveryModel == "" {
-			recoveryModel = strings.TrimSpace(cfg.Agent.GuardianModel)
+			recoveryModel = strings.TrimSpace(a.cfg.Agent.GuardianModel)
 		}
 		if recoveryModel == "" {
-			recoveryModel = modelRef
+			recoveryModel = a.modelRef
 		}
 		if recoveryModel != "" {
-			if re, ok := cfg.ResolveModel(recoveryModel); ok {
-				if rProv, err := NewProviderWithProxy(re, proxySpec, cfg.WebSearch.Enabled()); err == nil {
-					ctrlOpts.RecoveryReviewer = recovery.NewSessionWithSink(rProv, re.Price, modelRefFromEntry(re), sink)
+			if re, ok := a.cfg.ResolveModel(recoveryModel); ok {
+				if rProv, err := NewProviderWithProxy(re, a.proxySpec, a.cfg.WebSearch.Enabled()); err == nil {
+					ctrlOpts.RecoveryReviewer = recovery.NewSessionWithSink(rProv, re.Price, modelRefFromEntry(re), a.sink)
 				} else {
 					slog.Warn("recovery reviewer provider construction failed — rule-only recovery", "model", recoveryModel, "err", err)
 				}
@@ -246,48 +233,48 @@ func buildController(ctx context.Context, opts Options, cfg *config.Config, root
 		// HeadlessApprovalMode is an explicit declaration that this frontend has
 		// no decision channel (`corvus run`). ApprovalTimeout is not a proxy for
 		// that capability: bots have a bounded timeout and can still answer cards.
-		ctrlOpts.RecoveryHeadless = recoveryHeadlessMode(opts)
+		ctrlOpts.RecoveryHeadless = recoveryHeadlessMode(a.opts)
 	}
 	ctrl := control.New(ctrlOpts)
 	// Share the recovery checkpoint with task/fleet sub-agents so background
 	// writers observe the same failure state as the root agent.
-	if taskTool != nil {
+	if a.taskTool != nil {
 		if g := ctrl.Executor(); g != nil {
-			taskTool.WithRecoveryGate(g.RecoveryGate())
+			a.taskTool.WithRecoveryGate(g.RecoveryGate())
 		}
 	}
-	if capRuntime != nil {
-		ctrl.SetCapabilityProxyTools(capRuntime.ConnectedProxyTools)
+	if a.capRuntime != nil {
+		ctrl.SetCapabilityProxyTools(a.capRuntime.ConnectedProxyTools)
 	}
 	// Task tools created before capRuntime assignment still need the runtime if
 	// they were built early; re-bind when present.
-	if taskTool != nil && capRuntime != nil {
-		taskTool.WithCapabilityRuntime(capRuntime)
+	if a.taskTool != nil && a.capRuntime != nil {
+		a.taskTool.WithCapabilityRuntime(a.capRuntime)
 	}
-	if tokenDelivery {
+	if a.tokenDelivery {
 		var router *capability.SemanticRouter
 		// Prefer agent.subagent_models["capability-router"] when configured.
-		if modelRef := strings.TrimSpace(cfg.Agent.SubagentModels["capability-router"]); modelRef != "" {
-			effortRef := strings.TrimSpace(cfg.Agent.SubagentEfforts["capability-router"])
-			if p, price, _, err := resolveSubagentProvider(modelRef, effortRef); err == nil && p != nil {
-				usageModelRef, _ := subagentIdentity(modelRef, effortRef)
-				router = &capability.SemanticRouter{Provider: p, Sink: sink, Model: usageModelRef, Pricing: price, Audit: capAudit}
+		if routerRef := strings.TrimSpace(a.cfg.Agent.SubagentModels["capability-router"]); routerRef != "" {
+			effortRef := strings.TrimSpace(a.cfg.Agent.SubagentEfforts["capability-router"])
+			if p, price, _, err := a.resolveSubagentProvider(routerRef, effortRef); err == nil && p != nil {
+				usageModelRef, _ := a.subagentIdentity(routerRef, effortRef)
+				router = &capability.SemanticRouter{Provider: p, Sink: a.sink, Model: usageModelRef, Pricing: price, Audit: a.capAudit}
 			}
 		}
 		if router == nil {
 			// Fallback to the executor's provider — and its pricing, so router
 			// usage events never display as zero-cost.
-			router = &capability.SemanticRouter{Provider: execProv, Sink: sink, Model: modelRef, Pricing: entry.Price, Audit: capAudit}
+			router = &capability.SemanticRouter{Provider: a.execProv, Sink: a.sink, Model: a.modelRef, Pricing: a.entry.Price, Audit: a.capAudit}
 		}
-		ctrl.WireCapabilityRouting(cfg.Plugins, capSpecs, router, capAudit)
+		ctrl.WireCapabilityRouting(a.cfg.Plugins, a.capSpecs, router, a.capAudit)
 		ctrl.SetCapabilityProxyRouting(true)
-	} else if tokenEconomy {
-		ctrl.WireCapabilityRouting(cfg.Plugins, capSpecs, nil, nil)
-	} else if dualModelPlanner {
+	} else if a.tokenEconomy {
+		ctrl.WireCapabilityRouting(a.cfg.Plugins, a.capSpecs, nil, nil)
+	} else if a.dualModelPlanner {
 		// Balanced dual-model: load plugin config + schema cache so not-yet-
 		// started MCP can route through the stable Planner/Executor proxy.
 		// No semantic router — deterministic route only.
-		ctrl.WireCapabilityRouting(cfg.Plugins, capSpecs, nil, capAudit)
+		ctrl.WireCapabilityRouting(a.cfg.Plugins, a.capSpecs, nil, a.capAudit)
 		ctrl.SetCapabilityProxyRouting(true)
 	}
 	return ctrl, nil
