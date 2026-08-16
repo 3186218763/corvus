@@ -147,46 +147,22 @@ func TestSetPlannerModel(t *testing.T) {
 	}
 }
 
-func TestSetAutoPlanRejectsRetiredModes(t *testing.T) {
+func TestUIShortcutLayoutNormalizes(t *testing.T) {
 	c := Default()
-	if err := c.SetAutoPlan("off"); err != nil {
-		t.Fatalf("SetAutoPlan(off): %v", err)
-	}
-	if c.Agent.AutoPlan != "off" || c.Agent.AutoPlanClassifier != "" {
-		t.Fatalf("retired auto-plan state = (%q, %q), want off/empty", c.Agent.AutoPlan, c.Agent.AutoPlanClassifier)
-	}
-	for _, mode := range []string{"on", "ask", "auto"} {
-		if err := c.SetAutoPlan(mode); err == nil || !strings.Contains(err.Error(), "retired") {
-			t.Fatalf("SetAutoPlan(%q) err = %v, want retired error", mode, err)
+	for _, tt := range []struct {
+		in   string
+		want string
+	}{
+		{"", "classic"},
+		{"desktop", "desktop"},
+		{"dual-axis", "desktop"},
+		{"classic", "classic"},
+		{"surprise", "classic"},
+	} {
+		c.UI.ShortcutLayout = tt.in
+		if got := c.UIShortcutLayout(); got != tt.want {
+			t.Errorf("UIShortcutLayout(%q) = %q, want %q", tt.in, got, tt.want)
 		}
-	}
-}
-
-func TestSetUIShortcutLayout(t *testing.T) {
-	c := Default()
-	if got := c.UIShortcutLayout(); got != "classic" {
-		t.Fatalf("default shortcut layout = %q, want classic", got)
-	}
-	if err := c.SetUIShortcutLayout("desktop"); err != nil {
-		t.Fatalf("SetUIShortcutLayout desktop: %v", err)
-	}
-	if got := c.UIShortcutLayout(); got != "desktop" {
-		t.Fatalf("shortcut layout = %q, want desktop", got)
-	}
-	if err := c.SetUIShortcutLayout("dual-axis"); err != nil {
-		t.Fatalf("SetUIShortcutLayout alias: %v", err)
-	}
-	if got := c.UIShortcutLayout(); got != "desktop" {
-		t.Fatalf("shortcut layout alias = %q, want desktop", got)
-	}
-	if err := c.SetUIShortcutLayout("classic"); err != nil {
-		t.Fatalf("SetUIShortcutLayout classic: %v", err)
-	}
-	if got := c.UIShortcutLayout(); got != "classic" {
-		t.Fatalf("shortcut layout = %q, want classic", got)
-	}
-	if err := c.SetUIShortcutLayout("surprise"); err == nil {
-		t.Fatal("expected error for invalid shortcut layout")
 	}
 }
 

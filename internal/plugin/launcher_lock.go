@@ -14,8 +14,10 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"corvus/internal/mcplaunch"
+	"corvus/internal/netclient"
 	"corvus/internal/secrets"
 )
 
@@ -197,7 +199,7 @@ func resolveLauncherLocator(ctx context.Context, spec Spec, locator launcherLoca
 	case "npx", "bunx":
 		return resolveNPMPackage(ctx, spec, locator.value)
 	case "uvx":
-		return resolvePyPIPackage(ctx, locator.value)
+		return resolvePyPIPackage(ctx, spec, locator.value)
 	default:
 		return "", "", fmt.Errorf("unsupported mutable launcher %q", locator.kind)
 	}
@@ -258,7 +260,11 @@ func npmPackageName(locator string) string {
 	return locator
 }
 
-func resolvePyPIPackage(ctx context.Context, locator string) (string, string, error) {
+// resolvePyPIPackage pins a uvx locator by querying PyPI. The query goes
+// through a netclient transport built from the plugin's ProxySpec so this
+// resolution honors the same egress policy as every other Corvus request
+// (ADR-0004); previously it was the process's only direct DefaultClient call.
+func resolvePyPIPackage(ctx context.Context, spec Spec, locator string) (string, string, error) {
 	match := pep508Package.FindStringSubmatch(strings.TrimSpace(locator))
 	if match == nil {
 		return "", "", fmt.Errorf("unsupported uvx package locator %q", locator)
@@ -276,7 +282,15 @@ func resolvePyPIPackage(ctx context.Context, locator string) (string, string, er
 	if err != nil {
 		return "", "", err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	client, err := netclient.NewHTTPClient(spec.Proxy, netclient.TransportOptions{
+		DialTimeout:           30 * time.Second,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("resolve PyPI package %q: %w", locator, err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("resolve PyPI package %q: %w", locator, err)
 	}

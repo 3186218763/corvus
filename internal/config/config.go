@@ -729,8 +729,10 @@ type AgentConfig struct {
 	// TOML and desktop clients may still send them, but config loading
 	// normalizes both to zero and rendering omits them. One-off CLI and
 	// unattended bot limits remain separate controls.
-	MaxSteps            int     `toml:"max_steps"`
-	PlannerMaxSteps     int     `toml:"planner_max_steps"`
+	MaxSteps        int `toml:"max_steps"`
+	PlannerMaxSteps int `toml:"planner_max_steps"`
+	// Temperature is live (main + planner sampling temperature); only the two
+	// fields above it are deprecated.
 	Temperature         float64 `toml:"temperature"`
 	PlannerModel        string  `toml:"planner_model"`
 	GuardianModel       string  `toml:"guardian_model"`

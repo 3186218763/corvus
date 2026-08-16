@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"corvus/internal/netpolicy"
 	"corvus/internal/textutil"
@@ -57,6 +56,12 @@ func NewWebSearchTool(engine, baseURL, apiKey string, maxResults int, client *ht
 			return nil, fmt.Errorf("engine %q requires api_key", engine)
 		}
 	}
+	if client == nil {
+		// Every configured engine must egress through the caller's netclient
+		// transport (proxy policy, SSRF guard); a bare client here would be the
+		// only request in the process that bypasses it (ADR-0004).
+		return nil, fmt.Errorf("web_search: an HTTP client is required; pass the netclient-built client")
+	}
 	return webSearch{
 		engine:     engine,
 		baseURL:    baseURL,
@@ -70,7 +75,6 @@ func NewWebSearchTool(engine, baseURL, apiKey string, maxResults int, client *ht
 const (
 	webSearchDefaultMax  = 8
 	webSearchMaxMax      = 20
-	webSearchTimeout     = 15 * time.Second
 	webSearchMaxRead     = 1 << 20 // 1 MiB cap
 	webSearchSnippetRune = 200
 )
@@ -133,11 +137,15 @@ func (t webSearch) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if maxResults <= 0 {
 		maxResults = webSearchDefaultMax
 	}
-	client := t.client
-	if client == nil {
-		client = &http.Client{Timeout: webSearchTimeout}
+	switch t.engine {
+	case "searxng", "brave", "tavily":
+	default:
+		return "", fmt.Errorf("web_search: unknown web_search engine %q (supported: searxng, brave, tavily)", t.engine)
 	}
-
+	if t.client == nil {
+		return "", fmt.Errorf("web_search: no HTTP client configured")
+	}
+	client := t.client
 	var results []webSearchResult
 	var err error
 	switch t.engine {
@@ -147,8 +155,6 @@ func (t webSearch) Execute(ctx context.Context, args json.RawMessage) (string, e
 		results, err = t.searchBrave(ctx, client, query, maxResults)
 	case "tavily":
 		results, err = t.searchTavily(ctx, client, query, maxResults)
-	default:
-		return "", fmt.Errorf("web_search: unknown web_search engine %q (supported: searxng, brave, tavily)", t.engine)
 	}
 	if err != nil {
 		return "", fmt.Errorf("web_search: %w", err)

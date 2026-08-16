@@ -4327,9 +4327,7 @@ func TestDesktopShortcutLayoutShiftTabCyclesSafeModes(t *testing.T) {
 	m.ctrl = control.New(control.Options{})
 	m.ctrl.SetToolApprovalMode(control.ToolApprovalAuto)
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout("desktop"); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = "desktop"
 
 	shiftTab := tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 	out, _ := m.Update(shiftTab)
@@ -4362,9 +4360,7 @@ func TestDesktopShortcutLayoutShiftTabClearsGoalWhenEnteringPlan(t *testing.T) {
 	m.ctrl = control.New(control.Options{})
 	m.ctrl.SetGoal("ship the shortcut redesign")
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout("desktop"); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = "desktop"
 
 	shiftTab := tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 	out, _ := m.Update(shiftTab)
@@ -4383,9 +4379,7 @@ func TestDesktopShortcutLayoutCtrlYTogglesYolo(t *testing.T) {
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{})
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout("desktop"); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = "desktop"
 
 	ctrlY := tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl}
 	out, _ := m.Update(ctrlY)
@@ -4406,9 +4400,7 @@ func TestDesktopShortcutLayoutCtrlYRestoresAutoAfterYolo(t *testing.T) {
 	m.ctrl = control.New(control.Options{})
 	m.ctrl.SetToolApprovalMode(control.ToolApprovalAuto)
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout("desktop"); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = "desktop"
 
 	ctrlY := tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl}
 	out, _ := m.Update(ctrlY)
@@ -4428,9 +4420,7 @@ func TestClassicShortcutLayoutCtrlYTogglesYolo(t *testing.T) {
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{})
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout("classic"); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = "classic"
 
 	ctrlY := tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl}
 	out, cmd := m.Update(ctrlY)
@@ -4454,9 +4444,7 @@ func TestPrimaryYShortcutRestoresAutoUnderClassicShortcutLayout(t *testing.T) {
 	m.ctrl = control.New(control.Options{})
 	m.ctrl.SetToolApprovalMode(control.ToolApprovalAuto)
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout("classic"); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = "classic"
 
 	cmdY := tea.KeyPressMsg{Code: 'y', Mod: tea.ModSuper}
 	out, _ := m.Update(cmdY)
@@ -4476,9 +4464,7 @@ func TestDesktopShortcutLayoutDoesNotStealCompletionTab(t *testing.T) {
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{})
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout("desktop"); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = "desktop"
 	m.input.SetValue("/")
 	m.completion = completion{
 		active:      true,
@@ -4501,9 +4487,7 @@ func TestShiftTabCyclesSafeModesUnderClassicShortcutLayout(t *testing.T) {
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{})
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout("classic"); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = "classic"
 
 	out, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	m = out.(chatTUI)
@@ -4522,9 +4506,7 @@ func TestShiftTabLeavesDontAskForAskMode(t *testing.T) {
 	m.ctrl = control.New(control.Options{})
 	m.ctrl.SetToolApprovalMode(control.ToolApprovalDontAsk)
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout("desktop"); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = "desktop"
 	if got := m.modeTagText(); got != "Don't Ask" {
 		t.Fatalf("dontAsk mode tag = %q", got)
 	}

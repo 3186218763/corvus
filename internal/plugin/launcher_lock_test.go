@@ -175,7 +175,7 @@ func TestResolvePyPIPackagePinsVersionAndFileDigests(t *testing.T) {
 	oldBase := pypiBaseURL
 	pypiBaseURL = server.URL
 	defer func() { pypiBaseURL = oldBase }()
-	resolved, digest, err := resolvePyPIPackage(context.Background(), "demo")
+	resolved, digest, err := resolvePyPIPackage(context.Background(), Spec{}, "demo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +262,7 @@ func TestFullGitCommitAcceptsOnlyCompleteObjectNames(t *testing.T) {
 }
 
 func TestResolvePyPIPackageRejectsWildcardBeforeNetwork(t *testing.T) {
-	if _, _, err := resolvePyPIPackage(context.Background(), "server==2.4.*"); err == nil || !strings.Contains(err.Error(), "wildcard") {
+	if _, _, err := resolvePyPIPackage(context.Background(), Spec{}, "server==2.4.*"); err == nil || !strings.Contains(err.Error(), "wildcard") {
 		t.Fatalf("wildcard uvx locator resolved: %v", err)
 	}
 }

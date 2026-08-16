@@ -138,7 +138,7 @@ func TestWebSearchBadEngine(t *testing.T) {
 }
 
 func TestWebSearchMissingKey(t *testing.T) {
-	ws := webSearch{engine: "brave", baseURL: "https://example.com", maxResults: 5}
+	ws := webSearch{engine: "brave", baseURL: "https://example.com", maxResults: 5, client: &http.Client{}}
 	_, err := webSearchExec(t, ws, "x")
 	if err == nil || !strings.Contains(err.Error(), "api_key") {
 		t.Errorf("error = %v, want missing api_key error", err)

@@ -190,9 +190,7 @@ func TestComposerBadgeAndStatusFitWithinFrameWidth(t *testing.T) {
 	ctrl.SetToolApprovalMode(control.ToolApprovalDontAsk)
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 20)
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout("desktop"); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = "desktop"
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 20, Height: 12})
 	m = next.(chatTUI)
 	if got := m.modeTagText(); got != "Don't Ask" {
@@ -250,9 +248,7 @@ func TestClassicModeTagShowsAskForDefaultPosture(t *testing.T) {
 	}
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout("classic"); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = "classic"
 	if got := m.modeTagText(); got != "Ask" {
 		t.Fatalf("classic modeTagText() = %q, want Ask", got)
 	}
@@ -272,9 +268,7 @@ func TestDesktopModeTagParityOnBadge(t *testing.T) {
 	ctrl.SetToolApprovalMode(control.ToolApprovalDontAsk)
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout("desktop"); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = "desktop"
 	if got := m.modeTagText(); got != "Don't Ask" {
 		t.Fatalf("desktop dontAsk modeTagText() = %q, want Don't Ask", got)
 	}
@@ -567,9 +561,7 @@ func renderStatuslineViewWithShortcutLayout(t *testing.T, layout string) string 
 	ctrl := control.New(control.Options{})
 	m := newChatTUI(ctrl, "", make(chan event.Event, 1), 80)
 	m.cfg = config.Default()
-	if err := m.cfg.SetUIShortcutLayout(layout); err != nil {
-		t.Fatal(err)
-	}
+	m.cfg.UI.ShortcutLayout = layout
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	return next.(chatTUI).View().Content
 }

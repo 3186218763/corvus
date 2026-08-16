@@ -69,32 +69,6 @@ func (c *Config) SetPlannerModel(name string) error {
 	return nil
 }
 
-// SetAutoPlan is retained for source compatibility with older desktop clients.
-// Automatic plan mode is retired: "off" is an idempotent compatibility write,
-// while every attempt to enable it is rejected explicitly.
-func (c *Config) SetAutoPlan(mode string) error {
-	if strings.EqualFold(strings.TrimSpace(mode), "off") {
-		c.Agent.AutoPlan = "off"
-		c.Agent.AutoPlanClassifier = ""
-		return nil
-	}
-	return fmt.Errorf("automatic plan mode has been retired; use Plan Mode explicitly")
-}
-
-// SetUIShortcutLayout selects the CLI keyboard shortcut layout. "classic" keeps
-// historical behavior; "desktop" enables the two-axis desktop-style shortcuts.
-func (c *Config) SetUIShortcutLayout(layout string) error {
-	switch strings.ToLower(strings.TrimSpace(layout)) {
-	case "", "classic", "default", "legacy", "off":
-		c.UI.ShortcutLayout = "classic"
-	case "desktop", "dual", "dual-axis", "dual_axis":
-		c.UI.ShortcutLayout = "desktop"
-	default:
-		return fmt.Errorf("shortcut_layout %q: must be classic|desktop", layout)
-	}
-	return nil
-}
-
 // UpsertProvider adds e, or replaces an existing provider with the same name
 // (preserving its position). Required fields (name, kind, base_url, model/models)
 // are validated; whether the kind is actually registered and the key resolves is
