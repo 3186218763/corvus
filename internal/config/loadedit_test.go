@@ -51,7 +51,8 @@ func TestMergeTOMLUIProviderAccessPreservesExplicitEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	access, declared, err := mergeTOMLProviderAccess([]string{path})
+	sources, decodeErr := decodeTOMLSources([]string{path})
+	access, declared, err := mergeTOMLProviderAccess(sources, decodeErr)
 	if err != nil {
 		t.Fatalf("mergeTOMLProviderAccess: %v", err)
 	}

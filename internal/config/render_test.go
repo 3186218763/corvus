@@ -185,39 +185,39 @@ func TestWriteRootsForRootExcludesUserConfigDirByDefault(t *testing.T) {
 	}
 }
 
-// TestRenderTOMLRoundTrips ensures the annotated TOML we emit parses back into
-// an equivalent config — i.e. the wizard never writes a file it can't read.
-func TestRenderTOMLRoundTrips(t *testing.T) {
-	orig := Default()
-	orig.Providers = append(orig.Providers, legacyMimoCustomProvider("mimo-pro"))
-	orig.DefaultModel = "mimo-pro"
-	orig.Language = "zh"
-	orig.UI.Theme = "light"
-	orig.UI.ThemeStyle = "glacier"
-	orig.UI.ShortcutLayout = "desktop"
-	orig.UI.CursorShape = "bar"
-	orig.UI.Currency = "CNY"
-	orig.UI.ProviderAccess = []string{"deepseek-flash", "mimo-pro"}
-	orig.Agent.RecoveryModel = "mimo-pro"
-	orig.Agent.RecoveryTemperature = 0.15
-	orig.Agent.ReasoningLanguage = "zh"
-	orig.Agent.ToolResultSnipRatio = 0.65
-	orig.Agent.SubagentModel = "mimo-pro"
-	orig.Agent.SubagentModels = map[string]string{"review": "deepseek-pro"}
-	orig.Agent.MaxSubagentDepth = 3
-	orig.Agent.Keep = []string{"errors", "user_marked"}
-	orig.Agent.RecentKeep = 4
-	orig.Tools.BashTimeoutSeconds = intPtr(900)
-	orig.Tools.BackgroundJobs.StalledWarningSeconds = intPtr(30)
-	orig.Tools.Shell.Prefer = "bash"
-	orig.Tools.Shell.Path = "/usr/local/bin/bash"
-	orig.Permissions = PermissionsConfig{
+// richRenderFixture returns a config that differs from Default() in every
+// section, so render tests exercise each serializer's full field surface.
+func richRenderFixture() *Config {
+	c := Default()
+	c.Providers = append(c.Providers, legacyMimoCustomProvider("mimo-pro"))
+	c.DefaultModel = "mimo-pro"
+	c.Language = "zh"
+	c.UI.Theme = "light"
+	c.UI.ThemeStyle = "glacier"
+	c.UI.ShortcutLayout = "desktop"
+	c.UI.CursorShape = "bar"
+	c.UI.Currency = "CNY"
+	c.UI.ProviderAccess = []string{"deepseek-flash", "mimo-pro"}
+	c.Agent.RecoveryModel = "mimo-pro"
+	c.Agent.RecoveryTemperature = 0.15
+	c.Agent.ReasoningLanguage = "zh"
+	c.Agent.ToolResultSnipRatio = 0.65
+	c.Agent.SubagentModel = "mimo-pro"
+	c.Agent.SubagentModels = map[string]string{"review": "deepseek-pro"}
+	c.Agent.MaxSubagentDepth = 3
+	c.Agent.Keep = []string{"errors", "user_marked"}
+	c.Agent.RecentKeep = 4
+	c.Tools.BashTimeoutSeconds = intPtr(900)
+	c.Tools.BackgroundJobs.StalledWarningSeconds = intPtr(30)
+	c.Tools.Shell.Prefer = "bash"
+	c.Tools.Shell.Path = "/usr/local/bin/bash"
+	c.Permissions = PermissionsConfig{
 		Mode:             "deny",
 		Deny:             []string{"Bash(rm -rf*)"},
 		Allow:            []string{"Bash(go test:*)", "read_file"},
 		AllowDynamicBash: true,
 	}
-	orig.Network = NetworkConfig{
+	c.Network = NetworkConfig{
 		ProxyMode: "custom",
 		NoProxy:   "localhost,127.0.0.1",
 		Proxy: NetworkProxyConfig{
@@ -228,13 +228,13 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 			Password: "${CORVUS_PROXY_PASSWORD}",
 		},
 	}
-	orig.Environment.Enabled = boolPtr(false)
-	orig.Environment.Tools = map[string]string{"go": "/opt/homebrew/bin/go", "python3": "~/.pyenv/shims/python3"}
-	orig.Skills.Paths = []string{"~/my-skills", "../shared/skills"}
-	orig.Skills.ExcludedPaths = []string{"~/.agents/skills"}
-	orig.Skills.DisabledSkills = []string{"review", "explore"}
-	orig.Skills.MaxDepth = 2
-	orig.LSP = LSPConfig{
+	c.Environment.Enabled = boolPtr(false)
+	c.Environment.Tools = map[string]string{"go": "/opt/homebrew/bin/go", "python3": "~/.pyenv/shims/python3"}
+	c.Skills.Paths = []string{"~/my-skills", "../shared/skills"}
+	c.Skills.ExcludedPaths = []string{"~/.agents/skills"}
+	c.Skills.DisabledSkills = []string{"review", "explore"}
+	c.Skills.MaxDepth = 2
+	c.LSP = LSPConfig{
 		Enabled: true,
 		Servers: map[string]LSPServer{
 			"lua": {
@@ -247,19 +247,88 @@ func TestRenderTOMLRoundTrips(t *testing.T) {
 			},
 		},
 	}
-	orig.Plugins = []PluginEntry{
+	c.Plugins = []PluginEntry{
 		{Name: "example", Command: "corvus-plugin-example"},
 		{Name: "stripe", Type: "http", URL: "https://mcp.stripe.com", Headers: map[string]string{"Authorization": "Bearer x"}, AutoStart: boolPtr(false), Tier: "background"},
 	}
-	mm, _ := orig.Provider("mimo-pro")
+	mm, _ := c.Provider("mimo-pro")
 	mm.BaseURL = "http://localhost:8000/v1"
 	mm.ChatURL = "http://localhost:8000/v1/chat/completions"
 	mm.ModelsURL = "http://localhost:8000/v1/models"
 	mm.ReasoningProtocol = "openai"
 	mm.PresetID = "mimo-api"
 	mm.PresetVersion = ProviderPresetVersion
-	ds, _ := orig.Provider("deepseek-flash")
+	ds, _ := c.Provider("deepseek-flash")
 	ds.Effort = "max"
+
+	return c
+}
+
+// TestRenderTOMLRoundTrips ensures the annotated TOML we emit parses back into
+// an equivalent config — i.e. the wizard never writes a file it can't read.
+// TestRenderTOMLScopesAreByteStable pins the renderers' exact output: for a
+// config differing from defaults in every section, each scope render and the
+// project delta must (1) decode back onto Default() preserving the fixture's
+// values, and (2) re-render to byte-identical output. Byte equality catches
+// annotation drift and dropped fields that a value-only assertion would miss;
+// the fixture-preservation half catches a renderer emitting bytes decode
+// ignores. New config options must extend richRenderFixture so both halves
+// stay honest.
+func TestRenderTOMLScopesAreByteStable(t *testing.T) {
+	isolateUserConfigHome(t)
+	orig := richRenderFixture()
+
+	for _, scope := range []RenderScope{RenderScopeFull, RenderScopeUser, RenderScopeProject} {
+		t.Run(string(scope), func(t *testing.T) {
+			first := RenderTOMLForScope(orig, scope)
+			var decoded Config
+			if _, err := toml.Decode(first, &decoded); err != nil {
+				t.Fatalf("rendered TOML does not parse: %v\n---\n%s", err, first)
+			}
+			if scope == RenderScopeProject {
+				if strings.Contains(first, "\ncurrency =") {
+					t.Fatal("project scope must not render ui.currency")
+				}
+				if strings.Contains(first, "\ncredentials_store =") {
+					t.Fatal("project scope must not render credentials_store")
+				}
+			} else if !strings.Contains(first, "\ncurrency = \"CNY\"") {
+				t.Fatal("user/full scope must render ui.currency")
+			}
+			decoded.ConfigVersion = orig.ConfigVersion
+			second := RenderTOMLForScope(&decoded, scope)
+			if trimTrailingBlankLines(second) != trimTrailingBlankLines(first) {
+				t.Fatalf("render is not byte-stable under decode; first:\n%s\n---second---\n%s", first, second)
+			}
+		})
+	}
+
+	t.Run("project-delta", func(t *testing.T) {
+		delta := RenderTOMLProjectDelta(orig)
+		overlay := Default()
+		if _, err := toml.Decode(delta, overlay); err != nil {
+			t.Fatalf("project delta does not parse: %v\n---\n%s", err, delta)
+		}
+		if again := RenderTOMLProjectDelta(overlay); trimTrailingBlankLines(again) != trimTrailingBlankLines(delta) {
+			t.Fatalf("project delta is not byte-stable under decode; first:\n%s\n---second---\n%s", delta, again)
+		}
+	})
+}
+
+// trimTrailingBlankLines drops blank lines at EOF only: the renderers emit a
+// section-separating blank after every section, so whether trailing empty
+// sections render can change only trailing whitespace, which no consumer of
+// these bytes observes.
+func trimTrailingBlankLines(s string) string {
+	lines := strings.Split(s, "\n")
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.Join(lines, "\n")
+}
+
+func TestRenderTOMLRoundTrips(t *testing.T) {
+	orig := richRenderFixture()
 
 	rendered := RenderTOML(orig)
 

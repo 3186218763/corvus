@@ -150,7 +150,13 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		} else {
 			b.WriteString("# deny    = [\"*.internal.corp\", \"10.0.0.0\"]   # hostname globs always refused; wins over allow\n")
 		}
-		fmt.Fprintf(&b, "default = %q   # allow (open) | deny (closed) | ask (no approval UI: falls back to allow)\n", c.NetworkPolicy.Default)
+		policyDefault := strings.TrimSpace(c.NetworkPolicy.Default)
+		if policyDefault == "" {
+			// NetPolicy maps a blank default to "allow"; render that value so
+			// a reloaded config does not churn the file with default = "".
+			policyDefault = "allow"
+		}
+		fmt.Fprintf(&b, "default = %q   # allow (open) | deny (closed) | ask (no approval UI: falls back to allow)\n", policyDefault)
 		b.WriteString("\n")
 	}
 	if shouldRenderEnvironment(c, defaults, scope) {
@@ -231,13 +237,15 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# max_subagent_depth = 2   # nested subagent delegation depth; set 1 to disable nested delegation\n")
 	}
-	if c.Agent.MaxSubagentConcurrency != defaults.Agent.MaxSubagentConcurrency {
-		fmt.Fprintf(&b, "max_subagent_concurrency = %d   # session-wide sub-agent concurrency (task/fleet/skills)\n", c.Agent.MaxSubagentConcurrency)
+	// Zero means "unset" for both knobs (NormalizeConcurrencyLimits maps it to
+	// 6/3), so rendering an explicit 0 after a reload would only churn the file.
+	if v := c.Agent.MaxSubagentConcurrency; v != 0 && v != defaults.Agent.MaxSubagentConcurrency {
+		fmt.Fprintf(&b, "max_subagent_concurrency = %d   # session-wide sub-agent concurrency (task/fleet/skills)\n", v)
 	} else {
 		b.WriteString("# max_subagent_concurrency = 6   # session-wide sub-agent concurrency (task/fleet/skills)\n")
 	}
-	if c.Agent.MaxParallelWriters != defaults.Agent.MaxParallelWriters {
-		fmt.Fprintf(&b, "max_parallel_writers = %d   # concurrent writers with non-overlapping write_paths\n", c.Agent.MaxParallelWriters)
+	if v := c.Agent.MaxParallelWriters; v != 0 && v != defaults.Agent.MaxParallelWriters {
+		fmt.Fprintf(&b, "max_parallel_writers = %d   # concurrent writers with non-overlapping write_paths\n", v)
 	} else {
 		b.WriteString("# max_parallel_writers = 3   # concurrent writers with non-overlapping write_paths\n")
 	}
@@ -1077,7 +1085,15 @@ func shouldRenderNetworkPolicy(c, defaults *Config, scope RenderScope) bool {
 	if scope != RenderScopeProject {
 		return true
 	}
-	return !reflect.DeepEqual(c.NetworkPolicy, defaults.NetworkPolicy)
+	// A blank default is the default policy at runtime, so it must not make a
+	// defaults-equal policy look project-customized after a reload.
+	eq := func(p NetworkPolicyConfig) NetworkPolicyConfig {
+		if strings.TrimSpace(p.Default) == "" {
+			p.Default = "allow"
+		}
+		return p
+	}
+	return !reflect.DeepEqual(eq(c.NetworkPolicy), eq(defaults.NetworkPolicy))
 }
 
 func shouldRenderEnvironment(c, defaults *Config, scope RenderScope) bool {

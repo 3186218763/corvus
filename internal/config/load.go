@@ -167,13 +167,14 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 	// only the last file's. Re-merge by name across all sources (later wins) so a
 	// project .corvus/config.toml doesn't drop the global config's MCP servers.
 	// mergeTOMLPlugins only reads files; it does not run on-disk migrations.
-	plugins, err := mergeTOMLPlugins(tomlSources)
+	decodedSources, decodeErr := decodeTOMLSources(tomlSources)
+	plugins, err := mergeTOMLPlugins(decodedSources, decodeErr)
 	if err != nil {
 		cfg.addLoadWarning(fmt.Sprintf("plugin configuration could not be merged (%v); continuing without those entries", err))
 	} else {
 		cfg.Plugins = plugins
 	}
-	if providers, providerSources, shadowedProjectProviders, ok, err := mergeTOMLProviders(tomlSources); err != nil {
+	if providers, providerSources, shadowedProjectProviders, ok, err := mergeTOMLProviders(decodedSources, decodeErr); err != nil {
 		cfg.addLoadWarning(fmt.Sprintf("provider configuration could not be merged (%v); keeping providers already loaded", err))
 	} else if ok {
 		cfg.Providers = providers
@@ -181,7 +182,7 @@ func loadForRoot(root string, migrateOnDisk bool) (*Config, error) {
 		cfg.shadowedProjectProviders = shadowedProjectProviders
 	}
 	fillPartialProvidersFromDefaults(cfg)
-	if access, ok, err := mergeTOMLProviderAccess(tomlSources); err != nil {
+	if access, ok, err := mergeTOMLProviderAccess(decodedSources, decodeErr); err != nil {
 		cfg.addLoadWarning(fmt.Sprintf("provider access configuration could not be merged (%v)", err))
 	} else if ok {
 		cfg.UI.ProviderAccess = access
@@ -387,10 +388,22 @@ func normalizeLegacyEffort(c *Config) {
 	}
 }
 
-// mergeTOMLPlugins merges [[plugins]] across TOML sources by name (later source wins).
-func mergeTOMLPlugins(paths []string) ([]PluginEntry, error) {
-	var merged []PluginEntry
-	index := map[string]int{}
+// decodedSource is one TOML source decoded once for every merge pass: the
+// plugin, provider, and provider-access merges all read the same files, so a
+// Load() decodes each existing file a single time.
+type decodedSource struct {
+	path string
+	meta toml.MetaData
+	cfg  Config
+}
+
+// decodeTOMLSources decodes every existing source in declaration order.
+// Missing files are skipped; failures keep the "config %s: %w" shape the merge
+// callers produced when they each decoded inline. Callers pass the returned
+// error straight into the merge helpers so each merge reports the same failure
+// it would have hit on its own.
+func decodeTOMLSources(paths []string) ([]decodedSource, error) {
+	var out []decodedSource
 	for _, path := range paths {
 		_, exists, err := statConfigPath(path)
 		if err != nil {
@@ -400,10 +413,25 @@ func mergeTOMLPlugins(paths []string) ([]PluginEntry, error) {
 			continue
 		}
 		var f Config
-		if _, err := decodeTOMLFile(path, &f); err != nil {
+		meta, err := decodeTOMLFile(path, &f)
+		if err != nil {
 			return nil, fmt.Errorf("config %s: %w", path, err)
 		}
-		for _, p := range f.Plugins {
+		out = append(out, decodedSource{path: path, meta: meta, cfg: f})
+	}
+	return out, nil
+}
+
+// mergeTOMLPlugins merges [[plugins]] across TOML sources by name (later source wins).
+func mergeTOMLPlugins(sources []decodedSource, decodeErr error) ([]PluginEntry, error) {
+	if decodeErr != nil {
+		return nil, decodeErr
+	}
+	var merged []PluginEntry
+	index := map[string]int{}
+	for _, src := range sources {
+		path := src.path
+		for _, p := range src.cfg.Plugins {
 			p, _ = NormalizePluginCommandLine(p)
 			if isUserConfigPath(path) {
 				p.Source = MCPSourceUserConfig
@@ -426,44 +454,37 @@ func mergeTOMLPlugins(paths []string) ([]PluginEntry, error) {
 // only fill names the global config does not define. Keep official legacy aliases
 // distinct here: they can carry different default models and effort capabilities,
 // and the later desktop normalization layer handles canonical Settings access.
-func mergeTOMLProviders(paths []string) ([]ProviderEntry, map[string]providerSourceScope, []ProviderEntry, bool, error) {
+func mergeTOMLProviders(sources []decodedSource, decodeErr error) ([]ProviderEntry, map[string]providerSourceScope, []ProviderEntry, bool, error) {
+	if decodeErr != nil {
+		return nil, nil, nil, false, decodeErr
+	}
 	var merged []ProviderEntry
 	var shadowedProject []ProviderEntry
 	index := map[string]int{}
-	sources := map[string]providerSourceScope{}
+	sourceScopes := map[string]providerSourceScope{}
 	saw := false
-	for _, path := range paths {
-		_, exists, err := statConfigPath(path)
-		if err != nil {
-			return nil, nil, nil, false, fmt.Errorf("config %s: %w", path, err)
-		}
-		if !exists {
-			continue
-		}
-		var f Config
-		if _, err := decodeTOMLFile(path, &f); err != nil {
-			return nil, nil, nil, false, fmt.Errorf("config %s: %w", path, err)
-		}
+	for _, src := range sources {
+		f := src.cfg
 		markPersistedDeepSeekOfficialPricing(&f)
 		if len(f.Providers) == 0 {
 			continue
 		}
 		saw = true
-		source := providerSourceForPath(path)
+		source := providerSourceForPath(src.path)
 		for _, p := range f.Providers {
 			normalizeProviderEffortFields(&p)
 			key := providerMergeKey(p)
 			prio := providerSourcePriority(source)
 			if i, ok := index[key]; ok {
 				switch {
-				case prio > providerSourcePriority(sources[key]):
+				case prio > providerSourcePriority(sourceScopes[key]):
 					// A user entry wins wholesale, but a partial entry (one that
 					// only overrides, e.g., api_key) keeps the project entry's
 					// missing fields so a home .corvus key-only override works.
 					shadowedProject = append(shadowedProject, merged[i])
 					merged[i] = fillProviderEntryFrom(p, merged[i])
-					sources[key] = source
-				case prio < providerSourcePriority(sources[key]):
+					sourceScopes[key] = source
+				case prio < providerSourcePriority(sourceScopes[key]):
 					shadowedProject = append(shadowedProject, p)
 					// The user entry already wins, but a partial user entry
 					// (e.g. api_key only) keeps the project entry's fields.
@@ -475,11 +496,11 @@ func mergeTOMLProviders(paths []string) ([]ProviderEntry, map[string]providerSou
 			} else {
 				index[key] = len(merged)
 				merged = append(merged, p)
-				sources[key] = source
+				sourceScopes[key] = source
 			}
 		}
 	}
-	return merged, sources, shadowedProject, saw, nil
+	return merged, sourceScopes, shadowedProject, saw, nil
 }
 
 // fillProviderEntryFrom copies non-empty fields of base onto entry so a partial
@@ -579,26 +600,18 @@ func providerMergeKey(p ProviderEntry) string {
 
 // mergeTOMLProviderAccess merges ui.provider_access across TOML sources so
 // project setup choices do not hide account-level providers from the TUI.
-func mergeTOMLProviderAccess(paths []string) ([]string, bool, error) {
+func mergeTOMLProviderAccess(sources []decodedSource, decodeErr error) ([]string, bool, error) {
+	if decodeErr != nil {
+		return nil, false, decodeErr
+	}
 	var merged []string
 	seen := map[string]bool{}
 	saw := false
-	for _, path := range paths {
-		_, exists, err := statConfigPath(path)
-		if err != nil {
-			return nil, false, fmt.Errorf("config %s: %w", path, err)
-		}
-		if !exists {
+	for _, src := range sources {
+		if !src.meta.IsDefined("ui", "provider_access") {
 			continue
 		}
-		var f Config
-		meta, err := decodeTOMLFile(path, &f)
-		if err != nil {
-			return nil, false, fmt.Errorf("config %s: %w", path, err)
-		}
-		if !meta.IsDefined("ui", "provider_access") {
-			continue
-		}
+		f := src.cfg
 		if !saw {
 			// Preserve declaration state even when the list is explicitly empty.
 			// A nil slice means legacy/undeclared access; a non-nil empty slice

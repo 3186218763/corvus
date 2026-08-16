@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/joho/godotenv"
 
@@ -90,7 +92,37 @@ func loadDotEnvFileAs(path string, source CredentialSource) {
 	}
 }
 
+// dotEnvCache memoizes parsed .env files by (modtime, size) so one Load()
+// does not re-read and re-parse the same file for every credential key that
+// consults it (envFileValue is hit 5-7 times per provider). An edit bumps the
+// mtime and invalidates the entry; a missing file is never cached.
+var dotEnvCache sync.Map // path -> dotEnvCacheEntry
+
+type dotEnvCacheEntry struct {
+	modTime time.Time
+	size    int64
+	file    dotEnvFile
+}
+
 func readDotEnvFile(path string) (dotEnvFile, bool) {
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		if cached, ok := dotEnvCache.Load(path); ok {
+			entry := cached.(dotEnvCacheEntry)
+			if entry.modTime.Equal(info.ModTime()) && entry.size == info.Size() {
+				return entry.file, true
+			}
+		}
+	}
+	file, ok := parseDotEnvFile(path)
+	if ok {
+		if info, err := os.Stat(path); err == nil {
+			dotEnvCache.Store(path, dotEnvCacheEntry{modTime: info.ModTime(), size: info.Size(), file: file})
+		}
+	}
+	return file, ok
+}
+
+func parseDotEnvFile(path string) (dotEnvFile, bool) {
 	raw, err := fileencoding.ReadFileUTF8(path)
 	if err != nil {
 		return dotEnvFile{}, false

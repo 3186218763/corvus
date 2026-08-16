@@ -150,7 +150,8 @@ func credentialEnvNamesForRoot(root string) []string {
 		tomlSources = append(tomlSources, uc)
 	}
 	tomlSources = append(tomlSources, ProjectConfigPathForRoot(root))
-	if providers, _, _, ok, err := mergeTOMLProviders(tomlSources); err == nil && ok {
+	decodedSources, decodeErr := decodeTOMLSources(tomlSources)
+	if providers, _, _, ok, err := mergeTOMLProviders(decodedSources, decodeErr); err == nil && ok {
 		cfg.Providers = providers
 	}
 
