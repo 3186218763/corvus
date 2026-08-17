@@ -16,6 +16,10 @@ make event-map      # regenerate docs/event-map.md
 
 CI mirrors `make check` (`.github/workflows/ci.yml`).
 
+For a one-shot non-interactive run, use `corvus --headless "prompt"` (or pipe
+the prompt on stdin). It supports the same text/JSON event output and
+headless permission modes as `corvus-exec`.
+
 ## Architecture at a glance
 
 - `internal/agent` — the run loop, turn state machine, session persistence
@@ -33,6 +37,8 @@ CI mirrors `make check` (`.github/workflows/ci.yml`).
 - `internal/store` — the single authority for the on-disk persistence layout.
 - `internal/hook` — Claude-compatible shell hooks with a JSONL audit sidecar.
 - `internal/event` — the typed event stream every frontend consumes.
+- `internal/headless` — the shared one-shot frontend used by `corvus --headless`
+  and `corvus-exec`.
 - `internal/control` — the interactive controller (CLI/TUI glue).
 - `cmd/` — `corvus`, `corvus-exec`, `corvus-mcp-server`, `corvus-catalog`.
 

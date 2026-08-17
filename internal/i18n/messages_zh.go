@@ -496,6 +496,7 @@ var Chinese = Messages{
 启动交互式终端界面。在 TUI 中输入 /help 可查看会话内命令。
 
 选项：
+  --headless
   --model NAME
   --profile economy|balanced|delivery
   --max-steps N
