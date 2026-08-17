@@ -464,6 +464,7 @@ var ChineseTraditional = Messages{
 啟動互動式終端介面。在 TUI 中輸入 /help 可查看會話內命令。
 
 選項：
+  --headless
   --model NAME
   --profile economy|balanced|delivery
   --max-steps N

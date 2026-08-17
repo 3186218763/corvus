@@ -9,6 +9,7 @@ import (
 	"corvus/internal/config"
 	"corvus/internal/control"
 	"corvus/internal/event"
+	"corvus/internal/headless"
 	"corvus/internal/i18n"
 	"corvus/internal/provider"
 	"corvus/internal/provider/openai"
@@ -43,6 +44,9 @@ func Run(args []string, version string) int {
 	if cfg, err := config.Load(); err == nil && cfg.Language != "" {
 		i18n.DetectLanguage(cfg.Language)
 	}
+	if headlessArgs, ok := splitHeadlessArgs(args); ok {
+		return headless.RunAs(headlessArgs, version, "corvus")
+	}
 	// Help and version work without a TTY so scripts and --help in non-interactive
 	// shells still get a useful answer before the TUI gate.
 	if code, handled := handleInfoArgs(args, version); handled {
@@ -53,6 +57,27 @@ func Run(args []string, version string) int {
 		return 1
 	}
 	return runInteractiveSession(args, version)
+}
+
+// splitHeadlessArgs removes the main command's mode switch before handing the
+// remaining flags to the shared one-shot frontend. Only flags before `--` are
+// considered; after it, --headless is prompt text by convention.
+func splitHeadlessArgs(args []string) ([]string, bool) {
+	out := make([]string, 0, len(args))
+	enabled := false
+	for i, arg := range args {
+		if arg == "--" {
+			out = append(out, args[i:]...)
+			break
+		}
+		switch arg {
+		case "--headless", "--headless=true":
+			enabled = true
+		default:
+			out = append(out, arg)
+		}
+	}
+	return out, enabled
 }
 
 // handleInfoArgs answers -h/--help/help and -v/--version/version without opening

@@ -83,6 +83,51 @@ func TestNormalizeOptionalResumeArg(t *testing.T) {
 	}
 }
 
+func TestSplitHeadlessArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		want    []string
+		enabled bool
+	}{
+		{
+			name:    "bare flag",
+			args:    []string{"--headless", "hello", "--model", "m"},
+			want:    []string{"hello", "--model", "m"},
+			enabled: true,
+		},
+		{
+			name:    "explicit true",
+			args:    []string{"--model", "m", "--headless=true", "hello"},
+			want:    []string{"--model", "m", "hello"},
+			enabled: true,
+		},
+		{
+			name:    "after separator is prompt text",
+			args:    []string{"hello", "--", "--headless"},
+			want:    []string{"hello", "--", "--headless"},
+			enabled: false,
+		},
+		{
+			name:    "absent",
+			args:    []string{"--model", "m"},
+			want:    []string{"--model", "m"},
+			enabled: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, enabled := splitHeadlessArgs(tt.args)
+			if enabled != tt.enabled {
+				t.Fatalf("enabled = %v, want %v", enabled, tt.enabled)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("args = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestResolveSessionQueryByIDAndPreview(t *testing.T) {
 	dir := t.TempDir()
 	first := saveQueryTestSession(t, dir, "alpha-session.jsonl", "fix provider configuration")

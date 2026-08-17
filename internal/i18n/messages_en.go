@@ -495,6 +495,7 @@ Usage:
 Starts the interactive terminal UI. Type /help in the TUI to list commands.
 
 Options:
+  --headless
   --model NAME
   --profile economy|balanced|delivery
   --max-steps N

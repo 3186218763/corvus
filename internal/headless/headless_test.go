@@ -1,4 +1,4 @@
-package main
+package headless
 
 import (
 	"os"
@@ -79,8 +79,8 @@ func TestRunUsageErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if code := run(tt.args, "test"); code != tt.code {
-				t.Errorf("run(%v) = %d, want %d", tt.args, code, tt.code)
+			if code := Run(tt.args, "test"); code != tt.code {
+				t.Errorf("Run(%v) = %d, want %d", tt.args, code, tt.code)
 			}
 		})
 	}
@@ -112,7 +112,7 @@ func TestCompactArgsAndToolResult(t *testing.T) {
 		t.Errorf("compactArgs(long) length = %d, want 160", len(got))
 	}
 	if got := summarizeToolResult(mustEvent("bash", "", "", false, 0)); got != "← bash ok" {
-		t.Errorf("summarizeToolResult(ok) = %q", got)
+		t.Errorf("summarizeToolResult(ok) = %q, want %q", got, "← bash ok")
 	}
 	if got := summarizeToolResult(mustEvent("bash", "", "boom\nsecond", false, 1500)); got != "← bash err: boom (1.5s)" {
 		t.Errorf("summarizeToolResult(err) = %q", got)
