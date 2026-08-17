@@ -61,6 +61,16 @@ func buildExecutorAndPlanner(a *assembly) (*runnerResult, error) {
 		MaxSubagentDepth:             a.maxSubagentDepth,
 		MissingReasoningWarnStateDir: config.MissingReasoningWarnStateDir(),
 	}
+	// Compaction is an out-of-band request. Give it a fresh provider client so
+	// stateful executor protocols (notably Responses previous_response_id) do
+	// not observe or overwrite summary traffic.
+	if a.opts.ProviderResolver == nil {
+		compactionProv, err := NewCompactionProviderWithProxy(a.entry, a.proxySpec, a.cfg.WebSearch.Enabled())
+		if err != nil {
+			return nil, fmt.Errorf("construct compaction summarizer provider: %w", err)
+		}
+		execOpts.CompactionSummarizer = agent.NewProviderCompactionSummarizer(compactionProv, a.cfg.Agent.Temperature, a.sink, a.modelRef, a.entry.Price)
+	}
 	promptCacheOptions(a.cfg, a.entry, "", "").apply(&execOpts)
 	executor := agent.New(a.execProv, a.reg, execSess, execOpts, a.sink)
 
@@ -111,6 +121,13 @@ func buildExecutorAndPlanner(a *assembly) (*runnerResult, error) {
 				CapabilityLedger:             plannerLedger,
 				CapabilityAudit:              plannerAudit,
 				MissingReasoningWarnStateDir: config.MissingReasoningWarnStateDir(),
+			}
+			if a.opts.ProviderResolver == nil {
+				plannerCompactionProv, err := NewCompactionProviderWithProxy(pe, a.proxySpec, a.cfg.WebSearch.Enabled())
+				if err != nil {
+					return nil, fmt.Errorf("construct planner compaction summarizer provider: %w", err)
+				}
+				plannerOpts.CompactionSummarizer = agent.NewProviderCompactionSummarizer(plannerCompactionProv, a.cfg.Agent.Temperature, a.sink, modelRefFromEntry(pe), pe.Price)
 			}
 			// Same sticky-key policy as executor; SessionCacheID refreshed with
 			// the executor when the controller rebinds the session path.

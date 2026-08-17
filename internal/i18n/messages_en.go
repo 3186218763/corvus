@@ -224,7 +224,7 @@ var English = Messages{
 	SlashPromptEmpty:             "the MCP prompt returned no content to send",
 	SlashMCPNone:                 "no MCP servers configured — add a [[plugins]] entry in .corvus/config.toml",
 	CtrlCQuitHint:                "press Ctrl+C again to quit",
-	CompHintSlash:                "↑/↓ move · Tab/Enter select · Esc close",
+	CompHintSlash:                "↑/↓ move · Enter run · Tab fill · Esc close",
 	CompHintFile:                 "↑/↓ move · Tab/Enter open folder or pick file · Esc close",
 	MouseCopiedHint:              "copied to clipboard",
 	ClipboardCopyOSC52Hint:       "copy sent via OSC 52 — terminal permission may be required",

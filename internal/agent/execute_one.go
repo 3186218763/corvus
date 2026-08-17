@@ -309,7 +309,8 @@ func (a *Agent) applyDeliveryPolicyGates(plan *toolCallPlan) (toolOutcome, bool)
 	}
 
 	plan.mutates = evidence.ToolCallMutates(plan.evidenceName, plan.evidenceArgs, plan.readOnly)
-	if a.deliveryProfile && evidence.ToolCallRequiresDeliveryCriteria(plan.evidenceName, plan.evidenceArgs, plan.readOnly) && !a.deliveryCriteriaEstablished {
+	delivery := a.deliveryState()
+	if a.deliveryProfile && evidence.ToolCallRequiresDeliveryCriteria(plan.evidenceName, plan.evidenceArgs, plan.readOnly) && !delivery.criteriaEstablished {
 		return toolOutcome{
 			output:  "blocked: delivery-first mode requires acceptance criteria before state-changing work. Call todo_write with a concrete, verifiable task list, then retry this tool call.",
 			blocked: true,
@@ -361,7 +362,7 @@ func (a *Agent) applyRecoveryAndPermission(ctx context.Context, plan *toolCallPl
 		dec, rerr := a.recoveryGate.BeforeMutation(ctx, RecoveryProposal{
 			AgentID:        a.recoveryAgentID,
 			TaskID:         a.recoveryTaskID,
-			TaskScopeID:    recoveryTaskScopeID(a.deliveryScopeID, a.recoveryRunSeq.Load()),
+			TaskScopeID:    recoveryTaskScopeID(a.deliveryState().scopeID, a.recoveryRunSeq.Load()),
 			EpisodeID:      episodeID,
 			TaskSummary:    a.recoveryTaskSummary,
 			Tool:           plan.evidenceName,
@@ -646,7 +647,7 @@ func (a *Agent) finishToolExecution(ctx context.Context, plan *toolCallPlan) too
 			if err == nil && call.Name == "todo_write" {
 				a.setTodoState(rec.Todos)
 				if len(rec.Todos) > 0 {
-					a.deliveryCriteriaEstablished = true
+					a.deliveryState().criteriaEstablished = true
 				}
 			}
 		}

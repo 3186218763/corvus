@@ -161,8 +161,9 @@ func (m chatTUI) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleApprovalKey(msg)
 	}
 	// While the autocomplete menu is open it captures navigation/accept keys
-	// (↑/↓ move, Tab/Enter accept, Esc close); everything else falls through
-	// to the textarea and re-filters the menu at the end of Update.
+	// (↑/↓ move, Tab fill, Enter fill-and-submit for slash menus, Esc close);
+	// everything else falls through to the textarea and re-filters the menu
+	// at the end of Update.
 	if m.completion.active {
 		switch msg.String() {
 		case "up", "ctrl+p":
@@ -171,20 +172,42 @@ func (m chatTUI) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case "down", "ctrl+n":
 			m.moveCompletion(1)
 			return m, nil
-		case "tab", "enter":
-			if msg.String() == "enter" && (m.completionExactLabel() || m.completionBareOverlayCommand()) {
+		case "tab":
+			m.acceptCompletion()
+			return m, nil
+		case "enter":
+			// @-references keep accept-only semantics: Enter fills the
+			// highlighted path/resource without submitting the draft (a fully
+			// typed reference still falls through to the regular Enter).
+			if m.completion.kind == compAt {
+				if m.completionExactLabel() || m.completionBareOverlayCommand() {
+					m.completion = completion{}
+					break // fall through to regular Enter and submit the command
+				}
+				if m.completionSelectedInsertPresent() {
+					m.completion = completion{}
+					break // fall through to regular Enter
+				}
+				m.acceptCompletion()
+				return m, nil
+			}
+			// Slash menus: Enter completes the highlighted entry and submits it
+			// as soon as the command (or the chosen argument) is fully formed.
+			// Nested selections — /effort levels, /resume sessions, /mcp
+			// subcommands — stay open until a concrete value is picked. Tab
+			// still accepts without submitting.
+			if m.completionBareOverlayCommand() || m.completionSelectedInsertPresent() {
 				m.completion = completion{}
 				break // fall through to regular Enter and submit the command
 			}
-			// When Enter is pressed and the selected completion is already fully
-			// present in the input, close the menu and submit instead of accepting
-			// the same item again (/resume 1 still has /resume 10 as a prefix match).
-			if msg.String() == "enter" && m.completionSelectedInsertPresent() {
+			if m.completionExactLabel() && !m.completion.items[m.completion.sel].descend {
 				m.completion = completion{}
-				break // fall through to regular Enter
+				break // fall through to regular Enter and submit the command
 			}
 			m.acceptCompletion()
-			return m, nil
+			if m.completion.active {
+				return m, nil // still selecting the next level
+			}
 		case "esc":
 			m.completion = completion{}
 			if m.state == tuiRunning {

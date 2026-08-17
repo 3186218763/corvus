@@ -397,6 +397,122 @@ func TestEnterOnMCPWithTrailingSpaceSubmitsManager(t *testing.T) {
 	}
 }
 
+// TestEnterOnPartialSlashCommandExecutes proves Enter on a partially typed
+// command completes it and submits immediately, instead of only filling the
+// composer.
+func TestEnterOnPartialSlashCommandExecutes(t *testing.T) {
+	m := newTestChatTUI()
+	m.ctrl = control.New(control.Options{SessionDir: t.TempDir()})
+	m.input.SetValue("/co")
+	m.updateCompletion()
+	if !m.completion.active || m.completion.items[0].label != "/compact" {
+		t.Fatalf("/co should highlight /compact: %+v", m.completion)
+	}
+
+	got, _ := m.update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	next := got.(chatTUI)
+	if next.completion.active {
+		t.Fatalf("Enter should close the completion menu: %+v", next.completion)
+	}
+	if next.input.Value() != "" {
+		t.Fatalf("Enter should submit the completed command, input=%q", next.input.Value())
+	}
+	if !strings.Contains(strings.Join(next.transcript, "\n"), "/compact") {
+		t.Fatalf("submitted /compact should echo into the transcript: %v", next.transcript)
+	}
+}
+
+// TestTabOnPartialSlashCommandOnlyCompletes proves Tab keeps its accept-only
+// behavior so a command can be filled in without running.
+func TestTabOnPartialSlashCommandOnlyCompletes(t *testing.T) {
+	m := newTestChatTUI()
+	m.input.SetValue("/co")
+	m.updateCompletion()
+
+	got, _ := m.update(tea.KeyPressMsg{Code: tea.KeyTab})
+	next := got.(chatTUI)
+	if got := next.input.Value(); got != "/compact " {
+		t.Fatalf("Tab should complete the command, input=%q", got)
+	}
+	if next.completion.active {
+		t.Fatalf("Tab-completed command should close the menu: %+v", next.completion)
+	}
+	if len(next.transcript) != 0 {
+		t.Fatalf("Tab must not submit: %v", next.transcript)
+	}
+}
+
+// TestEnterOnExactEffortDescendsToLevelMenu proves /effort is not run bare:
+// Enter fills the command and opens the level selection menu.
+func TestEnterOnExactEffortDescendsToLevelMenu(t *testing.T) {
+	isolateUserConfig(t)
+	m := newTestChatTUI()
+	m.ctrl = control.New(control.Options{Label: "deepseek-flash"})
+	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.input.SetValue("/effort")
+	m.updateCompletion()
+	if !m.completion.active {
+		t.Fatal("typing /effort should show slash completion")
+	}
+
+	got, _ := m.update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	next := got.(chatTUI)
+	if got := next.input.Value(); got != "/effort " {
+		t.Fatalf("Enter should fill /effort and open level selection, input=%q", got)
+	}
+	if !next.completion.active || next.completion.kind != compSlashArg {
+		t.Fatalf("Enter on /effort should open the effort level menu: %+v", next.completion)
+	}
+	if len(next.completion.items) == 0 {
+		t.Fatal("effort level menu should have entries")
+	}
+	for _, line := range next.transcript {
+		if strings.Contains(line, "/effort") {
+			t.Fatalf("bare /effort must not execute on Enter: %v", next.transcript)
+		}
+	}
+}
+
+// TestEnterOnSelectedEffortLevelSubmits proves the command only runs once a
+// concrete effort value is chosen.
+func TestEnterOnSelectedEffortLevelSubmits(t *testing.T) {
+	isolateUserConfig(t)
+	m := newTestChatTUI()
+	m.ctrl = control.New(control.Options{Label: "deepseek-flash"})
+	m.modelRef = "deepseek-flash/deepseek-v4-flash"
+	m.buildController = func(_ controllerBuildSpec, _ []provider.Message, _ string, _ *control.Controller) (*control.Controller, error) {
+		return control.New(control.Options{Label: "deepseek-flash"}), nil
+	}
+	m.input.SetValue("/effort ")
+	m.updateCompletion()
+	if !m.completion.active || m.completion.kind != compSlashArg {
+		t.Fatalf("/effort should open the level menu: %+v", m.completion)
+	}
+	sel := -1
+	for i, it := range m.completion.items {
+		if it.label == "max" {
+			sel = i
+			break
+		}
+	}
+	if sel < 0 {
+		t.Fatalf("effort levels should include max: %v", labels(m.completion.items))
+	}
+	m.completion.sel = sel
+
+	got, _ := m.update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	next := got.(chatTUI)
+	if got := next.input.Value(); got != "" {
+		t.Fatalf("Enter on the selected level should submit, input=%q", got)
+	}
+	if next.completion.active {
+		t.Fatalf("menu should close after submitting: %+v", next.completion)
+	}
+	if next.pendingModelSwitch == nil {
+		t.Fatal("submitted /effort max should schedule the effort switch")
+	}
+}
+
 func TestEnterOnExactSlashArgSubmitsWhenPrefixAlsoMatches(t *testing.T) {
 	m := newTestChatTUI()
 	m.ctrl = control.New(control.Options{SessionDir: t.TempDir()})

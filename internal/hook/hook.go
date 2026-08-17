@@ -206,20 +206,84 @@ func UsesToolMatcher(event Event) bool {
 type LoadOptions struct {
 	ProjectRoot string
 	HomeDir     string
-	// Trusted is retained for source compatibility. Project hooks are enabled
-	// automatically now, so callers no longer need to set it.
+	// Trusted is retained for source compatibility. When true, it is an
+	// explicit one-load trust decision; it is never persisted by Load.
 	Trusted bool
+	// Headless suppresses project hooks when there is no durable trust record.
+	// Headless callers must never get an implicit prompt or an implicit grant.
+	Headless bool
+	// TrustProject is called before the project settings file is parsed. It may
+	// return Once or Remember; any other value denies project hooks.
+	TrustProject func(ProjectTrustRequest) ProjectTrustDecision
+	// Audit receives the load-time trust decision. It must not be used to make
+	// the decision, because the project settings have not been parsed yet.
+	Audit func(TrustAudit)
 }
 
 // Load resolves hooks: project first, then global; within a scope,
 // settings.json array order. A malformed file yields no hooks (never an error
 // — a typo shouldn't take down the CLI).
 func Load(opts LoadOptions) []ResolvedHook {
+	hooks, _ := LoadWithReport(opts)
+	return hooks
+}
+
+// LoadWithReport resolves hooks and reports whether project hooks were held
+// behind the trust gate. The project settings are not parsed until a durable
+// grant, an explicit one-load grant, or a positive TrustProject decision exists.
+func LoadWithReport(opts LoadOptions) ([]ResolvedHook, LoadReport) {
 	var out []ResolvedHook
+	report := LoadReport{ProjectRoot: opts.ProjectRoot}
 	if opts.ProjectRoot != "" {
 		p := ProjectSettingsPath(opts.ProjectRoot)
-		if s := readSettings(p); s != nil {
-			appendResolved(&out, s, ScopeProject, p)
+		report.ProjectSettingsPath = p
+		if pathExists(p) {
+			report.ProjectHooksFound = true
+			trusted := opts.Trusted
+			if !trusted && IsProjectTrusted(opts.HomeDir, opts.ProjectRoot) {
+				trusted = true
+				report.TrustPersisted = true
+				emitTrustAudit(opts.Audit, TrustAudit{ProjectRoot: opts.ProjectRoot, SettingsPath: p, Outcome: TrustOutcomeExisting, Persisted: true})
+			}
+			if !trusted {
+				report.TrustRequired = true
+				decision := ProjectTrustDeny
+				switch {
+				case opts.Headless:
+					report.TrustDenied = true
+					emitTrustAudit(opts.Audit, TrustAudit{ProjectRoot: opts.ProjectRoot, SettingsPath: p, Outcome: TrustOutcomeHeadless})
+				case opts.TrustProject != nil:
+					decision = opts.TrustProject(ProjectTrustRequest{ProjectRoot: opts.ProjectRoot, SettingsPath: p})
+				default:
+					emitTrustAudit(opts.Audit, TrustAudit{ProjectRoot: opts.ProjectRoot, SettingsPath: p, Outcome: TrustOutcomeUnavailable})
+				}
+				switch decision {
+				case ProjectTrustOnce:
+					trusted = true
+					emitTrustAudit(opts.Audit, TrustAudit{ProjectRoot: opts.ProjectRoot, SettingsPath: p, Outcome: TrustOutcomeOnce})
+				case ProjectTrustRemember:
+					if err := TrustProject(opts.HomeDir, opts.ProjectRoot); err == nil {
+						trusted = true
+						report.TrustPersisted = true
+						emitTrustAudit(opts.Audit, TrustAudit{ProjectRoot: opts.ProjectRoot, SettingsPath: p, Outcome: TrustOutcomeRemember, Persisted: true})
+					} else {
+						emitTrustAudit(opts.Audit, TrustAudit{ProjectRoot: opts.ProjectRoot, SettingsPath: p, Outcome: TrustOutcomeDenied})
+					}
+				case ProjectTrustDeny:
+					if !opts.Headless {
+						emitTrustAudit(opts.Audit, TrustAudit{ProjectRoot: opts.ProjectRoot, SettingsPath: p, Outcome: TrustOutcomeDenied})
+					}
+				}
+				if !trusted {
+					report.TrustDenied = true
+				}
+			}
+			if trusted {
+				if s := readSettings(p); s != nil {
+					appendResolved(&out, s, ScopeProject, p)
+					report.ProjectHooksEnabled = true
+				}
+			}
 		}
 	}
 	appendPluginHooks(&out, corvusHome(opts.HomeDir), opts.ProjectRoot)
@@ -233,7 +297,13 @@ func Load(opts LoadOptions) []ResolvedHook {
 			}
 		}
 	}
-	return out
+	return out, report
+}
+
+func emitTrustAudit(fn func(TrustAudit), audit TrustAudit) {
+	if fn != nil {
+		fn(audit)
+	}
 }
 
 func readSettings(path string) *Settings {
@@ -1047,8 +1117,12 @@ type SpawnInput struct {
 	Shell   string
 	Cwd     string
 	Env     map[string]string
-	Stdin   string
-	Timeout time.Duration
+	// ProjectScoped marks repository-controlled hooks. The default spawner
+	// applies a mandatory credential-like environment scrub to this scope even
+	// when the user has not enabled the broader global subprocess filter.
+	ProjectScoped bool
+	Stdin         string
+	Timeout       time.Duration
 }
 
 // RuntimeOptions carries resolved host dependencies into Hook execution.
@@ -1092,14 +1166,15 @@ func Run(ctx context.Context, payload Payload, hooks []ResolvedHook, spawner Spa
 		timeout := h.timeout()
 		stdin := marshalPayload(payload, h.PayloadFormat)
 		input := SpawnInput{
-			Command: h.Command,
-			Args:    h.Argv,
-			Mode:    h.ExecutionMode,
-			Shell:   h.Shell,
-			Cwd:     cwd,
-			Env:     h.Env,
-			Stdin:   stdin,
-			Timeout: timeout,
+			Command:       h.Command,
+			Args:          h.Argv,
+			Mode:          h.ExecutionMode,
+			Shell:         h.Shell,
+			Cwd:           cwd,
+			Env:           h.Env,
+			ProjectScoped: h.Scope == ScopeProject,
+			Stdin:         stdin,
+			Timeout:       timeout,
 		}
 		if h.Async {
 			asyncCtx := context.WithoutCancel(ctx)
@@ -1266,6 +1341,13 @@ func defaultSpawner(ctx context.Context, in SpawnInput, options RuntimeOptions) 
 		for _, k := range keys {
 			env = append(env, k+"="+in.Env[k])
 		}
+	}
+	if in.ProjectScoped {
+		// Trust is required to reach this point, but it does not turn a project
+		// settings file into a credential-bearing extension. Keep the trusted
+		// hook useful for ordinary PATH/config variables while removing both
+		// heuristic and explicitly registered credential names.
+		env = secrets.FilterEnv(env)
 	}
 	cmd.Env = env
 	cmd.Stdin = strings.NewReader(in.Stdin)

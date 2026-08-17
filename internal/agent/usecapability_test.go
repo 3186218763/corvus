@@ -937,8 +937,8 @@ func TestCapabilityGateRecoveryIsAudited(t *testing.T) {
 	if check := a.finalReadinessCheck(); check.reason == "" {
 		t.Fatal("expected a require miss first")
 	}
-	a.capabilityLedger.MarkInvoked("skill:review")
-	a.capabilityLedger.MarkSucceeded("skill:review")
+	a.CapabilityLedger().MarkInvoked("skill:review")
+	a.CapabilityLedger().MarkSucceeded("skill:review")
 	if check := a.finalReadinessCheck(); strings.Contains(check.reason, "required capabilities") {
 		t.Fatalf("gate should be clean after success, reason=%q", check.reason)
 	}

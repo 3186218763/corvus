@@ -64,7 +64,7 @@ func TestDeliveryClassificationUsesTrustedTaskText(t *testing.T) {
 	if err := sub.Run(context.Background(), legacyWorkspaceContext+"\n\n"+pristine); err != nil {
 		t.Fatalf("wrapped review prompt deadlocked despite trusted task text: %v", err)
 	}
-	if sub.deliveryMutationExpected {
+	if sub.deliveryState().mutationExpected {
 		t.Fatal("host framing armed the mutation expectation past the trusted override")
 	}
 }
@@ -115,7 +115,7 @@ func TestReadOnlyRegistryDisarmsMutationExpectation(t *testing.T) {
 	if err := sub.Run(context.Background(), "fix review: verify the fixes in a.go were applied"); err != nil {
 		t.Fatalf("read-only delivery subagent deadlocked: %v", err)
 	}
-	if sub.deliveryMutationExpected {
+	if sub.deliveryState().mutationExpected {
 		t.Fatal("mutation expectation armed on a read-only registry")
 	}
 }

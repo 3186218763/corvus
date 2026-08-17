@@ -277,7 +277,25 @@ func (m *chatTUI) runHooksSubcommand(input string) {
 	case "", "list", "ls":
 		m.hooksList()
 	case "trust":
-		m.notice("project hooks are enabled automatically; no trust action is required")
+		if m.ctrl == nil {
+			m.notice("hooks trust: controller not ready")
+			return
+		}
+		if err := m.ctrl.TrustProjectHooks(); err != nil {
+			m.notice("hooks trust: " + err.Error())
+		} else {
+			m.notice("project hooks trusted and enabled for this workspace")
+		}
+	case "revoke", "untrust":
+		if m.ctrl == nil {
+			m.notice("hooks revoke: controller not ready")
+			return
+		}
+		if err := m.ctrl.RevokeProjectHooks(); err != nil {
+			m.notice("hooks revoke: " + err.Error())
+		} else {
+			m.notice("project hook trust revoked; project hooks are disabled")
+		}
 	default:
 		m.notice("unknown /hooks subcommand " + args[1] + " - try: /hooks or /hooks list")
 	}

@@ -24,6 +24,42 @@ type fakeProvider struct {
 	hang         bool  // when true, Stream returns a channel that never sends or closes
 }
 
+type recordingSummarizer struct {
+	calls        int
+	instructions string
+	region       []provider.Message
+	result       string
+}
+
+func (s *recordingSummarizer) Summarize(_ context.Context, region []provider.Message, instructions string) (string, error) {
+	s.calls++
+	s.region = append([]provider.Message(nil), region...)
+	s.instructions = instructions
+	return s.result, nil
+}
+
+func TestInjectedCompactionSummarizerIsolatedFromExecutorProvider(t *testing.T) {
+	executor := &fakeProvider{reply: "executor reply"}
+	isolated := &recordingSummarizer{result: "isolated summary"}
+	a := New(executor, tool.NewRegistry(), &Session{}, Options{
+		CompactionSummarizer: isolated,
+	}, event.Discard)
+
+	got, err := a.summarize(context.Background(), []provider.Message{{Role: provider.RoleUser, Content: "old work"}}, "keep the migration plan")
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if got != "isolated summary" || isolated.calls != 1 {
+		t.Fatalf("summary = %q, calls = %d", got, isolated.calls)
+	}
+	if isolated.instructions != "keep the migration plan" || len(isolated.region) != 1 {
+		t.Fatalf("isolated summarizer input = instructions %q region %+v", isolated.instructions, isolated.region)
+	}
+	if len(executor.got) != 0 {
+		t.Fatalf("executor provider received a compaction request: %+v", executor.got)
+	}
+}
+
 func (f *fakeProvider) Name() string { return "fake" }
 
 func (f *fakeProvider) Stream(_ context.Context, req provider.Request) (<-chan provider.Chunk, error) {

@@ -420,46 +420,15 @@ type Agent struct {
 	projectChecks []instruction.VerifyCheck
 
 	// deliveryProfile enables the runtime-enforced delivery contract. The stable
-	// profile prompt explains intent; these fields are host state and never enter
-	// the provider-cached prefix. deliveryCriteriaEstablished resets per user turn
-	// but may inherit an unfinished canonical task list on continuation.
-	deliveryProfile             bool
-	deliveryCriteriaEstablished bool
-	deliveryTaskExpected        bool
-	deliveryMutationExpected    bool
-	deliveryScopeID             string
-	deliveryScopeActive         bool
-	deliveryCheckpoint          evidence.DeliveryCheckpoint
+	// profile prompt explains intent; the mutable scope/turn state lives in the
+	// delivery supervisor and never enters the provider-cached prefix.
+	deliveryProfile bool
+	delivery        *deliverySupervisor
 
 	// classifierTaskText is the host-trusted task text for delivery intent
 	// classification, set by sub-agent spawners whose Run input carries host
 	// framing. Empty means classify the raw input verbatim.
 	classifierTaskText string
-
-	// preserveEvidenceOnce makes the next Run keep the turn evidence ledger
-	// instead of resetting it. RunSubAgentWithSession sets it before a
-	// review_report completion nudge so the retry can cite the read receipts
-	// the subagent already earned; consumed (cleared) by that Run.
-	preserveEvidenceOnce bool
-	// deliveryRecoveryPending is armed only when this agent exhausts final
-	// readiness. An explicit host recovery action can consume it to preserve the
-	// failed turn's receipts once; an ordinary user turn still resets evidence.
-	deliveryRecoveryPending bool
-
-	// capabilityLedger tracks require/prefer outcomes for this user turn only.
-	// Never serialized into prompts or session state.
-	capabilityLedger *capability.Ledger
-	// capabilityAudit accumulates non-persisted routing/proxy counters.
-	capabilityAudit *capability.Audit
-	// lastCapabilityGate tracks prefer-reminder state across final-answer retries.
-	capabilityPreferReminded bool
-	// capabilityRequireMissSeen / capabilityPreferMissSeen remember that the
-	// final gate reported a miss earlier this turn, so a later clean gate is
-	// audited as a recovery. Reset per turn in SeedCapabilityRoute.
-	capabilityRequireMissSeen bool
-	capabilityPreferMissSeen  bool
-	// pendingReviewWarnings are warn-level findings to surface in the final summary.
-	pendingReviewWarnings []string
 
 	// memQueue, when non-nil, lets the remember/forget tools fold a turn-tail note
 	// about a just-made memory change into the next turn, so it applies this
@@ -1060,6 +1029,11 @@ type Options struct {
 	RecentKeep          int
 	ArchiveDir          string
 	KeepPolicy          KeepPolicy
+	// CompactionSummarizer is an optional isolated summarization backend. Boot
+	// supplies a fresh provider client here so a stateful executor continuation
+	// cannot be overwritten by a summary request. Nil preserves direct
+	// construction compatibility and uses the executor provider as a fallback.
+	CompactionSummarizer compaction.Summarizer
 
 	// Hooks fires PreToolUse / PostToolUse shell hooks around tool calls. nil
 	// disables hook firing.
@@ -1254,8 +1228,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 		projectChecks:             append([]instruction.VerifyCheck(nil), opts.ProjectChecks...),
 		deliveryProfile:           opts.DeliveryProfile,
 		classifierTaskText:        opts.ClassifierTaskText,
-		capabilityLedger:          opts.CapabilityLedger,
-		capabilityAudit:           opts.CapabilityAudit,
+		delivery:                  newDeliverySupervisor(opts.CapabilityLedger, opts.CapabilityAudit),
 		contextWindow:             opts.ContextWindow,
 		softCompactRatio:          opts.SoftCompactRatio,
 		toolResultSnipRatio:       opts.ToolResultSnipRatio,
@@ -1264,6 +1237,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 		recentKeep:                opts.RecentKeep,
 		archiveDir:                opts.ArchiveDir,
 		keepPolicy:                opts.KeepPolicy,
+		compactSummarizer:         opts.CompactionSummarizer,
 		subagentDepth:             subagentDepth,
 		maxSubagentDepth:          maxSubagentDepth,
 		mutationObserver:          opts.MutationObserver,
@@ -1589,6 +1563,7 @@ func (a *Agent) finalReadinessCheckFor(finalizeTask bool) finalReadinessCheck {
 	if a.evidence == nil {
 		return finalReadinessCheck{}
 	}
+	delivery := a.deliveryState()
 	var missing []string
 	out := finalReadinessCheck{}
 	// Planning returns a proposal to the controller, which owns the approval gate
@@ -1614,8 +1589,8 @@ func (a *Agent) finalReadinessCheckFor(finalizeTask bool) finalReadinessCheck {
 	writer, hasWriter := a.evidence.LatestSuccessfulWriterIndex()
 	deliveryMutation := false
 	deliveryVerificationOnly := false
-	checkpoint := a.deliveryCheckpoint
-	checkpointApplies := a.deliveryScopeActive && checkpoint.ScopeID == a.deliveryScopeID
+	checkpoint := delivery.checkpoint
+	checkpointApplies := delivery.scopeActive && checkpoint.ScopeID == delivery.scopeID
 	if a.deliveryProfile {
 		if mutation, ok := a.evidence.LatestSuccessfulMutationIndex(); ok {
 			writer, hasWriter = mutation, true
@@ -1630,11 +1605,11 @@ func (a *Agent) finalReadinessCheckFor(finalizeTask bool) finalReadinessCheck {
 			deliveryMutation = true
 		}
 		workObserved := a.evidence.HasSuccessfulWorkReceipt() || (checkpointApplies && checkpoint.WorkObserved)
-		if finalizeTask && a.deliveryTaskExpected && !workObserved {
+		if finalizeTask && delivery.taskExpected && !workObserved {
 			out.missingActionEvidence++
 			missing = append(missing, "perform host-observable work for this technical task before answering")
 		}
-		if finalizeTask && a.deliveryMutationExpected && !deliveryMutation {
+		if finalizeTask && delivery.mutationExpected && !deliveryMutation {
 			out.missingMutation++
 			missing = append(missing, "the request requires a state change, but no successful mutation was observed")
 		}
@@ -1669,7 +1644,7 @@ func (a *Agent) finalReadinessCheckFor(finalizeTask bool) finalReadinessCheck {
 	}
 	out.applies = true
 	if a.deliveryProfile {
-		criteriaEstablished := a.deliveryCriteriaEstablished || (checkpointApplies && checkpoint.CriteriaEstablished)
+		criteriaEstablished := delivery.criteriaEstablished || (checkpointApplies && checkpoint.CriteriaEstablished)
 		if !criteriaEstablished {
 			out.missingAcceptanceCriteria++
 			missing = append(missing, "establish concrete acceptance criteria with todo_write before changing state")
@@ -1720,7 +1695,7 @@ func (a *Agent) finalReadinessCheckFor(finalizeTask bool) finalReadinessCheck {
 // DeliveryCheckpoint returns the compact Goal-scoped delivery state. It is safe
 // to persist next to the Goal sidecar because it contains no raw arguments.
 func (a *Agent) DeliveryCheckpoint() evidence.DeliveryCheckpoint {
-	return a.deliveryCheckpoint
+	return a.deliveryState().checkpoint
 }
 
 // RestoreDeliveryCheckpoint seeds a rebuilt controller before its next Goal
@@ -1730,31 +1705,31 @@ func (a *Agent) RestoreDeliveryCheckpoint(checkpoint evidence.DeliveryCheckpoint
 	if checkpoint.ScopeID == "" {
 		return
 	}
-	a.deliveryCheckpoint = checkpoint
-	a.deliveryScopeID = checkpoint.ScopeID
+	delivery := a.deliveryState()
+	delivery.checkpoint = checkpoint
+	delivery.scopeID = checkpoint.ScopeID
 }
 
 // PrepareDeliveryRecovery preserves the exhausted turn's evidence for exactly
 // one explicit continuation. It returns false when there is no matching
 // readiness failure, so normal follow-up turns cannot inherit stale mutations.
 func (a *Agent) PrepareDeliveryRecovery() bool {
-	if !a.deliveryProfile || !a.deliveryRecoveryPending {
+	if !a.deliveryProfile || !a.deliveryState().recoveryPending {
 		return false
 	}
-	a.preserveEvidenceOnce = true
-	a.deliveryRecoveryPending = false
-	return true
+	return a.deliveryState().consumeRecovery()
 }
 
 func (a *Agent) updateDeliveryCheckpoint(runErr error) {
-	if !a.deliveryScopeActive || a.deliveryScopeID == "" || a.evidence == nil {
+	delivery := a.deliveryState()
+	if !delivery.scopeActive || delivery.scopeID == "" || a.evidence == nil {
 		return
 	}
-	cp := a.deliveryCheckpoint
-	if cp.ScopeID != a.deliveryScopeID {
-		cp = evidence.DeliveryCheckpoint{ScopeID: a.deliveryScopeID}
+	cp := delivery.checkpoint
+	if cp.ScopeID != delivery.scopeID {
+		cp = evidence.DeliveryCheckpoint{ScopeID: delivery.scopeID}
 	}
-	cp.CriteriaEstablished = cp.CriteriaEstablished || a.deliveryCriteriaEstablished || a.evidence.HasSuccessfulTodoWrite()
+	cp.CriteriaEstablished = cp.CriteriaEstablished || delivery.criteriaEstablished || a.evidence.HasSuccessfulTodoWrite()
 	cp.WorkObserved = cp.WorkObserved || a.evidence.HasSuccessfulWorkReceipt()
 	if _, ok := a.evidence.LatestSuccessfulMutationIndex(); ok {
 		cp.MutationObserved = true
@@ -1763,11 +1738,11 @@ func (a *Agent) updateDeliveryCheckpoint(runErr error) {
 	if runErr == nil && cp.PendingMutation && a.deliveryMutationCheckpointReady() {
 		cp.PendingMutation = false
 	}
-	a.deliveryCheckpoint = cp
+	delivery.checkpoint = cp
 }
 
 func (a *Agent) deliveryMutationCheckpointReady() bool {
-	if a.evidence == nil || !a.deliveryCriteriaEstablished {
+	if a.evidence == nil || !a.deliveryState().criteriaEstablished {
 		return false
 	}
 	mutation, ok := a.evidence.LatestSuccessfulMutationIndex()

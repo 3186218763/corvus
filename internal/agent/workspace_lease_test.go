@@ -59,7 +59,7 @@ func deliveryLeaseTestAgent(t *testing.T, owner *workspacelease.Owner, tools ...
 		reg.Add(candidate)
 	}
 	a := New(nil, reg, NewSession(""), Options{DeliveryProfile: true, WorkspaceLease: owner}, event.Discard)
-	a.deliveryCriteriaEstablished = true
+	a.deliveryState().criteriaEstablished = true
 	a.setTodoState([]evidence.TodoItem{{Content: "mutate", Status: "in_progress"}})
 	return a
 }

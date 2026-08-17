@@ -225,7 +225,7 @@ var Chinese = Messages{
 	SlashPromptEmpty:             "该 MCP prompt 没有返回可发送的内容",
 	SlashMCPNone:                 "没有配置 MCP 服务器 — 在 .corvus/config.toml 加一个 [[plugins]] 条目",
 	CtrlCQuitHint:                "再按一次 Ctrl+C 退出",
-	CompHintSlash:                "↑/↓ 移动 · Tab/Enter 选中 · Esc 关闭",
+	CompHintSlash:                "↑/↓ 移动 · Enter 执行 · Tab 补全 · Esc 关闭",
 	CompHintFile:                 "↑/↓ 移动 · Tab/Enter 进入文件夹或选中文件 · Esc 关闭",
 	MouseCopiedHint:              "已复制到剪贴板",
 	ClipboardCopyOSC52Hint:       "已通过 OSC 52 请求复制 — 可能需要终端授权",

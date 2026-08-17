@@ -133,30 +133,23 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	rawInput = RawUserInput(ctx, input)
 	providerInput := input
 	scope, scoped := DeliveryExecutionScopeFromContext(ctx)
-	preserveEvidence := a.preserveEvidenceOnce
+	delivery := a.deliveryState()
+	preserveEvidence := delivery.preserveEvidenceOnce
 	if a.evidence != nil {
 		switch {
 		case preserveEvidence:
 			a.evidence.ResetBackgroundLeases()
-		case scoped && a.deliveryScopeID == scope.ID:
+		case scoped && delivery.scopeID == scope.ID:
 			a.evidence.ResetBackgroundLeases()
 		default:
 			a.evidence.Reset()
 		}
 	}
-	a.preserveEvidenceOnce = false
+	delivery.preserveEvidenceOnce = false
 	if !preserveEvidence {
-		a.deliveryRecoveryPending = false
+		delivery.recoveryPending = false
 	}
-	if scoped {
-		a.deliveryScopeID = scope.ID
-	} else if !preserveEvidence {
-		a.deliveryScopeID = ""
-	}
-	a.deliveryScopeActive = scoped
-	if scoped && a.deliveryCheckpoint.ScopeID != scope.ID {
-		a.deliveryCheckpoint = evidence.DeliveryCheckpoint{ScopeID: scope.ID}
-	}
+	delivery.beginRun(preserveEvidence, scoped, scope.ID)
 	// Re-lease this session's background-job mutations that no turn has
 	// committed yet. The Reset above just wiped any lease a failed or
 	// cancelled turn held (its ledger is gone), and a process restart starts
@@ -180,9 +173,9 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 			a.evidence.MergeChild(summary)
 		}
 	}
-	a.deliveryCriteriaEstablished = a.hasIncompleteCanonicalCriteria() ||
+	criteriaEstablished := a.hasIncompleteCanonicalCriteria() ||
 		(a.evidence != nil && a.evidence.HasSuccessfulTodoWrite()) ||
-		(scoped && a.deliveryCheckpoint.CriteriaEstablished)
+		(scoped && delivery.checkpoint.CriteriaEstablished)
 	// Classify delivery expectations from the task text. Sub-agent spawners
 	// pass the pristine task through Options.ClassifierTaskText (a trusted
 	// host channel) because their Run input carries host framing whose
@@ -197,8 +190,7 @@ func (a *Agent) beginRunTurn(ctx context.Context, input string) (rawInput string
 	} else if strings.TrimSpace(classifierInput) == "" {
 		classifierInput = rawInput
 	}
-	a.deliveryTaskExpected = deliveryTaskNeedsEvidence(classifierInput)
-	a.deliveryMutationExpected = deliveryTaskNeedsMutation(classifierInput) && registryHasWriterTools(a.tools)
+	delivery.setExpectations(criteriaEstablished, deliveryTaskNeedsEvidence(classifierInput), deliveryTaskNeedsMutation(classifierInput) && registryHasWriterTools(a.tools))
 	a.recoveryTaskSummary = boundedRecoveryTaskSummary(classifierInput)
 	// A cancelled/error turn leaves a provider-excluded recovery record at the
 	// transcript tail. Fold its bounded facts into this new user turn exactly
@@ -499,7 +491,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *runLoopState, te
 			StopReason: reason,
 		}
 	}
-	finalizeTask := !a.deliveryScopeActive || deliveryDisposition(text) == deliveryGoalFinal
+	finalizeTask := !a.deliveryState().scopeActive || deliveryDisposition(text) == deliveryGoalFinal
 	readiness := a.finalReadinessCheckFor(finalizeTask)
 	if state.graceRound && (readiness.reason != "" || !hasVisibleFinalAnswer(text)) {
 		a.maybeCompact(ctx, usage)
@@ -521,7 +513,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *runLoopState, te
 		if exhausted {
 			result = evidence.ReadinessErrored
 			event.RecordReadinessAudit(a.sink, readiness.audit(result, false))
-			a.deliveryRecoveryPending = true
+			a.deliveryState().markRecoveryPending()
 			return false, &FinalReadinessError{Attempts: state.finalReadinessBlocks, Reason: readiness.reason, Missing: readiness.missingIDs()}
 		}
 		event.RecordReadinessAudit(a.sink, readiness.audit(result, false))

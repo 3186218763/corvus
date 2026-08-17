@@ -99,6 +99,23 @@ func NewProvider(e *config.ProviderEntry) (provider.Provider, error) {
 	return NewProviderWithProxy(e, netclient.ProxySpec{Mode: netclient.ModeAuto})
 }
 
+// NewCompactionProviderWithProxy builds a provider client for one-off summary
+// requests. It is a separate client from the executor, and Responses entries
+// are forced into stateless mode so a summary can never replace the executor's
+// previous_response_id continuation state.
+func NewCompactionProviderWithProxy(e *config.ProviderEntry, proxy netclient.ProxySpec, suppressServerWebSearch ...bool) (provider.Provider, error) {
+	if e == nil {
+		return nil, fmt.Errorf("compaction provider entry is nil")
+	}
+	copy := *e
+	if strings.EqualFold(strings.TrimSpace(copy.Kind), "responses") || strings.EqualFold(strings.TrimSpace(copy.Kind), "dashscope-responses") {
+		copy.ResponsesMode = "stateless"
+		stateful := false
+		copy.ResponsesStateful = &stateful
+	}
+	return NewProviderWithProxy(&copy, proxy, suppressServerWebSearch...)
+}
+
 // NewProviderWithProxy builds a provider.Provider with the configured ordinary
 // network proxy settings.
 

@@ -389,7 +389,11 @@ func pluginArgItems(prior []string, d ArgData) []SlashItem {
 
 func hooksArgItems(prior []string) []SlashItem {
 	if len(prior) <= 1 {
-		return []SlashItem{{Label: "list", Insert: "list", Hint: i18n.M.ArgHooksList}}
+		return []SlashItem{
+			{Label: "list", Insert: "list", Hint: i18n.M.ArgHooksList},
+			{Label: "trust", Insert: "trust", Hint: "enable project hooks for this workspace"},
+			{Label: "revoke", Insert: "revoke", Hint: "disable project hooks and remove workspace trust"},
+		}
 	}
 	return nil
 }
@@ -506,8 +510,17 @@ func (c *Controller) managementNotice(trimmed string) bool {
 		case "", "list", "ls":
 			c.notice(c.hookListText())
 		case "trust":
-			// Backward-compatible response for old clients and saved commands.
-			c.notice("project hooks are enabled automatically; no trust action is required")
+			if err := c.TrustProjectHooks(); err != nil {
+				c.notice("hooks trust: " + err.Error())
+			} else {
+				c.notice("project hooks trusted and enabled for this workspace")
+			}
+		case "revoke", "untrust":
+			if err := c.RevokeProjectHooks(); err != nil {
+				c.notice("hooks revoke: " + err.Error())
+			} else {
+				c.notice("project hook trust revoked; project hooks are disabled")
+			}
 		default:
 			c.notice("unknown /hooks subcommand " + fields[1] + " - try: /hooks or /hooks list")
 		}

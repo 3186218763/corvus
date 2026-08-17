@@ -1565,6 +1565,31 @@ func (c *Controller) DeleteSkill(name string, scope skill.Scope) error {
 // HookRunner returns the session hook runner so the TUI can list active hooks.
 func (c *Controller) HookRunner() *hook.Runner { return c.hooks }
 
+// TrustProjectHooks durably trusts this controller's workspace for project
+// hooks and reloads them immediately. Global and installed-plugin hooks are
+// left untouched.
+func (c *Controller) TrustProjectHooks() error {
+	if c == nil || c.hooks == nil {
+		return fmt.Errorf("project hook trust is unavailable")
+	}
+	return c.hooks.TrustProjectHooks()
+}
+
+// RevokeProjectHooks removes durable trust and immediately disables project
+// hooks for this controller. It does not affect global or installed-plugin
+// hooks.
+func (c *Controller) RevokeProjectHooks() error {
+	if c == nil || c.hooks == nil {
+		return fmt.Errorf("project hook trust is unavailable")
+	}
+	return c.hooks.RevokeProjectHooks()
+}
+
+// ProjectHooksTrusted reports the durable trust state for this workspace.
+func (c *Controller) ProjectHooksTrusted() bool {
+	return c != nil && c.hooks != nil && c.hooks.ProjectHooksTrusted()
+}
+
 // Label returns the human-readable model label, e.g. "deepseek-flash".
 func (c *Controller) Label() string { return c.label }
 

@@ -1815,7 +1815,7 @@ func RunSubAgentWithSession(ctx context.Context, prov provider.Provider, reg *to
 		nudges := 0
 		for !sub.HasSuccessfulReviewReport(kind) && nudges < maxReviewReportNudges {
 			nudges++
-			sub.preserveEvidenceOnce = true
+			sub.deliveryState().preserveEvidenceOnce = true
 			if err := sub.Run(ctx, reviewReportNudgePrompt(kind)); err != nil {
 				mergeChildEvidence(ctx, sub)
 				return "", fmt.Errorf("sub-agent: %w", err)

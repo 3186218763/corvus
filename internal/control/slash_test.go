@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"corvus/internal/event"
+	"corvus/internal/hook"
 	"corvus/internal/instruction"
 	"corvus/internal/memory"
 	"corvus/internal/skill"
@@ -134,8 +135,8 @@ func TestSlashArgItems(t *testing.T) {
 	}
 	// /hooks
 	items, _ = SlashArgItems("/hooks ", data)
-	if !has(items, "list") || has(items, "trust") {
-		t.Errorf("/hooks should offer list without a trust step; got %v", labelsOf(items))
+	if !has(items, "list") || !has(items, "trust") || !has(items, "revoke") {
+		t.Errorf("/hooks should offer list/trust/revoke; got %v", labelsOf(items))
 	}
 	// /effort
 	items, _ = SlashArgItems("/effort ", data)
@@ -459,18 +460,22 @@ func TestManagementMemoryArchiveRecoveryAcceptsQuotedPathWithSpaces(t *testing.T
 	}
 }
 
-func TestManagementHooksTrustCompatibilityNotice(t *testing.T) {
+func TestManagementHooksTrustNotice(t *testing.T) {
 	isolateControlConfigHome(t)
 	var notices []string
-	c := New(Options{Sink: event.FuncSink(func(e event.Event) {
-		if e.Kind == event.Notice {
-			notices = append(notices, e.Text)
-		}
-	})})
+	root, home := t.TempDir(), t.TempDir()
+	c := New(Options{
+		Hooks: hook.NewRunnerWithHome(nil, root, home, nil, nil),
+		Sink: event.FuncSink(func(e event.Event) {
+			if e.Kind == event.Notice {
+				notices = append(notices, e.Text)
+			}
+		}),
+	})
 	if !c.managementNotice("/hooks trust") {
-		t.Fatal("legacy /hooks trust was not handled")
+		t.Fatal("/hooks trust was not handled")
 	}
-	if len(notices) != 1 || !strings.Contains(notices[0], "enabled automatically") {
-		t.Fatalf("legacy /hooks trust notice = %v", notices)
+	if len(notices) != 1 || !strings.Contains(notices[0], "trusted and enabled") {
+		t.Fatalf("hooks trust notice = %v", notices)
 	}
 }

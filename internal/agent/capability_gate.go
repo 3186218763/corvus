@@ -16,14 +16,15 @@ func (a *Agent) SeedCapabilityRoute(decision capability.RouteDecision) {
 	if a == nil {
 		return
 	}
-	if a.capabilityLedger == nil {
-		a.capabilityLedger = capability.NewLedger()
+	d := a.deliveryState()
+	if d.capabilityLedger == nil {
+		d.capabilityLedger = capability.NewLedger()
 	}
-	a.capabilityLedger.Reset()
-	a.capabilityLedger.SeedCandidates(decision)
-	a.capabilityPreferReminded = false
-	a.capabilityRequireMissSeen = false
-	a.capabilityPreferMissSeen = false
+	d.capabilityLedger.Reset()
+	d.capabilityLedger.SeedCandidates(decision)
+	d.capabilityPreferReminded = false
+	d.capabilityRequireMissSeen = false
+	d.capabilityPreferMissSeen = false
 }
 
 // CapabilityLedger returns the turn-scoped capability ledger (may be nil).
@@ -31,7 +32,7 @@ func (a *Agent) CapabilityLedger() *capability.Ledger {
 	if a == nil {
 		return nil
 	}
-	return a.capabilityLedger
+	return a.deliveryState().capabilityLedger
 }
 
 // CapabilityAudit returns the non-persisted capability metrics sink (may be nil).
@@ -39,24 +40,28 @@ func (a *Agent) CapabilityAudit() *capability.Audit {
 	if a == nil {
 		return nil
 	}
-	return a.capabilityAudit
+	return a.deliveryState().capabilityAudit
 }
 
 func (a *Agent) noteCapabilityInvocation(toolName string, args json.RawMessage, callErr error) {
-	if a == nil || a.capabilityLedger == nil {
+	if a == nil {
+		return
+	}
+	d := a.deliveryState()
+	if d.capabilityLedger == nil {
 		return
 	}
 	// Successful/failed proxied MCP calls execute the resolved target
 	// directly, so this is the single audit point for action=call (inspect,
 	// decline, and resolve-time unavailability are counted in ResolveCall,
 	// which returns before this runs).
-	if toolName == "use_capability" && a.capabilityAudit != nil {
+	if toolName == "use_capability" && d.capabilityAudit != nil {
 		var p struct {
 			Action string `json:"action"`
 		}
 		_ = json.Unmarshal(args, &p)
 		if strings.EqualFold(strings.TrimSpace(p.Action), "call") {
-			a.capabilityAudit.RecordMCPProxy(false, true, callErr != nil)
+			d.capabilityAudit.RecordMCPProxy(false, true, callErr != nil)
 		}
 	}
 	id := capabilityIDFromToolCall(toolName, args)
@@ -64,15 +69,15 @@ func (a *Agent) noteCapabilityInvocation(toolName string, args json.RawMessage, 
 		return
 	}
 	if callErr != nil {
-		a.capabilityLedger.MarkFailed(id, callErr.Error())
-		if a.capabilityAudit != nil && strings.HasPrefix(id, "skill:") {
-			a.capabilityAudit.RecordSkill(true, errors.Is(callErr, skill.ErrInvocationUnavailable))
+		d.capabilityLedger.MarkFailed(id, callErr.Error())
+		if d.capabilityAudit != nil && strings.HasPrefix(id, "skill:") {
+			d.capabilityAudit.RecordSkill(true, errors.Is(callErr, skill.ErrInvocationUnavailable))
 		}
 		return
 	}
-	a.capabilityLedger.MarkSucceeded(id)
-	if a.capabilityAudit != nil && strings.HasPrefix(id, "skill:") {
-		a.capabilityAudit.RecordSkill(false, false)
+	d.capabilityLedger.MarkSucceeded(id)
+	if d.capabilityAudit != nil && strings.HasPrefix(id, "skill:") {
+		d.capabilityAudit.RecordSkill(false, false)
 	}
 }
 
@@ -127,30 +132,34 @@ func splitMCP(name string) (server, raw string, ok bool) {
 
 // capabilityGateFailure is checked during final readiness for Delivery.
 func (a *Agent) capabilityGateFailure() string {
-	if a == nil || !a.deliveryProfile || a.capabilityLedger == nil {
+	if a == nil || !a.deliveryProfile {
 		return ""
 	}
-	gate := a.capabilityLedger.CheckFinalGate()
+	d := a.deliveryState()
+	if d.capabilityLedger == nil {
+		return ""
+	}
+	gate := d.capabilityLedger.CheckFinalGate()
 	if gate.Reason == "" {
 		// A clean gate after an earlier miss this turn is a recovery — the
 		// model was nudged and then actually invoked the capability.
-		if a.capabilityRequireMissSeen || a.capabilityPreferMissSeen {
-			if a.capabilityAudit != nil {
-				a.capabilityAudit.RecordGateRecovery(a.capabilityRequireMissSeen, a.capabilityPreferMissSeen)
+		if d.capabilityRequireMissSeen || d.capabilityPreferMissSeen {
+			if d.capabilityAudit != nil {
+				d.capabilityAudit.RecordGateRecovery(d.capabilityRequireMissSeen, d.capabilityPreferMissSeen)
 			}
-			a.capabilityRequireMissSeen = false
-			a.capabilityPreferMissSeen = false
+			d.capabilityRequireMissSeen = false
+			d.capabilityPreferMissSeen = false
 		}
 		return ""
 	}
-	if gate.PreferRemind && !a.capabilityPreferReminded {
+	if gate.PreferRemind && !d.capabilityPreferReminded {
 		for _, id := range gate.PreferIDs {
-			a.capabilityLedger.MarkReminded(id)
+			d.capabilityLedger.MarkReminded(id)
 		}
-		a.capabilityPreferReminded = true
-		a.capabilityPreferMissSeen = true
-		if a.capabilityAudit != nil {
-			a.capabilityAudit.RecordGate(false, true, false)
+		d.capabilityPreferReminded = true
+		d.capabilityPreferMissSeen = true
+		if d.capabilityAudit != nil {
+			d.capabilityAudit.RecordGate(false, true, false)
 		}
 		return gate.Reason
 	}
@@ -160,8 +169,8 @@ func (a *Agent) capabilityGateFailure() string {
 		// the model is nudged once; if it still claims success, missing mutation
 		// / sign-off gates still apply. For pure capability blockers with no
 		// mutation, we surface the reason and allow the loop-guard path.
-		if a.capabilityAudit != nil {
-			a.capabilityAudit.RecordGate(true, false, false)
+		if d.capabilityAudit != nil {
+			d.capabilityAudit.RecordGate(true, false, false)
 		}
 		// Do not hard-block forever: once reported, allow final if no mutation pending.
 		if _, ok := a.evidence.LatestSuccessfulMutationIndex(); !ok {
@@ -170,16 +179,16 @@ func (a *Agent) capabilityGateFailure() string {
 		return gate.Reason
 	}
 	if len(gate.RequireIDs) > 0 {
-		a.capabilityRequireMissSeen = true
-		if a.capabilityAudit != nil {
-			a.capabilityAudit.RecordGate(true, false, false)
+		d.capabilityRequireMissSeen = true
+		if d.capabilityAudit != nil {
+			d.capabilityAudit.RecordGate(true, false, false)
 		}
 		return gate.Reason
 	}
 	if len(gate.PreferIDs) > 0 {
-		a.capabilityPreferMissSeen = true
-		if a.capabilityAudit != nil {
-			a.capabilityAudit.RecordGate(false, true, false)
+		d.capabilityPreferMissSeen = true
+		if d.capabilityAudit != nil {
+			d.capabilityAudit.RecordGate(false, true, false)
 		}
 		return gate.Reason
 	}
@@ -193,6 +202,7 @@ func (a *Agent) deliveryReviewGateFailure() string {
 	if a == nil || !a.deliveryProfile || a.evidence == nil {
 		return ""
 	}
+	d := a.deliveryState()
 	if a.subagentDepth > 0 {
 		// Structured review is the parent's contract. A child's mutation
 		// receipts merge into the parent ledger (mergeChildEvidence), so the
@@ -222,8 +232,8 @@ func (a *Agent) deliveryReviewGateFailure() string {
 		}
 		ok, blocking, report := a.evidence.HasStructuredReviewAfter(evidence.ReviewKindReview, mutation, paths)
 		if blocking {
-			if a.capabilityAudit != nil {
-				a.capabilityAudit.RecordReviewBlock(false)
+			if d.capabilityAudit != nil {
+				d.capabilityAudit.RecordReviewBlock(false)
 			}
 			return "structured review reported blocking findings; fix them and re-run review"
 		}
@@ -231,7 +241,7 @@ func (a *Agent) deliveryReviewGateFailure() string {
 			return "medium-risk changes require a successful review after the latest mutation (run the review skill; its subagent submits review_report)" + reviewCoverageHint(paths)
 		}
 		if report != nil {
-			a.pendingReviewWarnings = append(a.pendingReviewWarnings, report.WarningSummaries()...)
+			d.pendingReviewWarnings = append(d.pendingReviewWarnings, report.WarningSummaries()...)
 		}
 	case evidence.RiskHigh:
 		if !hasReviewTool && !hasSecurityTool {
@@ -239,8 +249,8 @@ func (a *Agent) deliveryReviewGateFailure() string {
 		}
 		okR, blockR, repR := a.evidence.HasStructuredReviewAfter(evidence.ReviewKindReview, mutation, paths)
 		if blockR {
-			if a.capabilityAudit != nil {
-				a.capabilityAudit.RecordReviewBlock(false)
+			if d.capabilityAudit != nil {
+				d.capabilityAudit.RecordReviewBlock(false)
 			}
 			return "structured review reported blocking findings; fix them and re-run review"
 		}
@@ -249,8 +259,8 @@ func (a *Agent) deliveryReviewGateFailure() string {
 		}
 		okS, blockS, repS := a.evidence.HasStructuredReviewAfter(evidence.ReviewKindSecurity, mutation, paths)
 		if blockS {
-			if a.capabilityAudit != nil {
-				a.capabilityAudit.RecordReviewBlock(true)
+			if d.capabilityAudit != nil {
+				d.capabilityAudit.RecordReviewBlock(true)
 			}
 			return "security_review reported blocking findings; fix them and re-run security_review"
 		}
@@ -258,10 +268,10 @@ func (a *Agent) deliveryReviewGateFailure() string {
 			return "high-risk changes require security_review with review_report after the latest mutation" + reviewCoverageHint(paths)
 		}
 		if repR != nil {
-			a.pendingReviewWarnings = append(a.pendingReviewWarnings, repR.WarningSummaries()...)
+			d.pendingReviewWarnings = append(d.pendingReviewWarnings, repR.WarningSummaries()...)
 		}
 		if repS != nil {
-			a.pendingReviewWarnings = append(a.pendingReviewWarnings, repS.WarningSummaries()...)
+			d.pendingReviewWarnings = append(d.pendingReviewWarnings, repS.WarningSummaries()...)
 		}
 	}
 	return ""
@@ -306,6 +316,5 @@ func (a *Agent) ReviewWarnings() []string {
 	if a == nil {
 		return nil
 	}
-	return append([]string(nil), a.pendingReviewWarnings...)
+	return append([]string(nil), a.deliveryState().pendingReviewWarnings...)
 }
-

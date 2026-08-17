@@ -75,18 +75,29 @@ func hookSettingsWithCommand(t *testing.T, event Event, command string) string {
 	return string(body)
 }
 
-func TestLoadProjectHooksByDefault(t *testing.T) {
+func TestLoadProjectHooksRequireTrustBeforeParsing(t *testing.T) {
 	home := t.TempDir()
 	proj := t.TempDir()
 	writeSettings(t, proj, sampleSettings)
 	writeSettings(t, home, `{"hooks":{"PostToolUse":[{"command":"echo g"}]}}`)
 
 	got := Load(LoadOptions{ProjectRoot: proj, HomeDir: home})
-	if len(got) != 3 {
-		t.Fatalf("default load should include project + global, got %d", len(got))
+	if len(got) != 1 {
+		t.Fatalf("untrusted load should include only global hooks, got %d", len(got))
 	}
-	if got[0].Scope != ScopeProject {
-		t.Errorf("project hooks should sort first, got %s", got[0].Scope)
+	if got[0].Scope != ScopeGlobal {
+		t.Errorf("untrusted project hook must not be registered, got %s", got[0].Scope)
+	}
+
+	got = Load(LoadOptions{
+		ProjectRoot: proj,
+		HomeDir:     home,
+		TrustProject: func(ProjectTrustRequest) ProjectTrustDecision {
+			return ProjectTrustOnce
+		},
+	})
+	if len(got) != 3 || got[0].Scope != ScopeProject {
+		t.Fatalf("explicit trust should load project hooks first, got %+v", got)
 	}
 }
 

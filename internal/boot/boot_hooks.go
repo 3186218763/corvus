@@ -1,7 +1,10 @@
 package boot
 
 import (
+	"bufio"
+	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 
 	"corvus/internal/config"
@@ -10,6 +13,8 @@ import (
 	"corvus/internal/hook"
 	"corvus/internal/permission"
 	"corvus/internal/sandbox"
+
+	"golang.org/x/term"
 )
 
 type hookResult struct {
@@ -35,17 +40,36 @@ func buildPermissionAndHooks(cfg *config.Config, opts Options, root string, shel
 		WithSessionAllow(opts.PermissionAllow)
 	headlessGate := control.NewSharedHeadlessGate(policy, opts.HeadlessApprovalMode)
 
-	// Hooks: load the global settings.json plus the project's. Non-blocking hook
+	// Hooks: load the global settings.json plus the project's. Project settings
+	// are held behind a load-time trust decision: parsing a JSON file is already
+	// too late to protect a shell hook's execution contract. Non-blocking hook
 	// output is surfaced to the user as a Notice through the shared sink. The
 	// runner fires PreToolUse/PostToolUse in the agent loop and
 	// PermissionRequest/UserPromptSubmit/Stop at the controller boundary.
-	resolvedHooks := hook.Load(hook.LoadOptions{ProjectRoot: root})
+	headless := recoveryHeadlessMode(opts)
+	trustApprover := opts.ProjectHookTrustApprover
+	if trustApprover == nil && !headless {
+		trustApprover = defaultProjectHookTrustApprover
+	}
+	resolvedHooks, trustReport := hook.LoadWithReport(hook.LoadOptions{
+		ProjectRoot:  root,
+		Headless:     headless,
+		TrustProject: trustApprover,
+	})
+	if trustReport.TrustDenied {
+		level := event.LevelWarn
+		detail := fmt.Sprintf("project hooks from %s were not parsed or registered; trust this workspace explicitly before enabling repository-controlled shell code", trustReport.ProjectSettingsPath)
+		if headless {
+			detail += "; headless mode fails closed without an existing trust record"
+		}
+		sink.Emit(event.Event{Kind: event.Notice, Level: level, Text: "Project hooks are disabled until this workspace is trusted.", Detail: detail})
+	}
 	hookRuntime := hook.RuntimeOptions{}
 	if shell.Kind == sandbox.ShellBash {
 		hookRuntime.BashPath = shell.Path
 	}
-	hookRunner := hook.NewRunner(
-		resolvedHooks, root, hook.NewDefaultSpawner(hookRuntime),
+	hookRunner := hook.NewRunnerWithHome(
+		resolvedHooks, root, "", hook.NewDefaultSpawner(hookRuntime),
 		func(msg string) { sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: msg}) },
 	)
 
@@ -54,6 +78,29 @@ func buildPermissionAndHooks(cfg *config.Config, opts Options, root string, shel
 		headlessGate: headlessGate,
 		hookRunner:   hookRunner,
 	}, nil
+}
+
+// defaultProjectHookTrustApprover runs before the TUI takes ownership of the
+// terminal, just like the project-MCP launch prompt. A remembered grant is the
+// useful default for an affirmative answer; "once" remains available for a
+// user who wants to inspect a repository without changing durable trust state.
+func defaultProjectHookTrustApprover(req hook.ProjectTrustRequest) hook.ProjectTrustDecision {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return hook.ProjectTrustDeny
+	}
+	fmt.Fprintf(os.Stdout, "\nProject hooks found in %s. They can execute shell commands on lifecycle events and may modify this workspace.\nTrust this workspace? [y/N/once] ", req.SettingsPath)
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && strings.TrimSpace(line) == "" {
+		return hook.ProjectTrustDeny
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes", "remember":
+		return hook.ProjectTrustRemember
+	case "once":
+		return hook.ProjectTrustOnce
+	default:
+		return hook.ProjectTrustDeny
+	}
 }
 
 func rememberPermissionRule(workspaceRoot, rule string) control.RememberResult {

@@ -17,6 +17,7 @@ import (
 type Runner struct {
 	hooks     []ResolvedHook
 	cwd       string
+	homeDir   string // user-state root used for project-hook trust decisions
 	spawner   Spawner
 	notify    func(string) // surface a non-blocking (warn/error) hook message; may be nil
 	mu        sync.RWMutex
@@ -45,7 +46,57 @@ func (r *Runner) payload(event Event) Payload {
 // NewRunner builds a Runner. spawner nil uses DefaultSpawner; notify nil drops
 // non-blocking messages.
 func NewRunner(hooks []ResolvedHook, cwd string, spawner Spawner, notify func(string)) *Runner {
-	return &Runner{hooks: hooks, cwd: cwd, spawner: spawner, notify: notify}
+	return NewRunnerWithHome(hooks, cwd, "", spawner, notify)
+}
+
+// NewRunnerWithHome is NewRunner with the user-state override used by the
+// project-hook trust store. Existing callers can keep using NewRunner; boot
+// uses this constructor so `/hooks trust` and `/hooks revoke` update the same
+// state that was consulted during loading.
+func NewRunnerWithHome(hooks []ResolvedHook, cwd, homeDir string, spawner Spawner, notify func(string)) *Runner {
+	return &Runner{hooks: append([]ResolvedHook(nil), hooks...), cwd: cwd, homeDir: homeDir, spawner: spawner, notify: notify}
+}
+
+// TrustProjectHooks records trust for the runner's project and immediately
+// reloads the hook set. The settings file is parsed only after the durable
+// record has been published.
+func (r *Runner) TrustProjectHooks() error {
+	if r == nil {
+		return nil
+	}
+	if err := TrustProject(r.homeDir, r.cwd); err != nil {
+		return err
+	}
+	return r.reloadProjectHooks()
+}
+
+// RevokeProjectHooks removes trust and immediately removes project hooks from
+// the active runner. Global and installed-plugin hooks remain active.
+func (r *Runner) RevokeProjectHooks() error {
+	if r == nil {
+		return nil
+	}
+	if err := RevokeProjectTrust(r.homeDir, r.cwd); err != nil {
+		return err
+	}
+	return r.reloadProjectHooks()
+}
+
+// ProjectHooksTrusted reports the durable trust state without loading project
+// settings. It is useful for management UIs and is safe to call mid-turn.
+func (r *Runner) ProjectHooksTrusted() bool {
+	if r == nil {
+		return false
+	}
+	return IsProjectTrusted(r.homeDir, r.cwd)
+}
+
+func (r *Runner) reloadProjectHooks() error {
+	hooks, _ := LoadWithReport(LoadOptions{ProjectRoot: r.cwd, HomeDir: r.homeDir})
+	r.mu.Lock()
+	r.hooks = hooks
+	r.mu.Unlock()
+	return nil
 }
 
 // Hooks returns the resolved hooks (for `/hooks` listing).
@@ -53,20 +104,26 @@ func (r *Runner) Hooks() []ResolvedHook {
 	if r == nil {
 		return nil
 	}
-	return r.hooks
+	return r.hooksSnapshot()
+}
+
+func (r *Runner) hooksSnapshot() []ResolvedHook {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return append([]ResolvedHook(nil), r.hooks...)
 }
 
 // Enabled reports whether any hooks are configured.
-func (r *Runner) Enabled() bool { return r != nil && len(r.hooks) > 0 }
+func (r *Runner) Enabled() bool { return len(r.hooksSnapshot()) > 0 }
 
 // Has reports whether any configured hook listens for the given event. Callers
 // use it to skip work that only matters when a specific hook exists (e.g. the
 // agent buffers reasoning for transform only when a PostLLMCall hook is set).
 func (r *Runner) Has(event Event) bool {
-	if r == nil {
-		return false
-	}
-	for _, h := range r.hooks {
+	for _, h := range r.hooksSnapshot() {
 		if h.Event == event {
 			return true
 		}
@@ -91,9 +148,10 @@ func (r *Runner) PreToolUse(ctx context.Context, name string, args json.RawMessa
 	if !r.Enabled() {
 		return false, ""
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(PreToolUse)
 	p.ToolName, p.ToolArgs = name, args
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, hooks, r.spawner)
 	return r.handle(rep)
 }
 
@@ -103,9 +161,10 @@ func (r *Runner) PostToolUse(ctx context.Context, name string, args json.RawMess
 	if !r.Enabled() {
 		return
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(PostToolUse)
 	p.ToolName, p.ToolArgs, p.ToolResult = name, args, result
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, hooks, r.spawner)
 	r.handle(rep)
 }
 
@@ -114,16 +173,17 @@ func (r *Runner) PostToolUseFailure(ctx context.Context, name string, args json.
 	if !r.Enabled() {
 		return
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(PostToolUseFailure)
 	p.ToolName, p.ToolArgs, p.ToolResult = name, args, result
 	if err != nil {
 		p.Error = err.Error()
 		p.IsInterrupt = errors.Is(err, context.Canceled)
 	}
-	r.handle(Run(ctx, p, r.hooks, r.spawner))
+	r.handle(Run(ctx, p, hooks, r.spawner))
 	// Native Corvus PostToolUse historically observed both success and
 	// failure. Preserve that contract while Claude hooks use the distinct event.
-	legacy := r.nativeHooks(PostToolUse)
+	legacy := r.nativeHooks(PostToolUse, hooks)
 	if len(legacy) > 0 {
 		p.Event = PostToolUse
 		r.handle(Run(ctx, p, legacy, r.spawner))
@@ -145,9 +205,10 @@ func (r *Runner) PermissionRequest(ctx context.Context, name, subject string, ar
 	if !r.Enabled() {
 		return nil, ""
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(PermissionRequest)
 	p.ToolName, p.ToolArgs, p.Subject = name, args, subject
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, hooks, r.spawner)
 	block, msg := r.handle(rep)
 	switch {
 	case block:
@@ -167,9 +228,10 @@ func (r *Runner) PromptSubmit(ctx context.Context, prompt string, turn int) (blo
 	if !r.Enabled() {
 		return false, ""
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(UserPromptSubmit)
 	p.Prompt, p.Turn = prompt, turn
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, hooks, r.spawner)
 	return r.handle(rep)
 }
 
@@ -178,9 +240,10 @@ func (r *Runner) Stop(ctx context.Context, lastAssistant string, turn int) {
 	if !r.Enabled() {
 		return
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(Stop)
 	p.LastAssistant, p.Turn = lastAssistant, turn
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, hooks, r.spawner)
 	r.handle(rep)
 }
 
@@ -193,20 +256,21 @@ func (r *Runner) StopResult(ctx context.Context, lastAssistant string, turn int,
 	if !r.Enabled() {
 		return
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(StopFailure)
 	p.LastAssistant, p.Turn, p.Error = lastAssistant, turn, err.Error()
 	p.IsInterrupt = errors.Is(err, context.Canceled)
-	r.handle(Run(ctx, p, r.hooks, r.spawner))
-	legacy := r.nativeHooks(Stop)
+	r.handle(Run(ctx, p, hooks, r.spawner))
+	legacy := r.nativeHooks(Stop, hooks)
 	if len(legacy) > 0 {
 		p.Event = Stop
 		r.handle(Run(ctx, p, legacy, r.spawner))
 	}
 }
 
-func (r *Runner) nativeHooks(event Event) []ResolvedHook {
+func (r *Runner) nativeHooks(event Event, hooks []ResolvedHook) []ResolvedHook {
 	var out []ResolvedHook
-	for _, h := range r.hooks {
+	for _, h := range hooks {
 		if h.Event == event && h.PayloadFormat != "claude" {
 			out = append(out, h)
 		}
@@ -220,12 +284,13 @@ func (r *Runner) SessionStart(ctx context.Context, source ...string) []string {
 	if !r.Enabled() {
 		return nil
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(SessionStart)
 	p.Source = "startup"
 	if len(source) > 0 && strings.TrimSpace(source[0]) != "" {
 		p.Source = strings.TrimSpace(source[0])
 	}
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, hooks, r.spawner)
 	r.handle(rep)
 	return r.additionalContexts(rep)
 }
@@ -235,12 +300,13 @@ func (r *Runner) SessionEnd(ctx context.Context, reason ...string) {
 	if !r.Enabled() {
 		return
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(SessionEnd)
 	p.Reason = "other"
 	if len(reason) > 0 && strings.TrimSpace(reason[0]) != "" {
 		p.Reason = strings.TrimSpace(reason[0])
 	}
-	r.handle(Run(ctx, p, r.hooks, r.spawner))
+	r.handle(Run(ctx, p, hooks, r.spawner))
 }
 
 // SubagentStop fires when a `task` sub-agent finishes. It can't block; last is
@@ -249,9 +315,10 @@ func (r *Runner) SubagentStop(ctx context.Context, last string) {
 	if !r.Enabled() {
 		return
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(SubagentStop)
 	p.LastAssistant = last
-	r.handle(Run(ctx, p, r.hooks, r.spawner))
+	r.handle(Run(ctx, p, hooks, r.spawner))
 }
 
 // Notification fires when the agent needs the user's attention (e.g. a pending
@@ -260,12 +327,13 @@ func (r *Runner) Notification(ctx context.Context, message string, notificationT
 	if !r.Enabled() {
 		return
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(Notification)
 	p.Message = message
 	if len(notificationType) > 0 {
 		p.NotificationType = strings.TrimSpace(notificationType[0])
 	}
-	r.handle(Run(ctx, p, r.hooks, r.spawner))
+	r.handle(Run(ctx, p, hooks, r.spawner))
 }
 
 // PostLLMCall fires after every model turn completes but before the
@@ -277,9 +345,10 @@ func (r *Runner) PostLLMCall(ctx context.Context, reasoning string, turn int) st
 	if !r.Has(PostLLMCall) {
 		return reasoning
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(PostLLMCall)
 	p.Reasoning, p.Turn = reasoning, turn
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, hooks, r.spawner)
 	r.handle(rep)
 	for _, o := range rep.Outcomes {
 		if o.Decision == DecisionPass {
@@ -298,9 +367,10 @@ func (r *Runner) PreCompact(ctx context.Context, trigger string) string {
 	if !r.Enabled() {
 		return ""
 	}
+	hooks := r.hooksSnapshot()
 	p := r.payload(PreCompact)
 	p.Trigger = trigger
-	rep := Run(ctx, p, r.hooks, r.spawner)
+	rep := Run(ctx, p, hooks, r.spawner)
 	r.handle(rep)
 	var b strings.Builder
 	for _, o := range rep.Outcomes {

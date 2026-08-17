@@ -18,6 +18,7 @@ import (
 	"corvus/internal/agent"
 	"corvus/internal/control"
 	"corvus/internal/event"
+	"corvus/internal/hook"
 	"corvus/internal/plugin"
 	"corvus/internal/provider"
 	"corvus/internal/tool/builtin"
@@ -121,6 +122,11 @@ type Options struct {
 	// terminal. Headless/bot frontends pass a positive value so an unanswered
 	// prompt can't wedge the session indefinitely (#4626, #4402).
 	ApprovalTimeout time.Duration
+	// ProjectHookTrustApprover decides whether repository-controlled hooks may
+	// be parsed and registered. It runs before project settings are read. Nil
+	// uses the cooked-terminal y/N prompt for interactive boots and denies in
+	// headless boots.
+	ProjectHookTrustApprover func(hook.ProjectTrustRequest) hook.ProjectTrustDecision
 	// HeadlessApprovalMode selects the non-interactive tool-approval contract
 	// (control.ToolApprovalAuto/DontAsk/Yolo) applied to every headless-only gate
 	// this boot constructs: the top-level executor, task/read_only_task,
