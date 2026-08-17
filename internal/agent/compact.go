@@ -404,6 +404,7 @@ func (a *Agent) pinnableUserTurn(m provider.Message) bool {
 func (a *Agent) partitionFold(region []provider.Message) (kept, fold []provider.Message) {
 	return compaction.PartitionFold(region, a.keepPolicy, a.pinnableUserTurn)
 }
+
 // planCompaction locates the region to summarize. head is the count of leading
 // messages preserved verbatim (see pinnedPrefixLen); start is where the preserved
 // recent tail begins, so msgs[head:start] is compacted. The tail is bounded by a

@@ -24,7 +24,6 @@ linters:
     cyclop:
       max-complexity: 30
       package-average: 0
-      skip-tests: true
 
 issues:
   max-issues-per-linter: 0
