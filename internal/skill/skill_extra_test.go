@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"corvus/internal/frontmatter"
 )
 
 // --- IsValidName ---
@@ -34,10 +36,10 @@ func TestIsValidName(t *testing.T) {
 	}
 }
 
-// --- splitFrontmatter ---
+// --- frontmatter.Split ---
 
 func TestSplitFrontmatterNoFence(t *testing.T) {
-	fm, body := splitFrontmatter("just body")
+	fm, body := frontmatter.Split("just body")
 	if len(fm) != 0 {
 		t.Errorf("expected empty fm, got %v", fm)
 	}
@@ -47,7 +49,7 @@ func TestSplitFrontmatterNoFence(t *testing.T) {
 }
 
 func TestSplitFrontmatterUnclosed(t *testing.T) {
-	fm, body := splitFrontmatter("---\nkey: val\n\nno closing")
+	fm, body := frontmatter.Split("---\nkey: val\n\nno closing")
 	if len(fm) != 0 {
 		t.Errorf("unclosed fence should return empty fm, got %v", fm)
 	}
@@ -57,7 +59,7 @@ func TestSplitFrontmatterUnclosed(t *testing.T) {
 }
 
 func TestSplitFrontmatterEmpty(t *testing.T) {
-	fm, body := splitFrontmatter("")
+	fm, body := frontmatter.Split("")
 	if len(fm) != 0 {
 		t.Errorf("empty input should return empty fm, got %v", fm)
 	}
@@ -67,7 +69,7 @@ func TestSplitFrontmatterEmpty(t *testing.T) {
 }
 
 func TestSplitFrontmatterQuotedValues(t *testing.T) {
-	fm, _ := splitFrontmatter("---\ndescription: \"quoted\"\n---\n")
+	fm, _ := frontmatter.Split("---\ndescription: \"quoted\"\n---\n")
 	if fm["description"] != "quoted" {
 		t.Errorf("description = %q", fm["description"])
 	}

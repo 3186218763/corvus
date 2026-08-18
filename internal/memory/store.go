@@ -762,7 +762,7 @@ func loadMemory(path string) (Memory, bool) {
 	if err != nil {
 		return Memory{}, false
 	}
-	fm, body := splitFrontmatter(string(b))
+	fm, body := frontmatter.Split(string(b))
 	m := Memory{
 		ID:          fm["id"],
 		Revision:    parsePositiveInt(fm["revision"]),
@@ -845,12 +845,6 @@ func (s Store) scopeForDir(dir string) FactScope {
 
 func (s Store) scopeForPath(path string) FactScope {
 	return s.scopeForDir(filepath.Dir(path))
-}
-
-// splitFrontmatter is a thin wrapper; the real parser lives in
-// internal/frontmatter.
-func splitFrontmatter(s string) (map[string]string, string) {
-	return frontmatter.Split(s)
 }
 
 // slugRe strips everything but Unicode letters and digits.

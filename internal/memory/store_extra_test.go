@@ -5,12 +5,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"corvus/internal/frontmatter"
 )
 
-// --- splitFrontmatter ---
+// --- frontmatter.Split ---
 
 func TestSplitFrontmatterNoFence(t *testing.T) {
-	fm, body := splitFrontmatter("just plain text\nno frontmatter")
+	fm, body := frontmatter.Split("just plain text\nno frontmatter")
 	if len(fm) != 0 {
 		t.Errorf("expected empty fm, got %v", fm)
 	}
@@ -21,7 +23,7 @@ func TestSplitFrontmatterNoFence(t *testing.T) {
 
 func TestSplitFrontmatterUnclosedFence(t *testing.T) {
 	input := "---\nname: test\ndescription: desc\n\nsome body without closing fence"
-	fm, body := splitFrontmatter(input)
+	fm, body := frontmatter.Split(input)
 	// Unclosed fence: treat all as body.
 	if len(fm) != 0 {
 		t.Errorf("unclosed fence should return empty fm, got %v", fm)
@@ -33,7 +35,7 @@ func TestSplitFrontmatterUnclosedFence(t *testing.T) {
 
 func TestSplitFrontmatterEmptyBody(t *testing.T) {
 	input := "---\nname: test\n---\n"
-	fm, body := splitFrontmatter(input)
+	fm, body := frontmatter.Split(input)
 	if fm["name"] != "test" {
 		t.Errorf("name = %q", fm["name"])
 	}
@@ -44,7 +46,7 @@ func TestSplitFrontmatterEmptyBody(t *testing.T) {
 
 func TestSplitFrontmatterNestedMetadata(t *testing.T) {
 	input := "---\nname: my-fact\ndescription: a desc\nmetadata:\n  type: user\n---\n\nbody here"
-	fm, body := splitFrontmatter(input)
+	fm, body := frontmatter.Split(input)
 	if fm["name"] != "my-fact" {
 		t.Errorf("name = %q", fm["name"])
 	}
@@ -62,7 +64,7 @@ func TestSplitFrontmatterNestedMetadata(t *testing.T) {
 
 func TestSplitFrontmatterCRLF(t *testing.T) {
 	input := "---\r\nname: test\r\n---\r\nbody\r\n"
-	fm, body := splitFrontmatter(input)
+	fm, body := frontmatter.Split(input)
 	if fm["name"] != "test" {
 		t.Errorf("name = %q", fm["name"])
 	}
@@ -73,7 +75,7 @@ func TestSplitFrontmatterCRLF(t *testing.T) {
 
 func TestSplitFrontmatterQuotedValues(t *testing.T) {
 	input := "---\nname: test\ndescription: \"quoted desc\"\n---\n"
-	fm, _ := splitFrontmatter(input)
+	fm, _ := frontmatter.Split(input)
 	if fm["description"] != "quoted desc" {
 		t.Errorf("description should be unquoted: %q", fm["description"])
 	}
@@ -150,7 +152,7 @@ func TestRenderRoundTrip(t *testing.T) {
 		Body:        "The body of the fact.",
 	}
 	rendered := render(m, "test-fact")
-	fm, body := splitFrontmatter(rendered)
+	fm, body := frontmatter.Split(rendered)
 	if fm["name"] != "test-fact" {
 		t.Errorf("name = %q", fm["name"])
 	}
@@ -168,7 +170,7 @@ func TestRenderRoundTrip(t *testing.T) {
 func TestRenderNormalizesType(t *testing.T) {
 	m := Memory{Name: "x", Description: "d", Type: Type("unknown"), Body: "b"}
 	rendered := render(m, "x")
-	fm, _ := splitFrontmatter(rendered)
+	fm, _ := frontmatter.Split(rendered)
 	if fm["type"] != "project" {
 		t.Errorf("unknown type should normalize to project, got %q", fm["type"])
 	}

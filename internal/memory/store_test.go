@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/frontmatter"
 )
 
 // TestRenderEscapesYAMLMetacharacters pins the frontmatter-corruption fix: a
@@ -89,7 +90,7 @@ func TestRenderKeepsPreviousReleaseRoutingScopeSafe(t *testing.T) {
 		for _, typ := range []Type{TypeUser, TypeFeedback, TypeProject, TypeReference} {
 			label := string(scope) + "-" + string(typ)
 			t.Run(label, func(t *testing.T) {
-				fm, _ := splitFrontmatter(render(Memory{Description: "d", Type: typ, Scope: scope, Body: "b"}, label))
+				fm, _ := frontmatter.Split(render(Memory{Description: "d", Type: typ, Scope: scope, Body: "b"}, label))
 				if got := persistedFactType(fm); got != typ {
 					t.Fatalf("new reader type = %q, want %q; frontmatter=%v", got, typ, fm)
 				}

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"corvus/internal/frontmatter"
 )
 
 type SaveOptions struct {
@@ -63,8 +65,8 @@ func (s Store) MigrateV2() (MigrationReport, error) {
 			if err != nil {
 				return report, err
 			}
-			frontmatter, _ := splitFrontmatter(string(raw))
-			if strings.TrimSpace(frontmatter["id"]) != "" && parsePositiveInt(frontmatter["revision"]) > 0 {
+			fm, _ := frontmatter.Split(string(raw))
+			if strings.TrimSpace(fm["id"]) != "" && parsePositiveInt(fm["revision"]) > 0 {
 				continue
 			}
 			memory, ok := loadMemory(path)

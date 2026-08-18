@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"corvus/internal/frontmatter"
 )
 
 func TestStoreV2StableIDSurvivesRenameAndRevisionIncrements(t *testing.T) {
@@ -124,9 +126,9 @@ func TestStoreV2MigrationPersistsLegacyIdentity(t *testing.T) {
 	if report.Migrated != 1 {
 		t.Fatalf("migration report = %+v", report)
 	}
-	frontmatter, _ := splitFrontmatter(mustReadString(t, path))
-	if !strings.HasPrefix(frontmatter["id"], "legacy-") || frontmatter["revision"] != "1" || frontmatter["created_at"] == "" || frontmatter["updated_at"] == "" {
-		t.Fatalf("migrated frontmatter = %+v", frontmatter)
+	fm, _ := frontmatter.Split(mustReadString(t, path))
+	if !strings.HasPrefix(fm["id"], "legacy-") || fm["revision"] != "1" || fm["created_at"] == "" || fm["updated_at"] == "" {
+		t.Fatalf("migrated frontmatter = %+v", fm)
 	}
 	again, err := store.MigrateV2()
 	if err != nil || again.Migrated != 0 {
