@@ -106,6 +106,24 @@ type ConcurrencySafe interface {
 	ConcurrencySafe(args json.RawMessage) bool
 }
 
+// CompletionRequired is an optional capability a Tool may implement to declare
+// that verified completion cannot finish without it. Exposure=deferred still
+// keeps these tools on the startup surface; the scheduler never matches them
+// by name.
+type CompletionRequired interface {
+	CompletionRequired() bool
+}
+
+// IsCompletionRequired reports whether t opts into the verified-completion
+// surface. A missing interface or a false result is not required.
+func IsCompletionRequired(t Tool) bool {
+	if t == nil {
+		return false
+	}
+	req, ok := t.(CompletionRequired)
+	return ok && req.CompletionRequired()
+}
+
 // ReadOnlyExecutionHostMutation marks a target that is logically read-only but
 // must first mutate host state to become executable, such as starting an
 // on-demand MCP process. Strict read-only agents reject these targets even when

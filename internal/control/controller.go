@@ -40,6 +40,7 @@ import (
 	"corvus/internal/plugin"
 	"corvus/internal/provider"
 	"corvus/internal/recovery"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/sandbox"
 	"corvus/internal/skill"
 	"corvus/internal/store"
@@ -157,8 +158,10 @@ type Controller struct {
 	capabilityProxy bool
 	// proxyToolsFn returns live tools observed through use_capability without
 	// entering the provider-visible registry (Balanced dual-model Planner).
-	proxyToolsFn   func() map[string][]plugin.CachedTool
-	runtimeProfile capability.Profile
+	proxyToolsFn         func() map[string][]plugin.CachedTool
+	runtimeProfile       capability.Profile
+	runtimePolicyRequest runtimepolicy.Request
+	runtimePolicy        runtimepolicy.Policy
 
 	// goals owns the active goal's FSM (status, intercepts, idle/turn counters)
 	// and its persistence, behind its own mutex so a per-turn goal save never
@@ -444,6 +447,10 @@ type Options struct {
 	// RuntimeProfile selects capability routing/filtering behavior. Empty keeps
 	// the backward-compatible Balanced profile.
 	RuntimeProfile capability.Profile
+	// RuntimePolicyRequest and RuntimePolicy are persisted onto BranchMeta so
+	// resume/fork can reconstruct the same typed selections.
+	RuntimePolicyRequest runtimepolicy.Request
+	RuntimePolicy        runtimepolicy.Policy
 }
 
 // New builds a Controller. A nil Sink is replaced with event.Discard.
@@ -505,6 +512,8 @@ func New(opts Options) *Controller {
 		mcpConfigureSpec:       opts.MCPConfigureSpec,
 		capabilityRuntime:      opts.CapabilityRuntime,
 		runtimeProfile:         runtimeProfile,
+		runtimePolicyRequest:   opts.RuntimePolicyRequest,
+		runtimePolicy:          opts.RuntimePolicy,
 		workspaceRoot:          opts.WorkspaceRoot,
 		approval:               newApprovalManager(opts.Policy, ToolApprovalAsk, opts.ApprovalTimeout),
 	}

@@ -33,6 +33,7 @@ import (
 	"corvus/internal/plugin"
 	"corvus/internal/pluginpkg"
 	"corvus/internal/provider"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/sandbox"
 	"corvus/internal/secrets"
 	"corvus/internal/skill"
@@ -1906,6 +1907,96 @@ model = "x"
 	}
 	if requestMessageContains(fullReq.Messages, provider.RoleUser, "<delivery-runtime>") {
 		t.Fatal("full profile unexpectedly received the delivery runtime contract")
+	}
+}
+
+func TestVerifiedDeferredKeepsCompletionRequiredTools(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
+default_model = "test-model"
+
+[agent]
+system_prompt = "BASE"
+
+[[providers]]
+name = "test-model"
+kind = "boot-token-profile-test"
+model = "x"
+`)
+	registerBootTokenProfileTestProvider()
+	prov := testutil.NewMock("token-profile", testutil.Turn{Text: "done"})
+	setBootTokenProfileTestProvider(t, prov)
+	ctrl, err := Build(context.Background(), Options{
+		Sink:       event.Discard,
+		TokenMode:  TokenModeEconomy,
+		Completion: "verified",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctrl.Close()
+	if err := ctrl.Run(context.Background(), "capture"); err != nil {
+		t.Fatal(err)
+	}
+	req := prov.Requests()[0]
+	sys := systemMessage(req.Messages)
+	if !strings.Contains(sys, tokenDeliveryPrompt) {
+		t.Fatal("verified completion must keep the delivery contract")
+	}
+	if !strings.Contains(sys, tokenEconomyPrompt) {
+		t.Fatal("deferred exposure must keep the economy prompt")
+	}
+	deliveryIdx := strings.Index(sys, tokenDeliveryPrompt)
+	economyIdx := strings.Index(sys, tokenEconomyPrompt)
+	if deliveryIdx < 0 || economyIdx < deliveryIdx {
+		t.Fatal("completion fragment must precede exposure fragment")
+	}
+	if !requestHasTool(req, "todo_write") || !requestHasTool(req, "complete_step") {
+		t.Fatalf("verified+deferred must keep completion tools, got %v", toolSchemaNames(req.Tools))
+	}
+	if !requestHasTool(req, "connect_tool_source") {
+		t.Fatal("verified+deferred must keep the deferred connector")
+	}
+}
+
+func TestGuidanceAutoAddsFragmentWithoutChangingLegacyPresets(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+	writeFile(t, dir, filepath.Join(".corvus", "config.toml"), `
+default_model = "test-model"
+
+[agent]
+system_prompt = "BASE"
+
+[[providers]]
+name = "test-model"
+kind = "boot-token-profile-test"
+model = "x"
+model_capability = "lite"
+`)
+	registerBootTokenProfileTestProvider()
+	prov := testutil.NewMock("token-profile", testutil.Turn{Text: "done"})
+	setBootTokenProfileTestProvider(t, prov)
+	ctrl, err := Build(context.Background(), Options{
+		Sink:     event.Discard,
+		Guidance: "auto",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctrl.Close()
+	if err := ctrl.Run(context.Background(), "capture"); err != nil {
+		t.Fatal(err)
+	}
+	sys := systemMessage(prov.Requests()[0].Messages)
+	if !strings.Contains(sys, runtimepolicy.GuidanceStructuredPrompt) {
+		t.Fatalf("lite+unknown automatic guidance should be structured:\n%s", sys)
+	}
+	if strings.Contains(sys, tokenDeliveryPrompt) || strings.Contains(sys, tokenEconomyPrompt) {
+		t.Fatal("legacy full preset must not add completion or exposure fragments")
 	}
 }
 

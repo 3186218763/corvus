@@ -21,6 +21,7 @@ import (
 	"corvus/internal/netpolicy"
 	"corvus/internal/plugin"
 	"corvus/internal/provider"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/sandbox"
 	"corvus/internal/skill"
 	"corvus/internal/tool"
@@ -43,7 +44,7 @@ type toolResult struct {
 
 // buildToolRegistry constructs the shared tool registry and registers the
 // startup built-in tools, then creates the plugin host (shared or private).
-func buildToolRegistry(cfg *config.Config, opts Options, root string, stderr io.Writer, additionalDirs []string, shell sandbox.Shell, proxySpec netclient.ProxySpec, tokenEconomy bool) (*toolResult, error) {
+func buildToolRegistry(cfg *config.Config, opts Options, root string, stderr io.Writer, additionalDirs []string, shell sandbox.Shell, proxySpec netclient.ProxySpec, policy runtimepolicy.Policy) (*toolResult, error) {
 	reg := tool.NewRegistry()
 	writeRoots := cfg.WriteRootsForRoot(root)
 	writeRoots = appendUniquePaths(writeRoots, additionalDirs...)
@@ -84,8 +85,8 @@ func buildToolRegistry(cfg *config.Config, opts Options, root string, stderr io.
 	searchSpec := builtin.ResolveSearch(cfg.Tools.Search.Engine, cfg.Tools.Search.RgPath, stderr)
 	bashTimeout := time.Duration(cfg.BashTimeoutSeconds()) * time.Second
 	enabledBuiltins := cfg.Tools.Enabled
-	if tokenEconomy {
-		enabledBuiltins = tokenEconomyBuiltins(enabledBuiltins)
+	if policy.Exposure == runtimepolicy.ExposureDeferred {
+		enabledBuiltins = deferredStartupBuiltins(enabledBuiltins, policy.Completion == runtimepolicy.CompletionVerified)
 	}
 	// The [network_policy] section compiles to the egress policy for web_fetch
 	// and the bash URL guard. A malformed section refuses startup rather than
@@ -101,7 +102,7 @@ func buildToolRegistry(cfg *config.Config, opts Options, root string, stderr io.
 	if err != nil {
 		return nil, err
 	}
-	if !tokenEconomy || len(cfg.Tools.Enabled) == 0 || len(enabledBuiltins) > 0 {
+	if policy.Exposure == runtimepolicy.ExposureEager || len(cfg.Tools.Enabled) == 0 || len(enabledBuiltins) > 0 {
 		addBuiltins(reg, enabledBuiltins, webSearchTool, writeRoots, bashSpec, bashTimeout, searchSpec, stderr, root, proxySpec, netPolicy, forbidReadRoots, sessionGuard, managedConfig, opts.FileOverlay, opts.TerminalRunner)
 	}
 	// Use the caller-supplied shared host when set, so controllers for the same
@@ -137,7 +138,7 @@ type lspResult struct {
 // buildLSPAndSessionStore wires the LSP manager and its cleanup chain, then
 // resolves the subagent transcript store and binds the job-manager destroy
 // checker.
-func buildLSPAndSessionStore(cfg *config.Config, opts Options, root string, pluginHost *plugin.Host, reg *tool.Registry, tokenEconomy bool, sessionDir string, jm *jobs.Manager) (*lspResult, error) {
+func buildLSPAndSessionStore(cfg *config.Config, opts Options, root string, pluginHost *plugin.Host, reg *tool.Registry, policy runtimepolicy.Policy, sessionDir string, jm *jobs.Manager) (*lspResult, error) {
 	cleanup := pluginHost.Close
 	if opts.SharedHost != nil {
 		// The caller owns the shared host's lifecycle; the controller must not
@@ -161,7 +162,7 @@ func buildLSPAndSessionStore(cfg *config.Config, opts Options, root string, plug
 	}
 	if cfg.LSP.Enabled {
 		lspMgr = lsp.NewManager(root, LSPSpecs(cfg.LSP))
-		if !tokenEconomy {
+		if policy.Exposure == runtimepolicy.ExposureEager {
 			addLSPTools()
 		}
 		prev := cleanup
@@ -196,7 +197,7 @@ type sessionMemoryResult struct {
 
 // buildSessionAndMemoryTools registers the history/session/memory tools and
 // the always-present ask tool.
-func buildSessionAndMemoryTools(sessionDir string, mem *memory.Set, reg *tool.Registry, tokenEconomy bool) (*sessionMemoryResult, error) {
+func buildSessionAndMemoryTools(sessionDir string, mem *memory.Set, reg *tool.Registry, policy runtimepolicy.Policy) (*sessionMemoryResult, error) {
 	// Session and memory tools are always present in Balanced/Delivery. Economy
 	// installs them only after connect_tool_source requests that capability, so
 	// simple coding turns do not pay for unrelated schemas.
@@ -222,7 +223,7 @@ func buildSessionAndMemoryTools(sessionDir string, mem *memory.Set, reg *tool.Re
 		reg.Add(memory.NewForgetTool(mem.Store))
 		return "enabled memory, remember, forget."
 	}
-	if !tokenEconomy {
+	if policy.Exposure == runtimepolicy.ExposureEager {
 		addSessionTools()
 		addMemoryTools()
 	}
@@ -285,7 +286,7 @@ func buildSkillTools(a *assembly) (*skillToolsResult, error) {
 			ReasoningLanguage:   agent.ReasoningLanguageFromContext(sctx),
 			SubagentDepth:       childDepth,
 			MaxSubagentDepth:    a.maxSubagentDepth,
-			DeliveryProfile:     a.tokenDelivery,
+			DeliveryProfile:     a.runtimePolicy.Completion == runtimepolicy.CompletionVerified,
 			WorkspaceLease:      a.workspaceLease,
 		}
 		// Parent entry kind/URL: skill sub-agents that override the model still
@@ -625,7 +626,7 @@ func buildSkillTools(a *assembly) (*skillToolsResult, error) {
 		addSlashCommandTool(true)
 		return "enabled skills. Use run_skill/read_skill/read_only_skill or the dedicated skill tools on the next model request.\n\n" + skill.IndexBlock(a.skills)
 	}
-	if !a.tokenEconomy {
+	if a.runtimePolicy.Exposure == runtimepolicy.ExposureEager {
 		addInstallSourceTool()
 		addSkillTools()
 	}
@@ -645,7 +646,7 @@ func buildSkillTools(a *assembly) (*skillToolsResult, error) {
 // buildToolSourceConnector registers the economy-mode connect_tool_source
 // connector that enables skill/task/MCP/LSP/session/memory sources on demand.
 func buildToolSourceConnector(a *assembly) {
-	if a.tokenEconomy {
+	if a.runtimePolicy.Exposure == runtimepolicy.ExposureDeferred {
 		addBuiltinSourceTools := func(source string, names ...string) string {
 			var missing []string
 			for _, name := range names {

@@ -104,7 +104,15 @@ type Options struct {
 	// the normal capability surface. "economy" keeps the core coding tools visible
 	// and moves optional sources behind connect_tool_source. "delivery" keeps the
 	// full surface and adds a stable completion-and-verification contract.
+	// Deprecated compatibility input; typed Guidance/Completion/Exposure win
+	// when they are non-empty.
 	TokenMode string
+	// Guidance, Completion, and Exposure are typed runtime-policy selections
+	// (inherit|auto|concrete). Empty means inherit the TokenMode preset (or the
+	// configured [runtime_policy] default). Invalid non-empty values fail Build.
+	Guidance   string
+	Completion string
+	Exposure   string
 	// SessionDir overrides where persisted chat transcripts are written. When
 	// empty, the shared CLI/global session directory is used.
 	SessionDir string
@@ -174,27 +182,27 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		return nil, err
 	}
 	// Jobs, lease, network client, executor provider, shell.
-	jobsResult, err := buildJobsAndProviders(opts, sink, cfgResult.cfg, cfgResult.root, cfgResult.stderr, cfgResult.modelRef, cfgResult.tokenDelivery)
+	jobsResult, err := buildJobsAndProviders(opts, sink, cfgResult.cfg, cfgResult.root, cfgResult.stderr, cfgResult.modelRef, cfgResult.runtimePolicy)
 	if err != nil {
 		return nil, err
 	}
 	// Cache-stable system-prompt prefix (base + style + memory + skills index).
-	promptResult, err := buildPromptAndMemory(ctx, cfgResult.cfg, opts, cfgResult.root, jobsResult.shell, sink, cfgResult.tokenEconomy, cfgResult.tokenDelivery, cfgResult.runtimeProfile)
+	promptResult, err := buildPromptAndMemory(ctx, cfgResult.cfg, opts, cfgResult.root, jobsResult.shell, sink, cfgResult.runtimePolicy)
 	if err != nil {
 		return nil, err
 	}
 	// Shared tool registry with startup built-ins, plus the plugin host.
-	toolResult, err := buildToolRegistry(cfgResult.cfg, opts, cfgResult.root, cfgResult.stderr, cfgResult.additionalDirs, jobsResult.shell, jobsResult.proxySpec, cfgResult.tokenEconomy)
+	toolResult, err := buildToolRegistry(cfgResult.cfg, opts, cfgResult.root, cfgResult.stderr, cfgResult.additionalDirs, jobsResult.shell, jobsResult.proxySpec, cfgResult.runtimePolicy)
 	if err != nil {
 		return nil, err
 	}
 	// MCP specs, launch isolation, catalog placeholders, demotion notices.
-	pluginResult, err := buildMCPPlugins(ctx, opts, sink, cfgResult.cfg, cfgResult.root, toolResult.reg, toolResult.pluginHost, toolResult.writeRoots, toolResult.networkEnabled, toolResult.forbidReadRoots, cfgResult.tokenEconomy)
+	pluginResult, err := buildMCPPlugins(ctx, opts, sink, cfgResult.cfg, cfgResult.root, toolResult.reg, toolResult.pluginHost, toolResult.writeRoots, toolResult.networkEnabled, toolResult.forbidReadRoots, cfgResult.runtimePolicy)
 	if err != nil {
 		return nil, err
 	}
 	// LSP manager + cleanup chain, subagent transcript store, max steps.
-	lspResult, err := buildLSPAndSessionStore(cfgResult.cfg, opts, cfgResult.root, toolResult.pluginHost, toolResult.reg, cfgResult.tokenEconomy, jobsResult.sessionDir, jobsResult.jm)
+	lspResult, err := buildLSPAndSessionStore(cfgResult.cfg, opts, cfgResult.root, toolResult.pluginHost, toolResult.reg, cfgResult.runtimePolicy, jobsResult.sessionDir, jobsResult.jm)
 	if err != nil {
 		return nil, err
 	}
@@ -204,12 +212,12 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		return nil, err
 	}
 	// Sub-agent machinery: task tools, scheduler, capability-runtime cell.
-	subagentResult, err := buildSubagentTools(cfgResult.cfg, opts, cfgResult.entry, cfgResult.modelName, jobsResult.proxySpec, jobsResult.execProv, toolResult.reg, lspResult.maxSteps, lspResult.subagentStore, hookResult.headlessGate, cfgResult.keepPolicy, cfgResult.root, toolResult.bashSpec, jobsResult.workspaceLease, promptResult.skillStore, cfgResult.tokenEconomy, cfgResult.tokenDelivery)
+	subagentResult, err := buildSubagentTools(cfgResult.cfg, opts, cfgResult.entry, cfgResult.modelName, jobsResult.proxySpec, jobsResult.execProv, toolResult.reg, lspResult.maxSteps, lspResult.subagentStore, hookResult.headlessGate, cfgResult.keepPolicy, cfgResult.root, toolResult.bashSpec, jobsResult.workspaceLease, promptResult.skillStore, cfgResult.runtimePolicy)
 	if err != nil {
 		return nil, err
 	}
 	// Session/memory tools + ask tool.
-	sessionMemoryResult, err := buildSessionAndMemoryTools(jobsResult.sessionDir, promptResult.mem, toolResult.reg, cfgResult.tokenEconomy)
+	sessionMemoryResult, err := buildSessionAndMemoryTools(jobsResult.sessionDir, promptResult.mem, toolResult.reg, cfgResult.runtimePolicy)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +240,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 	// Economy-mode on-demand tool sources.
 	buildToolSourceConnector(a)
 	// Session-shared MCP capability runtime + Delivery/dual-model frontends.
-	capabilityResult, err := buildCapabilityRuntime(ctx, cfgResult.cfg, opts, cfgResult.root, toolResult.reg, promptResult.skillStore, toolResult.pluginHost, pluginResult.pluginSpecOptions, pluginResult.enabledMCPNames, cfgResult.runtimeProfile, cfgResult.tokenEconomy, cfgResult.tokenDelivery, cfgResult.entry, subagentResult.capRuntimeGet, subagentResult.capRuntimeSet)
+	capabilityResult, err := buildCapabilityRuntime(ctx, cfgResult.cfg, opts, cfgResult.root, toolResult.reg, promptResult.skillStore, toolResult.pluginHost, pluginResult.pluginSpecOptions, pluginResult.enabledMCPNames, cfgResult.runtimePolicy, cfgResult.entry, subagentResult.capRuntimeGet, subagentResult.capRuntimeSet)
 	if err != nil {
 		return nil, err
 	}

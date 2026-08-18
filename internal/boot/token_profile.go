@@ -50,24 +50,75 @@ func NormalizeTokenMode(mode string) string {
 }
 
 func tokenEconomyBuiltins(configured []string) []string {
+	return deferredStartupBuiltins(configured, false)
+}
+
+// deferredStartupBuiltins is the initial deferred surface. When verified is
+// true, tools that implement tool.CompletionRequired stay visible so a
+// verified+deferred session can still sign off work.
+func deferredStartupBuiltins(configured []string, verified bool) []string {
+	core := append([]string(nil), tokenEconomyCoreBuiltins...)
+	if verified {
+		core = appendCompletionRequiredBuiltins(core)
+	}
 	if len(configured) == 0 {
-		return append([]string(nil), tokenEconomyCoreBuiltins...)
+		return core
 	}
-	core := map[string]bool{}
-	for _, name := range tokenEconomyCoreBuiltins {
-		core[name] = true
+	allowed := map[string]bool{}
+	for _, name := range core {
+		allowed[name] = true
 	}
-	out := make([]string, 0, len(configured))
+	if verified {
+		for _, name := range completionRequiredBuiltinNames() {
+			allowed[name] = true
+		}
+	}
+	out := make([]string, 0, len(configured)+len(core))
 	seen := map[string]bool{}
 	for _, name := range configured {
 		name = strings.TrimSpace(name)
-		if name == "" || !core[name] || seen[name] {
+		if name == "" || !allowed[name] || seen[name] {
 			continue
 		}
 		seen[name] = true
 		out = append(out, name)
 	}
+	if verified {
+		for _, name := range completionRequiredBuiltinNames() {
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
 	return out
+}
+
+func appendCompletionRequiredBuiltins(names []string) []string {
+	seen := map[string]bool{}
+	for _, name := range names {
+		seen[name] = true
+	}
+	for _, name := range completionRequiredBuiltinNames() {
+		if seen[name] {
+			continue
+		}
+		names = append(names, name)
+		seen[name] = true
+	}
+	return names
+}
+
+func completionRequiredBuiltinNames() []string {
+	var names []string
+	for _, t := range tool.Builtins() {
+		if tool.IsCompletionRequired(t) {
+			names = append(names, t.Name())
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 type toolSourceConnector struct {

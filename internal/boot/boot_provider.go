@@ -14,6 +14,7 @@ import (
 	"corvus/internal/jobs"
 	"corvus/internal/netclient"
 	"corvus/internal/provider"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/sandbox"
 	"corvus/internal/workspacelease"
 )
@@ -30,13 +31,13 @@ type jobsResult struct {
 
 // buildJobsAndProviders wires the session-scoped job manager, the Delivery
 // workspace lease, the network client, the executor provider, and the shell.
-func buildJobsAndProviders(opts Options, sink event.Sink, cfg *config.Config, root string, stderr io.Writer, modelRef string, tokenDelivery bool) (res *jobsResult, err error) {
+func buildJobsAndProviders(opts Options, sink event.Sink, cfg *config.Config, root string, stderr io.Writer, modelRef string, policy runtimepolicy.Policy) (res *jobsResult, err error) {
 	var workspaceLease *workspacelease.Owner
 	jobOptions := []jobs.Option{
 		jobs.WithStalledWarningAfter(time.Duration(cfg.BackgroundJobStalledWarningSeconds()) * time.Second),
 		jobs.WithSessionOwnershipProbe(agent.SessionLeaseHeldByCurrentRuntime),
 	}
-	if tokenDelivery {
+	if policy.Completion == runtimepolicy.CompletionVerified {
 		workspaceLease, err = workspacelease.New(root, config.WorkspaceLeaseDir(), func() {
 			sink.Emit(event.Event{
 				Kind:   event.Notice,

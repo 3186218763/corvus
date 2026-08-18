@@ -95,6 +95,15 @@ func (m chatTUI) handleModelSwitch(msg modelSwitchMsg) (chatTUI, tea.Cmd) {
 		if msg.profile != "" {
 			m.runtimeProfile = msg.profile
 		}
+		if msg.guidance != "" {
+			m.runtimeGuidance = msg.guidance
+		}
+		if msg.completion != "" {
+			m.runtimeCompletion = msg.completion
+		}
+		if msg.exposure != "" {
+			m.runtimeExposure = msg.exposure
+		}
 		m.refreshEffortStatus()
 		// Stash the old controller for cleanup at exit. It cannot be
 		// closed here or in the build goroutine — Close() runs

@@ -105,6 +105,9 @@ func (m *chatTUI) runEffortCommand(input string) tea.Cmd {
 	m.armControllerRebuild(controllerBuildSpec{
 		ModelRef:       ref,
 		RuntimeProfile: m.runtimeProfile,
+		Guidance:       m.runtimeGuidance,
+		Completion:     m.runtimeCompletion,
+		Exposure:       m.runtimeExposure,
 		EffortOverride: &effort,
 	}, carried, prevPath, modelSwitchMsg{ref: ref})
 	m.notice(fmt.Sprintf("effort for %s set to %s", entry.Name, display))

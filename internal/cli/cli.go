@@ -13,6 +13,7 @@ import (
 	"corvus/internal/i18n"
 	"corvus/internal/provider"
 	"corvus/internal/provider/openai"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/textutil"
 	"crypto/sha1"
 	"encoding/hex"
@@ -128,6 +129,9 @@ func migrateMCPConfigForCLIWorkspace() {
 
 type cliBuildOverrides struct {
 	Effort               *string
+	Guidance             string
+	Completion           string
+	Exposure             string
 	PermissionAllow      []string
 	AdditionalDirs       []string
 	WorkspaceRoot        string
@@ -149,6 +153,9 @@ func cliProfileBuildOptions(modelName string, maxStepsOverride int, requireKey b
 		RequireKey:           requireKey,
 		Sink:                 sink,
 		TokenMode:            profile,
+		Guidance:             overrides.Guidance,
+		Completion:           overrides.Completion,
+		Exposure:             overrides.Exposure,
 		SessionDir:           resolveCLISessionDir(),
 		WorkspaceRoot:        overrides.WorkspaceRoot,
 		EffortOverride:       overrides.Effort,
@@ -239,6 +246,39 @@ func parseRuntimeProfile(value string) (string, error) {
 	}
 }
 
+func parseGuidanceFlag(value string) (string, error) {
+	if strings.TrimSpace(value) == "" {
+		return "", nil
+	}
+	sel, err := runtimepolicy.ParseGuidanceSelection(value)
+	if err != nil {
+		return "", err
+	}
+	return string(sel), nil
+}
+
+func parseCompletionFlag(value string) (string, error) {
+	if strings.TrimSpace(value) == "" {
+		return "", nil
+	}
+	sel, err := runtimepolicy.ParseCompletionSelection(value)
+	if err != nil {
+		return "", err
+	}
+	return string(sel), nil
+}
+
+func parseExposureFlag(value string) (string, error) {
+	if strings.TrimSpace(value) == "" {
+		return "", nil
+	}
+	sel, err := runtimepolicy.ParseExposureSelection(value)
+	if err != nil {
+		return "", err
+	}
+	return string(sel), nil
+}
+
 func chdirTo(dir string) int {
 	if dir == "" {
 		return 0
@@ -294,6 +334,9 @@ func chatREPL(args []string, version string) int {
 	fs.SetInterspersed(true)
 	model := fs.String("model", "", "provider name (default: config default_model)")
 	profileFlag := fs.String("profile", "balanced", "runtime profile: economy | balanced | delivery")
+	guidanceFlag := fs.String("guidance", "", "runtime guidance: inherit | auto | off | light | structured")
+	completionFlag := fs.String("completion", "", "runtime completion: inherit | auto | standard | verified")
+	exposureFlag := fs.String("tool-exposure", "", "runtime tool exposure: inherit | auto | eager | deferred")
 	maxSteps := fs.Int("max-steps", 0, "one-off max tool-call rounds (0 = automatic)")
 	cont := registerContinueFlag(fs)
 	resume := fs.StringP("resume", "r", "", "resume by session ID/query, or open the picker when no value is given")
@@ -319,6 +362,18 @@ func chatREPL(args []string, version string) int {
 	}
 	profile, err := parseRuntimeProfile(*profileFlag)
 	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return 2
+	}
+	if _, err := parseGuidanceFlag(*guidanceFlag); err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return 2
+	}
+	if _, err := parseCompletionFlag(*completionFlag); err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return 2
+	}
+	if _, err := parseExposureFlag(*exposureFlag); err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 2
 	}
@@ -423,8 +478,29 @@ func chatREPL(args []string, version string) int {
 	if strings.TrimSpace(*effort) != "" {
 		effortOverride = effort
 	}
+	if resumePath != "" {
+		if rec, ok := agent.LoadSessionRuntimePolicy(resumePath); ok {
+			if !fs.Changed("profile") && rec.Preset != "" {
+				if parsed, err := parseRuntimeProfile(rec.Preset); err == nil {
+					profile = parsed
+				}
+			}
+			if !fs.Changed("guidance") && rec.Guidance != "" {
+				*guidanceFlag = rec.Guidance
+			}
+			if !fs.Changed("completion") && rec.Completion != "" {
+				*completionFlag = rec.Completion
+			}
+			if !fs.Changed("tool-exposure") && rec.Exposure != "" {
+				*exposureFlag = rec.Exposure
+			}
+		}
+	}
 	overrides := cliBuildOverrides{
 		Effort:             effortOverride,
+		Guidance:           strings.TrimSpace(*guidanceFlag),
+		Completion:         strings.TrimSpace(*completionFlag),
+		Exposure:           strings.TrimSpace(*exposureFlag),
 		PermissionAllow:    allowedTools,
 		AdditionalDirs:     additionalDirs,
 		WorkspaceRoot:      workspaceRoot,
@@ -522,6 +598,11 @@ func chatREPL(args []string, version string) int {
 		if spec.EffortOverride != nil {
 			effectiveOverrides.Effort = spec.EffortOverride
 		}
+		if spec.Guidance != "" || spec.Completion != "" || spec.Exposure != "" {
+			effectiveOverrides.Guidance = spec.Guidance
+			effectiveOverrides.Completion = spec.Completion
+			effectiveOverrides.Exposure = spec.Exposure
+		}
 		c, err := setupQuietProfile(ctx, spec.ModelRef, *maxSteps, false, sink, spec.RuntimeProfile, effectiveOverrides)
 		if err != nil {
 			return nil, err
@@ -544,6 +625,9 @@ func chatREPL(args []string, version string) int {
 		return c, nil
 	}
 	m.runtimeProfile = profile
+	m.runtimeGuidance = overrides.Guidance
+	m.runtimeCompletion = overrides.Completion
+	m.runtimeExposure = overrides.Exposure
 	if effortOverride != nil {
 		m.effortLevel = *effortOverride
 	}

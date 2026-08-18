@@ -64,6 +64,7 @@ type Config struct {
 	Statusline       StatuslineConfig    `toml:"statusline"`
 	LSP              LSPConfig           `toml:"lsp"`
 	Secrets          SecretsConfig       `toml:"secrets"`
+	RuntimePolicy    RuntimePolicyConfig `toml:"runtime_policy"`
 
 	systemPromptFileSource     promptFileSource
 	providerSources            map[string]providerSourceScope
@@ -794,6 +795,14 @@ type AgentConfig struct {
 	PlanModeReadOnlyCommands []string `toml:"plan_mode_read_only_commands"`
 }
 
+// RuntimePolicyConfig holds optional default axis selections for new sessions.
+// Empty fields inherit the TokenMode / --profile preset.
+type RuntimePolicyConfig struct {
+	Guidance   string `toml:"guidance"`
+	Completion string `toml:"completion"`
+	Exposure   string `toml:"exposure"`
+}
+
 // ProviderEntry declares a model provider instance. ContextWindow is the model's
 // token budget; the harness compacts older history as a turn's prompt approaches
 // it (see agent compaction). 0 disables compaction for the instance.
@@ -848,6 +857,10 @@ type ProviderEntry struct {
 	// and image tokens are heavy — gating keeps text-only flows cheap (the prompt
 	// prefix is byte-identical with no image, so the cache is unaffected either way).
 	Vision bool `toml:"vision"`
+	// ModelCapability describes the model's inherent capacity for runtime policy
+	// resolution. Valid values: auto|strong|standard|lite. Empty/auto defaults to
+	// standard. Invalid values produce a configuration error.
+	ModelCapability string `toml:"model_capability"`
 	// VisionModels narrows image input support to specific models in a multi-model
 	// provider. This lets one provider expose both text-only and multimodal chat
 	// models without enabling image payloads for every model.
@@ -900,6 +913,9 @@ type ProviderModelOverride struct {
 	// MaxOutputTokens overrides the provider-wide output budget. Zero inherits;
 	// positive values set a cap and negative values omit optional wire limits.
 	MaxOutputTokens int `toml:"max_output_tokens"`
+	// ModelCapability overrides the provider-wide capability tier. Valid values:
+	// auto|strong|standard|lite. Empty inherits provider-level setting.
+	ModelCapability string `toml:"model_capability"`
 }
 
 // ModelList returns the models this provider exposes: the explicit `models` list,

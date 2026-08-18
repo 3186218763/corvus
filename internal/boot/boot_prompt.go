@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"strings"
 
-	"corvus/internal/capability"
 	"corvus/internal/config"
 	"corvus/internal/environment"
 	"corvus/internal/event"
 	"corvus/internal/instruction"
 	"corvus/internal/memory"
 	"corvus/internal/outputstyle"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/sandbox"
 	"corvus/internal/skill"
 )
@@ -31,7 +31,7 @@ type promptResult struct {
 // buildPromptAndMemory assembles the cache-stable system-prompt prefix:
 // base prompt, output style, policy blocks, environment probe section, memory
 // compose, and the skills index.
-func buildPromptAndMemory(ctx context.Context, cfg *config.Config, opts Options, root string, shell sandbox.Shell, sink event.Sink, tokenEconomy, tokenDelivery bool, runtimeProfile capability.Profile) (*promptResult, error) {
+func buildPromptAndMemory(ctx context.Context, cfg *config.Config, opts Options, root string, shell sandbox.Shell, sink event.Sink, policy runtimepolicy.Policy) (*promptResult, error) {
 	sysPrompt, err := cfg.ResolveSystemPromptForRoot(root)
 	if err != nil {
 		if !config.IsMissingSystemPromptFile(err) {
@@ -54,10 +54,17 @@ func buildPromptAndMemory(ctx context.Context, cfg *config.Config, opts Options,
 	if workspaceLine := currentWorkspacePromptLine(root); workspaceLine != "" {
 		sysPrompt += "\n\n" + workspaceLine
 	}
-	if tokenEconomy {
-		sysPrompt += "\n\n" + tokenEconomyPrompt
-	} else if tokenDelivery {
+	// Fragment order is normative: guidance, then completion, then exposure.
+	// Legacy presets stay byte-identical because they use guidance=off and
+	// only one of the remaining fragments.
+	if fragment := runtimepolicy.GuidancePrompt(policy.Guidance); fragment != "" {
+		sysPrompt += "\n\n" + fragment
+	}
+	if policy.Completion == runtimepolicy.CompletionVerified {
 		sysPrompt += "\n\n" + tokenDeliveryPrompt
+	}
+	if policy.Exposure == runtimepolicy.ExposureDeferred {
+		sysPrompt += "\n\n" + tokenEconomyPrompt
 	}
 	if cfg.EnvironmentEnabled() {
 		shellLabel := shell.Kind.String()
@@ -112,11 +119,12 @@ func buildPromptAndMemory(ctx context.Context, cfg *config.Config, opts Options,
 	// Install the static profile filter before building the prompt index and
 	// dedicated skill tools. The dependency checker is attached once the live
 	// registry/plugin host has been assembled below.
+	runtimeProfile := deriveLegacyProfile(policy)
 	skillStore.ConfigureInvocationPolicy(string(runtimeProfile), nil)
 	skills := skillStore.List()
 	allSkillStore := skill.New(skill.Options{ProjectRoot: root, CustomPaths: cfg.SkillCustomPaths(), PluginPaths: cfg.PluginPackageSkillOwners(), PluginAgentPaths: cfg.PluginPackageAgentOwners(), ExcludedPaths: cfg.SkillExcludedPaths(), MaxDepth: cfg.SkillMaxDepth(), Stderr: io.Discard})
 	allSkills := allSkillStore.List()
-	if !tokenEconomy {
+	if policy.Exposure != runtimepolicy.ExposureDeferred {
 		sysPrompt = skill.ApplyIndex(sysPrompt, skills)
 	}
 

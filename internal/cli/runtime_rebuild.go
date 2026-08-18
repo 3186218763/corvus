@@ -52,6 +52,9 @@ func (m *chatTUI) scheduleCurrentControllerRebuild(reason, successNotice string)
 	m.armControllerRebuild(controllerBuildSpec{
 		ModelRef:       m.modelRef,
 		RuntimeProfile: m.runtimeProfile,
+		Guidance:       m.runtimeGuidance,
+		Completion:     m.runtimeCompletion,
+		Exposure:       m.runtimeExposure,
 	}, carried, resumePath, modelSwitchMsg{
 		ref:           m.modelRef,
 		failurePrefix: reason,

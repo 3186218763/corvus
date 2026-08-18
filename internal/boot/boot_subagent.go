@@ -9,6 +9,7 @@ import (
 	"corvus/internal/control"
 	"corvus/internal/netclient"
 	"corvus/internal/provider"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/sandbox"
 	"corvus/internal/skill"
 	"corvus/internal/store"
@@ -33,7 +34,7 @@ type subagentResult struct {
 // task/read_only_task tools, scheduler, and the shared MCP capability runtime
 // cell. capRuntimeGet/capRuntimeSet expose the cell to later assembly stages
 // that assign the runtime after MCP specs load.
-func buildSubagentTools(cfg *config.Config, opts Options, entry *config.ProviderEntry, modelName string, proxySpec netclient.ProxySpec, execProv provider.Provider, reg *tool.Registry, maxSteps int, subagentStore *agent.SubagentStore, headlessGate *control.SharedHeadlessGate, keepPolicy agent.KeepPolicy, root string, bashSpec sandbox.Spec, workspaceLease *workspacelease.Owner, skillStore *skill.Store, tokenEconomy, tokenDelivery bool) (*subagentResult, error) {
+func buildSubagentTools(cfg *config.Config, opts Options, entry *config.ProviderEntry, modelName string, proxySpec netclient.ProxySpec, execProv provider.Provider, reg *tool.Registry, maxSteps int, subagentStore *agent.SubagentStore, headlessGate *control.SharedHeadlessGate, keepPolicy agent.KeepPolicy, root string, bashSpec sandbox.Spec, workspaceLease *workspacelease.Owner, skillStore *skill.Store, policy runtimepolicy.Policy) (*subagentResult, error) {
 	// The `task` tool spawns sub-agents that reuse the parent's provider and
 	// tool registry. Wired here after the built-ins / plugins are loaded so
 	// sub-agents inherit the full tool set (minus `task` itself, to keep
@@ -157,7 +158,7 @@ func buildSubagentTools(cfg *config.Config, opts Options, entry *config.Provider
 			WithTranscripts(subagentStore, root, modelName, entry.Effort).
 			WithTranscriptIdentityResolver(subagentIdentity).
 			WithMaxSubagentDepth(maxSubagentDepth).
-			WithDeliveryProfile(tokenDelivery).
+			WithDeliveryProfile(policy.Completion == runtimepolicy.CompletionVerified).
 			WithWorkspaceLease(workspaceLease).
 			WithScheduler(subagentScheduler).
 			WithProfileLookup(profileLookup).
@@ -191,7 +192,7 @@ func buildSubagentTools(cfg *config.Config, opts Options, entry *config.Provider
 		reg.Add(agent.NewReadOnlyTaskTool(taskTool))
 		return "enabled read_only_task."
 	}
-	if !tokenEconomy {
+	if policy.Exposure == runtimepolicy.ExposureEager {
 		addTaskTool()
 		addReadOnlyTaskTool()
 	}

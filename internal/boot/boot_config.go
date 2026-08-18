@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"corvus/internal/agent"
-	"corvus/internal/capability"
 	"corvus/internal/config"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/secrets"
 )
 
@@ -17,9 +17,8 @@ type configResult struct {
 	additionalDirs   []string
 	cfg              *config.Config
 	modelName        string
-	tokenEconomy     bool
-	tokenDelivery    bool
-	runtimeProfile   capability.Profile
+	runtimePolicy    runtimepolicy.Policy
+	runtimeRequest   runtimepolicy.Request
 	keepPolicy       agent.KeepPolicy
 	entry            *config.ProviderEntry
 	modelRef         string
@@ -88,14 +87,6 @@ func buildConfigAndModel(opts Options) (*configResult, error) {
 	}
 	config.NormalizeLegacyMimoCustomProvidersForRefs(cfg, modelName)
 	tokenMode := NormalizeTokenMode(opts.TokenMode)
-	tokenEconomy := tokenMode == TokenModeEconomy
-	tokenDelivery := tokenMode == TokenModeDelivery
-	runtimeProfile := capability.ProfileBalanced
-	if tokenEconomy {
-		runtimeProfile = capability.ProfileEconomy
-	} else if tokenDelivery {
-		runtimeProfile = capability.ProfileDelivery
-	}
 	keepPolicy := agentKeepPolicy(cfg.Agent.Keep)
 	entry, modelRef, err := resolveModelEntry(opts, cfg, modelName)
 	if err != nil {
@@ -113,15 +104,26 @@ func buildConfigAndModel(opts Options) (*configResult, error) {
 		}
 	}
 
+	req, err := assembleRuntimeRequest(opts, cfg)
+	if err != nil {
+		return nil, err
+	}
+	// TokenMode still selects the compatibility preset even when typed axes
+	// override individual inherit values.
+	req.Preset = normalizeTokenModeToPreset(tokenMode)
+	policy, err := resolveRuntimePolicy(req, entry)
+	if err != nil {
+		return nil, err
+	}
+
 	return &configResult{
 		stderr:           stderr,
 		root:             root,
 		additionalDirs:   additionalDirs,
 		cfg:              cfg,
 		modelName:        modelName,
-		tokenEconomy:     tokenEconomy,
-		tokenDelivery:    tokenDelivery,
-		runtimeProfile:   runtimeProfile,
+		runtimePolicy:    policy,
+		runtimeRequest:   req,
 		keepPolicy:       keepPolicy,
 		entry:            entry,
 		modelRef:         modelRef,

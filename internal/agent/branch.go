@@ -11,6 +11,7 @@ import (
 
 	"corvus/internal/fileutil"
 	fileencoding "corvus/internal/fileutil/encoding"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/store"
 )
 
@@ -18,26 +19,27 @@ import (
 // navigable conversation tree. The conversation itself remains in the .jsonl
 // file; metadata lives beside it at <session>.meta.
 type BranchMeta struct {
-	ID               string    `json:"id"`
-	Name             string    `json:"name,omitempty"`
-	ParentID         string    `json:"parent_id,omitempty"`
-	ForkTurn         int       `json:"fork_turn,omitempty"`
-	ForkMessageIndex int       `json:"fork_message_index,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	Scope            string    `json:"scope,omitempty"`
-	WorkspaceRoot    string    `json:"workspace_root,omitempty"`
-	TopicID          string    `json:"topic_id,omitempty"`
-	TopicTitle       string    `json:"topic_title,omitempty"`
-	CustomTitle      string    `json:"custom_title,omitempty"`
-	Model            string    `json:"model,omitempty"`
-	TokenMode        string    `json:"token_mode,omitempty"`
-	Mode             string    `json:"mode,omitempty"`
-	ToolApprovalMode string    `json:"tool_approval_mode,omitempty"`
-	Goal             string    `json:"goal,omitempty"`
-	Recovered        bool      `json:"recovered,omitempty"`
-	RecoveryReason   string    `json:"recovery_reason,omitempty"`
-	RecoveryDigest   string    `json:"recovery_digest,omitempty"`
+	ID               string                `json:"id"`
+	Name             string                `json:"name,omitempty"`
+	ParentID         string                `json:"parent_id,omitempty"`
+	ForkTurn         int                   `json:"fork_turn,omitempty"`
+	ForkMessageIndex int                   `json:"fork_message_index,omitempty"`
+	CreatedAt        time.Time             `json:"created_at"`
+	UpdatedAt        time.Time             `json:"updated_at"`
+	Scope            string                `json:"scope,omitempty"`
+	WorkspaceRoot    string                `json:"workspace_root,omitempty"`
+	TopicID          string                `json:"topic_id,omitempty"`
+	TopicTitle       string                `json:"topic_title,omitempty"`
+	CustomTitle      string                `json:"custom_title,omitempty"`
+	Model            string                `json:"model,omitempty"`
+	TokenMode        string                `json:"token_mode,omitempty"`
+	RuntimePolicy    *runtimepolicy.Record `json:"runtime_policy,omitempty"`
+	Mode             string                `json:"mode,omitempty"`
+	ToolApprovalMode string                `json:"tool_approval_mode,omitempty"`
+	Goal             string                `json:"goal,omitempty"`
+	Recovered        bool                  `json:"recovered,omitempty"`
+	RecoveryReason   string                `json:"recovery_reason,omitempty"`
+	RecoveryDigest   string                `json:"recovery_digest,omitempty"`
 	// RecoveryDepth counts how many recovery forks separate this branch from a
 	// normal session (1 = forked from a normal session). SaveRecoveryBranch
 	// refuses to fork past SessionRecoveryMaxDepth so a conflict loop cannot
@@ -448,4 +450,53 @@ func UpdateSessionMeta(sessionPath, model, preview string, turns int, markActivi
 	// authoritative — listing can then trust Turns (even 0) without re-decoding.
 	m.SchemaVersion = BranchMetaCountsVersion
 	return saveBranchMeta(sessionPath, m, markActivity)
+}
+
+// LoadSessionRuntimePolicy returns persisted runtime-policy selections.
+// A versioned record wins; otherwise TokenMode is migrated to inherit-all.
+func LoadSessionRuntimePolicy(sessionPath string) (runtimepolicy.Record, bool) {
+	meta, ok, err := LoadBranchMeta(sessionPath)
+	if err != nil || !ok {
+		return runtimepolicy.Record{}, false
+	}
+	if rec, ok := SessionRuntimePolicy(meta); ok {
+		return rec, true
+	}
+	return runtimepolicy.Record{}, false
+}
+
+// SessionRuntimePolicy derives a record from BranchMeta, migrating TokenMode.
+func SessionRuntimePolicy(meta BranchMeta) (runtimepolicy.Record, bool) {
+	if meta.RuntimePolicy != nil && meta.RuntimePolicy.Version > 0 {
+		return *meta.RuntimePolicy, true
+	}
+	if strings.TrimSpace(meta.TokenMode) != "" {
+		return runtimepolicy.RecordFromTokenMode(meta.TokenMode), true
+	}
+	return runtimepolicy.Record{}, false
+}
+
+// PersistSessionRuntimePolicy writes versioned policy metadata and the
+// compatibility TokenMode field without changing listing timestamps.
+func PersistSessionRuntimePolicy(sessionPath string, rec runtimepolicy.Record, tokenMode string) error {
+	if sessionPath == "" {
+		return fmt.Errorf("empty session path")
+	}
+	unlock := lockSessionSavePath(sessionPath)
+	defer unlock()
+	m, err := EnsureBranchMeta(sessionPath)
+	if err != nil {
+		return err
+	}
+	if rec.Version == 0 {
+		rec.Version = runtimepolicy.RecordVersion
+	}
+	copied := rec
+	m.RuntimePolicy = &copied
+	if mode := strings.TrimSpace(tokenMode); mode != "" {
+		m.TokenMode = mode
+	} else if rec.Preset != "" {
+		m.TokenMode = rec.Preset
+	}
+	return SaveBranchMetaPreserveUpdated(sessionPath, m)
 }

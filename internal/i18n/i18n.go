@@ -245,6 +245,7 @@ type Messages struct {
 	CmdModel            string // /model
 	CmdStatus           string // /status
 	CmdWorkMode         string // /work-mode
+	CmdRuntimePolicy    string // /runtime-policy
 	CmdMemory           string // /memory
 	CmdGoal             string // /goal
 	CmdRemember         string // /remember
@@ -310,57 +311,65 @@ type Messages struct {
 	ListMcpNone         string // no mcp servers
 
 	// in-chat memory/model/rewind notices.
-	MemoryNone                string
-	MemoryLoaded              string
-	MemorySavedHeader         string
-	MemoryStoredUnderFmt      string
-	MemoryEditHint            string
-	ForgetUsage               string
-	ForgetDoneFmt             string
-	QuickRememberEmpty        string
-	QuickRememberDoneFmt      string
-	GoalEmpty                 string
-	GoalCurrentFmt            string
-	GoalSetFmt                string
-	GoalCleared               string
-	ModelSwitchUnavailable    string
-	ModelSwitchBusy           string
-	ModelAlreadyOnFmt         string
-	ModelSwitchingFmt         string
-	ModelSwitchedFmt          string
-	ModelListHeader           string
-	RuntimeSwitchPending      string
-	WorkModeStatusFmt         string
-	WorkModeListHeaderFmt     string
-	WorkModeListHint          string
-	WorkModeEconomyLabel      string
-	WorkModeBalancedLabel     string
-	WorkModeDeliveryLabel     string
-	WorkModeEconomyDesc       string
-	WorkModeBalancedDesc      string
-	WorkModeDeliveryDesc      string
-	WorkModeUsage             string
-	WorkModeSwitchUnavailable string
-	WorkModeSwitchBusy        string
-	WorkModeAlreadyOnFmt      string
-	WorkModeSwitchingFmt      string
-	WorkModeSwitchedFmt       string
-	RewindNone                string
-	RewindCodeConversation    string
-	RewindConversationOnly    string
-	RewindCodeOnly            string
-	RewindFork                string
-	RewindSummarizeFrom       string
-	RewindSummarizeUpto       string
-	RewindPickTitle           string
-	RewindPickHint            string
-	RewindRestoreTitleFmt     string
-	RewindApplyHint           string
-	RewindCoverageTitle       string
-	RewindCoverageWarningFmt  string
-	RewindConfirmHint         string
-	RewindUnavailableFmt      string
-	RewindEmpty               string
+	MemoryNone                     string
+	MemoryLoaded                   string
+	MemorySavedHeader              string
+	MemoryStoredUnderFmt           string
+	MemoryEditHint                 string
+	ForgetUsage                    string
+	ForgetDoneFmt                  string
+	QuickRememberEmpty             string
+	QuickRememberDoneFmt           string
+	GoalEmpty                      string
+	GoalCurrentFmt                 string
+	GoalSetFmt                     string
+	GoalCleared                    string
+	ModelSwitchUnavailable         string
+	ModelSwitchBusy                string
+	ModelAlreadyOnFmt              string
+	ModelSwitchingFmt              string
+	ModelSwitchedFmt               string
+	ModelListHeader                string
+	RuntimeSwitchPending           string
+	WorkModeStatusFmt              string
+	WorkModeListHeaderFmt          string
+	WorkModeListHint               string
+	WorkModeEconomyLabel           string
+	WorkModeBalancedLabel          string
+	WorkModeDeliveryLabel          string
+	WorkModeEconomyDesc            string
+	WorkModeBalancedDesc           string
+	WorkModeDeliveryDesc           string
+	WorkModeUsage                  string
+	WorkModeSwitchUnavailable      string
+	WorkModeSwitchBusy             string
+	WorkModeAlreadyOnFmt           string
+	WorkModeSwitchingFmt           string
+	WorkModeSwitchedFmt            string
+	RuntimePolicyHeader            string
+	RuntimePolicyListHint          string
+	RuntimePolicyUsage             string
+	RuntimePolicySwitchUnavailable string
+	RuntimePolicySwitchBusy        string
+	RuntimePolicyAlreadyOnFmt      string
+	RuntimePolicySwitchingFmt      string
+	RuntimePolicySwitchedFmt       string
+	RewindNone                     string
+	RewindCodeConversation         string
+	RewindConversationOnly         string
+	RewindCodeOnly                 string
+	RewindFork                     string
+	RewindSummarizeFrom            string
+	RewindSummarizeUpto            string
+	RewindPickTitle                string
+	RewindPickHint                 string
+	RewindRestoreTitleFmt          string
+	RewindApplyHint                string
+	RewindCoverageTitle            string
+	RewindCoverageWarningFmt       string
+	RewindConfirmHint              string
+	RewindUnavailableFmt           string
+	RewindEmpty                    string
 
 	// skill picker overlay (/skills interactive panel in CLI TUI)
 	SkillPickerTitle             string

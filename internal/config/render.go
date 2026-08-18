@@ -265,6 +265,11 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		b.WriteString("# prompt_cache_key_value = \"my-stable-id\"   # used only when prompt_cache_key = \"custom\"\n")
 	}
 	b.WriteString("\n")
+	if shouldRenderRuntimePolicy(c) {
+		b.WriteString("[runtime_policy]\n")
+		writeRuntimePolicyFields(&b, c.RuntimePolicy, true)
+		b.WriteString("\n")
+	}
 
 	if shouldRenderProviders(c, defaults, scope) {
 		for _, p := range c.Providers {
@@ -758,6 +763,11 @@ func RenderTOMLProjectDelta(c *Config) string {
 	if anyAgent {
 		b.WriteString("[agent]\n")
 		b.WriteString(agentBuf.String())
+		b.WriteString("\n")
+	}
+	if shouldRenderRuntimePolicy(c) {
+		b.WriteString("[runtime_policy]\n")
+		writeRuntimePolicyFields(&b, c.RuntimePolicy, false)
 		b.WriteString("\n")
 	}
 
@@ -1259,6 +1269,39 @@ func renderStringMap(m map[string]string) string {
 	}
 	b.WriteString(" }")
 	return b.String()
+}
+
+func shouldRenderRuntimePolicy(c *Config) bool {
+	if c == nil {
+		return false
+	}
+	return strings.TrimSpace(c.RuntimePolicy.Guidance) != "" ||
+		strings.TrimSpace(c.RuntimePolicy.Completion) != "" ||
+		strings.TrimSpace(c.RuntimePolicy.Exposure) != ""
+}
+
+func writeRuntimePolicyFields(b *strings.Builder, cfg RuntimePolicyConfig, annotated bool) {
+	if guidance := strings.TrimSpace(cfg.Guidance); guidance != "" {
+		if annotated {
+			fmt.Fprintf(b, "guidance   = %q   # inherit|auto|off|light|structured\n", guidance)
+		} else {
+			fmt.Fprintf(b, "guidance = %q\n", guidance)
+		}
+	}
+	if completion := strings.TrimSpace(cfg.Completion); completion != "" {
+		if annotated {
+			fmt.Fprintf(b, "completion = %q   # inherit|auto|standard|verified\n", completion)
+		} else {
+			fmt.Fprintf(b, "completion = %q\n", completion)
+		}
+	}
+	if exposure := strings.TrimSpace(cfg.Exposure); exposure != "" {
+		if annotated {
+			fmt.Fprintf(b, "exposure   = %q   # inherit|auto|eager|deferred\n", exposure)
+		} else {
+			fmt.Fprintf(b, "exposure = %q\n", exposure)
+		}
+	}
 }
 
 func renderAnyMap(m map[string]any) string {

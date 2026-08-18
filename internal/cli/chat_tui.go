@@ -330,10 +330,13 @@ type chatTUI struct {
 	// outgoing controller, passed through so the replacement can carry forward
 	// same-session tool grants and Plan-mode read-only command trust that
 	// don't travel through carry/resumePath (see Controller.RestoreSessionAuthorizations).
-	buildController func(spec controllerBuildSpec, carry []provider.Message, resumePath string, oldCtrl *control.Controller) (*control.Controller, error)
-	modelRef        string
-	runtimeProfile  string
-	effortLevel     string // "" when the current provider/model has no configurable effort
+	buildController   func(spec controllerBuildSpec, carry []provider.Message, resumePath string, oldCtrl *control.Controller) (*control.Controller, error)
+	modelRef          string
+	runtimeProfile    string
+	runtimeGuidance   string
+	runtimeCompletion string
+	runtimeExposure   string
+	effortLevel       string // "" when the current provider/model has no configurable effort
 
 	// leases owns the session lease guarding the TUI's active session file (set
 	// by chatREPL; nil in tests and when persistence is disabled). Every in-TUI
@@ -406,6 +409,9 @@ const (
 type controllerBuildSpec struct {
 	ModelRef         string
 	RuntimeProfile   string
+	Guidance         string
+	Completion       string
+	Exposure         string
 	ToolApprovalMode string
 	PlanMode         bool
 	EffortOverride   *string
@@ -420,6 +426,15 @@ type controllerBuildSpec struct {
 func (m *chatTUI) armControllerRebuild(spec controllerBuildSpec, carried []provider.Message, resumePath string, outcome modelSwitchMsg) tea.Cmd {
 	oldCtrl := m.ctrl
 	build := m.buildController
+	if outcome.guidance == "" {
+		outcome.guidance = spec.Guidance
+	}
+	if outcome.completion == "" {
+		outcome.completion = spec.Completion
+	}
+	if outcome.exposure == "" {
+		outcome.exposure = spec.Exposure
+	}
 	m.modelSwitchPending = true
 	m.pendingModelSwitch = func() tea.Msg {
 		spec.ToolApprovalMode = oldCtrl.ToolApprovalMode()
@@ -530,6 +545,9 @@ const statuslineCommandTimeout = 2 * time.Second
 type modelSwitchMsg struct {
 	ref           string
 	profile       string
+	guidance      string
+	completion    string
+	exposure      string
 	ctrl          *control.Controller
 	oldCtrl       *control.Controller
 	label         string

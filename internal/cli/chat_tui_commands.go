@@ -92,6 +92,9 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 	case "/work-mode", "/profile":
 		m.echoLocalCommand(input)
 		return m.runWorkModeCommand(input)
+	case "/runtime-policy":
+		m.echoLocalCommand(input)
+		return m.runRuntimePolicyCommand(input)
 	case "/reasoning-language":
 		m.echoLocalCommand(input)
 		m.runReasoningLanguageCommand(input)

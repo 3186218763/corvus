@@ -76,7 +76,8 @@ func (c *Controller) forkNamed(turn int, name string, switchToFork bool) (string
 		return "", c.rewindFail(err)
 	}
 	forkPreview, forkTurns := agent.SessionPreviewFromMessages(forked)
-	if err := agent.SaveBranchMeta(newPath, agent.BranchMeta{
+	parentMeta, _, _ := agent.LoadBranchMeta(c.SessionPath())
+	forkMeta := agent.BranchMeta{
 		Name:             strings.TrimSpace(name),
 		ParentID:         parentID,
 		ForkTurn:         turn,
@@ -84,7 +85,9 @@ func (c *Controller) forkNamed(turn int, name string, switchToFork bool) (string
 		Preview:          forkPreview,
 		Turns:            forkTurns,
 		SchemaVersion:    agent.BranchMetaCountsVersion,
-	}); err != nil {
+	}
+	applyRuntimePolicyMeta(&forkMeta, parentMeta, c)
+	if err := agent.SaveBranchMeta(newPath, forkMeta); err != nil {
 		return "", c.rewindFail(err)
 	}
 	if switchToFork {
@@ -160,7 +163,8 @@ func (c *Controller) Branch(name string) (string, error) {
 		return "", c.rewindFail(err)
 	}
 	branchPreview, branchTurns := agent.SessionPreviewFromMessages(branched)
-	if err := agent.SaveBranchMeta(newPath, agent.BranchMeta{
+	parentMeta, _, _ := agent.LoadBranchMeta(parentPath)
+	branchMeta := agent.BranchMeta{
 		Name:             strings.TrimSpace(name),
 		ParentID:         parentID,
 		ForkTurn:         -1,
@@ -168,7 +172,9 @@ func (c *Controller) Branch(name string) (string, error) {
 		Preview:          branchPreview,
 		Turns:            branchTurns,
 		SchemaVersion:    agent.BranchMetaCountsVersion,
-	}); err != nil {
+	}
+	applyRuntimePolicyMeta(&branchMeta, parentMeta, c)
+	if err := agent.SaveBranchMeta(newPath, branchMeta); err != nil {
 		return "", c.rewindFail(err)
 	}
 	// See snapshotMu: the swap must not interleave with an in-flight save.

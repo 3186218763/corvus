@@ -65,6 +65,9 @@ func (m *chatTUI) runModelSubcommand(input string) {
 	m.armControllerRebuild(controllerBuildSpec{
 		ModelRef:       ref,
 		RuntimeProfile: m.runtimeProfile,
+		Guidance:       m.runtimeGuidance,
+		Completion:     m.runtimeCompletion,
+		Exposure:       m.runtimeExposure,
 	}, carried, prevPath, modelSwitchMsg{ref: ref})
 }
 

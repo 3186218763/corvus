@@ -60,6 +60,10 @@ func (todoWrite) Schema() json.RawMessage {
 // laying out a plan as todos is exactly the point.
 func (todoWrite) ReadOnly() bool { return true }
 
+// CompletionRequired keeps the task list visible when completion is verified
+// even if the rest of the optional surface is deferred.
+func (todoWrite) CompletionRequired() bool { return true }
+
 func (todoWrite) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
 		Todos []todoItem `json:"todos"`

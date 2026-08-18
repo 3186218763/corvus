@@ -220,6 +220,9 @@ func (m *chatTUI) scheduleSkillSessionRefresh(reason, notice string) bool {
 	m.armControllerRebuild(controllerBuildSpec{
 		ModelRef:       m.modelRef,
 		RuntimeProfile: m.runtimeProfile,
+		Guidance:       m.runtimeGuidance,
+		Completion:     m.runtimeCompletion,
+		Exposure:       m.runtimeExposure,
 	}, carried, prevPath, modelSwitchMsg{ref: m.modelRef})
 	return true
 }

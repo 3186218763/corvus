@@ -80,6 +80,10 @@ func (completeStep) Schema() json.RawMessage {
 // effect), so it never needs approval and stays available alongside todo_write.
 func (completeStep) ReadOnly() bool { return true }
 
+// CompletionRequired keeps the delivery sign-off tool visible when completion
+// is verified even if optional sources stay deferred.
+func (completeStep) CompletionRequired() bool { return true }
+
 // PlanModeSafe reports false: although complete_step is read-only, it signs off a
 // completed execution step, which is meaningful only after plan approval — not
 // during planning. This explicit phase opt-out is the Plan gate's enforced

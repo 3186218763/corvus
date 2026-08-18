@@ -17,6 +17,7 @@ import (
 	"corvus/internal/mcplaunch"
 	"corvus/internal/netclient"
 	"corvus/internal/plugin"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/sandbox"
 	"corvus/internal/skill"
 	"corvus/internal/tool"
@@ -32,7 +33,7 @@ type pluginResult struct {
 // buildMCPPlugins resolves enabled MCP entries into specs, applies launch
 // isolation and timeouts, connects host-session extra plugins, registers
 // catalog placeholders, and emits demotion notices.
-func buildMCPPlugins(ctx context.Context, opts Options, sink event.Sink, cfg *config.Config, root string, reg *tool.Registry, pluginHost *plugin.Host, writeRoots []string, networkEnabled bool, forbidReadRoots []string, tokenEconomy bool) (*pluginResult, error) {
+func buildMCPPlugins(ctx context.Context, opts Options, sink event.Sink, cfg *config.Config, root string, reg *tool.Registry, pluginHost *plugin.Host, writeRoots []string, networkEnabled bool, forbidReadRoots []string, policy runtimepolicy.Policy) (*pluginResult, error) {
 	// Enabled MCP servers enter the tool catalog at boot. Cached schemas
 	// register placeholders without starting processes; cache-miss servers get
 	// a single background catalog discovery. First real tool call uses
@@ -87,7 +88,7 @@ func buildMCPPlugins(ctx context.Context, opts Options, sink event.Sink, cfg *co
 	}
 	onDemandMCPSpecs := map[string]plugin.Spec{}
 	onDemandMCPNames := []string{}
-	if tokenEconomy {
+	if policy.Exposure == runtimepolicy.ExposureDeferred {
 		for _, spec := range append(PluginSpecsForRootWithOptions(autoStartEntries, root, pluginSpecOptions), extraSpecs...) {
 			name := strings.TrimSpace(spec.Name)
 			if name == "" {
@@ -121,7 +122,7 @@ func buildMCPPlugins(ctx context.Context, opts Options, sink event.Sink, cfg *co
 	eagerSpecs := PluginSpecsForRootWithOptions(eagerEntries, root, pluginSpecOptions)
 	bgSpecs := PluginSpecsForRootWithOptions(bgEntries, root, pluginSpecOptions)
 
-	if !tokenEconomy {
+	if policy.Exposure == runtimepolicy.ExposureEager {
 		eagerSpecs = append(eagerSpecs, extraSpecs...)
 	}
 
@@ -139,7 +140,7 @@ func buildMCPPlugins(ctx context.Context, opts Options, sink event.Sink, cfg *co
 	// for this controller and still take a short readiness probe so recovery and
 	// session-scoped servers are deterministic. User/project config MCP stays
 	// catalog-first and process-idle until first real tool call.
-	if len(extraSpecs) > 0 && !tokenEconomy {
+	if len(extraSpecs) > 0 && policy.Exposure == runtimepolicy.ExposureEager {
 		for _, s := range extraSpecs {
 			if pluginHost.HasClient(s.Name) {
 				if tools, err := pluginHost.ToolsFor(ctx, s.Name); err == nil {
@@ -207,10 +208,10 @@ func buildMCPPlugins(ctx context.Context, opts Options, sink event.Sink, cfg *co
 			}
 		}
 	}
-	// eagerSpecs already includes extraSpecs when !tokenEconomy; avoid double
+	// eagerSpecs already includes extraSpecs when Exposure == Eager; avoid double
 	// registration of host-session servers that connected above.
 	configSpecs := append(append([]plugin.Spec{}, eagerSpecs...), bgSpecs...)
-	if len(extraSpecs) > 0 && !tokenEconomy {
+	if len(extraSpecs) > 0 && policy.Exposure == runtimepolicy.ExposureEager {
 		extraNames := map[string]bool{}
 		for _, s := range extraSpecs {
 			extraNames[s.Name] = true
@@ -249,7 +250,7 @@ type capabilityResult struct {
 // buildCapabilityRuntime loads the MCP capability specs and cache, builds the
 // session-shared MCP runtime and the Delivery/dual-model capability frontends,
 // and installs the skill invocation dependency checker.
-func buildCapabilityRuntime(ctx context.Context, cfg *config.Config, opts Options, root string, reg *tool.Registry, skillStore *skill.Store, pluginHost *plugin.Host, pluginSpecOptions PluginSpecOptions, enabledMCPNames map[string]bool, runtimeProfile capability.Profile, tokenEconomy, tokenDelivery bool, entry *config.ProviderEntry, capRuntimeGet func() *agent.MCPCapabilityRuntime, capRuntimeSet func(*agent.MCPCapabilityRuntime)) (*capabilityResult, error) {
+func buildCapabilityRuntime(ctx context.Context, cfg *config.Config, opts Options, root string, reg *tool.Registry, skillStore *skill.Store, pluginHost *plugin.Host, pluginSpecOptions PluginSpecOptions, enabledMCPNames map[string]bool, policy runtimepolicy.Policy, entry *config.ProviderEntry, capRuntimeGet func() *agent.MCPCapabilityRuntime, capRuntimeSet func(*agent.MCPCapabilityRuntime)) (*capabilityResult, error) {
 	// Session-shared MCP runtime: Host, specs, and connection snapshots. Each
 	// agent gets its own use_capability frontend (ledger/audit isolation) while
 	// reusing processes. Delivery puts a frontend on the executor registry;
@@ -266,17 +267,12 @@ func buildCapabilityRuntime(ctx context.Context, cfg *config.Config, opts Option
 	// use_capability surface to both Planner and Executor. Their frontends keep
 	// independent ledgers/audits while sharing the session MCP runtime.
 	dualModelPlanner := false
-	if pm := effectivePlannerModel(cfg, opts, tokenEconomy); pm != "" {
+	if pm := effectivePlannerModel(cfg, opts, policy.Exposure == runtimepolicy.ExposureDeferred); pm != "" {
 		if pe, ok := resolveOptionalEntry(opts, cfg, pm); ok && pe.Model != entry.Model {
 			dualModelPlanner = true
 		}
 	}
-	profile := capability.ProfileBalanced
-	if tokenDelivery {
-		profile = capability.ProfileDelivery
-	} else if tokenEconomy {
-		profile = capability.ProfileEconomy
-	}
+	runtimeProfile := deriveLegacyProfile(policy)
 	var capProxy *agent.UseCapabilityTool
 	// Catalog closes over capRuntime so proxy-connected tools stay routable.
 	catalogFn := func() capability.Catalog {
@@ -294,7 +290,7 @@ func buildCapabilityRuntime(ctx context.Context, cfg *config.Config, opts Option
 			Tools:       reg.ContractEntries(),
 			Skills:      skillStore.List(),
 			Plugins:     cfg.Plugins,
-			Profile:     profile,
+			Profile:     runtimeProfile,
 			Connected:   conn,
 			Failed:      failedNow,
 			CachedTools: cachedTools,
@@ -307,11 +303,11 @@ func buildCapabilityRuntime(ctx context.Context, cfg *config.Config, opts Option
 	}
 	// Always build the runtime when a plugin host exists so task/fleet children
 	// can use the stable proxy even in Balanced/Economy without Delivery.
-	if pluginHost != nil || len(capSpecs) > 0 || tokenDelivery || dualModelPlanner {
+	if pluginHost != nil || len(capSpecs) > 0 || policy.Completion == runtimepolicy.CompletionVerified || dualModelPlanner {
 		capRuntimeSet(agent.NewMCPCapabilityRuntime(ctx, pluginHost, capSpecs, reg, catalogFn))
 		capRuntimeGet().ConfigureServers(cfg.Plugins, capSpecs, enabledMCPNames)
 	}
-	if tokenDelivery || dualModelPlanner {
+	if policy.Completion == runtimepolicy.CompletionVerified || dualModelPlanner {
 		capLedger = capability.NewLedger()
 		capAudit = &capability.Audit{}
 		if rt := capRuntimeGet(); rt != nil {

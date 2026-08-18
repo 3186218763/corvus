@@ -23,6 +23,7 @@ import (
 	"corvus/internal/control"
 	"corvus/internal/event"
 	"corvus/internal/i18n"
+	"corvus/internal/runtimepolicy"
 
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
@@ -68,6 +69,9 @@ func RunAs(args []string, version, commandName string) int {
 	jsonOut := fs.Bool("json", false, "alias for --format json")
 	model := fs.String("model", "", "model reference (default: configured default_model)")
 	profile := fs.String("profile", "balanced", "runtime profile: economy, balanced, or delivery")
+	guidance := fs.String("guidance", "", "runtime guidance: inherit | auto | off | light | structured")
+	completion := fs.String("completion", "", "runtime completion: inherit | auto | standard | verified")
+	exposure := fs.String("tool-exposure", "", "runtime tool exposure: inherit | auto | eager | deferred")
 	maxSteps := fs.Int("max-steps", 0, "maximum tool-call steps (0 = automatic)")
 	permissionMode := fs.String("permission-mode", "auto", "headless approval mode: auto, dontAsk, yolo, or ask")
 	dir := fs.String("dir", "", "change to this directory and use it as the workspace root")
@@ -102,6 +106,18 @@ func RunAs(args []string, version, commandName string) int {
 	}
 	tokenMode, err := parseProfile(*profile)
 	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return exitUsage
+	}
+	if _, err := parseOptionalEnum(*guidance, runtimepolicy.ParseGuidanceSelection); err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return exitUsage
+	}
+	if _, err := parseOptionalEnum(*completion, runtimepolicy.ParseCompletionSelection); err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		return exitUsage
+	}
+	if _, err := parseOptionalEnum(*exposure, runtimepolicy.ParseExposureSelection); err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return exitUsage
 	}
@@ -176,6 +192,24 @@ func RunAs(args []string, version, commandName string) int {
 	leases := control.NewSessionLeaseKeeper()
 	defer leases.Release()
 
+	if resumePath != "" {
+		if rec, ok := agent.LoadSessionRuntimePolicy(resumePath); ok {
+			if !fs.Changed("profile") && rec.Preset != "" {
+				if parsed, err := parseProfile(rec.Preset); err == nil {
+					tokenMode = parsed
+				}
+			}
+			if !fs.Changed("guidance") && rec.Guidance != "" {
+				*guidance = rec.Guidance
+			}
+			if !fs.Changed("completion") && rec.Completion != "" {
+				*completion = rec.Completion
+			}
+			if !fs.Changed("tool-exposure") && rec.Exposure != "" {
+				*exposure = rec.Exposure
+			}
+		}
+	}
 	opts := boot.Options{
 		Model:                modelForResume(*model, resumePath),
 		MaxSteps:             *maxSteps,
@@ -183,6 +217,9 @@ func RunAs(args []string, version, commandName string) int {
 		RequireKey:           true,
 		Sink:                 sink,
 		TokenMode:            tokenMode,
+		Guidance:             strings.TrimSpace(*guidance),
+		Completion:           strings.TrimSpace(*completion),
+		Exposure:             strings.TrimSpace(*exposure),
 		SessionDir:           sessionDir,
 		WorkspaceRoot:        workspaceRoot,
 		HeadlessApprovalMode: approvalMode,
@@ -236,12 +273,12 @@ func RunAs(args []string, version, commandName string) int {
 	// consumers see a complete TurnStarted..TurnDone record and text mode has
 	// the final answer to print.
 	cancelled := errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded)
-	completion := event.Event{Kind: event.TurnDone, Err: runErr, Cancelled: cancelled}
+	doneEvent := event.Event{Kind: event.TurnDone, Err: runErr, Cancelled: cancelled}
 	if runErr != nil {
 		// Err marshals as {} in JSON; carry the human-readable message in Text.
-		completion.Text = runErr.Error()
+		doneEvent.Text = runErr.Error()
 	}
-	eventCh <- completion
+	eventCh <- doneEvent
 	td := <-done
 
 	switch {
@@ -282,6 +319,14 @@ func parsePermissionMode(value string) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown permission mode %q (want auto, dontAsk, yolo, or ask)", value)
 	}
+}
+
+func parseOptionalEnum[T ~string](value string, parse func(string) (T, error)) (T, error) {
+	var zero T
+	if strings.TrimSpace(value) == "" {
+		return zero, nil
+	}
+	return parse(value)
 }
 
 func parseProfile(value string) (string, error) {

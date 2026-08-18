@@ -128,6 +128,9 @@ func (m *chatTUI) runWorkModeCommand(input string) tea.Cmd {
 	m.armControllerRebuild(controllerBuildSpec{
 		ModelRef:       m.modelRef,
 		RuntimeProfile: target,
+		Guidance:       "inherit",
+		Completion:     "inherit",
+		Exposure:       "inherit",
 	}, carried, resumePath, modelSwitchMsg{
 		ref:           m.modelRef,
 		profile:       target,

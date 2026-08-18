@@ -17,6 +17,7 @@ import (
 	"corvus/internal/fileutil"
 	"corvus/internal/guardian"
 	"corvus/internal/jobs"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/store"
 )
 
@@ -358,6 +359,60 @@ func (c *Controller) maybeColdResumePrune(path string) {
 // interaction). Returns errNoSessionPath when there IS content but no resolved
 // path, so a misconfigured deployment surfaces instead of dropping data.
 // Called after every turn so a crash loses at most one in-flight prompt.
+func (c *Controller) persistRuntimePolicy(path string) {
+	if c == nil || strings.TrimSpace(path) == "" {
+		return
+	}
+	rec := runtimepolicy.RecordFromRequest(c.runtimePolicyRequest)
+	tokenMode := string(c.runtimePolicy.LegacyPreset)
+	if tokenMode == "" {
+		tokenMode = rec.Preset
+	}
+	if err := agent.PersistSessionRuntimePolicy(path, rec, tokenMode); err != nil {
+		slog.Warn("controller: persist runtime policy", "path", path, "err", err)
+	}
+}
+
+func (c *Controller) RuntimePolicyRequest() runtimepolicy.Request {
+	if c == nil {
+		return runtimepolicy.Request{}
+	}
+	return c.runtimePolicyRequest
+}
+
+func (c *Controller) RuntimePolicy() runtimepolicy.Policy {
+	if c == nil {
+		return runtimepolicy.Policy{}
+	}
+	return c.runtimePolicy
+}
+
+func applyRuntimePolicyMeta(dst *agent.BranchMeta, src agent.BranchMeta, c *Controller) {
+	if dst == nil {
+		return
+	}
+	if rec, ok := agent.SessionRuntimePolicy(src); ok {
+		copied := rec
+		dst.RuntimePolicy = &copied
+		if src.TokenMode != "" {
+			dst.TokenMode = src.TokenMode
+		} else {
+			dst.TokenMode = rec.Preset
+		}
+		return
+	}
+	if c == nil {
+		return
+	}
+	rec := runtimepolicy.RecordFromRequest(c.runtimePolicyRequest)
+	dst.RuntimePolicy = &rec
+	if mode := string(c.runtimePolicy.LegacyPreset); mode != "" {
+		dst.TokenMode = mode
+	} else {
+		dst.TokenMode = rec.Preset
+	}
+}
+
 func (c *Controller) Snapshot() error {
 	return c.snapshot(false, false, false)
 }
@@ -516,6 +571,7 @@ func (c *Controller) snapshot(markActivity, forceRewrite, shutdownRecovery bool)
 	if err := agent.UpdateSessionMeta(path, modelRef, preview, turns, markActivity); err != nil {
 		return err
 	}
+	c.persistRuntimePolicy(path)
 	return nil
 }
 
@@ -812,6 +868,7 @@ func (c *Controller) setSessionPath(p string, fresh bool) {
 		c.loadRecoveryState(p)
 	}
 	c.snapshotMu.Unlock()
+	c.persistRuntimePolicy(p)
 	if !fresh {
 		c.recoverCheckpointTransactions()
 	}

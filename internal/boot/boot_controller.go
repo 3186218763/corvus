@@ -14,6 +14,7 @@ import (
 	"corvus/internal/plugin"
 	"corvus/internal/provider"
 	"corvus/internal/recovery"
+	"corvus/internal/runtimepolicy"
 )
 
 type runnerResult struct {
@@ -43,7 +44,7 @@ func buildExecutorAndPlanner(a *assembly) (*runnerResult, error) {
 		WriteScheduler:               a.subagentScheduler,
 		WriteWorkspaceRoot:           a.root,
 		ProjectChecks:                a.projectChecks,
-		DeliveryProfile:              a.tokenDelivery,
+		DeliveryProfile:              a.runtimePolicy.Completion == runtimepolicy.CompletionVerified,
 		WorkspaceLease:               a.workspaceLease,
 		CapabilityLedger:             a.capLedger,
 		CapabilityAudit:              a.capAudit,
@@ -80,7 +81,7 @@ func buildExecutorAndPlanner(a *assembly) (*runnerResult, error) {
 	// Coordinator with its own session, kept separate for cache stability. The
 	// planner gets the same standing memory context and a filtered read-only
 	// research tool set, so it can inspect rules/code without side effects.
-	if pm := effectivePlannerModel(a.cfg, a.opts, a.tokenEconomy); pm != "" {
+	if pm := effectivePlannerModel(a.cfg, a.opts, a.runtimePolicy.Exposure == runtimepolicy.ExposureDeferred); pm != "" {
 		pe, ok := resolveOptionalEntry(a.opts, a.cfg, pm)
 		if !ok {
 			return nil, fmt.Errorf("planner_model %q is not a configured provider", pm)
@@ -198,7 +199,9 @@ func buildController(a *assembly) (*control.Controller, error) {
 		DisableColdResumePrune: !a.cfg.ColdResumePruneEnabled(),
 		Shell:                  a.shell,
 		ApprovalTimeout:        a.opts.ApprovalTimeout,
-		RuntimeProfile:         a.runtimeProfile,
+		RuntimeProfile:         deriveLegacyProfile(a.runtimePolicy),
+		RuntimePolicyRequest:   a.runtimeRequest,
+		RuntimePolicy:          a.runtimePolicy,
 		OnRemember: func(rule string) control.RememberResult {
 			return rememberPermissionRule(a.root, rule)
 		},
@@ -265,7 +268,7 @@ func buildController(a *assembly) (*control.Controller, error) {
 	if a.taskTool != nil && a.capRuntime != nil {
 		a.taskTool.WithCapabilityRuntime(a.capRuntime)
 	}
-	if a.tokenDelivery {
+	if a.runtimePolicy.Completion == runtimepolicy.CompletionVerified {
 		var router *capability.SemanticRouter
 		// Prefer agent.subagent_models["capability-router"] when configured.
 		if routerRef := strings.TrimSpace(a.cfg.Agent.SubagentModels["capability-router"]); routerRef != "" {
@@ -282,7 +285,7 @@ func buildController(a *assembly) (*control.Controller, error) {
 		}
 		ctrl.WireCapabilityRouting(a.cfg.Plugins, a.capSpecs, router, a.capAudit)
 		ctrl.SetCapabilityProxyRouting(true)
-	} else if a.tokenEconomy {
+	} else if a.runtimePolicy.Exposure == runtimepolicy.ExposureDeferred {
 		ctrl.WireCapabilityRouting(a.cfg.Plugins, a.capSpecs, nil, nil)
 	} else if a.dualModelPlanner {
 		// Balanced dual-model: load plugin config + schema cache so not-yet-
@@ -301,8 +304,8 @@ func recoveryHeadlessMode(opts Options) bool {
 // effectivePlannerModel centralizes planner precedence. The explicit ACP hard
 // override is checked before user/project config and cannot be reversed by a
 // later assembly branch.
-func effectivePlannerModel(cfg *config.Config, opts Options, tokenEconomy bool) string {
-	if cfg == nil || opts.DisablePlanner || tokenEconomy {
+func effectivePlannerModel(cfg *config.Config, opts Options, exposureDeferred bool) string {
+	if cfg == nil || opts.DisablePlanner || exposureDeferred {
 		return ""
 	}
 	return strings.TrimSpace(cfg.Agent.PlannerModel)

@@ -271,6 +271,9 @@ func normalizeEffortConfig(c *Config) {
 	for i := range c.Providers {
 		normalizeProviderEffortFields(&c.Providers[i])
 	}
+	c.RuntimePolicy.Guidance = strings.ToLower(strings.TrimSpace(c.RuntimePolicy.Guidance))
+	c.RuntimePolicy.Completion = strings.ToLower(strings.TrimSpace(c.RuntimePolicy.Completion))
+	c.RuntimePolicy.Exposure = strings.ToLower(strings.TrimSpace(c.RuntimePolicy.Exposure))
 }
 
 func normalizeProviderEffortFields(e *ProviderEntry) {
@@ -282,6 +285,7 @@ func normalizeProviderEffortFields(e *ProviderEntry) {
 	e.ReasoningProtocol = normalizeReasoningProtocol(e.ReasoningProtocol)
 	e.DefaultEffort = normalizeEffortLevel(e.DefaultEffort)
 	e.SupportedEfforts = normalizedSupportedEfforts(e)
+	e.ModelCapability = normalizeModelCapability(e.ModelCapability)
 	e.ModelOverrides = normalizedModelOverrides(e.ModelOverrides)
 }
 
@@ -495,6 +499,18 @@ func normalizedProviderHeaders(headers map[string]string) map[string]string {
 	return out
 }
 
+func normalizeModelCapability(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "auto":
+		return ""
+	case "strong", "standard", "lite":
+		return strings.ToLower(strings.TrimSpace(raw))
+	default:
+		// Invalid values are kept as-is to be diagnosed during resolution
+		return strings.TrimSpace(raw)
+	}
+}
+
 func normalizedModelOverrides(overrides map[string]ProviderModelOverride) map[string]ProviderModelOverride {
 	if len(overrides) == 0 {
 		return nil
@@ -508,13 +524,14 @@ func normalizedModelOverrides(overrides map[string]ProviderModelOverride) map[st
 		ov.ReasoningProtocol = normalizeReasoningProtocol(ov.ReasoningProtocol)
 		ov.SupportedEfforts = normalizedEffortLevels(ov.SupportedEfforts)
 		ov.DefaultEffort = normalizeEffortLevel(ov.DefaultEffort)
+		ov.ModelCapability = normalizeModelCapability(ov.ModelCapability)
 		if ov.ContextWindow < 0 {
 			ov.ContextWindow = 0
 		}
 		if ov.DefaultEffort != "" && !containsString(ov.SupportedEfforts, ov.DefaultEffort) {
 			ov.DefaultEffort = ""
 		}
-		if ov.ReasoningProtocol == "" && len(ov.SupportedEfforts) == 0 && ov.DefaultEffort == "" && ov.Vision == nil && ov.ContextWindow == 0 {
+		if ov.ReasoningProtocol == "" && len(ov.SupportedEfforts) == 0 && ov.DefaultEffort == "" && ov.Vision == nil && ov.ContextWindow == 0 && ov.ModelCapability == "" {
 			continue
 		}
 		out[model] = ov
