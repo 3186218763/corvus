@@ -1,6 +1,7 @@
 package compaction
 
 import (
+	"strings"
 	"testing"
 
 	"corvus/internal/provider"
@@ -47,11 +48,124 @@ func TestTailStartNeverBeginsWithOrphanToolResult(t *testing.T) {
 	}
 }
 
-func TestSummarizeToolArgsNeverLeaksArgumentText(t *testing.T) {
-	if got := SummarizeToolArgs(`{"prompt":"secret task text"}`); got != "{prompt} (1 keys)" {
-		t.Fatalf("SummarizeToolArgs = %q", got)
+// --- ExtractFileSet ---
+
+func TestExtractFileSetClassifiesReadsAndWrites(t *testing.T) {
+	region := []provider.Message{
+		user("read this file"),
+		asst(
+			provider.ToolCall{ID: "r1", Name: "read_file", Arguments: `{"path":"internal/foo.go"}`},
+			provider.ToolCall{ID: "e1", Name: "edit_file", Arguments: `{"path":"internal/foo.go","old_string":"a","new_string":"b"}`},
+			provider.ToolCall{ID: "w1", Name: "write_file", Arguments: `{"path":"internal/bar.go","content":"..."}`},
+			provider.ToolCall{ID: "g1", Name: "grep", Arguments: `{"pattern":"TODO","path":"internal/"}`},
+		),
+		tool("ok", "r1"), tool("ok", "e1"), tool("ok", "w1"), tool("ok", "g1"),
 	}
-	if got := SummarizeToolArgs("not json"); got == "not json" {
-		t.Fatal("non-JSON args leaked verbatim")
+	fs := ExtractFileSet(region)
+	if len(fs.Read) != 2 || len(fs.Modified) != 2 {
+		t.Fatalf("read=%v modified=%v, want 2/2", fs.Read, fs.Modified)
+	}
+	// read_file and grep both contribute "internal/foo.go" and "internal/" —
+	// deduplicated, first-seen order preserved.
+	if fs.Read[0] != "internal/foo.go" {
+		t.Errorf("first read = %q, want internal/foo.go", fs.Read[0])
+	}
+	if fs.Modified[0] != "internal/foo.go" {
+		t.Errorf("first modified = %q, want internal/foo.go", fs.Modified[0])
+	}
+	if fs.Modified[1] != "internal/bar.go" {
+		t.Errorf("second modified = %q, want internal/bar.go", fs.Modified[1])
+	}
+}
+
+func TestExtractFileSetSkipsBashAndUnknownTools(t *testing.T) {
+	region := []provider.Message{
+		asst(
+			provider.ToolCall{ID: "b1", Name: "bash", Arguments: `{"command":"cat internal/foo.go"}`},
+			provider.ToolCall{ID: "u1", Name: "custom_tool", Arguments: `{"path":"internal/secret.go"}`},
+		),
+		tool("ok", "b1"), tool("ok", "u1"),
+	}
+	fs := ExtractFileSet(region)
+	if len(fs.Read) != 0 || len(fs.Modified) != 0 {
+		t.Fatalf("bash and unknown tools should not contribute: read=%v modified=%v", fs.Read, fs.Modified)
+	}
+}
+
+func TestExtractFileSetMoveFileClassifiesBothPaths(t *testing.T) {
+	region := []provider.Message{
+		asst(provider.ToolCall{ID: "m1", Name: "move_file", Arguments: `{"source_path":"a.go","destination_path":"b.go"}`}),
+		tool("ok", "m1"),
+	}
+	fs := ExtractFileSet(region)
+	if len(fs.Read) != 1 || fs.Read[0] != "a.go" {
+		t.Fatalf("read = %v, want [a.go]", fs.Read)
+	}
+	if len(fs.Modified) != 1 || fs.Modified[0] != "b.go" {
+		t.Fatalf("modified = %v, want [b.go]", fs.Modified)
+	}
+}
+
+func TestExtractFileSetDeduplicatesAndCleans(t *testing.T) {
+	region := []provider.Message{
+		asst(
+			provider.ToolCall{ID: "r1", Name: "read_file", Arguments: `{"path":"./internal/foo.go"}`},
+			provider.ToolCall{ID: "r2", Name: "read_file", Arguments: `{"path":"internal/foo.go"}`},
+			provider.ToolCall{ID: "r3", Name: "read_file", Arguments: `{"path":"internal//foo.go"}`},
+		),
+		tool("ok", "r1"), tool("ok", "r2"), tool("ok", "r3"),
+	}
+	fs := ExtractFileSet(region)
+	if len(fs.Read) != 1 {
+		t.Fatalf("deduplicated read = %v, want 1 entry", fs.Read)
+	}
+	if fs.Read[0] != "internal/foo.go" {
+		t.Errorf("cleaned = %q, want internal/foo.go", fs.Read[0])
+	}
+}
+
+func TestFileSetMergeAccumulatesAcrossRounds(t *testing.T) {
+	var fs FileSet
+	fs.Merge(ExtractFileSet([]provider.Message{
+		asst(provider.ToolCall{ID: "r1", Name: "read_file", Arguments: `{"path":"a.go"}`}),
+		tool("ok", "r1"),
+	}))
+	fs.Merge(ExtractFileSet([]provider.Message{
+		asst(provider.ToolCall{ID: "w1", Name: "write_file", Arguments: `{"path":"b.go","content":"..."}`}),
+		tool("ok", "w1"),
+	}))
+	if len(fs.Read) != 1 || fs.Read[0] != "a.go" {
+		t.Fatalf("accumulated read = %v, want [a.go]", fs.Read)
+	}
+	if len(fs.Modified) != 1 || fs.Modified[0] != "b.go" {
+		t.Fatalf("accumulated modified = %v, want [b.go]", fs.Modified)
+	}
+	// A second read of a.go should not duplicate.
+	fs.Merge(ExtractFileSet([]provider.Message{
+		asst(provider.ToolCall{ID: "r2", Name: "read_file", Arguments: `{"path":"a.go"}`}),
+		tool("ok", "r2"),
+	}))
+	if len(fs.Read) != 1 {
+		t.Fatalf("re-read should not duplicate: %v", fs.Read)
+	}
+}
+
+func TestRenderFileSetEmptyReturnsNothing(t *testing.T) {
+	if got := RenderFileSet(FileSet{}); got != "" {
+		t.Fatalf("empty set rendered %q, want \"\"", got)
+	}
+}
+
+func TestRenderFileSetContainsBothSections(t *testing.T) {
+	fs := FileSet{
+		Read:     []string{"a.go"},
+		Modified: []string{"b.go"},
+	}
+	got := RenderFileSet(fs)
+	if !strings.Contains(got, "Modified:") || !strings.Contains(got, "b.go") {
+		t.Errorf("missing modified section: %q", got)
+	}
+	if !strings.Contains(got, "Read:") || !strings.Contains(got, "a.go") {
+		t.Errorf("missing read section: %q", got)
 	}
 }

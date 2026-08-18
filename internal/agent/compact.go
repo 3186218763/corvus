@@ -171,7 +171,10 @@ func (a *Agent) compact(ctx context.Context, trigger, instructions string, force
 	// compaction rewrites message indexes. Keep the entire active turn outside
 	// the fold so completed tool call/result pairs remain available for a later
 	// cancellation or crash recovery instead of surviving only as prose in a
-	// summary.
+	// summary. This is another manifestation of the tool-pairing cut-point rule:
+	// never split an assistant tool_calls message from its results, even when
+	// that assistant message is still being executed. The active turn boundary
+	// takes precedence over the tail-budget calculation.
 	if active := a.activeTurnStart(msgs); active >= head && active < start {
 		start = active
 		if start <= head {
@@ -221,6 +224,12 @@ func (a *Agent) compact(ctx context.Context, trigger, instructions string, force
 	// are spliced back verbatim, so a fact that reached a digest once is never
 	// re-summarized away and the user's own words are never touched. Digests
 	// accumulate (small) rather than collapsing into one lossy rolling summary.
+	//
+	// The deterministic file set is extracted from the fold's tool calls and
+	// merged into the accumulated projection, so the model always sees the full
+	// set of files it has read or modified — not just what this pass folds.
+	regionFileSet := compaction.ExtractFileSet(fold)
+	a.compactFileSet.Merge(regionFileSet)
 	summary, err := a.summarizeWithRetry(ctx, fold, instructions)
 	if err != nil {
 		// Mechanical fold: the foldable region is already archived, so stand in a
@@ -230,6 +239,9 @@ func (a *Agent) compact(ctx context.Context, trigger, instructions string, force
 		a.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelInfo, Text: "Context was compacted without a generated summary.", Detail: "compaction summary unavailable (" + err.Error() + "); folded mechanically"})
 		summary = compaction.MechanicalFoldDigest(len(fold), archived)
 	}
+	// Append the deterministic file set so it survives even a mechanical fold
+	// (where the LLM summary is absent) and stays accurate across rounds.
+	summary += compaction.RenderFileSet(a.compactFileSet)
 
 	compacted := make([]provider.Message, 0, head+len(kept)+1+len(msgs)-start)
 	compacted = append(compacted, msgs[:head]...)
@@ -447,8 +459,7 @@ func (a *Agent) tailFloor() int {
 // message would push its token estimate past budgetTokens (but never below
 // minKeep messages), then aligns the boundary back off any tool result so the
 // tail never begins with an orphan whose assistant tool_calls were summarized
-// away.
-
+// away. See compaction.TailStart for the full rationale on the cut-point rule.
 func tailStart(msgs []provider.Message, head, budgetTokens int, tokPerChar float64, minKeep int) int {
 	return compaction.TailStart(msgs, head, budgetTokens, tokPerChar, minKeep)
 }
@@ -498,7 +509,8 @@ func (a *Agent) summarize(ctx context.Context, region []provider.Message, instru
 			{Role: provider.RoleSystem, Content: sys},
 			{Role: provider.RoleUser, Content: compaction.RenderTranscript(region)},
 		},
-		Temperature: provider.OptionalTemperature(a.temperature),
+		Temperature:    provider.OptionalTemperature(a.temperature),
+		PromptCacheKey: "", // One-off summary requests don't merit polluting the cache; explicitly disable cache write
 	})
 	if err != nil {
 		return "", err

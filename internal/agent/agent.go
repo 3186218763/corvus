@@ -463,6 +463,12 @@ type Agent struct {
 	compactSummarizer   compaction.Summarizer
 	compactStuck        bool
 	consecutiveCompacts int
+	// compactFileSet accumulates the deterministic file-projection across
+	// compaction rounds. Each compact pass extracts read/modified paths from
+	// its foldable region, merges them into this set, and appends the rendered
+	// result to the summary. The next pass sees the prior summary in the kept
+	// tail, so the projection carries forward without a separate store.
+	compactFileSet compaction.FileSet
 	// activeTurnCreatedAt identifies the real/synthetic user message that began
 	// the currently running turn. Compaction may rewrite older history while a
 	// tool loop is active, but it must keep this message and everything after it

@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -224,6 +225,14 @@ func ToolCallIDs(m provider.Message) map[string]bool {
 // minKeep messages), then aligns the boundary back off any tool result so the
 // tail never begins with an orphan whose assistant tool_calls were summarized
 // away.
+//
+// The alignment rule (never cut on a tool result) is critical for correctness:
+// splitting an assistant message with tool_calls from its tool results violates
+// the OpenAI/Anthropic API contract and causes 400 errors on replay. This
+// ensures that every tool_calls turn kept verbatim in the tail has its complete
+// set of tool results alongside it, and every tool_calls turn in the summarized
+// region is fully paired before summarization. The cut point always lands on a
+// user or assistant message boundary, never between a call and its result.
 func TailStart(msgs []provider.Message, head, budgetTokens int, tokPerChar float64, minKeep int) int {
 	start := len(msgs)
 	acc := 0
@@ -326,4 +335,145 @@ func SummarizeToolArgs(args string) string {
 	}
 	sort.Strings(keys)
 	return fmt.Sprintf("{%s} (%d keys)", strings.Join(keys, ", "), len(parsed))
+}
+
+// FileSet is the deterministic, accumulate-across-summaries projection of
+// which files a conversation region read or modified. It is extracted purely
+// from tool-call arguments (never from model prose), so no matter how many
+// compaction rounds pass, the model is always told the full set of files it
+// has touched — mirroring pi's branch-summarization readFiles/modifiedFiles.
+//
+// The zero value is an empty set. Merge composes sets from successive regions
+// (or from a prior digest's carry-forward) so a later compaction pass sees the
+// union of everything before it, not just its own region.
+type FileSet struct {
+	Read     []string
+	Modified []string
+}
+
+// ExtractFileSet inspects tool-call arguments in region and classifies each
+// path as read or modified according to the tool's side effects. Paths are
+// cleaned and deduplicated, preserving first-seen order within each class.
+// Unknown tools and malformed arguments contribute nothing.
+func ExtractFileSet(region []provider.Message) FileSet {
+	var fs FileSet
+	for _, m := range region {
+		if m.Role != provider.RoleAssistant {
+			continue
+		}
+		for _, tc := range m.ToolCalls {
+			classifyToolCall(&fs, tc)
+		}
+	}
+	fs.Read = dedupePaths(fs.Read)
+	fs.Modified = dedupePaths(fs.Modified)
+	return fs
+}
+
+// Merge unions another FileSet into this one, deduplicating and preserving
+// receiver order. It is safe to call on a zero-value receiver.
+func (fs *FileSet) Merge(other FileSet) {
+	fs.Read = dedupePaths(append(fs.Read, other.Read...))
+	fs.Modified = dedupePaths(append(fs.Modified, other.Modified...))
+}
+
+// RenderFileSet formats a FileSet as the "Files & code" appendix appended to
+// a compaction summary. The model sees exactly which paths it has already
+// inspected or changed, so it does not re-read or re-edit them blindly.
+func RenderFileSet(fs FileSet) string {
+	var b strings.Builder
+	if len(fs.Read) == 0 && len(fs.Modified) == 0 {
+		return ""
+	}
+	b.WriteString("\n\n## Files touched (deterministic, accumulated across compactions)\n")
+	if len(fs.Modified) > 0 {
+		b.WriteString("Modified:\n")
+		for _, p := range fs.Modified {
+			fmt.Fprintf(&b, "- %s\n", p)
+		}
+	}
+	if len(fs.Read) > 0 {
+		b.WriteString("Read:\n")
+		for _, p := range fs.Read {
+			fmt.Fprintf(&b, "- %s\n", p)
+		}
+	}
+	return b.String()
+}
+
+// classifyToolCall parses a single tool call's arguments and records the paths
+// it touches. Read/modified classification follows each built-in tool's
+// documented side effects; MCP and unknown tools are skipped because their
+// effect on the workspace is not statically knowable.
+func classifyToolCall(fs *FileSet, tc provider.ToolCall) {
+	if tc.Name == "" || tc.Arguments == "" {
+		return
+	}
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(tc.Arguments), &raw); err != nil {
+		return
+	}
+	switch tc.Name {
+	case "read_file", "ls", "code_index", "grep":
+		// grep/ls/code_index read a directory or file; read_file reads one file.
+		if p := pathFromArg(raw, "path"); p != "" {
+			fs.Read = append(fs.Read, p)
+		}
+	case "glob":
+		// glob matches a pattern, not a concrete path; it is a search, not a read
+		// of a specific file, so it does not contribute to the file set.
+	case "edit_file", "write_file", "delete_range", "delete_symbol", "notebook_edit":
+		if p := pathFromArg(raw, "path"); p != "" {
+			fs.Modified = append(fs.Modified, p)
+		}
+	case "multi_edit":
+		// multi_edit edits one file with multiple edits; the path is the file.
+		if p := pathFromArg(raw, "path"); p != "" {
+			fs.Modified = append(fs.Modified, p)
+		}
+	case "move_file":
+		// move_file reads source and writes destination.
+		if src := pathFromArg(raw, "source_path"); src != "" {
+			fs.Read = append(fs.Read, src)
+		}
+		if dst := pathFromArg(raw, "destination_path"); dst != "" {
+			fs.Modified = append(fs.Modified, dst)
+		}
+	case "bash":
+		// bash commands are not statically analyzable for file effects; they are
+		// intentionally excluded from the deterministic set. The model's own
+		// summary prose can still note build/test outcomes.
+	}
+}
+
+// pathFromArg extracts and cleans a string path argument, returning "" for
+// missing or non-string values.
+func pathFromArg(raw map[string]any, key string) string {
+	v, ok := raw[key]
+	if !ok {
+		return ""
+	}
+	s, ok := v.(string)
+	if !ok || strings.TrimSpace(s) == "" {
+		return ""
+	}
+	return filepath.Clean(s)
+}
+
+// dedupePaths returns paths deduplicated by cleaned form, preserving the
+// first-seen order. Empty strings are dropped.
+func dedupePaths(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(paths))
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	return out
 }
