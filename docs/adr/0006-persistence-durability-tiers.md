@@ -59,3 +59,26 @@ The audit (`.scratch/dep-audit/FINDINGS.md` B5/C4/C7) found:
   readers' skip behavior covers the remainder.
 - Session transcripts (`<id>.jsonl`) are untouched: they were already atomic
   (temp + rename), never O_APPEND.
+
+## Known exemption: agent package session locks
+
+`internal/agent/session_lock_unix.go` keeps its own `unix.Flock`-based lock
+helpers (`tryLockSessionFile`, `tryTakeSessionLockFile`,
+`tryLockSessionLeaseFile`) instead of delegating to `filelock.Acquire`. This is
+a deliberate, scoped exemption, not a second general-purpose lock
+implementation:
+
+- The session save path needs an **unlink-while-locked** release
+  (`sessionLockFile.RemoveAndUnlock` deletes the lock file atomically with the
+  flock release so a waiter blocked on the inode can never adopt a file about
+  to disappear for everyone else). `filelock.Acquire` returns an opaque unlock
+  closure that does not expose this inode-stable unlink semantics.
+- The session package surfaces its own sentinel errors
+  (`ErrSessionFileLockHeld`, `ErrSessionLeaseHeld`) that the save/recovery path
+  branches on; routing them through `filelock.ErrHeld` would lose that
+  distinction at the call sites that need it.
+
+The exemption is limited to these three helpers in one file. Any new lock site
+in the agent package must use `filelock.Acquire`; reopening this exemption
+requires extending `filelock` with the unlink-under-flock operation rather than
+adding a fourth private helper.
