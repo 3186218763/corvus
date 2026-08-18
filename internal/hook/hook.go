@@ -1129,6 +1129,15 @@ type SpawnInput struct {
 // It is runtime-only and never changes persisted Hook configuration.
 type RuntimeOptions struct {
 	BashPath string
+	// ProjectSandbox is the OS-sandbox spec applied to project-scoped hooks
+	// (defense-in-depth beneath the trust gate). A zero-value Spec (Mode == "")
+	// does not enforce, so an unconfigured caller runs project hooks with the
+	// legacy FilterEnv-only path. When Enforce is set and the OS backend is
+	// unavailable, the spawner fails closed instead of running the hook
+	// unconfined. Global and plugin hooks are never sandboxed here: they are
+	// user-installed configuration and already ran through the user's own
+	// trust decision at install time.
+	ProjectSandbox sandbox.Spec
 }
 
 type SpawnResult struct {
@@ -1325,10 +1334,33 @@ func defaultSpawner(ctx context.Context, in SpawnInput, options RuntimeOptions) 
 	cctx, cancel := context.WithTimeout(ctx, in.Timeout)
 	defer cancel()
 
+	// Defense-in-depth for project-scoped hooks: when an OS sandbox spec is
+	// configured, wrap the hook command in the same Seatbelt/bwrap/AppContainer
+	// jail the bash tool uses. The trust gate already decided the hooks may
+	// run; this limits what a trusted-but-malicious hook process can do (read
+	// freely, write only inside the workspace, no network unless allowed).
+	// When the backend is unavailable under an enforce request, fail closed
+	// rather than executing unconfined — a trusted hook that cannot be
+	// confined is still safer to skip than to run without the boundary.
+	if in.ProjectScoped && options.ProjectSandbox.Enforce() {
+		sandboxed, ok := sandboxProjectCommand(options.ProjectSandbox, in)
+		if !ok {
+			return SpawnResult{ExitCode: -1, SpawnErr: fmt.Errorf("%s", sandbox.UnavailableMessage())}
+		}
+		return runSandboxedHook(cctx, sandboxed, in)
+	}
+
 	cmd, spawnErr := spawnCommand(cctx, in.Command, in.Mode, in.Shell, in.Args, options)
 	if spawnErr != nil {
 		return SpawnResult{ExitCode: -1, SpawnErr: spawnErr}
 	}
+	return runHookCommand(cctx, cmd, in)
+}
+
+// runHookCommand runs a prepared hook command with the standard environment,
+// stdin, and output capture. It is the shared tail of the unsandboxed spawn
+// path used by global, plugin, and unconfined project hooks.
+func runHookCommand(ctx context.Context, cmd *exec.Cmd, in SpawnInput) SpawnResult {
 	proc.HideWindow(cmd)
 	cmd.Dir = in.Cwd
 	env := secrets.ProcessEnv()
@@ -1366,10 +1398,10 @@ func defaultSpawner(ctx context.Context, in SpawnInput, options RuntimeOptions) 
 		Truncated: outBuf.truncated || errBuf.truncated,
 	}
 	switch {
-	case cctx.Err() == context.DeadlineExceeded:
+	case ctx.Err() == context.DeadlineExceeded:
 		res.TimedOut = true
-	case cctx.Err() == context.Canceled:
-		res.SpawnErr = cctx.Err()
+	case ctx.Err() == context.Canceled:
+		res.SpawnErr = ctx.Err()
 	case err != nil:
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
@@ -1381,6 +1413,49 @@ func defaultSpawner(ctx context.Context, in SpawnInput, options RuntimeOptions) 
 		res.ExitCode = 0
 	}
 	return res
+}
+
+// sandboxProjectCommand resolves the hook's argv and wraps it in the OS
+// sandbox. It handles all three execution modes (exec, shell, legacy) by
+// first resolving the base argv via the existing spawnCommand helpers, then
+// prefixing the sandbox wrapper. Returns the wrapped argv and whether the OS
+// backend was available (false = fail closed).
+func sandboxProjectCommand(spec sandbox.Spec, in SpawnInput) ([]string, bool) {
+	// Resolve the shell the hook would use, so the sandbox's argv matches the
+	// unsandboxed path's interpreter selection.
+	sh := hookShell(in.Shell, in.Mode)
+	// For shell-mode and legacy-mode hooks, the command is a shell script and
+	// the sandbox wraps the interpreter. For exec-mode hooks, the command is a
+	// direct executable and the sandbox wraps it with its args.
+	if in.Mode == ExecutionExec && in.Args != nil {
+		argv := append([]string{in.Command}, in.Args...)
+		return sandbox.CommandArgs(spec, argv)
+	}
+	return sandbox.Command(spec, sh, in.Command)
+}
+
+// hookShell resolves the sandbox.Shell a hook's execution mode implies. Exec
+// mode has no shell (the sandbox wraps the binary directly); shell and legacy
+// modes use the configured interpreter or the platform default.
+func hookShell(preferred string, mode ExecutionMode) sandbox.Shell {
+	if mode == ExecutionExec {
+		// The exec path does not use a shell; returning a bare shell here is
+		// safe because sandboxProjectCommand routes exec through CommandArgs.
+		return sandbox.Shell{Kind: sandbox.ShellBash}
+	}
+	return sandbox.ResolveShell(preferred, "", nil)
+}
+
+// runSandboxedHook executes an already-wrapped sandbox argv, applying the same
+// environment scrub and output capture as the unsandboxed path. The cwd and
+// env are set on the bwrap/seatbelt process; the sandbox enforces the
+// filesystem and network boundary.
+func runSandboxedHook(ctx context.Context, argv []string, in SpawnInput) SpawnResult {
+	if len(argv) == 0 {
+		return SpawnResult{ExitCode: -1, SpawnErr: fmt.Errorf("sandbox wrapper produced no argv")}
+	}
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	return runHookCommand(ctx, cmd, in)
 }
 
 // spawnCommand picks the execution vehicle from the manifest contract.

@@ -68,6 +68,15 @@ func buildPermissionAndHooks(cfg *config.Config, opts Options, root string, shel
 	if shell.Kind == sandbox.ShellBash {
 		hookRuntime.BashPath = shell.Path
 	}
+	// Defense-in-depth for project-scoped hooks: confine them to an OS sandbox
+	// with the same write/read boundaries as the bash tool but **hardcoded
+	// network isolation** (project hooks are repo-controlled lifecycle scripts
+	// with no legitimate need for network access, unlike model-issued bash that
+	// may download packages). Global and plugin hooks are not sandboxed here —
+	// they are user-installed and already trusted at install. When the bash
+	// sandbox is "enforce" and the backend is unavailable, the spawner fails
+	// closed (refuses to run the project hook unconfined).
+	hookRuntime.ProjectSandbox = hookProjectSandbox(cfg, root, shell)
 	hookRunner := hook.NewRunnerWithHome(
 		resolvedHooks, root, "", hook.NewDefaultSpawner(hookRuntime),
 		func(msg string) { sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: msg}) },
@@ -101,6 +110,30 @@ func defaultProjectHookTrustApprover(req hook.ProjectTrustRequest) hook.ProjectT
 	default:
 		return hook.ProjectTrustDeny
 	}
+}
+
+// hookProjectSandbox builds the OS-sandbox spec for project-scoped hooks. It
+// mirrors the bash tool's write/read confinement — same write roots, same
+// forbid-read roots — but **enforces network isolation regardless of the bash
+// tool's network setting**. Project hooks are repository-controlled lifecycle
+// scripts that do not need network access for legitimate work (unlike bash
+// commands that download modules/packages), so defense-in-depth demands they
+// remain network-isolated even when the user has enabled network for builds.
+// When the bash sandbox is "off", project hooks run with the legacy
+// FilterEnv-only path (Mode == "" does not enforce).
+func hookProjectSandbox(cfg *config.Config, root string, shell sandbox.Shell) sandbox.Spec {
+	spec := sandbox.Spec{
+		Mode:            cfg.BashMode(),
+		WriteRoots:      cfg.WriteRootsForRoot(root),
+		ForbidReadRoots: RuntimeForbidReadRoots(cfg, root),
+		Network:         false, // hardcoded: project hooks never get network access
+		Shell:           shell,
+		// Hooks don't run builds or package managers, so the broad build-tool
+		// cache allowances (go-build, npm, cargo…) are unnecessary. MinimalWrites
+		// keeps the jail tight: only the workspace and explicit allow_write roots.
+		MinimalWrites: true,
+	}
+	return spec
 }
 
 func rememberPermissionRule(workspaceRoot, rule string) control.RememberResult {

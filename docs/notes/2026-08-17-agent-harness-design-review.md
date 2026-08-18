@@ -20,9 +20,11 @@ skills、per-model pricing、lazy capability loading 等能力，Corvus 已经�
 
 Corvus 当前最需要的不是继续横向加功能，而是收紧安全边界和控制复杂度：
 
-1. **P0：项目 hooks 缺少真实信任边界。** 项目配置会被自动加载，`Trusted` 参数被忽略，
-   hook 最终以宿主进程环境执行 shell。"项目 hook 只能 deny"只限制返回值，不限制 hook
-   进程读凭据、写文件或联网。
+1. **~~P0：项目 hooks 缺少真实信任边界~~** ✅ **已解决 (2026-08-18, ADR 0010)**
+   - Trust gate 在 b624b87 已修复（headless fail-closed + explicit approval）
+   - OS sandbox 框架已存在并通过测试验证
+   - **本次修复**：网络隔离硬编码为 `Network: false`，不再继承 bash 配置
+   - 纵深防护完整：trust gate → env scrub → filesystem sandbox → network isolation
 2. **P1：compaction 的 summarizer 接口没有真正接通。** 默认摘要复用 executor provider；
    对 stateful Responses provider，这会覆盖 continuation state。应注入独立、无状态的
    summarizer/provider，并做回归测试。
@@ -42,7 +44,7 @@ Corvus 当前最需要的不是继续横向加功能，而是收紧安全边界�
 | spill 后告诉模型完整输出路径 | `internal/spill` 和 `Agent.boundToolResult` 已返回 locator 与检索提示 | 已完成 |
 | compaction 不从 tool result 切、结构化摘要、保留旧摘要 | `internal/compaction` 与 `internal/agent/compact.go` 已实现 | 已完成 |
 | session tree / fork / branch navigation | `BranchMeta.ParentID/ForkTurn/ForkMessageIndex` 与 controller 分支操作已存在 | 已完成，不重构存储模型 |
-| sandbox mode 与 approval policy 正交 | `internal/config`、`internal/permission`、`internal/sandbox` 已分层 | 已完成；默认网络策略仍可评估 |
+| sandbox mode 与 approval policy 正交 | `internal/config`、`internal/permission`、`internal/sandbox` 已分层 | 已完成；~~默认网络策略仍可评估~~ 2026-08-18 已实现网络隔离 |
 | skills 体系和跨生态发现 | 已支持 `.corvus/.agents/.agent/.claude`、手动/自动触发、profiles、requires 等 | 已完成且范围更广 |
 | per-model pricing | `ProviderEntry.Prices` / `PriceForModel` 已存在 | 已完成 |
 | 动态工具加载 | MCP lazy placeholder、`use_capability`、tool search / economy routing 已存在 | 已完成 |
