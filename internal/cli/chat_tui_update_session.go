@@ -92,9 +92,6 @@ func (m chatTUI) handleModelSwitch(msg modelSwitchMsg) (chatTUI, tea.Cmd) {
 		m.skills = msg.skills
 		m.host = msg.host
 		m.modelRef = msg.ref
-		if msg.profile != "" {
-			m.runtimeProfile = msg.profile
-		}
 		if msg.guidance != "" {
 			m.runtimeGuidance = msg.guidance
 		}

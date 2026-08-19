@@ -37,31 +37,6 @@ func TestParsePermissionMode(t *testing.T) {
 	}
 }
 
-func TestParseProfile(t *testing.T) {
-	tests := []struct {
-		in   string
-		want string
-		ok   bool
-	}{
-		{"balanced", "full", true},
-		{"", "full", true},
-		{"economy", "economy", true},
-		{"delivery", "delivery", true},
-		{"ECONOMY", "economy", true},
-		{"bogus", "", false},
-	}
-	for _, tt := range tests {
-		got, err := parseProfile(tt.in)
-		if (err == nil) != tt.ok {
-			t.Errorf("parseProfile(%q) err = %v, want ok=%v", tt.in, err, tt.ok)
-			continue
-		}
-		if tt.ok && got != tt.want {
-			t.Errorf("parseProfile(%q) = %q, want %q", tt.in, got, tt.want)
-		}
-	}
-}
-
 func TestRunUsageErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -73,7 +48,7 @@ func TestRunUsageErrors(t *testing.T) {
 		{"unknown flag", []string{"--bogus"}, exitUsage},
 		{"bad format", []string{"--format", "xml", "hi"}, exitUsage},
 		{"bad permission mode", []string{"--permission-mode", "bogus", "hi"}, exitUsage},
-		{"bad profile", []string{"--profile", "bogus", "hi"}, exitUsage},
+		{"retired profile flag", []string{"--profile", "bogus", "hi"}, exitUsage},
 		{"negative max steps", []string{"--max-steps", "-1", "hi"}, exitUsage},
 		{"no prompt", []string{}, exitUsage},
 	}

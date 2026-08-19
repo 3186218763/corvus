@@ -15,7 +15,7 @@ type capabilityRecordingRunner struct {
 	input string
 }
 
-func TestEconomyRoutesOnlyEconomyEligibleSkills(t *testing.T) {
+func TestRuntimeRoutesAllSkillsWithoutWorkModeFiltering(t *testing.T) {
 	runner := &capabilityRecordingRunner{}
 	reg := tool.NewRegistry()
 	reg.Add(capabilityTestTool{name: "run_skill"})
@@ -32,11 +32,10 @@ func TestEconomyRoutesOnlyEconomyEligibleSkills(t *testing.T) {
 	if err := c.Run(context.Background(), "review code"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.Contains(runner.input, "skill:economy-review prefer") {
-		t.Fatalf("economy skill missing from route:\n%s", runner.input)
-	}
-	if strings.Contains(runner.input, "skill:balanced-review") {
-		t.Fatalf("balanced-only skill leaked into economy route:\n%s", runner.input)
+	for _, name := range []string{"skill:economy-review", "skill:balanced-review"} {
+		if !strings.Contains(runner.input, name) {
+			t.Fatalf("skill %s missing from unfiltered route:\n%s", name, runner.input)
+		}
 	}
 }
 

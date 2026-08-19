@@ -63,7 +63,7 @@ func renderCacheHitRate(hit, miss int) string {
 
 // primaryStatusLine renders the interaction half of the first footer row. The
 // mode pill anchors the same row's left edge (statusPrimaryWithBadge); this
-// half only carries contextual UI state. The model/profile group is laid out
+// half only carries contextual UI state. The model group is laid out
 // separately so it can stay right-anchored on wide terminals and move as one
 // unit on narrow terminals.
 func (m chatTUI) primaryStatusLine(shellMode, cancelRequested bool) string {

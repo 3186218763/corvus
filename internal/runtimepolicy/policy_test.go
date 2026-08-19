@@ -4,78 +4,31 @@ import (
 	"testing"
 )
 
-func TestResolve_LegacyPresets(t *testing.T) {
-	tests := []struct {
-		name   string
-		preset Preset
-		want   Policy
-	}{
-		{
-			name:   "full preset",
-			preset: PresetFull,
-			want: Policy{
-				Guidance:           GuidanceOff,
-				Completion:         CompletionStandard,
-				Exposure:           ExposureEager,
-				LegacyPreset:       PresetFull,
-				LegacySkillProfile: "default",
-				PlannerEligible:    true,
-				CapabilityFrontend: "",
-				WorkspaceLease:     false,
-			},
-		},
-		{
-			name:   "economy preset",
-			preset: PresetEconomy,
-			want: Policy{
-				Guidance:           GuidanceOff,
-				Completion:         CompletionStandard,
-				Exposure:           ExposureDeferred,
-				LegacyPreset:       PresetEconomy,
-				LegacySkillProfile: "economy",
-				PlannerEligible:    false,
-				CapabilityFrontend: "",
-				WorkspaceLease:     false,
-			},
-		},
-		{
-			name:   "delivery preset",
-			preset: PresetDelivery,
-			want: Policy{
-				Guidance:           GuidanceOff,
-				Completion:         CompletionVerified,
-				Exposure:           ExposureEager,
-				LegacyPreset:       PresetDelivery,
-				LegacySkillProfile: "default",
-				PlannerEligible:    true,
-				CapabilityFrontend: "delivery",
-				WorkspaceLease:     true,
-			},
-		},
+func TestResolve_LegacyPresetIsIgnoredAfterMigration(t *testing.T) {
+	got, err := Resolve(Input{
+		Request:        Request{Preset: PresetEconomy},
+		CapabilityTier: CapabilityStandard,
+		EffortBand:     EffortUnknown,
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
+	if got.Guidance != GuidanceLight || got.Completion != CompletionStandard || got.Exposure != ExposureEager {
+		t.Fatalf("legacy preset leaked into runtime policy: %+v", got)
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			input := Input{
-				Request: Request{
-					Preset:     tt.preset,
-					Guidance:   GuidanceSelectionInherit,
-					Completion: CompletionSelectionInherit,
-					Exposure:   ExposureSelectionInherit,
-				},
-				CapabilityTier: CapabilityStandard,
-				EffortBand:     EffortUnknown,
-			}
-
-			got, err := Resolve(input)
-			if err != nil {
-				t.Fatalf("Resolve() error = %v", err)
-			}
-
-			if got != tt.want {
-				t.Errorf("Resolve() mismatch:\ngot  = %+v\nwant = %+v", got, tt.want)
-			}
-		})
+func TestResolve_NewRequestUsesIndependentDefaults(t *testing.T) {
+	got, err := Resolve(Input{
+		Request:        Request{},
+		CapabilityTier: CapabilityStrong,
+		EffortBand:     EffortHigh,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Guidance != GuidanceOff || got.Completion != CompletionStandard || got.Exposure != ExposureEager {
+		t.Fatalf("new defaults = %+v, want strong/high + standard/eager", got)
 	}
 }
 
@@ -94,12 +47,9 @@ func TestResolve_ExplicitOverrides(t *testing.T) {
 				Exposure:   ExposureSelectionInherit,
 			},
 			wantPolicy: Policy{
-				Guidance:           GuidanceOff,
-				Completion:         CompletionStandard,
-				Exposure:           ExposureEager,
-				LegacyPreset:       PresetFull,
-				LegacySkillProfile: "default",
-				PlannerEligible:    true,
+				Guidance:   GuidanceOff,
+				Completion: CompletionStandard,
+				Exposure:   ExposureEager,
 			},
 		},
 		{
@@ -111,14 +61,9 @@ func TestResolve_ExplicitOverrides(t *testing.T) {
 				Exposure:   ExposureSelectionInherit,
 			},
 			wantPolicy: Policy{
-				Guidance:           GuidanceOff,
-				Completion:         CompletionVerified,
-				Exposure:           ExposureDeferred,
-				LegacyPreset:       PresetEconomy,
-				LegacySkillProfile: "economy",
-				PlannerEligible:    false,
-				CapabilityFrontend: "delivery",
-				WorkspaceLease:     true,
+				Guidance:   GuidanceLight,
+				Completion: CompletionVerified,
+				Exposure:   ExposureEager,
 			},
 		},
 		{
@@ -130,12 +75,9 @@ func TestResolve_ExplicitOverrides(t *testing.T) {
 				Exposure:   ExposureSelectionAuto,
 			},
 			wantPolicy: Policy{
-				Guidance:           GuidanceLight,
-				Completion:         CompletionStandard,
-				Exposure:           ExposureEager,
-				LegacyPreset:       PresetFull,
-				LegacySkillProfile: "default",
-				PlannerEligible:    true,
+				Guidance:   GuidanceLight,
+				Completion: CompletionStandard,
+				Exposure:   ExposureEager,
 			},
 		},
 	}
@@ -162,9 +104,6 @@ func TestResolve_ExplicitOverrides(t *testing.T) {
 			if got.Exposure != tt.wantPolicy.Exposure {
 				t.Errorf("Exposure = %v, want %v", got.Exposure, tt.wantPolicy.Exposure)
 			}
-			if got.WorkspaceLease != tt.wantPolicy.WorkspaceLease {
-				t.Errorf("WorkspaceLease = %v, want %v", got.WorkspaceLease, tt.wantPolicy.WorkspaceLease)
-			}
 		})
 	}
 }
@@ -179,8 +118,8 @@ func TestResolve_AutomaticGuidanceMatrix(t *testing.T) {
 		// Strong capability
 		{name: "strong/unknown", capability: CapabilityStrong, effort: EffortUnknown, want: GuidanceLight},
 		{name: "strong/disabled", capability: CapabilityStrong, effort: EffortDisabled, want: GuidanceStructured},
-		{name: "strong/low", capability: CapabilityStrong, effort: EffortLow, want: GuidanceLight},
-		{name: "strong/medium", capability: CapabilityStrong, effort: EffortMedium, want: GuidanceLight},
+		{name: "strong/low", capability: CapabilityStrong, effort: EffortLow, want: GuidanceOff},
+		{name: "strong/medium", capability: CapabilityStrong, effort: EffortMedium, want: GuidanceOff},
 		{name: "strong/high", capability: CapabilityStrong, effort: EffortHigh, want: GuidanceOff},
 		{name: "strong/xhigh", capability: CapabilityStrong, effort: EffortXHigh, want: GuidanceOff},
 		{name: "strong/max", capability: CapabilityStrong, effort: EffortMax, want: GuidanceOff},
@@ -188,8 +127,8 @@ func TestResolve_AutomaticGuidanceMatrix(t *testing.T) {
 		// Standard capability
 		{name: "standard/unknown", capability: CapabilityStandard, effort: EffortUnknown, want: GuidanceLight},
 		{name: "standard/disabled", capability: CapabilityStandard, effort: EffortDisabled, want: GuidanceStructured},
-		{name: "standard/low", capability: CapabilityStandard, effort: EffortLow, want: GuidanceStructured},
-		{name: "standard/medium", capability: CapabilityStandard, effort: EffortMedium, want: GuidanceStructured},
+		{name: "standard/low", capability: CapabilityStandard, effort: EffortLow, want: GuidanceLight},
+		{name: "standard/medium", capability: CapabilityStandard, effort: EffortMedium, want: GuidanceLight},
 		{name: "standard/high", capability: CapabilityStandard, effort: EffortHigh, want: GuidanceLight},
 		{name: "standard/xhigh", capability: CapabilityStandard, effort: EffortXHigh, want: GuidanceLight},
 		{name: "standard/max", capability: CapabilityStandard, effort: EffortMax, want: GuidanceLight},
@@ -201,7 +140,7 @@ func TestResolve_AutomaticGuidanceMatrix(t *testing.T) {
 		{name: "lite/medium", capability: CapabilityLite, effort: EffortMedium, want: GuidanceStructured},
 		{name: "lite/high", capability: CapabilityLite, effort: EffortHigh, want: GuidanceStructured},
 		{name: "lite/xhigh", capability: CapabilityLite, effort: EffortXHigh, want: GuidanceStructured},
-		{name: "lite/max", capability: CapabilityLite, effort: EffortMax, want: GuidanceLight},
+		{name: "lite/max", capability: CapabilityLite, effort: EffortMax, want: GuidanceStructured},
 	}
 
 	for _, tt := range tests {
@@ -211,7 +150,7 @@ func TestResolve_AutomaticGuidanceMatrix(t *testing.T) {
 					Preset:     PresetFull,
 					Guidance:   GuidanceSelectionAuto,
 					Completion: CompletionSelectionInherit,
-					Exposure:   ExposureSelectionInherit,
+					Exposure:   ExposureSelectionDeferred,
 				},
 				CapabilityTier: tt.capability,
 				EffortBand:     tt.effort,
@@ -321,8 +260,8 @@ func TestResolve_CapabilityAutoResolvesToStandard(t *testing.T) {
 	}
 
 	// Auto with medium effort should behave like standard capability
-	if got.Guidance != GuidanceStructured {
-		t.Errorf("With auto capability (resolved to standard) and medium effort, expected structured guidance, got %v", got.Guidance)
+	if got.Guidance != GuidanceLight {
+		t.Errorf("With auto capability (resolved to standard) and medium effort, expected light guidance, got %v", got.Guidance)
 	}
 }
 
@@ -332,7 +271,7 @@ func TestResolve_VerifiedPlusDeferred(t *testing.T) {
 			Preset:     PresetEconomy,
 			Guidance:   GuidanceSelectionInherit,
 			Completion: CompletionSelectionVerified,
-			Exposure:   ExposureSelectionInherit,
+			Exposure:   ExposureSelectionDeferred,
 		},
 		CapabilityTier: CapabilityStandard,
 		EffortBand:     EffortUnknown,
@@ -348,9 +287,6 @@ func TestResolve_VerifiedPlusDeferred(t *testing.T) {
 	}
 	if got.Exposure != ExposureDeferred {
 		t.Errorf("Exposure = %v, want deferred", got.Exposure)
-	}
-	if !got.WorkspaceLease {
-		t.Error("WorkspaceLease should be true for verified completion")
 	}
 }
 
@@ -387,7 +323,7 @@ func TestNormalize_CaseInsensitive(t *testing.T) {
 	tests := []struct {
 		name     string
 		request  Request
-		wantGuid Guidance
+		wantGUID Guidance
 		wantComp Completion
 		wantExp  Exposure
 	}{
@@ -399,7 +335,7 @@ func TestNormalize_CaseInsensitive(t *testing.T) {
 				Completion: "STANDARD",
 				Exposure:   "EAGER",
 			},
-			wantGuid: GuidanceOff,
+			wantGUID: GuidanceOff,
 			wantComp: CompletionStandard,
 			wantExp:  ExposureEager,
 		},
@@ -411,7 +347,7 @@ func TestNormalize_CaseInsensitive(t *testing.T) {
 				Completion: "Verified",
 				Exposure:   "Deferred",
 			},
-			wantGuid: GuidanceLight,
+			wantGUID: GuidanceLight,
 			wantComp: CompletionVerified,
 			wantExp:  ExposureDeferred,
 		},
@@ -423,7 +359,7 @@ func TestNormalize_CaseInsensitive(t *testing.T) {
 				Completion: " standard ",
 				Exposure:   " eager ",
 			},
-			wantGuid: GuidanceStructured,
+			wantGUID: GuidanceStructured,
 			wantComp: CompletionStandard,
 			wantExp:  ExposureEager,
 		},
@@ -442,8 +378,8 @@ func TestNormalize_CaseInsensitive(t *testing.T) {
 				t.Fatalf("Resolve() error = %v", err)
 			}
 
-			if got.Guidance != tt.wantGuid {
-				t.Errorf("Guidance = %v, want %v", got.Guidance, tt.wantGuid)
+			if got.Guidance != tt.wantGUID {
+				t.Errorf("Guidance = %v, want %v", got.Guidance, tt.wantGUID)
 			}
 			if got.Completion != tt.wantComp {
 				t.Errorf("Completion = %v, want %v", got.Completion, tt.wantComp)

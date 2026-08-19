@@ -8,7 +8,7 @@ import (
 	"unicode/utf8"
 
 	"corvus/internal/agent"
-	"corvus/internal/capability"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/textutil"
 )
 
@@ -79,7 +79,7 @@ func (c *Controller) withPlannerTurnMetadata(ctx context.Context, userText strin
 		Synthetic:              synthetic,
 		ExplicitPlanMode:       c.PlanMode(),
 		GoalActive:             c.goals.active(),
-		DeliveryProfile:        c.runtimeProfile == capability.ProfileDelivery,
+		DeliveryProfile:        c.runtimePolicy.Completion == runtimepolicy.CompletionVerified,
 		HasConversationContext: priorMessages > 1,
 	})
 }

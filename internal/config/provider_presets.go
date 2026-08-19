@@ -142,6 +142,7 @@ func tokenRhythmModelOverrides() map[string]ProviderModelOverride {
 			ReasoningProtocol: ReasoningProtocolDeepSeek,
 			SupportedEfforts:  []string{"disabled", "high", "max"},
 			DefaultEffort:     "high",
+			ModelCapability:   "strong",
 		},
 		"deepseek-v4-flash-0731": {
 			ReasoningProtocol: ReasoningProtocolDeepSeek,
@@ -201,7 +202,7 @@ var curatedProviderPresets = []ProviderPreset{
 			Prices:        deepSeekV4PricesUSD(),
 			ModelOverrides: map[string]ProviderModelOverride{
 				"deepseek-v4-flash": {SupportedEfforts: []string{"disabled", "low", "high", "max"}, DefaultEffort: "high"},
-				"deepseek-v4-pro":   {SupportedEfforts: []string{"disabled", "high", "max"}, DefaultEffort: "high"},
+				"deepseek-v4-pro":   {SupportedEfforts: []string{"disabled", "high", "max"}, DefaultEffort: "high", ModelCapability: "strong"},
 			},
 		}},
 	},
@@ -678,6 +679,7 @@ var curatedProviderPresets = []ProviderPreset{
 					ReasoningProtocol: ReasoningProtocolDeepSeek,
 					SupportedEfforts:  []string{"disabled", "high", "max"},
 					DefaultEffort:     "high",
+					ModelCapability:   "strong",
 				},
 				"kimi-k2.6": {
 					ReasoningProtocol: ReasoningProtocolOpenAI,

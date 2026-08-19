@@ -364,11 +364,7 @@ func (c *Controller) persistRuntimePolicy(path string) {
 		return
 	}
 	rec := runtimepolicy.RecordFromRequest(c.runtimePolicyRequest)
-	tokenMode := string(c.runtimePolicy.LegacyPreset)
-	if tokenMode == "" {
-		tokenMode = rec.Preset
-	}
-	if err := agent.PersistSessionRuntimePolicy(path, rec, tokenMode); err != nil {
+	if err := agent.PersistSessionRuntimePolicy(path, rec, ""); err != nil {
 		slog.Warn("controller: persist runtime policy", "path", path, "err", err)
 	}
 }
@@ -394,11 +390,7 @@ func applyRuntimePolicyMeta(dst *agent.BranchMeta, src agent.BranchMeta, c *Cont
 	if rec, ok := agent.SessionRuntimePolicy(src); ok {
 		copied := rec
 		dst.RuntimePolicy = &copied
-		if src.TokenMode != "" {
-			dst.TokenMode = src.TokenMode
-		} else {
-			dst.TokenMode = rec.Preset
-		}
+		dst.TokenMode = ""
 		return
 	}
 	if c == nil {
@@ -406,11 +398,7 @@ func applyRuntimePolicyMeta(dst *agent.BranchMeta, src agent.BranchMeta, c *Cont
 	}
 	rec := runtimepolicy.RecordFromRequest(c.runtimePolicyRequest)
 	dst.RuntimePolicy = &rec
-	if mode := string(c.runtimePolicy.LegacyPreset); mode != "" {
-		dst.TokenMode = mode
-	} else {
-		dst.TokenMode = rec.Preset
-	}
+	dst.TokenMode = ""
 }
 
 func (c *Controller) Snapshot() error {

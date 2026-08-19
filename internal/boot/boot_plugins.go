@@ -263,7 +263,7 @@ func buildCapabilityRuntime(ctx context.Context, cfg *config.Config, opts Option
 	skillStore.ConfigureToolBindings(func(sk skill.Skill) []tool.MCPBinding {
 		return skillMCPBindings(sk, reg, capSpecs, cachedTools, cacheKeyOK)
 	})
-	// Detect dual-model planner early so Balanced can attach the same stable
+	// Detect dual-model planner early so the planner can attach the same stable
 	// use_capability surface to both Planner and Executor. Their frontends keep
 	// independent ledgers/audits while sharing the session MCP runtime.
 	dualModelPlanner := false
@@ -272,7 +272,6 @@ func buildCapabilityRuntime(ctx context.Context, cfg *config.Config, opts Option
 			dualModelPlanner = true
 		}
 	}
-	runtimeProfile := deriveLegacyProfile(policy)
 	var capProxy *agent.UseCapabilityTool
 	// Catalog closes over capRuntime so proxy-connected tools stay routable.
 	catalogFn := func() capability.Catalog {
@@ -290,7 +289,7 @@ func buildCapabilityRuntime(ctx context.Context, cfg *config.Config, opts Option
 			Tools:       reg.ContractEntries(),
 			Skills:      skillStore.List(),
 			Plugins:     cfg.Plugins,
-			Profile:     runtimeProfile,
+			Profile:     "",
 			Connected:   conn,
 			Failed:      failedNow,
 			CachedTools: cachedTools,
@@ -302,7 +301,7 @@ func buildCapabilityRuntime(ctx context.Context, cfg *config.Config, opts Option
 		return capability.BuildCatalog(catOpts)
 	}
 	// Always build the runtime when a plugin host exists so task/fleet children
-	// can use the stable proxy even in Balanced/Economy without Delivery.
+	// can use the stable proxy regardless of completion/exposure selection.
 	if pluginHost != nil || len(capSpecs) > 0 || policy.Completion == runtimepolicy.CompletionVerified || dualModelPlanner {
 		capRuntimeSet(agent.NewMCPCapabilityRuntime(ctx, pluginHost, capSpecs, reg, catalogFn))
 		capRuntimeGet().ConfigureServers(cfg.Plugins, capSpecs, enabledMCPNames)
@@ -315,7 +314,7 @@ func buildCapabilityRuntime(ctx context.Context, cfg *config.Config, opts Option
 			reg.Add(capProxy)
 		}
 	}
-	skillStore.ConfigureInvocationPolicy(string(runtimeProfile), func(requires []string) []string {
+	skillStore.ConfigureInvocationPolicy("", func(requires []string) []string {
 		connected := map[string]bool{}
 		failedNow := map[string]string{}
 		if pluginHost != nil {
@@ -330,7 +329,7 @@ func buildCapabilityRuntime(ctx context.Context, cfg *config.Config, opts Option
 			Tools:       reg.ContractEntries(),
 			Skills:      skillStore.List(),
 			Plugins:     cfg.Plugins,
-			Profile:     runtimeProfile,
+			Profile:     "",
 			Connected:   connected,
 			Failed:      failedNow,
 			CachedTools: cachedTools,

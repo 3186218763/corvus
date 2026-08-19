@@ -100,16 +100,16 @@ type Options struct {
 	// denies in non-interactive (headless/CI) environments. User-config and
 	// plugin-package MCP servers never reach this callback.
 	MCPLaunchApprover func(ctx context.Context, spec plugin.Spec) (bool, error)
-	// TokenMode selects the session's runtime profile. Empty/full/balanced preserves
-	// the normal capability surface. "economy" keeps the core coding tools visible
-	// and moves optional sources behind connect_tool_source. "delivery" keeps the
-	// full surface and adds a stable completion-and-verification contract.
-	// Deprecated compatibility input; typed Guidance/Completion/Exposure win
-	// when they are non-empty.
+	// TokenMode is a deprecated compatibility input read from old sessions. New
+	// callers should select Guidance, Completion, and Exposure directly; typed
+	// selections win when they are non-empty. The legacy delivery value maps to
+	// verified completion, while legacy economy maps to deferred exposure only
+	// when replaying old metadata.
 	TokenMode string
 	// Guidance, Completion, and Exposure are typed runtime-policy selections
-	// (inherit|auto|concrete). Empty means inherit the TokenMode preset (or the
-	// configured [runtime_policy] default). Invalid non-empty values fail Build.
+	// (inherit|auto|concrete). Empty guidance means capability-aware auto on the
+	// new-session defaults; other empty axes use standard/eager defaults. Invalid
+	// non-empty values fail Build.
 	Guidance   string
 	Completion string
 	Exposure   string
@@ -237,7 +237,7 @@ func Build(ctx context.Context, opts Options) (*control.Controller, error) {
 		return nil, err
 	}
 	a.skillToolsResult = skillToolsResult
-	// Economy-mode on-demand tool sources.
+	// Deferred-exposure on-demand tool sources.
 	buildToolSourceConnector(a)
 	// Session-shared MCP capability runtime + Delivery/dual-model frontends.
 	capabilityResult, err := buildCapabilityRuntime(ctx, cfgResult.cfg, opts, cfgResult.root, toolResult.reg, promptResult.skillStore, toolResult.pluginHost, pluginResult.pluginSpecOptions, pluginResult.enabledMCPNames, cfgResult.runtimePolicy, cfgResult.entry, subagentResult.capRuntimeGet, subagentResult.capRuntimeSet)

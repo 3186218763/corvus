@@ -19,9 +19,16 @@ Canonical terms:
 - **Capability tier** describes the model's inherent capacity (`strong`,
   `standard`, `lite`) and comes from explicit configuration metadata.
 
-The compatibility input `TokenMode` remains a public preset adapter while the
-runtime-policy resolver becomes the semantic owner. The authoritative design
-and execution instructions are:
+New sessions have no work-mode preset. Omitted axes resolve to capability-aware
+guidance plus standard completion and eager exposure: strong models get `off`
+or `light`, standard models get `light`, and lite models get `structured`
+guidance. Explicit `guidance=off|light|structured|inherit` still overrides
+this default.
+
+The old `TokenMode` values are migration-only metadata. The runtime-policy
+resolver is the semantic owner, and `completion=verified` replaces the old
+delivery profile while `exposure=deferred` replaces deferred/economy loading.
+The authoritative design and execution instructions are:
 
 1. `.scratch/RUNTIME_POLICY_SPEC_V5.md`
 2. `docs/adr/0012-runtime-policy-separation.md`

@@ -147,7 +147,7 @@ func buildExecutorAndPlanner(a *assembly) (*runnerResult, error) {
 
 // buildController assembles control.Options and constructs the controller,
 // attaching the guardian, recovery reviewer, capability proxy tools, and
-// Delivery/Economy/dual-model capability routing.
+// completion/deferred-exposure/dual-model capability routing.
 func buildController(a *assembly) (*control.Controller, error) {
 	ctrlOpts := control.Options{
 		Runner:                a.runner,
@@ -199,7 +199,6 @@ func buildController(a *assembly) (*control.Controller, error) {
 		DisableColdResumePrune: !a.cfg.ColdResumePruneEnabled(),
 		Shell:                  a.shell,
 		ApprovalTimeout:        a.opts.ApprovalTimeout,
-		RuntimeProfile:         deriveLegacyProfile(a.runtimePolicy),
 		RuntimePolicyRequest:   a.runtimeRequest,
 		RuntimePolicy:          a.runtimePolicy,
 		OnRemember: func(rule string) control.RememberResult {
@@ -288,7 +287,7 @@ func buildController(a *assembly) (*control.Controller, error) {
 	} else if a.runtimePolicy.Exposure == runtimepolicy.ExposureDeferred {
 		ctrl.WireCapabilityRouting(a.cfg.Plugins, a.capSpecs, nil, nil)
 	} else if a.dualModelPlanner {
-		// Balanced dual-model: load plugin config + schema cache so not-yet-
+		// Dual-model planner: load plugin config + schema cache so not-yet-
 		// started MCP can route through the stable Planner/Executor proxy.
 		// No semantic router — deterministic route only.
 		ctrl.WireCapabilityRouting(a.cfg.Plugins, a.capSpecs, nil, a.capAudit)
@@ -301,11 +300,12 @@ func recoveryHeadlessMode(opts Options) bool {
 	return strings.TrimSpace(opts.HeadlessApprovalMode) != ""
 }
 
-// effectivePlannerModel centralizes planner precedence. The explicit ACP hard
-// override is checked before user/project config and cannot be reversed by a
-// later assembly branch.
+// effectivePlannerModel centralizes planner precedence. Exposure is
+// intentionally not an input to planner selection: deferred tools affect the
+// initial surface only, never whether the configured planner exists.
 func effectivePlannerModel(cfg *config.Config, opts Options, exposureDeferred bool) string {
-	if cfg == nil || opts.DisablePlanner || exposureDeferred {
+	_ = exposureDeferred // retained for source compatibility with older callers
+	if cfg == nil || opts.DisablePlanner {
 		return ""
 	}
 	return strings.TrimSpace(cfg.Agent.PlannerModel)

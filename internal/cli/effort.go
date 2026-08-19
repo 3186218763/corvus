@@ -104,7 +104,7 @@ func (m *chatTUI) runEffortCommand(input string) tea.Cmd {
 	}
 	m.armControllerRebuild(controllerBuildSpec{
 		ModelRef:       ref,
-		RuntimeProfile: m.runtimeProfile,
+		RuntimeProfile: "",
 		Guidance:       m.runtimeGuidance,
 		Completion:     m.runtimeCompletion,
 		Exposure:       m.runtimeExposure,

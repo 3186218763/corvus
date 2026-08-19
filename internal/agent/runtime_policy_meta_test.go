@@ -17,7 +17,7 @@ func TestSessionRuntimePolicyMigratesTokenMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if req.Preset != runtimepolicy.PresetEconomy || req.Guidance != runtimepolicy.GuidanceSelectionInherit {
+	if req.Preset != "" || req.Exposure != runtimepolicy.ExposureSelectionDeferred {
 		t.Fatalf("migrated = %+v", req)
 	}
 }
@@ -48,7 +48,7 @@ func TestPersistAndLoadSessionRuntimePolicy(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("meta ok=%v err=%v", ok, err)
 	}
-	if meta.TokenMode != "full" {
-		t.Fatalf("token_mode = %q", meta.TokenMode)
+	if meta.TokenMode != "" {
+		t.Fatalf("token_mode should be cleared, got %q", meta.TokenMode)
 	}
 }

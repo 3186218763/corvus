@@ -55,8 +55,8 @@ func buildPromptAndMemory(ctx context.Context, cfg *config.Config, opts Options,
 		sysPrompt += "\n\n" + workspaceLine
 	}
 	// Fragment order is normative: guidance, then completion, then exposure.
-	// Legacy presets stay byte-identical because they use guidance=off and
-	// only one of the remaining fragments.
+	// Guidance is an independent axis. Legacy sessions that explicitly persisted
+	// off remain byte-stable; new sessions resolve through the capability matrix.
 	if fragment := runtimepolicy.GuidancePrompt(policy.Guidance); fragment != "" {
 		sysPrompt += "\n\n" + fragment
 	}
@@ -119,8 +119,9 @@ func buildPromptAndMemory(ctx context.Context, cfg *config.Config, opts Options,
 	// Install the static profile filter before building the prompt index and
 	// dedicated skill tools. The dependency checker is attached once the live
 	// registry/plugin host has been assembled below.
-	runtimeProfile := deriveLegacyProfile(policy)
-	skillStore.ConfigureInvocationPolicy(string(runtimeProfile), nil)
+	// Profiles are legacy skill metadata, not a runtime policy axis. An empty
+	// profile leaves every skill eligible; Exposure controls startup loading.
+	skillStore.ConfigureInvocationPolicy("", nil)
 	skills := skillStore.List()
 	allSkillStore := skill.New(skill.Options{ProjectRoot: root, CustomPaths: cfg.SkillCustomPaths(), PluginPaths: cfg.PluginPackageSkillOwners(), PluginAgentPaths: cfg.PluginPackageAgentOwners(), ExcludedPaths: cfg.SkillExcludedPaths(), MaxDepth: cfg.SkillMaxDepth(), Stderr: io.Discard})
 	allSkills := allSkillStore.List()

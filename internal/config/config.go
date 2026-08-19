@@ -796,7 +796,9 @@ type AgentConfig struct {
 }
 
 // RuntimePolicyConfig holds optional default axis selections for new sessions.
-// Empty fields inherit the TokenMode / --profile preset.
+// Empty fields use the independent runtime defaults: capability-aware guidance,
+// standard completion, and eager exposure. Legacy TokenMode/session metadata is
+// read separately only when migrating an older session.
 type RuntimePolicyConfig struct {
 	Guidance   string `toml:"guidance"`
 	Completion string `toml:"completion"`
@@ -1386,7 +1388,7 @@ func Default() *Config {
 		NetworkPolicy: NetworkPolicyConfig{Default: "allow"},
 		Providers: []ProviderEntry{
 			{Name: "deepseek-flash", Kind: "openai", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", APIKeyEnv: "DEEPSEEK_API_KEY", BalanceURL: "https://api.deepseek.com/user/balance", ContextWindow: 1_000_000, Price: deepSeekV4FlashPriceUSD()},
-			{Name: "deepseek-pro", Kind: "openai", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-pro", APIKeyEnv: "DEEPSEEK_API_KEY", BalanceURL: "https://api.deepseek.com/user/balance", ContextWindow: 1_000_000, Price: deepSeekV4ProPriceUSD()},
+			{Name: "deepseek-pro", Kind: "openai", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-pro", APIKeyEnv: "DEEPSEEK_API_KEY", BalanceURL: "https://api.deepseek.com/user/balance", ContextWindow: 1_000_000, Price: deepSeekV4ProPriceUSD(), ModelCapability: "strong"},
 		},
 	}
 }

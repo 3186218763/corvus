@@ -320,13 +320,12 @@ type chatTUI struct {
 	// skillPick is the interactive skill picker overlay for /skills. nil when closed.
 	skillPick *skillPicker
 
-	// buildController builds a fresh controller for a model/profile pair, carrying prior
+	// buildController builds a fresh controller for a model/axis pair, carrying prior
 	// history across and pinning auto-save to resumePath so the continued
 	// conversation stays in one file (set by chatREPL; it must NOT touch this
 	// model — the swap happens on the running copy). nil disables runtime
 	// rebuild commands. modelRef is the active "provider/model" ref, marked
-	// current in the picker. runtimeProfile stores boot's normalized token mode:
-	// full (displayed as balanced), economy, or delivery. oldCtrl is the
+	// current in the picker. oldCtrl is the
 	// outgoing controller, passed through so the replacement can carry forward
 	// same-session tool grants and Plan-mode read-only command trust that
 	// don't travel through carry/resumePath (see Controller.RestoreSessionAuthorizations).
@@ -379,7 +378,7 @@ type chatTUI struct {
 	modelSwitchPending bool
 	// pendingModelSwitch holds the tea.Cmd that triggers the async build. The
 	// historical field name is retained because model, effort, skill refresh,
-	// and work-mode changes all share the same atomic swap path.
+	// and runtime-policy changes all share the same atomic swap path.
 	pendingModelSwitch tea.Cmd
 	// oldControllers accumulates controllers retired by runtime switches.
 	// They cannot be closed during the switch (Close runs SessionEnd hooks
@@ -418,7 +417,7 @@ type controllerBuildSpec struct {
 }
 
 // armControllerRebuild arms the async controller rebuild shared by every
-// in-session switch (model, effort, work mode, runtime rebuild, skill hooks):
+// in-session switch (model, effort, runtime-policy rebuild, skill hooks):
 // approval and plan state carry over from the live controller, and both
 // outcomes land as one modelSwitchMsg. spec carries the per-site build inputs;
 // outcome carries the per-site result fields (ref, profile, failurePrefix,

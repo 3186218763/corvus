@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"corvus/internal/agent"
-	"corvus/internal/capability"
 	"corvus/internal/event"
 	"corvus/internal/evidence"
 	"corvus/internal/hook"
 	"corvus/internal/provider"
+	"corvus/internal/runtimepolicy"
 	"corvus/internal/skill"
 	"corvus/internal/tool"
 )
@@ -57,9 +57,9 @@ func TestTurnOrchestratorAttachesTrustedPlannerMetadata(t *testing.T) {
 	exec := agent.New(nil, tool.NewRegistry(), sess, agent.Options{}, event.Discard)
 	runner := &plannerMetadataRunner{}
 	c := New(Options{
-		Runner:         runner,
-		Executor:       exec,
-		RuntimeProfile: capability.ProfileDelivery,
+		Runner:        runner,
+		Executor:      exec,
+		RuntimePolicy: runtimepolicy.Policy{Completion: runtimepolicy.CompletionVerified},
 	})
 	c.SetGoal("migrate authentication across the backend")
 

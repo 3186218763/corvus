@@ -12,8 +12,8 @@ func TestModelCapabilityNormalization(t *testing.T) {
 		want  string
 	}{
 		{name: "empty", input: "", want: ""},
-		{name: "auto", input: "auto", want: ""},
-		{name: "AUTO uppercase", input: "AUTO", want: ""},
+		{name: "auto", input: "auto", want: "auto"},
+		{name: "AUTO uppercase", input: "AUTO", want: "auto"},
 		{name: "strong", input: "strong", want: "strong"},
 		{name: "Strong mixed case", input: "Strong", want: "strong"},
 		{name: "standard", input: "standard", want: "standard"},
@@ -46,8 +46,8 @@ func TestProviderModelOverrideNormalization(t *testing.T) {
 
 	got := normalizedModelOverrides(input)
 
-	if len(got) != 1 {
-		t.Errorf("expected 1 override after normalization, got %d", len(got))
+	if len(got) != 2 {
+		t.Errorf("expected 2 overrides after normalization, got %d", len(got))
 	}
 
 	if ov, ok := got["model-a"]; !ok {
@@ -58,8 +58,8 @@ func TestProviderModelOverrideNormalization(t *testing.T) {
 		}
 	}
 
-	if _, ok := got["model-b"]; ok {
-		t.Error("model-b should be removed (auto capability with no other fields)")
+	if ov, ok := got["model-b"]; !ok || ov.ModelCapability != "auto" {
+		t.Errorf("model-b = %+v, want retained auto capability", ov)
 	}
 }
 

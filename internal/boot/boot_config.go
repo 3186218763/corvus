@@ -86,7 +86,6 @@ func buildConfigAndModel(opts Options) (*configResult, error) {
 		}
 	}
 	config.NormalizeLegacyMimoCustomProvidersForRefs(cfg, modelName)
-	tokenMode := NormalizeTokenMode(opts.TokenMode)
 	keepPolicy := agentKeepPolicy(cfg.Agent.Keep)
 	entry, modelRef, err := resolveModelEntry(opts, cfg, modelName)
 	if err != nil {
@@ -108,9 +107,6 @@ func buildConfigAndModel(opts Options) (*configResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	// TokenMode still selects the compatibility preset even when typed axes
-	// override individual inherit values.
-	req.Preset = normalizeTokenModeToPreset(tokenMode)
 	policy, err := resolveRuntimePolicy(req, entry)
 	if err != nil {
 		return nil, err

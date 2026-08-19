@@ -452,23 +452,38 @@ func UpdateSessionMeta(sessionPath, model, preview string, turns int, markActivi
 	return saveBranchMeta(sessionPath, m, markActivity)
 }
 
-// LoadSessionRuntimePolicy returns persisted runtime-policy selections.
-// A versioned record wins; otherwise TokenMode is migrated to inherit-all.
+// LoadSessionRuntimePolicy returns canonical persisted runtime-policy
+// selections. A versioned record wins; otherwise legacy TokenMode is migrated
+// to explicit axis selections and rewritten best-effort.
 func LoadSessionRuntimePolicy(sessionPath string) (runtimepolicy.Record, bool) {
 	meta, ok, err := LoadBranchMeta(sessionPath)
 	if err != nil || !ok {
 		return runtimepolicy.Record{}, false
 	}
 	if rec, ok := SessionRuntimePolicy(meta); ok {
+		if migrated, changed, err := runtimepolicy.MigrateRecord(rec); err == nil {
+			if changed {
+				// Best-effort one-time rewrite. The canonical axes are still
+				// returned when a read-only filesystem prevents the rewrite.
+				_ = PersistSessionRuntimePolicy(sessionPath, migrated, "")
+			}
+			return migrated, true
+		}
 		return rec, true
 	}
 	return runtimepolicy.Record{}, false
 }
 
-// SessionRuntimePolicy derives a record from BranchMeta, migrating TokenMode.
+// SessionRuntimePolicy derives a canonical record from BranchMeta, migrating
+// legacy TokenMode or preset metadata when present.
 func SessionRuntimePolicy(meta BranchMeta) (runtimepolicy.Record, bool) {
 	if meta.RuntimePolicy != nil && meta.RuntimePolicy.Version > 0 {
-		return *meta.RuntimePolicy, true
+		rec := *meta.RuntimePolicy
+		migrated, _, err := runtimepolicy.MigrateRecord(rec)
+		if err != nil {
+			return rec, true
+		}
+		return migrated, true
 	}
 	if strings.TrimSpace(meta.TokenMode) != "" {
 		return runtimepolicy.RecordFromTokenMode(meta.TokenMode), true
@@ -476,8 +491,8 @@ func SessionRuntimePolicy(meta BranchMeta) (runtimepolicy.Record, bool) {
 	return runtimepolicy.Record{}, false
 }
 
-// PersistSessionRuntimePolicy writes versioned policy metadata and the
-// compatibility TokenMode field without changing listing timestamps.
+// PersistSessionRuntimePolicy writes canonical versioned policy metadata and
+// clears the retired TokenMode field without changing listing timestamps.
 func PersistSessionRuntimePolicy(sessionPath string, rec runtimepolicy.Record, tokenMode string) error {
 	if sessionPath == "" {
 		return fmt.Errorf("empty session path")
@@ -493,10 +508,13 @@ func PersistSessionRuntimePolicy(sessionPath string, rec runtimepolicy.Record, t
 	}
 	copied := rec
 	m.RuntimePolicy = &copied
-	if mode := strings.TrimSpace(tokenMode); mode != "" {
-		m.TokenMode = mode
-	} else if rec.Preset != "" {
-		m.TokenMode = rec.Preset
+	// tokenMode is accepted for source compatibility, but never persisted.
+	_ = tokenMode
+	m.TokenMode = ""
+	migrated, _, err := runtimepolicy.MigrateRecord(rec)
+	if err != nil {
+		return err
 	}
+	m.RuntimePolicy = &migrated
 	return SaveBranchMetaPreserveUpdated(sessionPath, m)
 }

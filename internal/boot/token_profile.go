@@ -17,7 +17,10 @@ const (
 	TokenModeDelivery = "delivery"
 )
 
-const tokenEconomyPrompt = `Economy mode is on. Keep work direct and use connect_tool_source only when the task needs a capability absent from the core file and shell tools.`
+// tokenEconomyPrompt is kept as an unexported compatibility name for old
+// characterization tests. Deferred exposure is now an independent axis, not a
+// work mode.
+const tokenEconomyPrompt = `Deferred tool exposure is on. Keep work direct and use connect_tool_source only when the task needs a capability absent from the core file and shell tools.`
 
 const tokenDeliveryPrompt = `<delivery-profile>
 Prioritize a verified, complete result over minimizing model calls or tokens.
@@ -47,10 +50,6 @@ func NormalizeTokenMode(mode string) string {
 	default:
 		return TokenModeFull
 	}
-}
-
-func tokenEconomyBuiltins(configured []string) []string {
-	return deferredStartupBuiltins(configured, false)
 }
 
 // deferredStartupBuiltins is the initial deferred surface. When verified is
@@ -144,7 +143,7 @@ type toolSourceConnector struct {
 func (*toolSourceConnector) Name() string { return "connect_tool_source" }
 
 func (*toolSourceConnector) Description() string {
-	return "Economy mode only: enable optional tools for the current task. For mcp, pass a configured server name or omit it to list servers. Enabled tools are available on the next model request."
+	return "Deferred exposure only: enable optional tools for the current task. For mcp, pass a configured server name or omit it to list servers. Enabled tools are available on the next model request."
 }
 
 func (*toolSourceConnector) ReadOnly() bool { return true }

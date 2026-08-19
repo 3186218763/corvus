@@ -1394,7 +1394,7 @@ func TestStatusCommandShowsRuntimeDetails(t *testing.T) {
 	m.runSlashCommand("/status")
 	out := ansi.Strip(strings.Join(m.transcript, "\n"))
 	for _, want := range []string{
-		"Session status", "provider/model", "delivery", "effort max",
+		"Session status", "provider/model", "effort max",
 		"$10.00", "feature/status-host", "mode", "mouse",
 	} {
 		if !strings.Contains(out, want) {
@@ -2639,7 +2639,7 @@ func TestLanguageCommandRefreshesCurrentController(t *testing.T) {
 	if m.ctrl == oldCtrl {
 		t.Fatal("/language kept the stale controller after a successful refresh")
 	}
-	if gotSpec.ModelRef != m.modelRef || gotSpec.RuntimeProfile != "full" {
+	if gotSpec.ModelRef != m.modelRef || gotSpec.RuntimeProfile != "" {
 		t.Fatalf("language refresh spec = %+v", gotSpec)
 	}
 }
@@ -2675,7 +2675,7 @@ func TestCurrencyCommandPersistsAndRefreshesCurrentController(t *testing.T) {
 	if m.ctrl == oldCtrl {
 		t.Fatal("/currency kept the stale controller after a successful refresh")
 	}
-	if gotSpec.ModelRef != m.modelRef || gotSpec.RuntimeProfile != "full" {
+	if gotSpec.ModelRef != m.modelRef || gotSpec.RuntimeProfile != "" {
 		t.Fatalf("currency refresh spec = %+v", gotSpec)
 	}
 }

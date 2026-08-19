@@ -506,7 +506,6 @@ Starts the interactive terminal UI. Type /help in the TUI to list commands.
 Options:
   --headless
   --model NAME
-  --profile economy|balanced|delivery
   --guidance inherit|auto|off|light|structured
   --completion inherit|auto|standard|verified
   --tool-exposure inherit|auto|eager|deferred

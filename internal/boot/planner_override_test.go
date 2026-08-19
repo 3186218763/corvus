@@ -15,7 +15,7 @@ func TestPlannerOffHasHighestPrecedence(t *testing.T) {
 	if got := effectivePlannerModel(cfg, Options{DisablePlanner: true}, false); got != "" {
 		t.Fatalf("planner-off returned %q, want disabled", got)
 	}
-	if got := effectivePlannerModel(cfg, Options{}, true); got != "" {
-		t.Fatalf("economy returned %q, want disabled", got)
+	if got := effectivePlannerModel(cfg, Options{}, true); got != "configured-planner" {
+		t.Fatalf("deferred exposure changed planner selection: %q", got)
 	}
 }

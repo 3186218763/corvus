@@ -501,8 +501,10 @@ func normalizedProviderHeaders(headers map[string]string) map[string]string {
 
 func normalizeModelCapability(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", "auto":
+	case "":
 		return ""
+	case "auto":
+		return "auto"
 	case "strong", "standard", "lite":
 		return strings.ToLower(strings.TrimSpace(raw))
 	default:

@@ -29,7 +29,7 @@ func (m *chatTUI) runtimeSettingChangeReady() bool {
 }
 
 // scheduleCurrentControllerRebuild refreshes configuration-backed runtime state
-// without changing the active model/profile. The old controller remains usable
+// without changing the active model or policy axes. The old controller remains usable
 // until a fully initialized replacement is ready.
 func (m *chatTUI) scheduleCurrentControllerRebuild(reason, successNotice string) tea.Cmd {
 	if m == nil || m.ctrl == nil {
@@ -51,7 +51,7 @@ func (m *chatTUI) scheduleCurrentControllerRebuild(reason, successNotice string)
 
 	m.armControllerRebuild(controllerBuildSpec{
 		ModelRef:       m.modelRef,
-		RuntimeProfile: m.runtimeProfile,
+		RuntimeProfile: "",
 		Guidance:       m.runtimeGuidance,
 		Completion:     m.runtimeCompletion,
 		Exposure:       m.runtimeExposure,

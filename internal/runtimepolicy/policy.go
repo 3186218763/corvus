@@ -64,7 +64,9 @@ const (
 	ExposureSelectionDeferred ExposureSelection = "deferred"
 )
 
-// Preset is the legacy TokenMode compatibility input.
+// Preset is retained only to read/migrate sessions written by older Corvus
+// versions. New requests should leave it empty and select the three axes
+// directly.
 type Preset string
 
 const (
@@ -86,13 +88,6 @@ type Policy struct {
 	Guidance   Guidance
 	Completion Completion
 	Exposure   Exposure
-
-	// Derived compatibility decisions; not additional user axes.
-	LegacyPreset       Preset
-	LegacySkillProfile string
-	PlannerEligible    bool
-	CapabilityFrontend string
-	WorkspaceLease     bool
 }
 
 // CapabilityTier describes a model's inherent capacity.
@@ -161,38 +156,10 @@ func Resolve(input Input) (Policy, error) {
 		return Policy{}, err
 	}
 
-	// Derive compatibility fields
-	preset := input.Request.Preset
-	if preset == "" {
-		preset = PresetFull
-	}
-
-	skillProfile := "default"
-	if preset == PresetEconomy {
-		skillProfile = "economy"
-	}
-
-	plannerEligible := true
-	if preset == PresetEconomy {
-		plannerEligible = false
-	}
-
-	capabilityFrontend := ""
-	if completion == CompletionVerified {
-		capabilityFrontend = "delivery"
-	}
-
-	workspaceLease := completion == CompletionVerified
-
 	return Policy{
-		Guidance:           guidance,
-		Completion:         completion,
-		Exposure:           exposure,
-		LegacyPreset:       preset,
-		LegacySkillProfile: skillProfile,
-		PlannerEligible:    plannerEligible,
-		CapabilityFrontend: capabilityFrontend,
-		WorkspaceLease:     workspaceLease,
+		Guidance:   guidance,
+		Completion: completion,
+		Exposure:   exposure,
 	}, nil
 }
 
@@ -210,12 +177,13 @@ func resolveGuidance(req Request, capability CapabilityTier, effort EffortBand) 
 	case GuidanceSelectionAuto:
 		return automaticGuidance(capability, effort), nil
 	case GuidanceSelectionInherit:
-		return presetGuidance(req.Preset), nil
+		return automaticGuidance(capability, effort), nil
 	}
 
-	// Empty input defaults to inherit
+	// Empty input uses the capability/effort matrix. This is the default for a
+	// new session; inherit is only needed when replaying legacy metadata.
 	if req.Guidance == "" || strings.TrimSpace(string(req.Guidance)) == "" {
-		return presetGuidance(req.Preset), nil
+		return automaticGuidance(capability, effort), nil
 	}
 
 	// Non-empty input that didn't normalize is invalid
@@ -234,12 +202,12 @@ func resolveCompletion(req Request) (Completion, error) {
 	case CompletionSelectionAuto:
 		return CompletionStandard, nil
 	case CompletionSelectionInherit:
-		return presetCompletion(req.Preset), nil
+		return CompletionStandard, nil
 	}
 
 	// Empty input defaults to inherit
 	if req.Completion == "" || strings.TrimSpace(string(req.Completion)) == "" {
-		return presetCompletion(req.Preset), nil
+		return CompletionStandard, nil
 	}
 
 	// Non-empty input that didn't normalize is invalid
@@ -258,12 +226,12 @@ func resolveExposure(req Request) (Exposure, error) {
 	case ExposureSelectionAuto:
 		return ExposureEager, nil
 	case ExposureSelectionInherit:
-		return presetExposure(req.Preset), nil
+		return ExposureEager, nil
 	}
 
 	// Empty input defaults to inherit
 	if req.Exposure == "" || strings.TrimSpace(string(req.Exposure)) == "" {
-		return presetExposure(req.Preset), nil
+		return ExposureEager, nil
 	}
 
 	// Non-empty input that didn't normalize is invalid
@@ -275,56 +243,25 @@ func automaticGuidance(capability CapabilityTier, effort EffortBand) Guidance {
 	switch capability {
 	case CapabilityStrong:
 		switch effort {
-		case EffortUnknown, EffortLow:
-			return GuidanceLight
 		case EffortDisabled:
 			return GuidanceStructured
-		case EffortMedium:
+		case EffortUnknown:
 			return GuidanceLight
-		case EffortHigh, EffortXHigh, EffortMax:
+		case EffortLow, EffortMedium, EffortHigh, EffortXHigh, EffortMax:
 			return GuidanceOff
 		}
 	case CapabilityStandard:
 		switch effort {
-		case EffortUnknown:
-			return GuidanceLight
-		case EffortDisabled, EffortLow, EffortMedium:
+		case EffortDisabled:
 			return GuidanceStructured
-		case EffortHigh, EffortXHigh, EffortMax:
+		case EffortUnknown, EffortLow, EffortMedium, EffortHigh, EffortXHigh, EffortMax:
 			return GuidanceLight
 		}
 	case CapabilityLite:
-		switch effort {
-		case EffortMax:
-			return GuidanceLight
-		default:
-			return GuidanceStructured
-		}
+		return GuidanceStructured
 	}
 	// Fallback
 	return GuidanceLight
-}
-
-// presetGuidance maps legacy presets to guidance.
-func presetGuidance(preset Preset) Guidance {
-	// All legacy presets use off
-	return GuidanceOff
-}
-
-// presetCompletion maps legacy presets to completion.
-func presetCompletion(preset Preset) Completion {
-	if preset == PresetDelivery {
-		return CompletionVerified
-	}
-	return CompletionStandard
-}
-
-// presetExposure maps legacy presets to exposure.
-func presetExposure(preset Preset) Exposure {
-	if preset == PresetEconomy {
-		return ExposureDeferred
-	}
-	return ExposureEager
 }
 
 func normalizeGuidanceSelection(raw GuidanceSelection) GuidanceSelection {

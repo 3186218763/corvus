@@ -31,7 +31,6 @@ func TestParseSelections(t *testing.T) {
 
 func TestRecordRoundTripAndTokenModeMigration(t *testing.T) {
 	req := Request{
-		Preset:     PresetEconomy,
 		Guidance:   GuidanceSelectionAuto,
 		Completion: CompletionSelectionInherit,
 		Exposure:   ExposureSelectionDeferred,
@@ -53,16 +52,36 @@ func TestRecordRoundTripAndTokenModeMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := InheritRequest(PresetDelivery)
+	want := Request{Guidance: GuidanceSelectionAuto, Completion: CompletionSelectionVerified, Exposure: ExposureSelectionEager}
 	if migrated != want {
 		t.Fatalf("legacy migrate = %+v, want %+v", migrated, want)
 	}
 }
 
+func TestLegacyPresetMigratesToAxesAndClearsPreset(t *testing.T) {
+	rec, changed, err := MigrateRecord(Record{Version: 1, Preset: string(PresetEconomy)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed || rec.Preset != "" || rec.Exposure != string(ExposureSelectionDeferred) || rec.Completion != string(CompletionSelectionStandard) {
+		t.Fatalf("migrated legacy record = %+v changed=%v", rec, changed)
+	}
+	req, err := RequestFromRecord(Record{Version: 1, Preset: string(PresetDelivery)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.Preset != "" || req.Completion != CompletionSelectionVerified {
+		t.Fatalf("delivery migration = %+v", req)
+	}
+	if migrated, changed, err := MigrateRecord(Record{Version: 1, Preset: "balanced"}); err != nil || !changed || migrated.Preset != "" {
+		t.Fatalf("balanced migration = %+v changed=%v err=%v", migrated, changed, err)
+	}
+}
+
 func TestOverlayRequestAndGuidancePrompt(t *testing.T) {
-	base := InheritRequest(PresetFull)
+	base := Request{Guidance: GuidanceSelectionAuto, Completion: CompletionSelectionAuto, Exposure: ExposureSelectionAuto}
 	got := OverlayRequest(base, Request{Guidance: GuidanceSelectionLight})
-	if got.Preset != PresetFull || got.Guidance != GuidanceSelectionLight || got.Completion != CompletionSelectionInherit {
+	if got.Preset != "" || got.Guidance != GuidanceSelectionLight || got.Completion != CompletionSelectionAuto {
 		t.Fatalf("overlay = %+v", got)
 	}
 	if GuidancePrompt(GuidanceOff) != "" {

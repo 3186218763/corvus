@@ -16,7 +16,7 @@ func TestRenderRuntimePolicyListsSelections(t *testing.T) {
 		Completion: runtimepolicy.CompletionStandard,
 		Exposure:   runtimepolicy.ExposureDeferred,
 	})
-	for _, want := range []string{"preset", "economy", "guidance", "auto", "structured", "completion", "inherit", "standard", "exposure", "deferred"} {
+	for _, want := range []string{"guidance", "auto", "structured", "completion", "inherit", "standard", "exposure", "deferred"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in:\n%s", want, out)
 		}

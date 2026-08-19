@@ -68,7 +68,6 @@ func RunAs(args []string, version, commandName string) int {
 	format := fs.String("format", formatText, "output format: text or json")
 	jsonOut := fs.Bool("json", false, "alias for --format json")
 	model := fs.String("model", "", "model reference (default: configured default_model)")
-	profile := fs.String("profile", "balanced", "runtime profile: economy, balanced, or delivery")
 	guidance := fs.String("guidance", "", "runtime guidance: inherit | auto | off | light | structured")
 	completion := fs.String("completion", "", "runtime completion: inherit | auto | standard | verified")
 	exposure := fs.String("tool-exposure", "", "runtime tool exposure: inherit | auto | eager | deferred")
@@ -100,11 +99,6 @@ func RunAs(args []string, version, commandName string) int {
 		return exitUsage
 	}
 	approvalMode, err := parsePermissionMode(*permissionMode)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-		return exitUsage
-	}
-	tokenMode, err := parseProfile(*profile)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return exitUsage
@@ -194,11 +188,6 @@ func RunAs(args []string, version, commandName string) int {
 
 	if resumePath != "" {
 		if rec, ok := agent.LoadSessionRuntimePolicy(resumePath); ok {
-			if !fs.Changed("profile") && rec.Preset != "" {
-				if parsed, err := parseProfile(rec.Preset); err == nil {
-					tokenMode = parsed
-				}
-			}
 			if !fs.Changed("guidance") && rec.Guidance != "" {
 				*guidance = rec.Guidance
 			}
@@ -216,7 +205,6 @@ func RunAs(args []string, version, commandName string) int {
 		MaxStepsKey:          "--max-steps",
 		RequireKey:           true,
 		Sink:                 sink,
-		TokenMode:            tokenMode,
 		Guidance:             strings.TrimSpace(*guidance),
 		Completion:           strings.TrimSpace(*completion),
 		Exposure:             strings.TrimSpace(*exposure),
@@ -327,19 +315,6 @@ func parseOptionalEnum[T ~string](value string, parse func(string) (T, error)) (
 		return zero, nil
 	}
 	return parse(value)
-}
-
-func parseProfile(value string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "balanced", "full":
-		return boot.TokenModeFull, nil
-	case "economy":
-		return boot.TokenModeEconomy, nil
-	case "delivery":
-		return boot.TokenModeDelivery, nil
-	default:
-		return "", fmt.Errorf("unknown runtime profile %q (want economy, balanced, or delivery)", value)
-	}
 }
 
 func resolveSessionDir() string {

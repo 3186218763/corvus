@@ -13,7 +13,9 @@ import (
 	"corvus/internal/tool"
 )
 
-// Profile filters which skills are eligible in a given runtime profile.
+// Profile is retained for old skill frontmatter and catalog callers. New
+// runtime policy does not select economy/balanced profiles; an empty profile
+// means all skills are eligible, while delivery remains a compatibility label.
 type Profile string
 
 const (
@@ -73,9 +75,6 @@ func LoadCachedToolsForSpecs(specs []plugin.Spec) (map[string][]plugin.CachedToo
 // BuildCatalog assembles the unified capability directory.
 func BuildCatalog(opts CatalogOptions) Catalog {
 	profile := opts.Profile
-	if profile == "" {
-		profile = ProfileBalanced
-	}
 	var entries []Entry
 	entries = append(entries, ToolEntries(opts.Tools)...)
 	entries = append(entries, SkillEntriesFiltered(opts.Skills, opts.Tools, profile)...)

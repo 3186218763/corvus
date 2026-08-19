@@ -95,7 +95,7 @@ func buildToolRegistry(cfg *config.Config, opts Options, root string, stderr io.
 	if err != nil {
 		return nil, err
 	}
-	// An explicit Economy allowlist can contain only on-demand tools, leaving no
+	// An explicit deferred-exposure allowlist can contain only on-demand tools, leaving no
 	// startup built-ins. Do not pass that filtered empty slice to addBuiltins,
 	// where an empty list intentionally means "all built-ins".
 	webSearchTool, err := buildWebSearchTool(cfg, proxySpec, netPolicy)
@@ -198,7 +198,7 @@ type sessionMemoryResult struct {
 // buildSessionAndMemoryTools registers the history/session/memory tools and
 // the always-present ask tool.
 func buildSessionAndMemoryTools(sessionDir string, mem *memory.Set, reg *tool.Registry, policy runtimepolicy.Policy) (*sessionMemoryResult, error) {
-	// Session and memory tools are always present in Balanced/Delivery. Economy
+	// Session and memory tools are present for eager exposure. Deferred exposure
 	// installs them only after connect_tool_source requests that capability, so
 	// simple coding turns do not pay for unrelated schemas.
 	sessionToolsAdded := false
@@ -252,8 +252,8 @@ type skillToolsResult struct {
 }
 
 // buildSkillTools wires the skill sub-agent runners, slash commands,
-// install_source, and the read-only/full skills sources, then enables them in
-// non-economy mode.
+// install_source, and the read-only/full skills sources, then enables them for
+// eager exposure.
 func buildSkillTools(a *assembly) (*skillToolsResult, error) {
 	// Skill tools: read_only_skill is a narrow explicitly read-only entry point; the
 	// full skills source adds run_skill / install_skill plus the dedicated
@@ -643,8 +643,9 @@ func buildSkillTools(a *assembly) (*skillToolsResult, error) {
 	}, nil
 }
 
-// buildToolSourceConnector registers the economy-mode connect_tool_source
-// connector that enables skill/task/MCP/LSP/session/memory sources on demand.
+// buildToolSourceConnector registers the deferred-exposure
+// connect_tool_source connector that enables skill/task/MCP/LSP/session/memory
+// sources on demand.
 func buildToolSourceConnector(a *assembly) {
 	if a.runtimePolicy.Exposure == runtimepolicy.ExposureDeferred {
 		addBuiltinSourceTools := func(source string, names ...string) string {

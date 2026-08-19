@@ -13,7 +13,7 @@ import (
 func (m *chatTUI) runRuntimePolicyCommand(input string) tea.Cmd {
 	args := tokenizeArgs(input)
 	if len(args) == 1 {
-		m.commitLine(renderRuntimePolicy(m.width, m.runtimeProfile, m.runtimeGuidance, m.runtimeCompletion, m.runtimeExposure, m.resolvedRuntimePolicy()))
+		m.commitLine(renderRuntimePolicy(m.width, "", m.runtimeGuidance, m.runtimeCompletion, m.runtimeExposure, m.resolvedRuntimePolicy()))
 		return nil
 	}
 	if len(args) != 3 {
@@ -80,13 +80,13 @@ func (m *chatTUI) runRuntimePolicyCommand(input string) tea.Cmd {
 	m.noticeCacheInvalidation(cacheInvalidationReasonRuntimePolicy)
 	m.armControllerRebuild(controllerBuildSpec{
 		ModelRef:       m.modelRef,
-		RuntimeProfile: m.runtimeProfile,
+		RuntimeProfile: "",
 		Guidance:       guidance,
 		Completion:     completion,
 		Exposure:       exposure,
 	}, carried, resumePath, modelSwitchMsg{
 		ref:           m.modelRef,
-		profile:       m.runtimeProfile,
+		profile:       "",
 		guidance:      guidance,
 		completion:    completion,
 		exposure:      exposure,
@@ -113,9 +113,9 @@ func normalizePolicySelection(raw string) string {
 
 func renderRuntimePolicy(width int, preset, guidance, completion, exposure string, resolved runtimepolicy.Policy) string {
 	_ = width
+	_ = preset // deprecated compatibility input is intentionally not rendered
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n", viewHeader("%s", i18n.M.RuntimePolicyHeader))
-	fmt.Fprintf(&b, "  preset      %s\n", runtimeProfileName(preset))
 	fmt.Fprintf(&b, "  guidance    %s  → %s\n", displaySelection(guidance), displayResolved(string(resolved.Guidance)))
 	fmt.Fprintf(&b, "  completion  %s  → %s\n", displaySelection(completion), displayResolved(string(resolved.Completion)))
 	fmt.Fprintf(&b, "  exposure    %s  → %s\n", displaySelection(exposure), displayResolved(string(resolved.Exposure)))
@@ -157,7 +157,7 @@ func (m *chatTUI) runtimePolicyArgItems(val string) ([]compItem, int, bool) {
 		switch strings.ToLower(fields[1]) {
 		case "guidance":
 			options = []workModeOption{
-				{name: "inherit", desc: "use the work-mode preset"},
+				{name: "inherit", desc: "use legacy session metadata when present"},
 				{name: "auto", desc: "capability × effort matrix"},
 				{name: "off", desc: "no guidance fragment"},
 				{name: "light", desc: "short plan before acting"},
@@ -165,14 +165,14 @@ func (m *chatTUI) runtimePolicyArgItems(val string) ([]compItem, int, bool) {
 			}
 		case "completion":
 			options = []workModeOption{
-				{name: "inherit", desc: "use the work-mode preset"},
+				{name: "inherit", desc: "use legacy session metadata when present"},
 				{name: "auto", desc: "standard completion"},
 				{name: "standard", desc: "ordinary turn completion"},
 				{name: "verified", desc: "delivery evidence contract"},
 			}
 		case "exposure":
 			options = []workModeOption{
-				{name: "inherit", desc: "use the work-mode preset"},
+				{name: "inherit", desc: "use legacy session metadata when present"},
 				{name: "auto", desc: "eager tool surface"},
 				{name: "eager", desc: "full startup surface"},
 				{name: "deferred", desc: "core tools; connect on demand"},

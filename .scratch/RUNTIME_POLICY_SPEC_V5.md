@@ -7,11 +7,10 @@
 
 ## 1. Purpose
 
-Corvus currently uses `TokenMode` (`full`, `economy`, `delivery`) as a compact
-input for unrelated behavior. V5 introduces a small, pure runtime-policy
-resolver and keeps `TokenMode` as a compatibility preset. The resolver makes
-three user-visible axes explicit while preserving existing provider-visible
-behavior during migration.
+Corvus now resolves runtime behavior from three independent axes. V5 introduces
+a small, pure runtime-policy resolver; the old `TokenMode`/work-mode values are
+accepted only when reading older sessions and are never the semantic source for
+a new session.
 
 The design is deliberately host-oriented: the host decides what the model may
 do, what counts as completion, and which capabilities are initially available.
@@ -21,9 +20,10 @@ Guidance is only a model-visible hint and must not silently weaken host safety.
 
 ### Goals
 
-- Resolve a deterministic policy from explicit axis requests, legacy presets,
-  model capability metadata, and effective provider effort.
-- Preserve the current full/economy/delivery behavior as compatibility cases.
+- Resolve a deterministic policy from explicit axis requests, model capability
+  metadata, and effective provider effort.
+- Read old work-mode metadata deterministically without carrying it into new
+  runtime selections.
 - Separate cognitive guidance, completion evidence, tool exposure, permissions,
   planner selection, and capability routing.
 - Make policy persistent and reconstructable on resume and fork.
@@ -55,7 +55,7 @@ type CompletionSelection string // inherit | auto | standard | verified
 type ExposureSelection string   // inherit | auto | eager | deferred
 
 type Request struct {
-    Preset     Preset // full | economy | delivery
+    Preset     Preset // deprecated, migration-only metadata
     Guidance   GuidanceSelection
     Completion CompletionSelection
     Exposure   ExposureSelection
@@ -75,13 +75,11 @@ type Policy struct {
 }
 ```
 
-The boot adapter fills omitted selection fields with `inherit` before calling
-the resolver. `inherit` uses the selected preset value; `auto` deliberately
-uses the automatic default (`Guidance` uses the matrix in section 5,
-`Completion` becomes `standard`, and `Exposure` becomes `eager`). This
-distinction lets a user select automatic guidance while retaining a legacy
-preset as metadata. A resolved `Policy` never contains `inherit`, `auto`, or an
-empty enum. Unknown values are errors, not silent fallbacks.
+The boot adapter fills omitted selections with the new-session defaults:
+`guidance=auto`, `completion=standard`, and `exposure=eager`. `inherit` is
+accepted only when replaying migration metadata. A resolved `Policy` never
+contains `inherit`, `auto`, or an empty enum. Unknown values are errors, not
+silent fallbacks.
 
 The implementation belongs in a deep module, preferably
 `internal/runtimepolicy`. Its public seam is intentionally small:
@@ -97,20 +95,20 @@ the resolved policy and remains loop glue rather than policy ownership.
 ## 4. Resolution inputs
 
 `Input` must contain the normalized request, model capability metadata, and the
-effective effort already selected by `config.EffectiveEffort(entry)`. It may
-also contain the legacy preset and feature facts needed for derived behavior,
-but it must not inspect tool names or parse shell text.
+effective effort already selected by `config.EffectiveEffort(entry)`. A legacy
+preset may be present only while reading migration metadata; the resolver must
+not inspect tool names or parse shell text.
 
 Resolution order for each axis is normative:
 
 1. An explicit concrete selection wins.
 2. `auto` uses the axis's automatic default.
-3. `inherit` uses the selected preset mapping in section 8.
+3. `inherit` uses migration metadata when present; otherwise it is equivalent
+   to the new-session default for that axis.
 
-The compatibility adapter maps an absent `TokenMode` to `full` with all axes
-set to `inherit`, preserving today's default behavior. Selecting `/work-mode`
-sets the chosen preset and resets all axis selections to `inherit`. Changing an
-advanced axis updates only that selection and preserves the preset metadata.
+There is no default work-mode preset. Frontends expose only the three axis
+selections. An old `TokenMode` value may be read to reconstruct a legacy
+session, then is written back only as a migration field.
 
 ### 4.1 Capability tier
 
@@ -168,10 +166,10 @@ The CLI/headless flag vocabulary is `--guidance`, `--completion`, and
 /runtime-policy exposure inherit|auto|eager|deferred
 ```
 
-Calling `/runtime-policy` without arguments displays the preset, selections,
-and resolved axes. Other frontends may use native controls but must send the
-same typed selection. This command surface is additive; `/work-mode` and its
-`/profile` alias remain supported.
+Calling `/runtime-policy` without arguments displays the selections and
+resolved axes. `/work-mode`, `/profile`, and `--profile` are removed; there is
+no runtime compatibility command. Compatibility is limited to persisted
+session metadata migration.
 
 ### 4.3 Effort
 
@@ -186,14 +184,15 @@ never change the inherent capability tier.
 
 An explicit `guidance=off|light|structured` always wins, including an explicit
 `off` for standard or lite models. The following table is the normative default
-for `guidance=auto`; `guidance=inherit` uses the preset instead. Columns are
+for `guidance=auto`; `guidance=inherit` uses migration metadata when present.
+Columns are
 effort bands after provider normalization.
 
 | Capability | unknown | disabled | low | medium | high/xhigh | max |
 | --- | --- | --- | --- | --- | --- | --- |
-| strong | light | structured | light | light | off | off |
-| standard | light | structured | structured | light | light | light |
-| lite | structured | structured | structured | structured | structured | light |
+| strong | light | structured | off | off | off | off |
+| standard | light | structured | light | light | light | light |
+| lite | structured | structured | structured | structured | structured | structured |
 
 Providers without an effort signal use `unknown`. The rule “only strong can be
 free” applies to automatic resolution only; an explicit user override is an
@@ -227,11 +226,10 @@ completion-requirement marker), not by hardcoded scheduler tool names.
 
 ## 7. Exposure policy
 
-`eager` keeps the current full tool surface and immediate MCP/plugin startup.
-`deferred` keeps the current economy behavior: core built-ins first, deferred
-tool sources represented by the existing connector, and MCP/skill/catalog
-sources loaded on demand. During migration the existing `tokenEconomyPrompt`
-text is preserved byte-for-byte.
+`eager` starts the configured tool surface normally. `deferred` keeps the core
+built-ins first, represents optional sources through the existing connector,
+and loads MCP/skill/catalog sources on demand. This is an exposure choice, not
+an economy work mode.
 
 Exposure controls visibility and startup timing only. It does not alter
 permissions, sandboxing, tool argument validation, or completion evidence.
@@ -245,38 +243,18 @@ The prompt fragment order is deterministic and must be:
 The combined `verified + deferred` case is supported. Deferred selection must
 still expose the minimum capabilities required to satisfy verified completion.
 
-## 8. Legacy preset adapter
+## 8. Migration metadata
 
-`TokenMode` remains accepted by configuration, CLI, TUI, headless, desktop, and
-ACP frontends. It is normalized by the compatibility adapter and then passed to
-the resolver as preset input.
+`TokenMode` and the old `full`, `balanced`, `economy`, and `delivery` strings
+are not runtime policy values anymore. The persistence reader accepts them so
+old sessions remain loadable. Migration maps only the behavior that cannot be
+represented otherwise: legacy `delivery` becomes `completion=verified` and
+legacy `economy` becomes `exposure=deferred`. Legacy `full`/`balanced` become
+the ordinary new defaults.
 
-| Legacy preset | Guidance | Completion | Exposure |
-| --- | --- | --- | --- |
-| `full` / `balanced` | off | standard | eager |
-| `economy` | off | standard | deferred |
-| `delivery` | off | verified | eager |
-
-`balanced` is an alias of `full`; the canonical persisted preset is `full`.
-Existing aliases continue to normalize through `NormalizeTokenMode`.
-
-Derived compatibility behavior must remain intact:
-
-- economy core-tool filtering, deferred-source connector, MCP startup delay,
-  and economy skill profile;
-- economy planner suppression through the existing
-  `effectivePlannerModel` path;
-- delivery evidence/runtime marker and workspace write lease;
-- delivery capability proxy and any existing delivery routing behavior.
-
-Planner eligibility is not a completion consequence. A planner is selected only
-when `agent.planner_model` is configured and the existing planner rules allow
-it; economy may continue to suppress it for compatibility.
-
-Selecting a legacy `/work-mode` preset clears advanced axis overrides by setting
-all selections to `inherit`. Changing an advanced axis preserves the selected
-preset as metadata but records the selection, so the effective policy is
-predictable and inspectable.
+Planner selection remains controlled only by `agent.planner_model`. Completion
+does not enable a planner, and exposure does not change permissions. New
+sessions never persist a preset; they persist the typed axis selections.
 
 ## 9. Permissions, risk, and concurrency
 
@@ -294,16 +272,18 @@ contracts.
 
 ## 10. Persistence and resume
 
-`BranchMeta` currently stores legacy `TokenMode`. Add a versioned runtime-policy
-selection or equivalent host metadata while retaining `TokenMode` for migration.
+`BranchMeta` may still contain legacy `TokenMode` while it is being read, but
+the versioned runtime-policy record is authoritative for new sessions and the
+legacy field is cleared on the first canonical save.
 Persist both the request (including explicit axis overrides) and the resolved
 policy, or enough versioned data to deterministically re-resolve it.
 
 Required behavior:
 
-- Old sessions with no new fields derive policy from `TokenMode`.
+- Old sessions with no new fields translate `TokenMode` once using the migration
+  mapping above.
 - Normal resume preserves the resolved policy and explicit overrides.
-- `/model`, `/effort`, `/work-mode`, and axis changes re-resolve and update
+- `/model`, `/effort`, and axis changes re-resolve and update
   metadata before the next model request.
 - Fork copies policy metadata unless the fork command explicitly changes it.
 - Anything model-visible remains reconstructable from the append/replace event
@@ -318,11 +298,10 @@ session or sidecar paths in boot or runtime-policy code.
 - Normalize case and surrounding whitespace for enum inputs.
 - Reject unknown non-empty enum values with field-specific errors.
 - Resolve typed selections ahead of legacy input. Concrete/`auto` selections
-  win per axis; `inherit` takes the preset value; `/work-mode` intentionally
-  resets all selections to `inherit`.
+  win per axis; `inherit` uses migration metadata only when present.
 - Never silently enable an unimplemented policy value.
-- Keep the old prompt bytes and tool surfaces unchanged for the three legacy
-  presets until the characterization tests are green.
+- Keep old session files readable and deterministic; new sessions must not
+  acquire work-mode-specific prompt or tool behavior.
 
 ## 12. Acceptance contract
 
@@ -331,7 +310,7 @@ The implementation is complete only when focused tests prove:
 - resolver purity, matrix values, explicit override precedence, and invalid
   value errors;
 - provider/model-override TOML apply, render, clone, backfill, and round-trip;
-- byte-stable legacy full/economy/delivery prompts;
+- old-session migration for legacy work-mode metadata;
 - built-in tool names/order, skills, MCP startup, deferred connector, and
   delivery capability proxy;
 - planner behavior remains controlled by `agent.planner_model`;
@@ -344,13 +323,13 @@ The handoff verification commands are listed in
 
 ## 13. Rejected approaches
 
-- Keeping `TokenMode` as the semantic core: it preserves the current
-  conflation and makes future combinations ambiguous.
+- Keeping work modes as the semantic core: it preserves the current conflation
+  and makes future combinations ambiguous.
 - Heuristic capability detection from model IDs: provider naming changes and
   aliases make it non-deterministic and unreviewable.
 - A free-form `RiskDetector`: it duplicates structured permission metadata and
   cannot safely parse arbitrary shell/tool payloads.
 - Treating completion as approval or planner enablement: these are separate
   host responsibilities with different contracts.
-- Big-bang removal of `TokenMode`: it needlessly breaks persisted sessions and
-  frontends; migrate behind a compatibility adapter instead.
+- Deleting the migration reader: it would make persisted sessions unreadable;
+  retain the field as data compatibility, not runtime semantics.

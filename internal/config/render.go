@@ -338,6 +338,9 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 			if p.Effort != "" {
 				fmt.Fprintf(&b, "effort      = %q\n", p.Effort)
 			}
+			if p.ModelCapability != "" {
+				fmt.Fprintf(&b, "model_capability = %q\n", p.ModelCapability)
+			}
 			if p.Vision {
 				b.WriteString("vision      = true   # provider accepts image input for all listed models\n")
 			}
@@ -839,6 +842,9 @@ func RenderTOMLProjectDelta(c *Config) string {
 			}
 			if p.Effort != "" {
 				fmt.Fprintf(&b, "effort      = %q\n", p.Effort)
+			}
+			if p.ModelCapability != "" {
+				fmt.Fprintf(&b, "model_capability = %q\n", p.ModelCapability)
 			}
 			if p.Vision {
 				b.WriteString("vision      = true\n")
@@ -1416,6 +1422,9 @@ func renderModelOverride(ov ProviderModelOverride) string {
 	if ov.DefaultEffort != "" {
 		parts = append(parts, fmt.Sprintf("default_effort = %q", ov.DefaultEffort))
 	}
+	if ov.ModelCapability != "" {
+		parts = append(parts, fmt.Sprintf("model_capability = %q", ov.ModelCapability))
+	}
 	if ov.Vision != nil {
 		parts = append(parts, fmt.Sprintf("vision = %t", *ov.Vision))
 	}
@@ -1429,7 +1438,7 @@ func renderModelOverride(ov ProviderModelOverride) string {
 }
 
 func modelOverrideEmpty(ov ProviderModelOverride) bool {
-	return ov.ReasoningProtocol == "" && len(ov.SupportedEfforts) == 0 && ov.DefaultEffort == "" && ov.Vision == nil && ov.ContextWindow <= 0 && ov.MaxOutputTokens == 0
+	return ov.ReasoningProtocol == "" && len(ov.SupportedEfforts) == 0 && ov.DefaultEffort == "" && ov.ModelCapability == "" && ov.Vision == nil && ov.ContextWindow <= 0 && ov.MaxOutputTokens == 0
 }
 
 func hasPositiveIntMap(m map[string]int) bool {

@@ -428,6 +428,10 @@ func assertToolOrder(t *testing.T, tools []provider.ToolSchema, want []string) {
 }
 
 func firstTokenProfileRequest(t *testing.T, tokenMode string) provider.Request {
+	return firstTokenProfileRequestWithGuidance(t, tokenMode, "")
+}
+
+func firstTokenProfileRequestWithGuidance(t *testing.T, tokenMode, guidance string) provider.Request {
 	t.Helper()
 	registerBootTokenProfileTestProvider()
 	prov := testutil.NewMock("token-profile", testutil.Turn{Text: "done"})
@@ -436,6 +440,9 @@ func firstTokenProfileRequest(t *testing.T, tokenMode string) provider.Request {
 	opts := Options{Sink: event.Discard}
 	if tokenMode != "" {
 		opts.TokenMode = tokenMode
+	}
+	if guidance != "" {
+		opts.Guidance = guidance
 	}
 	ctrl, err := Build(context.Background(), opts)
 	if err != nil {
@@ -1796,6 +1803,9 @@ model = "x"
 	if strings.Contains(systemMessage(fullReq.Messages), tokenEconomyPrompt) {
 		t.Fatalf("full mode system prompt should not include token economy prompt:\n%s", systemMessage(fullReq.Messages))
 	}
+	if !strings.Contains(systemMessage(fullReq.Messages), runtimepolicy.GuidanceLightPrompt) {
+		t.Fatalf("full mode should default to capability-aware light guidance:\n%s", systemMessage(fullReq.Messages))
+	}
 	if !strings.Contains(systemMessage(fullReq.Messages), "# Skills") || !strings.Contains(systemMessage(fullReq.Messages), "projskill") {
 		t.Fatalf("full mode should preserve the skills index in the system prompt:\n%s", systemMessage(fullReq.Messages))
 	}
@@ -1871,8 +1881,8 @@ kind = "boot-token-profile-test"
 model = "x"
 `)
 
-	fullReq := firstTokenProfileRequest(t, TokenModeFull)
-	deliveryReq := firstTokenProfileRequest(t, TokenModeDelivery)
+	fullReq := firstTokenProfileRequestWithGuidance(t, TokenModeFull, "off")
+	deliveryReq := firstTokenProfileRequestWithGuidance(t, TokenModeDelivery, "off")
 	fullSystem := systemMessage(fullReq.Messages)
 	deliverySystem := systemMessage(deliveryReq.Messages)
 	if !strings.Contains(deliverySystem, tokenDeliveryPrompt) {

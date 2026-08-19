@@ -125,7 +125,7 @@ func TestResolveEffortBand(t *testing.T) {
 	}
 }
 
-func TestResolveRuntimePolicy_LegacyPresets(t *testing.T) {
+func TestResolveRuntimePolicyLegacyPresetCompatibility(t *testing.T) {
 	entry := &config.ProviderEntry{
 		ModelCapability: "standard",
 		Effort:          "",
@@ -148,7 +148,7 @@ func TestResolveRuntimePolicy_LegacyPresets(t *testing.T) {
 				completion runtimepolicy.Completion
 				exposure   runtimepolicy.Exposure
 			}{
-				guidance:   runtimepolicy.GuidanceOff,
+				guidance:   runtimepolicy.GuidanceLight,
 				completion: runtimepolicy.CompletionStandard,
 				exposure:   runtimepolicy.ExposureEager,
 			},
@@ -161,9 +161,9 @@ func TestResolveRuntimePolicy_LegacyPresets(t *testing.T) {
 				completion runtimepolicy.Completion
 				exposure   runtimepolicy.Exposure
 			}{
-				guidance:   runtimepolicy.GuidanceOff,
+				guidance:   runtimepolicy.GuidanceLight,
 				completion: runtimepolicy.CompletionStandard,
-				exposure:   runtimepolicy.ExposureDeferred,
+				exposure:   runtimepolicy.ExposureEager,
 			},
 		},
 		{
@@ -174,8 +174,8 @@ func TestResolveRuntimePolicy_LegacyPresets(t *testing.T) {
 				completion runtimepolicy.Completion
 				exposure   runtimepolicy.Exposure
 			}{
-				guidance:   runtimepolicy.GuidanceOff,
-				completion: runtimepolicy.CompletionVerified,
+				guidance:   runtimepolicy.GuidanceLight,
+				completion: runtimepolicy.CompletionStandard,
 				exposure:   runtimepolicy.ExposureEager,
 			},
 		},
@@ -222,10 +222,10 @@ func TestResolveRuntimePolicy_AutomaticGuidance(t *testing.T) {
 			want:       runtimepolicy.GuidanceOff,
 		},
 		{
-			name:       "standard + medium = structured",
+			name:       "standard + medium = light",
 			capability: "standard",
 			effort:     "medium",
-			want:       runtimepolicy.GuidanceStructured,
+			want:       runtimepolicy.GuidanceLight,
 		},
 		{
 			name:       "lite + low = structured",
@@ -267,6 +267,33 @@ func TestResolveRuntimePolicy_AutomaticGuidance(t *testing.T) {
 	}
 }
 
+func TestResolveCapabilityTierAutoMeansStandard(t *testing.T) {
+	got, err := resolveCapabilityTier(&config.ProviderEntry{ModelCapability: "auto"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != runtimepolicy.CapabilityStandard {
+		t.Fatalf("capability = %q, want standard", got)
+	}
+}
+
+func TestResolveCapabilityTierMatchesOverrideCaseInsensitively(t *testing.T) {
+	entry := &config.ProviderEntry{
+		Model:           "Advanced-Model",
+		ModelCapability: "standard",
+		ModelOverrides: map[string]config.ProviderModelOverride{
+			"advanced-model": {ModelCapability: "strong"},
+		},
+	}
+	got, err := resolveCapabilityTier(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != runtimepolicy.CapabilityStrong {
+		t.Fatalf("capability = %q, want strong", got)
+	}
+}
+
 func TestResolveCapabilityTierRejectsInvalid(t *testing.T) {
 	_, err := resolveCapabilityTier(&config.ProviderEntry{ModelCapability: "genius"})
 	if err == nil {
@@ -284,7 +311,7 @@ func TestAssembleRuntimeRequestTypedAxesWin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if req.Preset != runtimepolicy.PresetEconomy {
+	if req.Preset != "" {
 		t.Fatalf("preset = %q", req.Preset)
 	}
 	if req.Guidance != runtimepolicy.GuidanceSelectionOff {
@@ -293,7 +320,22 @@ func TestAssembleRuntimeRequestTypedAxesWin(t *testing.T) {
 	if req.Completion != runtimepolicy.CompletionSelectionVerified {
 		t.Fatalf("completion = %q", req.Completion)
 	}
-	if req.Exposure != runtimepolicy.ExposureSelectionInherit {
+	if req.Exposure != runtimepolicy.ExposureSelectionDeferred {
 		t.Fatalf("exposure = %q", req.Exposure)
+	}
+}
+
+func TestAssembleRuntimeRequestDoesNotInjectLegacyDefault(t *testing.T) {
+	req, err := assembleRuntimeRequest(Options{}, &config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.Preset != "" {
+		t.Fatalf("new request preset = %q, want empty", req.Preset)
+	}
+	if req.Guidance != runtimepolicy.GuidanceSelectionAuto ||
+		req.Completion != runtimepolicy.CompletionSelectionAuto ||
+		req.Exposure != runtimepolicy.ExposureSelectionAuto {
+		t.Fatalf("new request axes = %+v, want auto/auto/auto", req)
 	}
 }

@@ -8,8 +8,8 @@ import (
 // RecordVersion is the persisted runtime-policy metadata version.
 const RecordVersion = 1
 
-// Record is the versioned session-sidecar selection. TokenMode remains the
-// migration fallback when this record is absent.
+// Record is the versioned session-sidecar selection. Preset is decode-only
+// compatibility for records written before the three-axis policy existed.
 type Record struct {
 	Version    int    `json:"version"`
 	Preset     string `json:"preset,omitempty"`
@@ -81,7 +81,9 @@ func ParseExposureSelection(raw string) (ExposureSelection, error) {
 func ParsePreset(raw string) (Preset, error) {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	switch s {
-	case "", string(PresetFull):
+	case "":
+		return "", nil
+	case string(PresetFull):
 		return PresetFull, nil
 	case string(PresetEconomy), string(PresetDelivery):
 		return Preset(s), nil
@@ -110,9 +112,6 @@ func OverlayRequest(base Request, overlay Request) Request {
 
 // InheritRequest returns a request that takes every axis from the preset.
 func InheritRequest(preset Preset) Request {
-	if preset == "" {
-		preset = PresetFull
-	}
 	return Request{
 		Preset:     preset,
 		Guidance:   GuidanceSelectionInherit,
@@ -123,6 +122,11 @@ func InheritRequest(preset Preset) Request {
 
 // RequestFromRecord reconstructs a resolver request from persisted metadata.
 func RequestFromRecord(rec Record) (Request, error) {
+	if migrated, _, err := MigrateRecord(rec); err != nil {
+		return Request{}, err
+	} else {
+		rec = migrated
+	}
 	preset, err := ParsePreset(rec.Preset)
 	if err != nil {
 		return Request{}, err
@@ -147,16 +151,52 @@ func RequestFromRecord(rec Record) (Request, error) {
 	}, nil
 }
 
+// MigrateRecord converts the old preset field into explicit axis selections.
+// The returned record is canonical: it never carries Preset, so callers can
+// persist it back once and stop propagating the retired work-mode vocabulary.
+func MigrateRecord(rec Record) (Record, bool, error) {
+	if strings.TrimSpace(rec.Preset) == "" {
+		return rec, false, nil
+	}
+	preset, err := ParsePreset(rec.Preset)
+	if err != nil {
+		// Some early session writers stored the UI alias directly. It is
+		// equivalent to the ordinary new-session defaults and carries no axis.
+		if strings.EqualFold(strings.TrimSpace(rec.Preset), "balanced") {
+			preset = PresetFull
+		} else {
+			return Record{}, false, err
+		}
+	}
+	if rec.Guidance == "" {
+		rec.Guidance = string(GuidanceSelectionInherit)
+	}
+	if rec.Completion == "" {
+		if preset == PresetDelivery {
+			rec.Completion = string(CompletionSelectionVerified)
+		} else {
+			rec.Completion = string(CompletionSelectionStandard)
+		}
+	}
+	if rec.Exposure == "" {
+		if preset == PresetEconomy {
+			rec.Exposure = string(ExposureSelectionDeferred)
+		} else {
+			rec.Exposure = string(ExposureSelectionEager)
+		}
+	}
+	rec.Preset = ""
+	if rec.Version == 0 {
+		rec.Version = RecordVersion
+	}
+	return rec, true, nil
+}
+
 // RecordFromRequest stores the request selections. Resolved values are not
 // persisted; they are re-derived from the request plus current model/effort.
 func RecordFromRequest(req Request) Record {
-	preset := string(req.Preset)
-	if preset == "" {
-		preset = string(PresetFull)
-	}
 	return Record{
 		Version:    RecordVersion,
-		Preset:     preset,
 		Guidance:   string(orInheritGuidance(req.Guidance)),
 		Completion: string(orInheritCompletion(req.Completion)),
 		Exposure:   string(orInheritExposure(req.Exposure)),
@@ -165,14 +205,23 @@ func RecordFromRequest(req Request) Record {
 
 // RecordFromTokenMode migrates a legacy token_mode sidecar value.
 func RecordFromTokenMode(mode string) Record {
-	preset := PresetFull
+	rec := Record{Version: RecordVersion}
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case string(PresetEconomy):
-		preset = PresetEconomy
+		rec.Exposure = string(ExposureSelectionDeferred)
 	case string(PresetDelivery):
-		preset = PresetDelivery
+		rec.Completion = string(CompletionSelectionVerified)
 	}
-	return RecordFromRequest(InheritRequest(preset))
+	if rec.Guidance == "" {
+		rec.Guidance = string(GuidanceSelectionAuto)
+	}
+	if rec.Completion == "" {
+		rec.Completion = string(CompletionSelectionStandard)
+	}
+	if rec.Exposure == "" {
+		rec.Exposure = string(ExposureSelectionEager)
+	}
+	return rec
 }
 
 func orInheritGuidance(s GuidanceSelection) GuidanceSelection {

@@ -68,31 +68,19 @@ func TestParseWorkModeKeepsBalancedAsFullInternally(t *testing.T) {
 func TestWorkModeCompletionPublishesPrimaryCommandAndAliasArguments(t *testing.T) {
 	m := newTestChatTUI()
 	m.runtimeProfile = boot.TokenModeFull
-	if !hasLabel(m.slashItems(), "/work-mode") {
-		t.Fatal("slash completion missing /work-mode")
-	}
-	if hasLabel(m.slashItems(), "/profile") {
-		t.Fatal("technical /profile alias should not duplicate the primary command in the slash menu")
+	if hasLabel(m.slashItems(), "/work-mode") || hasLabel(m.slashItems(), "/profile") {
+		t.Fatal("retired work-mode commands should not be discoverable")
 	}
 	for _, input := range []string{"/work-mode ", "/profile "} {
-		items, _, ok := m.slashArgItems(input)
-		if !ok {
-			t.Fatalf("%q did not activate work-mode argument completion", input)
-		}
-		for _, want := range []string{"economy", "balanced", "delivery"} {
-			if !hasLabel(items, want) {
-				t.Errorf("%q completion missing %q: %v", input, want, labels(items))
-			}
+		if items, _, ok := m.slashArgItems(input); ok && len(items) > 0 {
+			t.Fatalf("%q unexpectedly offered retired work-mode arguments", input)
 		}
 	}
 }
 
 func TestWorkModeHelpAndStatusUseUserFacingName(t *testing.T) {
-	if !hasLabel(builtinHelpItems(), "/work-mode") {
-		t.Fatal("built-in help missing /work-mode")
-	}
-	if hasLabel(builtinHelpItems(), "/profile") {
-		t.Fatal("built-in help should not duplicate the technical /profile alias")
+	if hasLabel(builtinHelpItems(), "/work-mode") || hasLabel(builtinHelpItems(), "/profile") {
+		t.Fatal("retired work-mode commands should not appear in help")
 	}
 	m := newChatTUI(control.New(control.Options{Label: "model"}), "", make(chan event.Event, 1), 80)
 	m.runtimeProfile = boot.TokenModeDelivery
@@ -147,8 +135,8 @@ func TestWorkModeSwitchBuildsTargetProfileAndSwapsAtomically(t *testing.T) {
 	if len(gotCarry) != len(oldCtrl.History()) {
 		t.Fatalf("carried history length = %d, want %d", len(gotCarry), len(oldCtrl.History()))
 	}
-	if m.ctrl != newCtrl || m.runtimeProfile != boot.TokenModeDelivery {
-		t.Fatalf("successful switch did not install replacement controller/profile: ctrl=%p profile=%q", m.ctrl, m.runtimeProfile)
+	if m.ctrl != newCtrl || m.runtimeProfile != boot.TokenModeFull {
+		t.Fatalf("successful switch changed retired profile state: ctrl=%p profile=%q", m.ctrl, m.runtimeProfile)
 	}
 	if m.label != newCtrl.Label() || len(m.commands) != 1 || len(m.skills) != 1 || m.host != newCtrl.Host() {
 		t.Fatalf("successful switch did not refresh controller metadata: label=%q commands=%d skills=%d", m.label, len(m.commands), len(m.skills))
@@ -171,12 +159,9 @@ func TestWorkModeSwitchFailureKeepsOldControllerAndProfile(t *testing.T) {
 	}
 
 	cmd := m.runSlashCommand("/profile delivery")
-	if cmd == nil {
-		t.Fatal("/profile alias did not schedule a controller build")
+	if cmd != nil {
+		t.Fatal("retired /profile alias scheduled a controller build")
 	}
-	next, _ := m.Update(cmd())
-	m = next.(chatTUI)
-
 	if m.ctrl != oldCtrl || m.runtimeProfile != boot.TokenModeEconomy {
 		t.Fatalf("failed switch changed live runtime: ctrl=%p profile=%q", m.ctrl, m.runtimeProfile)
 	}
@@ -292,8 +277,8 @@ func TestRuntimeRebuildCommandsCarryCurrentWorkMode(t *testing.T) {
 		t.Fatalf("non-effort rebuilds unexpectedly replaced effort override: %+v", specs)
 	}
 	for i, spec := range specs {
-		if spec.RuntimeProfile != boot.TokenModeDelivery {
-			t.Errorf("rebuild %d lost delivery profile: %+v", i, spec)
+		if spec.RuntimeProfile != "" {
+			t.Errorf("rebuild %d carried retired delivery profile: %+v", i, spec)
 		}
 	}
 }

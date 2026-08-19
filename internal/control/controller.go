@@ -433,7 +433,7 @@ type Options struct {
 	// persist to disk (e.g. "Bash(go test:*)"). The callback is wired into the
 	// permission Gate on EnableInteractiveApproval.
 	OnRemember func(rule string) RememberResult
-	// SessionRecoveryMeta lets a frontend attach scope/topic/profile metadata to
+	// SessionRecoveryMeta lets a frontend attach scope/topic metadata to
 	// an automatic recovery branch before it is written.
 	SessionRecoveryMeta func(SessionRecoveryRequest) agent.BranchMeta
 	// OnSessionRecovered is called after a stale runtime's transcript has been
@@ -444,8 +444,9 @@ type Options struct {
 	// terminal. Bot/headless frontends set a positive value so an unanswered
 	// prompt can't wedge the session indefinitely (#4626, #4402).
 	ApprovalTimeout time.Duration
-	// RuntimeProfile selects capability routing/filtering behavior. Empty keeps
-	// the backward-compatible Balanced profile.
+	// RuntimeProfile is a deprecated compatibility label for callers that still
+	// construct Controllers directly. Boot leaves it empty; runtime policy is
+	// expressed by the typed axes instead.
 	RuntimeProfile capability.Profile
 	// RuntimePolicyRequest and RuntimePolicy are persisted onto BranchMeta so
 	// resume/fork can reconstruct the same typed selections.
@@ -464,10 +465,9 @@ func New(opts Options) *Controller {
 		pluginCtx = context.Background()
 	}
 	bgCtx, bgCancel := context.WithCancel(context.Background())
-	runtimeProfile := opts.RuntimeProfile
-	if runtimeProfile == "" {
-		runtimeProfile = capability.ProfileBalanced
-	}
+	// Work-mode profiles are retired. Keep the option field for source
+	// compatibility, but never let it affect routing or planner behavior.
+	runtimeProfile := capability.Profile("")
 	if opts.Hooks != nil {
 		opts.Hooks.SetSessionID(agent.BranchID(opts.SessionPath))
 		opts.Hooks.SetAuditLog(store.SessionHookLog(opts.SessionPath))
@@ -1633,7 +1633,7 @@ func (c *Controller) SessionAuthorizations() SessionAuthorizations {
 
 // RestoreSessionAuthorizations re-applies session authorizations captured
 // from a prior controller in the same session (see SessionAuthorizations). A
-// model/effort/profile switch rebuilds the controller, and without this the
+// model/effort switch rebuilds the controller, and without this the
 // replacement forgets every grant the user already made this session.
 func (c *Controller) RestoreSessionAuthorizations(auth SessionAuthorizations) {
 	c.approval.restoreSessionAuthorizations(auth)

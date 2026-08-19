@@ -89,9 +89,6 @@ func (m *chatTUI) runSlashCommand(input string) tea.Cmd {
 		m.showSandboxStatus()
 	case "/effort":
 		return m.runEffortCommand(input)
-	case "/work-mode", "/profile":
-		m.echoLocalCommand(input)
-		return m.runWorkModeCommand(input)
 	case "/runtime-policy":
 		m.echoLocalCommand(input)
 		return m.runRuntimePolicyCommand(input)
@@ -253,9 +250,6 @@ func (m *chatTUI) showStatusDetails() {
 		if tag := m.contextTag(); tag != "" {
 			lines = append(lines, "  context    "+tag)
 		}
-	}
-	if tag := m.workModeTag(); tag != "" {
-		lines = append(lines, "  profile    "+tag)
 	}
 	if m.effortLevel != "" {
 		// The persistent footer uses a Title Case semantic label. The expanded

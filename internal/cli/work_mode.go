@@ -16,6 +16,9 @@ type workModeOption struct {
 }
 
 func runtimeProfileName(profile string) string {
+	if strings.TrimSpace(profile) == "" {
+		return "default"
+	}
 	switch boot.NormalizeTokenMode(profile) {
 	case boot.TokenModeEconomy:
 		return "economy"
@@ -27,6 +30,9 @@ func runtimeProfileName(profile string) string {
 }
 
 func runtimeProfileDisplay(profile string) string {
+	if strings.TrimSpace(profile) == "" {
+		return "default"
+	}
 	switch boot.NormalizeTokenMode(profile) {
 	case boot.TokenModeEconomy:
 		return i18n.M.WorkModeEconomyLabel

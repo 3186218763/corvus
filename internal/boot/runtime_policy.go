@@ -23,18 +23,31 @@ func resolveRuntimePolicy(req runtimepolicy.Request, entry *config.ProviderEntry
 	})
 }
 
-// assembleRuntimeRequest overlays config defaults, the TokenMode preset, and
-// typed axis selections. Non-empty typed fields are authoritative.
+// assembleRuntimeRequest overlays configured axis defaults and typed axis
+// selections. TokenMode is read only as a legacy session adapter; it is not the
+// source of defaults for a new session.
 func assembleRuntimeRequest(opts Options, cfg *config.Config) (runtimepolicy.Request, error) {
-	preset := normalizeTokenModeToPreset(NormalizeTokenMode(opts.TokenMode))
-	req := runtimepolicy.InheritRequest(preset)
+	// TokenMode is accepted only as a legacy adapter. It is immediately
+	// translated to the independent axis it historically controlled.
+	req := runtimepolicy.Request{
+		Guidance:   runtimepolicy.GuidanceSelectionAuto,
+		Completion: runtimepolicy.CompletionSelectionAuto,
+		Exposure:   runtimepolicy.ExposureSelectionAuto,
+	}
+	switch NormalizeTokenMode(opts.TokenMode) {
+	case TokenModeEconomy:
+		req.Exposure = runtimepolicy.ExposureSelectionDeferred
+	case TokenModeDelivery:
+		req.Completion = runtimepolicy.CompletionSelectionVerified
+	}
+	guidanceConfigured := false
 	if cfg != nil {
 		overlay, err := requestFromConfig(cfg.RuntimePolicy)
 		if err != nil {
 			return runtimepolicy.Request{}, err
 		}
 		req = runtimepolicy.OverlayRequest(req, overlay)
-		req.Preset = preset
+		guidanceConfigured = strings.TrimSpace(cfg.RuntimePolicy.Guidance) != ""
 	}
 	if opts.Guidance != "" {
 		guidance, err := runtimepolicy.ParseGuidanceSelection(opts.Guidance)
@@ -42,6 +55,7 @@ func assembleRuntimeRequest(opts Options, cfg *config.Config) (runtimepolicy.Req
 			return runtimepolicy.Request{}, err
 		}
 		req.Guidance = guidance
+		guidanceConfigured = true
 	}
 	if opts.Completion != "" {
 		completion, err := runtimepolicy.ParseCompletionSelection(opts.Completion)
@@ -56,6 +70,12 @@ func assembleRuntimeRequest(opts Options, cfg *config.Config) (runtimepolicy.Req
 			return runtimepolicy.Request{}, err
 		}
 		req.Exposure = exposure
+	}
+	// An omitted guidance selection is capability-aware regardless of the model
+	// or legacy metadata. Explicit guidance, including inherit, remains
+	// authoritative for resumed legacy sessions.
+	if !guidanceConfigured && strings.TrimSpace(opts.Guidance) == "" {
+		req.Guidance = runtimepolicy.GuidanceSelectionAuto
 	}
 	return req, nil
 }
@@ -92,7 +112,7 @@ func resolveCapabilityTier(entry *config.ProviderEntry) (runtimepolicy.Capabilit
 		return runtimepolicy.CapabilityStandard, nil
 	}
 	if entry.ModelOverrides != nil {
-		if override, ok := entry.ModelOverrides[entry.Model]; ok {
+		if override, ok := modelCapabilityOverride(entry.ModelOverrides, entry.Model); ok {
 			tier, err := parseCapabilityTier(override.ModelCapability)
 			if err != nil {
 				return "", fmt.Errorf("model override %q model_capability: %w", entry.Model, err)
@@ -112,10 +132,28 @@ func resolveCapabilityTier(entry *config.ProviderEntry) (runtimepolicy.Capabilit
 	return runtimepolicy.CapabilityStandard, nil
 }
 
+func modelCapabilityOverride(overrides map[string]config.ProviderModelOverride, model string) (config.ProviderModelOverride, bool) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return config.ProviderModelOverride{}, false
+	}
+	if override, ok := overrides[model]; ok {
+		return override, true
+	}
+	for name, override := range overrides {
+		if strings.EqualFold(strings.TrimSpace(name), model) {
+			return override, true
+		}
+	}
+	return config.ProviderModelOverride{}, false
+}
+
 func parseCapabilityTier(raw string) (runtimepolicy.CapabilityTier, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", "auto":
+	case "":
 		return "", nil
+	case "auto":
+		return runtimepolicy.CapabilityStandard, nil
 	case "strong":
 		return runtimepolicy.CapabilityStrong, nil
 	case "standard":
@@ -154,17 +192,5 @@ func normalizeEffortBand(raw string) runtimepolicy.EffortBand {
 		return runtimepolicy.EffortMax
 	default:
 		return runtimepolicy.EffortUnknown
-	}
-}
-
-// normalizeTokenModeToPreset converts legacy TokenMode string to Preset type.
-func normalizeTokenModeToPreset(mode string) runtimepolicy.Preset {
-	switch mode {
-	case TokenModeEconomy:
-		return runtimepolicy.PresetEconomy
-	case TokenModeDelivery:
-		return runtimepolicy.PresetDelivery
-	default:
-		return runtimepolicy.PresetFull
 	}
 }

@@ -91,14 +91,3 @@ func (d *deliverySupervisor) markRecoveryPending() {
 		d.recoveryPending = true
 	}
 }
-
-func (d *deliverySupervisor) checkpointFor(scopeID string) evidence.DeliveryCheckpoint {
-	if d == nil {
-		return evidence.DeliveryCheckpoint{}
-	}
-	cp := d.checkpoint
-	if cp.ScopeID != scopeID {
-		cp = evidence.DeliveryCheckpoint{ScopeID: scopeID}
-	}
-	return cp
-}

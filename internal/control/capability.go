@@ -8,6 +8,7 @@ import (
 	"corvus/internal/capability"
 	"corvus/internal/config"
 	"corvus/internal/plugin"
+	"corvus/internal/runtimepolicy"
 )
 
 func (c *Controller) withCapabilityRoute(composed, routeInput string) string {
@@ -44,11 +45,11 @@ func (c *Controller) withCapabilityRoute(composed, routeInput string) string {
 
 func (c *Controller) routeCapabilities(routeInput string) capability.RouteDecision {
 	tools := c.ToolContractEntries()
-	profile := c.runtimeProfile
-	if profile == "" {
-		profile = capability.ProfileBalanced
-	}
-	delivery := profile == capability.ProfileDelivery
+	// Completion is the sole delivery-routing switch. Legacy runtime profiles
+	// are intentionally ignored even when a direct caller still populates the
+	// deprecated Controller option.
+	profile := capability.Profile("")
+	delivery := c.runtimePolicy.Completion == runtimepolicy.CompletionVerified
 	var proxyTools map[string][]plugin.CachedTool
 	if c.proxyToolsFn != nil {
 		proxyTools = c.proxyToolsFn()

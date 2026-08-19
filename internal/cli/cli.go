@@ -146,13 +146,13 @@ func setupProfileWithOverrides(ctx context.Context, modelName string, maxStepsOv
 }
 
 func cliProfileBuildOptions(modelName string, maxStepsOverride int, requireKey bool, sink event.Sink, profile string, overrides cliBuildOverrides) boot.Options {
+	_ = profile // work-mode/profile was retired; typed axis overrides are authoritative.
 	return boot.Options{
 		Model:                modelName,
 		MaxSteps:             maxStepsOverride,
 		MaxStepsKey:          "--max-steps",
 		RequireKey:           requireKey,
 		Sink:                 sink,
-		TokenMode:            profile,
 		Guidance:             overrides.Guidance,
 		Completion:           overrides.Completion,
 		Exposure:             overrides.Exposure,
@@ -231,19 +231,6 @@ func setupQuietProfile(ctx context.Context, modelName string, maxStepsOverride i
 		overrides.Stderr = io.Discard
 	}
 	return boot.Build(ctx, cliProfileBuildOptions(modelName, maxStepsOverride, requireKey, sink, profile, overrides))
-}
-
-func parseRuntimeProfile(value string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "balanced", boot.TokenModeFull:
-		return boot.TokenModeFull, nil
-	case boot.TokenModeEconomy:
-		return boot.TokenModeEconomy, nil
-	case boot.TokenModeDelivery:
-		return boot.TokenModeDelivery, nil
-	default:
-		return "", fmt.Errorf("unknown runtime profile %q (want economy, balanced, or delivery)", value)
-	}
 }
 
 func parseGuidanceFlag(value string) (string, error) {
@@ -333,7 +320,6 @@ func chatREPL(args []string, version string) int {
 	fs := pflag.NewFlagSet("corvus", pflag.ContinueOnError)
 	fs.SetInterspersed(true)
 	model := fs.String("model", "", "provider name (default: config default_model)")
-	profileFlag := fs.String("profile", "balanced", "runtime profile: economy | balanced | delivery")
 	guidanceFlag := fs.String("guidance", "", "runtime guidance: inherit | auto | off | light | structured")
 	completionFlag := fs.String("completion", "", "runtime completion: inherit | auto | standard | verified")
 	exposureFlag := fs.String("tool-exposure", "", "runtime tool exposure: inherit | auto | eager | deferred")
@@ -356,11 +342,6 @@ func chatREPL(args []string, version string) int {
 		return code
 	}
 	allowedTools, err := splitAllowedToolRules(allowedToolValues)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
-		return 2
-	}
-	profile, err := parseRuntimeProfile(*profileFlag)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 2
@@ -480,11 +461,6 @@ func chatREPL(args []string, version string) int {
 	}
 	if resumePath != "" {
 		if rec, ok := agent.LoadSessionRuntimePolicy(resumePath); ok {
-			if !fs.Changed("profile") && rec.Preset != "" {
-				if parsed, err := parseRuntimeProfile(rec.Preset); err == nil {
-					profile = parsed
-				}
-			}
 			if !fs.Changed("guidance") && rec.Guidance != "" {
 				*guidanceFlag = rec.Guidance
 			}
@@ -507,7 +483,7 @@ func chatREPL(args []string, version string) int {
 		Stderr:             diagnostics.Writer(),
 		OnSessionRecovered: cliSessionRecoveredHandler(leases),
 	}
-	ctrl, err := setupProfileWithOverrides(ctx, *model, *maxSteps, false, sink, profile, overrides)
+	ctrl, err := setupProfileWithOverrides(ctx, *model, *maxSteps, false, sink, "", overrides)
 	if err != nil && errors.Is(err, boot.ErrUnknownModel) && isInteractive() && config.SourcePath() == "" {
 		// True first run whose default model can't resolve: guide setup, then retry.
 		// With a config present, fall through to the descriptive error — re-running
@@ -516,7 +492,7 @@ func chatREPL(args []string, version string) int {
 		if rc := interactiveSetup(defaultConfigTarget(), defaultEnvTarget()); rc != 0 {
 			return rc
 		}
-		ctrl, err = setupProfileWithOverrides(ctx, *model, *maxSteps, false, sink, profile, overrides)
+		ctrl, err = setupProfileWithOverrides(ctx, *model, *maxSteps, false, sink, "", overrides)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
@@ -603,7 +579,7 @@ func chatREPL(args []string, version string) int {
 			effectiveOverrides.Completion = spec.Completion
 			effectiveOverrides.Exposure = spec.Exposure
 		}
-		c, err := setupQuietProfile(ctx, spec.ModelRef, *maxSteps, false, sink, spec.RuntimeProfile, effectiveOverrides)
+		c, err := setupQuietProfile(ctx, spec.ModelRef, *maxSteps, false, sink, "", effectiveOverrides)
 		if err != nil {
 			return nil, err
 		}
@@ -624,7 +600,7 @@ func chatREPL(args []string, version string) int {
 		}
 		return c, nil
 	}
-	m.runtimeProfile = profile
+	m.runtimeProfile = ""
 	m.runtimeGuidance = overrides.Guidance
 	m.runtimeCompletion = overrides.Completion
 	m.runtimeExposure = overrides.Exposure
